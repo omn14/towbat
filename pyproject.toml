@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "wh"
+version = "0.1.0"
+description = ""
+authors = ["Ole Eiesland <ole.eiesland@ngi.no>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+matplotlib = "^3.10.6"
+requests = "^2.32.5"
+bs4 = "^0.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
