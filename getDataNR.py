@@ -4,6 +4,7 @@ import random
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 class model:
     def __init__(self, name: str, url: str):
@@ -11,10 +12,12 @@ class model:
         self.url = url
         self.characteristics = {}
         self.model_data = self.fetch_model_data(url)
-        if False:
-            self.characteristics = self.get_characteristics_from_html(self.model_data)
+        json_file_path = self.name.replace(" ", "_").lower() + '_characteristics.json'
+        if os.path.isfile(json_file_path):
+            self.characteristics = load_dict_from_file(json_file_path)
         else:
-            self.characteristics = load_dict_from_file(self.name.replace(" ", "_").lower() + '_characteristics.json')
+            self.characteristics = self.get_characteristics_from_html(self.model_data)
+            store_dict_to_file(self.characteristics, json_file_path)
         self.armor_save = 7
 
     def fetch_model_data(self,url: str) -> dict:
@@ -195,15 +198,15 @@ def simulate_battle(unit1, unit2,charge: bool):
 
     # how many attacks
     if charge:
-        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files 
-    else:
-        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
-        if attacks > unit1.nmodels:
-            attacks = unit1.nmodels
-        elif unit1.nmodels % unit1.files > 0:
-            attacks +=  unit1.nmodels % unit1.files
+        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+    else: #defends
+        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+        if attacks > int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
+            attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
+        elif unit1.nmodels % unit1.files > 0: # uncomplete second rank
+            attacks +=   (unit1.nmodels % unit1.files)
         else:
-            attacks *= 2
+            attacks += unit1.files # full second rank
     attacks1 = attacks 
     print(f"Total attacks by {unit1.name} on {unit2.name}: {attacks1}")
     total_hits = 0
@@ -232,7 +235,7 @@ def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
     plt.bar(labels, values, color=['blue', 'green', 'red', 'orange', 'purple'])
     plt.ylabel('Count')
     plt.title('Battle Simulation Results')
-    plt.ylim(0, 10)
+    plt.ylim(0, 15)
     # Annotate each bar with its value
     for i, v in enumerate(values):
         plt.text(i, v + 0.1, f"{v:.2f}", ha='center', va='bottom')
@@ -240,17 +243,22 @@ def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
 
 url_black_orc = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/907e-90b-b5a5-a8a3/black-orc"
 url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+url_saurus_warrior = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/lizardmen/65aee1f-83430cad/saurus-warrior"
 
 black_orc = model("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
 man_at_arm.armor_save = 7
+saurus_warrior = model("Saurus Warrior", url_saurus_warrior)
+saurus_warrior.armor_save = 3
 
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
+saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
 
 print(black_orc.characteristics)
 print(man_at_arm.characteristics)
+print(saurus_warrior.characteristics)
 
 #store_dict_to_file(black_orc.characteristics, 'black_orc_characteristics.json')
 #store_dict_to_file(man_at_arm.characteristics, 'man_at_arm_characteristics.json')
@@ -265,24 +273,26 @@ print(to_wound_result)
 
 results_attacker = []
 results_defender = []
+attacker = black_orc_unit
+defender = saurus_warrior_unit
 for i in range(1000):
-    man_at_arm_unit.nmodels=10
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(black_orc_unit, man_at_arm_unit,True)
+    defender.nmodels=10
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,True)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_attacker.append(result)
-    print(f"Total hits by {black_orc_unit.name} on {man_at_arm_unit.name}: {total_hits}")
-    print(f"suffered wounds by {black_orc_unit.name} on {man_at_arm_unit.name}: {suffered_wounds}")
-    print(f"Saves made by {man_at_arm_unit.name}: {saves_made}")
-    print(f"Total wounds by {black_orc_unit.name} on {man_at_arm_unit.name}: {total_wounds}")
+    print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
+    print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
+    print(f"Saves made by {defender.name}: {saves_made}")
+    print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-    man_at_arm_unit.nmodels-=total_wounds
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(man_at_arm_unit, black_orc_unit,False)
+    defender.nmodels-=total_wounds
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,False)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_defender.append(result)
-    print(f"Total hits by {man_at_arm_unit.name} on {black_orc_unit.name}: {total_hits}")
-    print(f"suffered wounds by {man_at_arm_unit.name} on {black_orc_unit.name}: {suffered_wounds}")
-    print(f"Saves made by {black_orc_unit.name}: {saves_made}")
-    print(f"Total wounds by {man_at_arm_unit.name} on {black_orc_unit.name}: {total_wounds}\n")
+    print(f"Total hits by {defender.name} on {attacker.name}: {total_hits}")
+    print(f"suffered wounds by {defender.name} on {attacker.name}: {suffered_wounds}")
+    print(f"Saves made by {attacker.name}: {saves_made}")
+    print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
 
 results_attacker = np.array(results_attacker)

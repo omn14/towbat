@@ -10,6 +10,8 @@ highest_in_pairs = [min(a, b) for a, b in pairs]
 print("Original pairs:", pairs)
 print("Highest in each pair:", highest_in_pairs)
 
+import matplotlib
+matplotlib.use('tkagg')  # Set backend before importing pyplot
 import matplotlib.pyplot as plt
 
 plt.hist(highest_in_pairs, bins=[0.5,1.5,2.5,3.5,4.5,5.5,6.5], edgecolor='black', weights=[1/num_pairs]*len(highest_in_pairs), align='mid')
