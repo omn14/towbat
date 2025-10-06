@@ -12,13 +12,21 @@ class model:
         self.url = url
         self.characteristics = {}
         self.model_data = self.fetch_model_data(url)
-        json_file_path = self.name.replace(" ", "_").lower() + '_characteristics.json'
-        if os.path.isfile(json_file_path):
-            self.characteristics = load_dict_from_file(json_file_path)
+        self.json_file_path = self.name.replace(" ", "_").lower() + '_characteristics.json'
+        if os.path.isfile(self.json_file_path):
+            self.characteristics = load_dict_from_file(self.json_file_path)
         else:
             self.characteristics = self.get_characteristics_from_html(self.model_data)
-            store_dict_to_file(self.characteristics, json_file_path)
+            store_dict_to_file(self.characteristics, self.json_file_path)
         self.armor_save = 7
+        self.AP = 0  # Armor Penetration
+
+    def reset_characteristics(self):
+        if os.path.isfile(self.json_file_path):
+            self.characteristics = load_dict_from_file(self.json_file_path)
+        
+        self.AP = 0  # Armor Penetration
+
 
     def fetch_model_data(self,url: str) -> dict:
         """
@@ -76,6 +84,78 @@ class model:
             #print(pairs.get('Ld'))
         return pairs
 
+class BlackOrc(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Black Orc specific attributes can be added here
+        self.special_rules = []
+        self.special_rules.append({'name': 'Always strikes first', 
+                                   'description': 'This model always strikes first in combat.',
+                                   'tag': 'combat'})
+        self.special_rules.append({'name': 'Furious charge',
+                                   'description': 'This model adds +1 to its Attacks characteristic when it charges.',
+                                   'tag': 'combat',
+                                   'charge': plus1attacks})
+        self.special_rules.append({'name': 'extra AP on charge',
+                                   'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
+                                   'tag': 'combat',
+                                   'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1)})
+        self.AP = 1  # Example Armor Penetration value for Black Orcs
+
+def plus1attacks(model_instance):
+            """
+            Adds +1 to a model's Attacks characteristic when charging.
+            
+            Args:
+                model_instance: The model to modify
+                
+            Returns:
+                int: The modified number of attacks
+            """
+            base_attacks = int(model_instance.characteristics.get('A', 0))
+            model_instance.characteristics['A'] = base_attacks + 1
+            return
+
+def plus1AP(model_instance):
+    base_AP = model_instance.AP
+    model_instance.AP = base_AP + 1
+    return
+
+class DetailedModel(model):
+    def __init__(self, name: str, url: str, model_type: str = "infantry", points_cost: int = 0):
+        super().__init__(name, url)
+        self.model_type = model_type  # infantry, cavalry, monster, etc.
+        self.points_cost = points_cost
+        self.weapons = []
+        self.special_rules = []
+        
+    def add_weapon(self, weapon_name: str, strength_modifier: int = 0, attacks_modifier: int = 0):
+        """Add a weapon to the model with optional stat modifiers."""
+        self.weapons.append({
+            'name': weapon_name,
+            'strength_modifier': strength_modifier,
+            'attacks_modifier': attacks_modifier
+        })
+        
+    def add_special_rule(self, rule_name: str, rule_description: str):
+        """Add a special rule or ability to the model."""
+        self.special_rules.append({
+            'name': rule_name,
+            'description': rule_description
+        })
+        
+    def get_effective_strength(self):
+        """Calculate effective strength including weapon modifiers."""
+        base_strength = int(self.characteristics.get('S', 0))
+        max_modifier = max([w['strength_modifier'] for w in self.weapons], default=0)
+        return base_strength + max_modifier
+        
+    def get_effective_attacks(self):
+        """Calculate effective attacks including weapon modifiers."""
+        base_attacks = int(self.characteristics.get('A', 0))
+        total_modifier = sum(w['attacks_modifier'] for w in self.weapons)
+        return base_attacks + total_modifier
+
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
         self.name = name
@@ -83,6 +163,7 @@ class unit:
         self.model = model
         self.files = files
         self.ranks = ranks
+        
 
 def compare_model_stats(model1: model, model2: model,stat: str):
     """
@@ -188,9 +269,9 @@ def simulate_attack(model1,model2):
         wound = False
     return hit, wound
 
-def check_armor_save(armor_save_value):
+def check_armor_save(armor_save_value, AP):
     armor_save_roll = random.randint(1, 6)
-    if armor_save_roll >= armor_save_value:
+    if armor_save_roll - AP >= armor_save_value:
         return True
     return False
 
@@ -198,7 +279,15 @@ def simulate_battle(unit1, unit2,charge: bool):
 
     # how many attacks
     if charge:
-        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+        
+        for rule in unit1.model.special_rules:
+            if rule.get('charge'):
+                #attacks = (int(unit1.model.characteristics.get('A', 0)) + 1) * unit1.files #front rank attacks
+                #print(unit1.model.special_rules[1]['charge'](unit1.model))
+                rule['charge'](unit1.model)
+            else:
+                attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
     else: #defends
         attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
         if attacks > int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
@@ -221,9 +310,14 @@ def simulate_battle(unit1, unit2,charge: bool):
             total_wounds += 1
             suffered_wounds += 1
         if wound:
-            if check_armor_save(unit2.model.armor_save):
+            print(unit1.model.AP)
+            if check_armor_save(unit2.model.armor_save, unit1.model.AP):
                 saves_made += 1
                 total_wounds -= 1
+    
+    unit1.model.reset_characteristics()
+    unit2.model.reset_characteristics()
+    
 
     return attacks,total_hits, suffered_wounds,  saves_made, total_wounds
 
@@ -245,7 +339,7 @@ url_black_orc = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-
 url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
 url_saurus_warrior = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/lizardmen/65aee1f-83430cad/saurus-warrior"
 
-black_orc = model("Black Orc", url_black_orc)
+black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
 man_at_arm.armor_save = 7
