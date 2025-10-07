@@ -20,12 +20,14 @@ class model:
             store_dict_to_file(self.characteristics, self.json_file_path)
         self.armor_save = 7
         self.AP = 0  # Armor Penetration
+        self.charging = False
 
     def reset_characteristics(self):
         if os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
         
         self.AP = 0  # Armor Penetration
+        self.charging = False
 
 
     def fetch_model_data(self,url: str) -> dict:
@@ -100,7 +102,23 @@ class BlackOrc(model):
                                    'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
                                    'tag': 'combat',
                                    'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1)})
+        self.special_rules.append({'name': 'Reroll 1s to hit when charging',
+                                      'description': 'This model can reroll hit rolls of 1 when charging.',
+                                      'tag': 'combat',
+                                      'charge': lambda model_instance: print("Reroll 1s to hit when charging"),
+                                      'to_wound': lambda roll,model_instance: reroll1d6(roll,[1],model_instance.charging)})
         self.AP = 1  # Example Armor Penetration value for Black Orcs
+
+class SaurusWarrior(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Saurus Warrior specific attributes can be added here
+        self.special_rules = []
+        self.special_rules.append({'name': 'Stubborn',
+                                   'description': 'This model is stubborn and has a higher Leadership.',
+                                   'tag': 'psychology'})
+        
+        self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
 def plus1attacks(model_instance):
             """
@@ -115,6 +133,11 @@ def plus1attacks(model_instance):
             base_attacks = int(model_instance.characteristics.get('A', 0))
             model_instance.characteristics['A'] = base_attacks + 1
             return
+
+def reroll1d6(roll,value_to_reroll,doCheckOrNot=False):
+    if doCheckOrNot and roll in value_to_reroll:
+        return random.randint(1, 6)
+    return roll
 
 def plus1AP(model_instance):
     base_AP = model_instance.AP
@@ -255,10 +278,14 @@ def to_wound(model1,model2):
     return f"could not calculate to wound"
 
 def simulate_attack(model1,model2):
-    to_hit_roll = to_hit(model1,model2)
-    to_wound_roll = to_wound(model1,model2)
     attack_roll = random.randint(1, 6)
     wound_roll = random.randint(1, 6)
+    for rule in model1.special_rules:
+        if rule.get('to_wound'):
+            wound_roll = rule['to_wound'](wound_roll,model1)
+    to_hit_roll = to_hit(model1,model2)
+    to_wound_roll = to_wound(model1,model2)
+    
     if attack_roll >= to_hit_roll:
         hit = True
     else:
@@ -279,7 +306,7 @@ def simulate_battle(unit1, unit2,charge: bool):
 
     # how many attacks
     if charge:
-        
+        unit1.model.charging = True
         for rule in unit1.model.special_rules:
             if rule.get('charge'):
                 #attacks = (int(unit1.model.characteristics.get('A', 0)) + 1) * unit1.files #front rank attacks
@@ -343,7 +370,7 @@ black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
 man_at_arm.armor_save = 7
-saurus_warrior = model("Saurus Warrior", url_saurus_warrior)
+saurus_warrior = SaurusWarrior("Saurus Warrior", url_saurus_warrior)
 saurus_warrior.armor_save = 3
 
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
