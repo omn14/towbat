@@ -102,12 +102,12 @@ class BlackOrc(model):
                                    'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
                                    'tag': 'combat',
                                    'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1)})
-        self.special_rules.append({'name': 'Reroll 1s to hit when charging',
-                                      'description': 'This model can reroll hit rolls of 1 when charging.',
+        self.special_rules.append({'name': 'Reroll 1s to wound when charging',
+                                      'description': 'This model can reroll wound rolls of 1 when charging.',
                                       'tag': 'combat',
-                                      'charge': lambda model_instance: print("Reroll 1s to hit when charging"),
+                                      'charge': lambda model_instance: print("Reroll 1s to wound when charging"),
                                       'to_wound': lambda roll,model_instance: reroll1d6(roll,[1],model_instance.charging)})
-        self.AP = 1  # Example Armor Penetration value for Black Orcs
+        self.AP = 0  # Example Armor Penetration value for Black Orcs
 
 class SaurusWarrior(model):
     def __init__(self, name: str, url: str):
@@ -117,7 +117,10 @@ class SaurusWarrior(model):
         self.special_rules.append({'name': 'Stubborn',
                                    'description': 'This model is stubborn and has a higher Leadership.',
                                    'tag': 'psychology'})
-        
+        self.special_rules.append({'name': 'Morks curse',
+                                   'description': 'This model must reroll saves of 6',
+                                   'tag': 'saving throw',
+                                   'to_save': lambda roll: reroll1d6(roll,[6],False)})
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
 def plus1attacks(model_instance):
@@ -296,8 +299,11 @@ def simulate_attack(model1,model2):
         wound = False
     return hit, wound
 
-def check_armor_save(armor_save_value, AP):
+def check_armor_save(model, armor_save_value, AP):
     armor_save_roll = random.randint(1, 6)
+    for rule in model.special_rules:
+        if rule.get('to_save'):
+            armor_save_roll = rule['to_save'](armor_save_roll)
     if armor_save_roll - AP >= armor_save_value:
         return True
     return False
@@ -320,7 +326,7 @@ def simulate_battle(unit1, unit2,charge: bool):
         if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
             attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
         elif unit1.nmodels % unit1.files > 0: # uncomplete second rank
-            attacks +=   (unit1.nmodels % unit1.files)
+            attacks +=   (unit1.nmodels % unit1.files) # only one attack if not in base contact
         else:
             attacks += unit1.files # full second rank
     attacks1 = attacks 
@@ -338,7 +344,7 @@ def simulate_battle(unit1, unit2,charge: bool):
             suffered_wounds += 1
         if wound:
             print(unit1.model.AP)
-            if check_armor_save(unit2.model.armor_save, unit1.model.AP):
+            if check_armor_save(unit2.model,unit2.model.armor_save, unit1.model.AP):
                 saves_made += 1
                 total_wounds -= 1
     
@@ -443,6 +449,12 @@ plt.title('Histogram of Attacker Wins')
 # Center bins on integer numbers
 min_win = int(np.floor(attacker_wins.min()))
 max_win = int(np.ceil(attacker_wins.max()))
+num_attacker_wins = np.sum(attacker_wins > 0)
+print(f"Number of times attacker wins: {num_attacker_wins}")
+num_attaker_losts = np.sum(attacker_wins < 0)
+print(f"Number of times attacker losts: {num_attaker_losts}")
+num_attacker_draws = np.sum(attacker_wins == 0)
+print(f"Number of times attacker draws: {num_attacker_draws}")
 bins = np.arange(min_win - 0.5, max_win + 1.5, 1)
 counts, bins, patches = plt.hist(attacker_wins, bins=bins, edgecolor='black', align='mid')
 for count, bin_left, patch in zip(counts, bins[:-1], patches):
