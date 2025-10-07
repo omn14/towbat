@@ -317,7 +317,7 @@ def simulate_battle(unit1, unit2,charge: bool):
         attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
     else: #defends
         attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
-        if attacks > int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
+        if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
             attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
         elif unit1.nmodels % unit1.files > 0: # uncomplete second rank
             attacks +=   (unit1.nmodels % unit1.files)
