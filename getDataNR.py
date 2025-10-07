@@ -21,6 +21,8 @@ class model:
         self.armor_save = 7
         self.AP = 0  # Armor Penetration
         self.charging = False
+        self.special_rules = []
+        self.weapons = {}
 
     def reset_characteristics(self):
         if os.path.isfile(self.json_file_path):
@@ -85,6 +87,12 @@ class model:
             #print(list(pairs.keys()))
             #print(pairs.get('Ld'))
         return pairs
+    def equip_weapon(self, weapon_name: str):
+        try:
+            weapon = self.weapons.get(weapon_name)
+            self.special_rules.append(weapon)
+        except Exception as e:
+            print(f"Error equipping weapon '{weapon_name}' for {self.name}: {e}")
 
 class BlackOrc(model):
     def __init__(self, name: str, url: str):
@@ -113,7 +121,7 @@ class SaurusWarrior(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)
         # Additional Saurus Warrior specific attributes can be added here
-        self.special_rules = []
+        
         self.special_rules.append({'name': 'Stubborn',
                                    'description': 'This model is stubborn and has a higher Leadership.',
                                    'tag': 'psychology'})
@@ -122,6 +130,14 @@ class SaurusWarrior(model):
                                    'tag': 'saving throw',
                                    'to_save': lambda roll: reroll1d6(roll,[6],False)})
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
+
+        self.weapons.update({
+            'hand weapon': {'name': 'hand wapon'},
+            'halberd': {'name': 'halberd',
+                        'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
+                        'tag': 'combat',
+                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1)}
+        })
 
 def plus1attacks(model_instance):
             """
@@ -378,6 +394,9 @@ man_at_arm = model("Man_at_Arm", url_man_at_arm)
 man_at_arm.armor_save = 7
 saurus_warrior = SaurusWarrior("Saurus Warrior", url_saurus_warrior)
 saurus_warrior.armor_save = 3
+saurus_warrior.equip_weapon('halberd')
+#print(saurus_warrior.weapons)
+print(saurus_warrior.special_rules)
 
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
@@ -404,7 +423,7 @@ attacker = black_orc_unit
 defender = saurus_warrior_unit
 for i in range(1000):
     defender.nmodels=10
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,True)
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=True)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_attacker.append(result)
     print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
@@ -413,7 +432,7 @@ for i in range(1000):
     print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
     defender.nmodels-=total_wounds
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,False)
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=True)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_defender.append(result)
     print(f"Total hits by {defender.name} on {attacker.name}: {total_hits}")
