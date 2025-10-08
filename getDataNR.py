@@ -530,15 +530,9 @@ black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
 saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
 night_goblin_unit = unit("Night Goblin Unit", night_goblin, 10,5,2)
-""" 
-attacks,total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(night_goblin_unit, saurus_warrior_unit, charge=False)
-print(f"Total attacks by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {attacks}")
-print(f"Total hits by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {total_hits}")
-print(f"Total wounds by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {total_wounds}")
-print(f"Saves made by {saurus_warrior_unit.name}: {saves_made}")
-print(f"Suffered wounds by {saurus_warrior_unit.name}: {suffered_wounds}")
-lol
- """
+
+
+
 
 print(black_orc.characteristics)
 print(man_at_arm.characteristics)
@@ -557,11 +551,37 @@ print(to_wound_result)
 
 results_attacker = []
 results_defender = []
+""" 
 attacker = black_orc_unit
 defender = saurus_warrior_unit
+
 for i in range(1000):
     defender.nmodels=10
     attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=True)
+    result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
+    results_attacker.append(result)
+    print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
+    print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
+    print(f"Saves made by {defender.name}: {saves_made}")
+    print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
+    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+    defender.nmodels-=total_wounds
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=False)
+    result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
+    results_defender.append(result)
+    print(f"Total hits by {defender.name} on {attacker.name}: {total_hits}")
+    print(f"suffered wounds by {defender.name} on {attacker.name}: {suffered_wounds}")
+    print(f"Saves made by {attacker.name}: {saves_made}")
+    print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
+    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+ """
+
+attacker = night_goblin_unit
+defender = saurus_warrior_unit
+
+for i in range(1000):
+    defender.nmodels=10
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(attacker, defender,charge=False)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_attacker.append(result)
     print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
@@ -586,6 +606,7 @@ suffered_wounds=results_attacker[:,2].mean()
 saves=results_attacker[:,3].mean()
 total_wounds=results_attacker[:,4].mean()
 battle_graph(attacks, hits, suffered_wounds, saves, total_wounds)
+
 results_defender = np.array(results_defender)
 attacks=results_defender[:,0].mean()
 hits=results_defender[:,1].mean()
