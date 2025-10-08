@@ -132,12 +132,33 @@ class SaurusWarrior(model):
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
         self.weapons.update({
-            'hand weapon': {'name': 'hand wapon'},
+            'hand weapon': {'name': 'hand weapon'},
             'halberd': {'name': 'halberd',
                         'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
                         'tag': 'combat',
-                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1)}
+                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1)}
         })
+
+class NightGoblin(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Night Goblin specific attributes can be added here
+        self.special_rules.append({'name': 'Night Goblin',
+                                   'description': 'This model has special rules for Night Goblins.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Night Goblins
+
+        self.weapons.update({
+            'hand weapon': {'name': 'hand weapon'},
+            'short bow': {'name': 'short bow',
+                          'description': 'weaker ranged weapon',
+                          'tag': 'ranged',
+                          'ranged_range': 12,
+                          'ranged_shots': 1,
+                          'ranged_strength': 3,
+                          'ranged_AP': 0}
+        })
+
 
 def plus1attacks(model_instance):
             """
@@ -267,8 +288,6 @@ def to_hit(model1,model2):
     if 2*ws1 < ws2:
         return 5
     return 4
-    
-    return f"could not calculate to hit"
 
 def to_wound(model1,model2):
     str1 = model1.characteristics.get('S')
@@ -314,6 +333,63 @@ def simulate_attack(model1,model2):
     else:
         wound = False
     return hit, wound
+
+def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False):
+    bs1 = model1.characteristics.get('BS')
+
+    if bs1 is None:
+        return f"The model does not have the characteristic 'BS'."
+
+    try:
+        bs1 = int(bs1)
+    except ValueError:
+        return f"Characteristic 'BS' is not a numeric value."
+
+    hit_roll = random.randint(1, 6)
+    print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
+    if moved:
+        bs1 -= 1
+    if long_range:
+        bs1 -= 1
+    if stand_and_shoot:
+        bs1 -= 1
+    if partial_cover:
+        bs1 -= 1
+    if full_cover:
+        bs1 -= 2
+    
+    if bs1 == 1 and hit_roll >= 6:
+        return True
+    elif bs1 == 2 and hit_roll >= 5:
+        return True
+    elif bs1 == 3 and hit_roll >= 4:
+        return True
+    elif bs1 == 4 and hit_roll >= 3:
+        return True
+    elif bs1 == 5 and hit_roll >= 2:
+        return True
+    else:
+        return False
+    
+
+def simulate_attack_ranged(model1,model2):
+    #attack_roll = random.randint(1, 6)
+    wound_roll = random.randint(1, 6)
+    for rule in model1.special_rules:
+        if rule.get('to_wound'):
+            wound_roll = rule['to_wound'](wound_roll,model1)
+    hit = to_hit_ranged(model1)
+    model1.characteristics['S'] = model1.weapons['short bow']['ranged_strength']
+    print(model1.characteristics['S'])
+    to_wound_roll = to_wound(model1,model2)
+    print(f"Ranged wound roll: {wound_roll} against to wound {to_wound_roll}")
+    if hit and wound_roll >= to_wound_roll:
+        wound = True
+    else:
+        wound = False
+    return hit, wound
+
+
 
 def check_armor_save(model, armor_save_value, AP):
     armor_save_roll = random.randint(1, 6)
@@ -370,6 +446,52 @@ def simulate_battle(unit1, unit2,charge: bool):
 
     return attacks,total_hits, suffered_wounds,  saves_made, total_wounds
 
+def simulate_battle_ranged(unit1, unit2, charge: bool):
+
+    # how many attacks
+    if charge:
+        unit1.model.charging = True
+        for rule in unit1.model.special_rules:
+            if rule.get('charge'):
+                #attacks = (int(unit1.model.characteristics.get('A', 0)) + 1) * unit1.files #front rank attacks
+                #print(unit1.model.special_rules[1]['charge'](unit1.model))
+                rule['charge'](unit1.model)
+            else:
+                attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
+    else: #defends
+        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
+        if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
+            attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
+        elif unit1.nmodels % unit1.files > 0: # uncomplete second rank
+            attacks +=   (unit1.nmodels % unit1.files) # only one attack if not in base contact
+        else:
+            attacks += unit1.files # full second rank
+    attacks1 = attacks 
+    print(f"Total attacks by {unit1.name} on {unit2.name}: {attacks1}")
+    total_hits = 0
+    total_wounds = 0
+    suffered_wounds = 0
+    saves_made = 0
+    for i in range(attacks1):
+        hit,wound = simulate_attack_ranged(unit1.model, unit2.model)
+        if hit:
+            total_hits += 1
+        if wound:
+            total_wounds += 1
+            suffered_wounds += 1
+        if wound:
+            print(unit1.model.AP)
+            if check_armor_save(unit2.model,unit2.model.armor_save, unit1.model.AP):
+                saves_made += 1
+                total_wounds -= 1
+    
+    unit1.model.reset_characteristics()
+    unit2.model.reset_characteristics()
+    
+
+    return attacks,total_hits, suffered_wounds,  saves_made, total_wounds
+
 def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
     plt.figure()
     values = [total_attacks, hits,suffered_wounds , saves, total_wounds]
@@ -387,7 +509,7 @@ def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
 url_black_orc = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/907e-90b-b5a5-a8a3/black-orc"
 url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
 url_saurus_warrior = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/lizardmen/65aee1f-83430cad/saurus-warrior"
-
+url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
 black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
@@ -398,9 +520,25 @@ saurus_warrior.equip_weapon('halberd')
 #print(saurus_warrior.weapons)
 print(saurus_warrior.special_rules)
 
+night_goblin = NightGoblin("Night Goblin", url_night_goblin)
+night_goblin.armor_save = 0
+night_goblin.equip_weapon('short bow')
+
+
+
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
 saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
+night_goblin_unit = unit("Night Goblin Unit", night_goblin, 10,5,2)
+""" 
+attacks,total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(night_goblin_unit, saurus_warrior_unit, charge=False)
+print(f"Total attacks by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {attacks}")
+print(f"Total hits by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {total_hits}")
+print(f"Total wounds by {night_goblin_unit.name} on {saurus_warrior_unit.name}: {total_wounds}")
+print(f"Saves made by {saurus_warrior_unit.name}: {saves_made}")
+print(f"Suffered wounds by {saurus_warrior_unit.name}: {suffered_wounds}")
+lol
+ """
 
 print(black_orc.characteristics)
 print(man_at_arm.characteristics)
@@ -432,7 +570,7 @@ for i in range(1000):
     print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
     defender.nmodels-=total_wounds
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=True)
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=False)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_defender.append(result)
     print(f"Total hits by {defender.name} on {attacker.name}: {total_hits}")
