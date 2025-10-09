@@ -148,6 +148,11 @@ class NightGoblin(model):
                                    'tag': 'special'})
         self.AP = 0  # Example Armor Penetration value for Night Goblins
 
+        self.special_rules.append({'name': 'AP +2 when wounding roll of 6',
+                                   'description': 'This model adds +2 to its Armor Penetration (AP) when it rolls a 6 to wound.',
+                                   'tag': 'combat',
+                                   'to_wound': lambda roll, model_instance: plusAP(model_instance, 2,roll) if roll == 6 else roll})
+
         self.weapons.update({
             'hand weapon': {'name': 'hand weapon'},
             'short bow': {'name': 'short bow',
@@ -179,45 +184,10 @@ def reroll1d6(roll,value_to_reroll,doCheckOrNot=False):
         return random.randint(1, 6)
     return roll
 
-def plus1AP(model_instance):
+def plusAP(model_instance, AP_increase, roll):
     base_AP = model_instance.AP
-    model_instance.AP = base_AP + 1
-    return
-
-class DetailedModel(model):
-    def __init__(self, name: str, url: str, model_type: str = "infantry", points_cost: int = 0):
-        super().__init__(name, url)
-        self.model_type = model_type  # infantry, cavalry, monster, etc.
-        self.points_cost = points_cost
-        self.weapons = []
-        self.special_rules = []
-        
-    def add_weapon(self, weapon_name: str, strength_modifier: int = 0, attacks_modifier: int = 0):
-        """Add a weapon to the model with optional stat modifiers."""
-        self.weapons.append({
-            'name': weapon_name,
-            'strength_modifier': strength_modifier,
-            'attacks_modifier': attacks_modifier
-        })
-        
-    def add_special_rule(self, rule_name: str, rule_description: str):
-        """Add a special rule or ability to the model."""
-        self.special_rules.append({
-            'name': rule_name,
-            'description': rule_description
-        })
-        
-    def get_effective_strength(self):
-        """Calculate effective strength including weapon modifiers."""
-        base_strength = int(self.characteristics.get('S', 0))
-        max_modifier = max([w['strength_modifier'] for w in self.weapons], default=0)
-        return base_strength + max_modifier
-        
-    def get_effective_attacks(self):
-        """Calculate effective attacks including weapon modifiers."""
-        base_attacks = int(self.characteristics.get('A', 0))
-        total_modifier = sum(w['attacks_modifier'] for w in self.weapons)
-        return base_attacks + total_modifier
+    model_instance.AP = base_AP + AP_increase
+    return roll
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -521,7 +491,7 @@ saurus_warrior.equip_weapon('halberd')
 print(saurus_warrior.special_rules)
 
 night_goblin = NightGoblin("Night Goblin", url_night_goblin)
-night_goblin.armor_save = 0
+night_goblin.armor_save = 7
 night_goblin.equip_weapon('short bow')
 
 
