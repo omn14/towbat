@@ -24,6 +24,9 @@ class model:
         self.special_rules = []
         self.weapons = {}
 
+        self.attack_roll = 0
+        self.wound_roll = 0
+
     def reset_characteristics(self):
         if os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
@@ -152,6 +155,11 @@ class NightGoblin(model):
                                    'description': 'This model adds +2 to its Armor Penetration (AP) when it rolls a 6 to wound.',
                                    'tag': 'combat',
                                    'to_wound': lambda roll, model_instance: plusAP(model_instance, 2,roll) if roll == 6 else roll})
+        
+        self.special_rules.append({'name': 'poison',
+                                   'description': 'adds +2 to roll to wound if hit roll is 6.',
+                                   'tag': 'combat',
+                                   'to_wound': lambda roll, model_instance: roll+2 if model_instance.attack_roll == 6 else roll})
 
         self.weapons.update({
             'hand weapon': {'name': 'hand weapon'},
@@ -187,6 +195,11 @@ def reroll1d6(roll,value_to_reroll,doCheckOrNot=False):
 def plusAP(model_instance, AP_increase, roll):
     base_AP = model_instance.AP
     model_instance.AP = base_AP + AP_increase
+    return roll
+    
+def plusSTAT(model_instance, STAT, STAT_increase, roll):
+    base_STAT = model_instance.characteristics.get(STAT, 0)
+    model_instance.characteristics[STAT] = base_STAT + STAT_increase
     return roll
 
 class unit:
@@ -286,19 +299,19 @@ def to_wound(model1,model2):
     return f"could not calculate to wound"
 
 def simulate_attack(model1,model2):
-    attack_roll = random.randint(1, 6)
-    wound_roll = random.randint(1, 6)
+    model1.attack_roll = random.randint(1, 6)
+    model1.wound_roll = random.randint(1, 6)
     for rule in model1.special_rules:
         if rule.get('to_wound'):
-            wound_roll = rule['to_wound'](wound_roll,model1)
+            model1.wound_roll = rule['to_wound'](model1.wound_roll,model1)
     to_hit_roll = to_hit(model1,model2)
     to_wound_roll = to_wound(model1,model2)
-    
-    if attack_roll >= to_hit_roll:
+
+    if model1.attack_roll >= to_hit_roll:
         hit = True
     else:
         hit = False
-    if hit and wound_roll >= to_wound_roll:
+    if hit and model1.wound_roll >= to_wound_roll:
         wound = True
     else:
         wound = False
@@ -315,7 +328,8 @@ def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,part
     except ValueError:
         return f"Characteristic 'BS' is not a numeric value."
 
-    hit_roll = random.randint(1, 6)
+    #hit_roll = random.randint(1, 6)
+    hit_roll = model1.attack_roll
     print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
     if moved:
         bs1 -= 1
@@ -343,17 +357,17 @@ def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,part
     
 
 def simulate_attack_ranged(model1,model2):
-    #attack_roll = random.randint(1, 6)
-    wound_roll = random.randint(1, 6)
+    model1.attack_roll = random.randint(1, 6)
+    model1.wound_roll = random.randint(1, 6)
     for rule in model1.special_rules:
         if rule.get('to_wound'):
-            wound_roll = rule['to_wound'](wound_roll,model1)
+            model1.wound_roll = rule['to_wound'](model1.wound_roll,model1)
     hit = to_hit_ranged(model1)
     model1.characteristics['S'] = model1.weapons['short bow']['ranged_strength']
     print(model1.characteristics['S'])
     to_wound_roll = to_wound(model1,model2)
-    print(f"Ranged wound roll: {wound_roll} against to wound {to_wound_roll}")
-    if hit and wound_roll >= to_wound_roll:
+    print(f"Ranged wound roll: {model1.wound_roll} against to wound {to_wound_roll}")
+    if hit and model1.wound_roll >= to_wound_roll:
         wound = True
     else:
         wound = False
@@ -470,7 +484,7 @@ def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
     plt.bar(labels, values, color=['blue', 'green', 'red', 'orange', 'purple'])
     plt.ylabel('Count')
     plt.title('Battle Simulation Results')
-    plt.ylim(0, 15)
+    plt.ylim(0, 25)
     # Annotate each bar with its value
     for i, v in enumerate(values):
         plt.text(i, v + 0.1, f"{v:.2f}", ha='center', va='bottom')
@@ -499,7 +513,7 @@ night_goblin.equip_weapon('short bow')
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
 saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
-night_goblin_unit = unit("Night Goblin Unit", night_goblin, 10,5,2)
+night_goblin_unit = unit("Night Goblin Unit", night_goblin, 20,20,2)
 
 
 
