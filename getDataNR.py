@@ -151,6 +151,7 @@ class NightGoblin(model):
                                    'tag': 'special'})
         self.AP = 0  # Example Armor Penetration value for Night Goblins
 
+        
         self.special_rules.append({'name': 'AP +2 when wounding roll of 6',
                                    'description': 'This model adds +2 to its Armor Penetration (AP) when it rolls a 6 to wound.',
                                    'tag': 'combat',
@@ -160,6 +161,12 @@ class NightGoblin(model):
                                    'description': 'adds +2 to roll to wound if hit roll is 6.',
                                    'tag': 'combat',
                                    'to_wound': lambda roll, model_instance: roll+2 if model_instance.attack_roll == 6 else roll})
+        
+        self.special_rules.append({'name': 'Reroll 1s to hit',
+                                      'description': 'This model can reroll hit rolls of 1.',
+                                      'tag': 'combat',
+                                      'to_hit': lambda roll,model_instance: reroll1d6(roll,[1],True)})
+       
 
         self.weapons.update({
             'hand weapon': {'name': 'hand weapon'},
@@ -362,7 +369,10 @@ def simulate_attack_ranged(model1,model2):
     for rule in model1.special_rules:
         if rule.get('to_wound'):
             model1.wound_roll = rule['to_wound'](model1.wound_roll,model1)
-    hit = to_hit_ranged(model1)
+        if rule.get('to_hit'):
+            model1.attack_roll = rule['to_hit'](model1.attack_roll,model1)
+    
+    hit = to_hit_ranged(model1,long_range=False)
     model1.characteristics['S'] = model1.weapons['short bow']['ranged_strength']
     print(model1.characteristics['S'])
     to_wound_roll = to_wound(model1,model2)
@@ -499,7 +509,7 @@ black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
 man_at_arm.armor_save = 7
 saurus_warrior = SaurusWarrior("Saurus Warrior", url_saurus_warrior)
-saurus_warrior.armor_save = 3
+saurus_warrior.armor_save = 4
 saurus_warrior.equip_weapon('halberd')
 #print(saurus_warrior.weapons)
 print(saurus_warrior.special_rules)
@@ -583,26 +593,31 @@ for i in range(1000):
     print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
 
-results_attacker = np.array(results_attacker)
-attacks=results_attacker[:,0].mean()
-hits=results_attacker[:,1].mean()
-suffered_wounds=results_attacker[:,2].mean()
-saves=results_attacker[:,3].mean()
-total_wounds=results_attacker[:,4].mean()
-battle_graph(attacks, hits, suffered_wounds, saves, total_wounds)
+def analyze_results(results):
+    results_attacker = np.array(results)
+    attacks=results_attacker[:,0].mean()
+    hits=results_attacker[:,1].mean()
+    suffered_wounds=results_attacker[:,2].mean()
+    saves=results_attacker[:,3].mean()
+    total_wounds=results_attacker[:,4].mean()
+    battle_graph(attacks, hits, suffered_wounds, saves, total_wounds)
+    return results_attacker
 
-results_defender = np.array(results_defender)
+results_attacker = analyze_results(results_attacker)
+results_defender = analyze_results(results_defender)
+
+""" results_defender = np.array(results_defender)
 attacks=results_defender[:,0].mean()
 hits=results_defender[:,1].mean()
 suffered_wounds=results_defender[:,2].mean()
 saves=results_defender[:,3].mean()
 total_wounds=results_defender[:,4].mean()
-battle_graph(attacks, hits, suffered_wounds, saves, total_wounds)
+battle_graph(attacks, hits, suffered_wounds, saves, total_wounds) """
 
 attacker_wins = results_attacker[:,4]-results_defender[:,4]
-plt.figure()
-plt.plot(attacker_wins)
-plt.title('Attacker Wins (Positive means attacker wins)')
+#plt.figure()
+#plt.plot(attacker_wins)
+#plt.title('Attacker Wins (Positive means attacker wins)')
 plt.figure()
 #plt.hist(attacker_wins, bins=10, edgecolor='black', align='mid')
 plt.title('Histogram of Attacker Wins')
