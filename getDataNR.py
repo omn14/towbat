@@ -120,6 +120,15 @@ class BlackOrc(model):
                                       'to_wound': lambda roll,model_instance: reroll1d6(roll,[1],model_instance.charging)})
         self.AP = 0  # Example Armor Penetration value for Black Orcs
 
+class OrcBoyz(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Orc Boyz specific attributes can be added here
+        self.special_rules.append({'name': 'Orc Boyz',
+                                   'description': 'This model has special rules for Orc Boyz.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Orc Boyz
+
 class SaurusWarrior(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)
@@ -178,6 +187,39 @@ class NightGoblin(model):
                           'ranged_strength': 3,
                           'ranged_AP': 0}
         })
+
+class MountedKnightOfTheRealm(model):
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        # Additional Mounted Knight of the Realm specific attributes can be added here
+        self.special_rules.append({'name': 'Mounted Knight of the Realm',
+                                   'description': 'This model has special rules for Mounted Knights of the Realm.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted',
+                                   'description': 'This model has a mount, which grants it additional movement and combat abilities.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+
+
+        self.AP = 0  # Example Armor Penetration value for Mounted Knights of the Realm
+
+        self.weapons.update({
+            'lance': {'name': 'lance',
+                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
+                      'tag': 'combat',
+                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1)},
+            'sword': {'name': 'sword'}
+        })
+
+class BretonnianWarhorse(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Bretonnian Warhorse specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Bretonnian Warhorse',
+                                   'description': 'This model has special rules for Bretonnian Warhorses.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Bretonnian Warhorses
 
 
 def plus1attacks(model_instance):
@@ -504,6 +546,9 @@ url_black_orc = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-
 url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
 url_saurus_warrior = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/lizardmen/65aee1f-83430cad/saurus-warrior"
 url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
+url_orc_boyz = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/9d5a-280f-c336-5226/orc-boy"
+url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
+url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
 black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
@@ -518,14 +563,23 @@ night_goblin = NightGoblin("Night Goblin", url_night_goblin)
 night_goblin.armor_save = 7
 night_goblin.equip_weapon('short bow')
 
+orc_boy = OrcBoyz("Orc Boyz", url_orc_boyz)
+orc_boy.armor_save = 5
+bretonnian_warhorse = BretonnianWarhorse("Bretonnian Warhorse", url_bretonnian_warhorse)
+bretonnian_warhorse.armor_save = 7
+bretonnian_warhorse_unit = unit("Bretonnian Warhorse Unit", bretonnian_warhorse, 5,5,1)
+mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", url_knight_of_the_realm, mountUnit=bretonnian_warhorse_unit)
+mounted_knight_of_the_realm.armor_save = 3
+
+
 
 
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
 saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
 night_goblin_unit = unit("Night Goblin Unit", night_goblin, 20,20,2)
-
-
+orc_boy_unit = unit("Orc Boy Unit", orc_boy, 20,5,4)
+mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
 
 
 print(black_orc.characteristics)
@@ -570,20 +624,39 @@ for i in range(1000):
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
  """
 
-attacker = night_goblin_unit
-defender = saurus_warrior_unit
+attacker = mounted_knight_of_the_realm_unit
+defender = black_orc_unit
 
 for i in range(1000):
     defender.nmodels=10
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(attacker, defender,charge=False)
+    #attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(attacker, defender,charge=False)
+    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=True)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_attacker.append(result)
     print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
     print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
     print(f"Saves made by {defender.name}: {saves_made}")
     print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
-    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
     defender.nmodels-=total_wounds
+    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+    if True: #if unit models has mounts do attacks with the mounts
+        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker.model.special_rules[1]['mountUnit'], defender,charge=True)
+        result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
+        # Combine mount's attack result with rider's attack result
+        if results_attacker:
+            last_rider_result = results_attacker.pop()  # Remove the last result (rider's attack)
+            avg_result = [(a + b) / 2 for a, b in zip(result, last_rider_result)]
+            results_attacker.append(avg_result)
+        else:
+            results_attacker.append(result)
+        print(f"Total hits by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {total_hits}")
+        print(f"suffered wounds by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {suffered_wounds}")
+        print(f"Saves made by {defender.name}: {saves_made}")
+        print(f"Total wounds by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {total_wounds}")
+        #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+        defender.nmodels-=total_wounds
+
+    
     attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=False)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
     results_defender.append(result)
