@@ -207,7 +207,8 @@ class MountedKnightOfTheRealm(model):
             'lance': {'name': 'lance',
                       'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
                       'tag': 'combat',
-                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1)},
+                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1),
+                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 2, -99) },
             'sword': {'name': 'sword'}
         })
 
@@ -247,7 +248,7 @@ def plusAP(model_instance, AP_increase, roll):
     return roll
     
 def plusSTAT(model_instance, STAT, STAT_increase, roll):
-    base_STAT = model_instance.characteristics.get(STAT, 0)
+    base_STAT = int(model_instance.characteristics.get(STAT, 0))
     model_instance.characteristics[STAT] = base_STAT + STAT_increase
     return roll
 
@@ -570,6 +571,7 @@ bretonnian_warhorse.armor_save = 7
 bretonnian_warhorse_unit = unit("Bretonnian Warhorse Unit", bretonnian_warhorse, 5,5,1)
 mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", url_knight_of_the_realm, mountUnit=bretonnian_warhorse_unit)
 mounted_knight_of_the_realm.armor_save = 3
+mounted_knight_of_the_realm.equip_weapon('lance')
 
 
 
@@ -645,8 +647,8 @@ for i in range(1000):
         # Combine mount's attack result with rider's attack result
         if results_attacker:
             last_rider_result = results_attacker.pop()  # Remove the last result (rider's attack)
-            avg_result = [(a + b) / 2 for a, b in zip(result, last_rider_result)]
-            results_attacker.append(avg_result)
+            sum_result = [(a + b)  for a, b in zip(result, last_rider_result)]
+            results_attacker.append(sum_result)
         else:
             results_attacker.append(result)
         print(f"Total hits by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {total_hits}")
