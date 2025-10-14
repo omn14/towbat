@@ -486,14 +486,14 @@ def simulate_battle_ranged(unit1, unit2, charge: bool):
 
     return attacks,total_hits, suffered_wounds,  saves_made, total_wounds
 
-def battle_graph(total_attacks, hits,suffered_wounds , saves, total_wounds):
+def battle_graph(unit,total_attacks, hits,suffered_wounds , saves, total_wounds):
     plt.figure()
     values = [total_attacks, hits,suffered_wounds , saves, total_wounds]
     labels = ['Total Attacks', 'Hits', 'Wounds', 'Saves', 'Total Wounds']
 
     plt.bar(labels, values, color=['blue', 'green', 'red', 'orange', 'purple'])
     plt.ylabel('Count')
-    plt.title('Battle Simulation Results')
+    plt.title('Battle Simulation Results for '+unit.name)
     plt.ylim(0, 25)
     # Annotate each bar with its value
     for i, v in enumerate(values):
@@ -593,18 +593,18 @@ for i in range(1000):
     print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
 
-def analyze_results(results):
+def analyze_results(unit, results):
     results_attacker = np.array(results)
     attacks=results_attacker[:,0].mean()
     hits=results_attacker[:,1].mean()
     suffered_wounds=results_attacker[:,2].mean()
     saves=results_attacker[:,3].mean()
     total_wounds=results_attacker[:,4].mean()
-    battle_graph(attacks, hits, suffered_wounds, saves, total_wounds)
+    battle_graph(unit, attacks, hits, suffered_wounds, saves, total_wounds)
     return results_attacker
 
-results_attacker = analyze_results(results_attacker)
-results_defender = analyze_results(results_defender)
+results_attacker = analyze_results(attacker, results_attacker)
+results_defender = analyze_results(defender, results_defender)
 
 """ results_defender = np.array(results_defender)
 attacks=results_defender[:,0].mean()
