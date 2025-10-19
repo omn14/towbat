@@ -33,7 +33,6 @@ print(saurus_warrior.special_rules)
 
 night_goblin = NightGoblin("Night Goblin", url_night_goblin)
 night_goblin.armor_save = 7
-night_goblin.equip_weapon('short bow')
 
 orc_boy = OrcBoyz("Orc Boyz", url_orc_boyz)
 orc_boy.armor_save = 5
@@ -52,51 +51,14 @@ mounted_knight_of_the_realm.equip_weapon('lance')
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
 man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
 saurus_warrior_unit = unit("Saurus Warrior Unit", saurus_warrior, 10,5,2)
-night_goblin_unit = unit("Night Goblin Unit", night_goblin, 20,20,2)
+night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
 orc_boy_unit = unit("Orc Boy Unit", orc_boy, 20,5,4)
 mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
 
 
-print(black_orc.characteristics)
-print(man_at_arm.characteristics)
-print(saurus_warrior.characteristics)
-
-#store_dict_to_file(black_orc.characteristics, 'black_orc_characteristics.json')
-#store_dict_to_file(man_at_arm.characteristics, 'man_at_arm_characteristics.json')
-
-
-
-to_hit_result = to_hit(black_orc, man_at_arm)
-print(to_hit_result)
-to_wound_result = to_wound(black_orc, man_at_arm)
-print(to_wound_result)
-
 results_attacker = []
 results_defender = []
-""" 
-attacker = black_orc_unit
-defender = saurus_warrior_unit
 
-for i in range(1000):
-    defender.nmodels=10
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=True)
-    result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
-    results_attacker.append(result)
-    print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
-    print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
-    print(f"Saves made by {defender.name}: {saves_made}")
-    print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
-    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-    defender.nmodels-=total_wounds
-    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=False)
-    result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
-    results_defender.append(result)
-    print(f"Total hits by {defender.name} on {attacker.name}: {total_hits}")
-    print(f"suffered wounds by {defender.name} on {attacker.name}: {suffered_wounds}")
-    print(f"Saves made by {attacker.name}: {saves_made}")
-    print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
-    #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
- """
 
 attacker = mounted_knight_of_the_realm_unit
 defender = orc_boy_unit

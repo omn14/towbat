@@ -68,7 +68,22 @@ def simulate_battle(unit1, unit2,charge: bool):
             attacks +=   (unit1.nmodels % unit1.files) # only one attack if not in base contact
         else:
             attacks += unit1.files # full second rank
-    attacks1 = attacks 
+    
+    if unit1.model.equipedWeapon.get('tag') == 'ranged':
+        attacks = unit1.model.equipedWeapon.get('ranged_shots') * unit1.files #front rank attacks
+        if attacks >= unit1.model.equipedWeapon.get('ranged_shots') * unit1.nmodels: 
+            attacks = unit1.model.equipedWeapon.get('ranged_shots') * unit1.nmodels # cannot attack more than you have models in front rank
+
+        for rule in unit1.model.special_rules:
+            if rule.get('volley_fire'):
+                
+                if unit1.nmodels % unit1.files > 0: # incomplete second rank
+                    attacks += int(((unit1.nmodels % unit1.files) + 1) / 2)  # only one attack if not in base contact
+                else:
+                    attacks += int((unit1.files + 1) / 2)  # half attacks from second rank
+                    print("Volly fire rule applied",unit1.files,attacks)
+
+    attacks1 = attacks
     print(f"Total attacks by {unit1.name} on {unit2.name}: {attacks1}")
     total_hits = 0
     total_wounds = 0
@@ -91,6 +106,6 @@ def simulate_battle(unit1, unit2,charge: bool):
     unit2.model.reset_characteristics()
     
 
-    return attacks,total_hits, suffered_wounds,  saves_made, total_wounds
+    return attacks1,total_hits, suffered_wounds,  saves_made, total_wounds
 
 

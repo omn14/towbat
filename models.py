@@ -189,7 +189,8 @@ class NightGoblin(model):
                           'ranged_range': 12,
                           'ranged_shots': 1,
                           'ranged_strength': 3,
-                          'ranged_AP': 0}
+                          'ranged_AP': 0,
+                          'volley_fire': True}
         })
 
 class MountedKnightOfTheRealm(model):
