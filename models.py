@@ -22,7 +22,11 @@ class model:
         self.charging = False
         self.special_rules = []
         self.weapons = {}
-
+        self.weapons.update({'hand weapon': {'name': 'hand weapon',
+                                             'description': 'basic melee weapon',
+                                             'tag': 'combat'}})
+        self.equipedWeapon = None
+        self.equip_weapon('hand weapon')
         self.attack_roll = 0
         self.wound_roll = 0
 
@@ -91,8 +95,8 @@ class model:
         return pairs
     def equip_weapon(self, weapon_name: str):
         try:
-            weapon = self.weapons.get(weapon_name)
-            self.special_rules.append(weapon)
+            self.equipedWeapon = self.weapons.get(weapon_name)
+            self.special_rules.append(self.equipedWeapon)
         except Exception as e:
             print(f"Error equipping weapon '{weapon_name}' for {self.name}: {e}")
 
@@ -143,7 +147,7 @@ class SaurusWarrior(model):
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
         self.weapons.update({
-            'hand weapon': {'name': 'hand weapon'},
+            'spear': {'name': 'spear'},
             'halberd': {'name': 'halberd',
                         'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
                         'tag': 'combat',
@@ -159,25 +163,26 @@ class NightGoblin(model):
                                    'tag': 'special'})
         self.AP = 0  # Example Armor Penetration value for Night Goblins
 
-        
+        """ 
         self.special_rules.append({'name': 'AP +2 when wounding roll of 6',
                                    'description': 'This model adds +2 to its Armor Penetration (AP) when it rolls a 6 to wound.',
                                    'tag': 'combat',
                                    'to_wound': lambda roll, model_instance: plusAP(model_instance, 2,roll) if roll == 6 else roll})
-        
+         """
+        """ 
         self.special_rules.append({'name': 'poison',
                                    'description': 'adds +2 to roll to wound if hit roll is 6.',
                                    'tag': 'combat',
                                    'to_wound': lambda roll, model_instance: roll+2 if model_instance.attack_roll == 6 else roll})
-        
+         """
+        """ 
         self.special_rules.append({'name': 'Reroll 1s to hit',
                                       'description': 'This model can reroll hit rolls of 1.',
                                       'tag': 'combat',
                                       'to_hit': lambda roll,model_instance: reroll1d6(roll,[1],True)})
-       
+        """
 
         self.weapons.update({
-            'hand weapon': {'name': 'hand weapon'},
             'short bow': {'name': 'short bow',
                           'description': 'weaker ranged weapon',
                           'tag': 'ranged',

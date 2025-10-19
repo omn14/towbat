@@ -7,13 +7,29 @@ def simulate_attack(model1,model2):
     for rule in model1.special_rules:
         if rule.get('to_wound'):
             model1.wound_roll = rule['to_wound'](model1.wound_roll,model1)
-    to_hit_roll = to_hit(model1,model2)
+        if rule.get('to_hit'):
+            model1.attack_roll = rule['to_hit'](model1.attack_roll,model1)
+    
+    weaponIsRanged = False
+
+    if model1.equipedWeapon.get('tag') == 'ranged':
+        weaponIsRanged = True
+    print(f"Weapon is ranged: {weaponIsRanged}")
+    if not weaponIsRanged: # for to hit modifications
+        to_hit_target_roll = to_hit(model1,model2)
+        if model1.attack_roll >= to_hit_target_roll:
+            hit = True
+        else:
+            hit = False
+    else:
+        hit = to_hit_ranged(model1,long_range=False)
+        model1.characteristics['S'] = model1.equipedWeapon.get('ranged_strength')
+        print(model1.characteristics['S'])
+
+
     to_wound_roll = to_wound(model1,model2)
 
-    if model1.attack_roll >= to_hit_roll:
-        hit = True
-    else:
-        hit = False
+    
     if hit and model1.wound_roll >= to_wound_roll:
         wound = True
     else:
@@ -21,8 +37,7 @@ def simulate_attack(model1,model2):
     return hit, wound
 
 
-    
-
+""" 
 def simulate_attack_ranged(model1,model2):
     model1.attack_roll = random.randint(1, 6)
     model1.wound_roll = random.randint(1, 6)
@@ -42,6 +57,8 @@ def simulate_attack_ranged(model1,model2):
     else:
         wound = False
     return hit, wound
+ """
+
 
 
 

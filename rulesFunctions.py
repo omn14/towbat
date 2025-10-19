@@ -1,3 +1,5 @@
+import random
+
 def plus1attacks(model_instance):
             """
             Adds +1 to a model's Attacks characteristic when charging.

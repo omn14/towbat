@@ -40,7 +40,9 @@ orc_boy.armor_save = 5
 bretonnian_warhorse = BretonnianWarhorse("Bretonnian Warhorse", url_bretonnian_warhorse)
 bretonnian_warhorse.armor_save = 7
 bretonnian_warhorse_unit = unit("Bretonnian Warhorse Unit", bretonnian_warhorse, 5,5,1)
-mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", url_knight_of_the_realm, mountUnit=bretonnian_warhorse_unit)
+mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", 
+                                                      url_knight_of_the_realm, 
+                                                      mountUnit=bretonnian_warhorse_unit)
 mounted_knight_of_the_realm.armor_save = 3
 mounted_knight_of_the_realm.equip_weapon('lance')
 
@@ -99,6 +101,9 @@ for i in range(1000):
 attacker = mounted_knight_of_the_realm_unit
 defender = orc_boy_unit
 
+attacker = night_goblin_unit
+night_goblin_unit.model.equip_weapon('short bow')
+
 for i in range(1000):
     defender.nmodels=10
     #attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(attacker, defender,charge=False)
@@ -111,22 +116,24 @@ for i in range(1000):
     print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
     defender.nmodels-=total_wounds
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-    if True: #if unit models has mounts do attacks with the mounts
-        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker.model.special_rules[1]['mountUnit'], defender,charge=True)
-        result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
-        # Combine mount's attack result with rider's attack result
-        if results_attacker:
-            last_rider_result = results_attacker.pop()  # Remove the last result (rider's attack)
-            sum_result = [(a + b)  for a, b in zip(result, last_rider_result)]
-            results_attacker.append(sum_result)
-        else:
-            results_attacker.append(result)
-        print(f"Total hits by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {total_hits}")
-        print(f"suffered wounds by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {suffered_wounds}")
-        print(f"Saves made by {defender.name}: {saves_made}")
-        print(f"Total wounds by {attacker.model.special_rules[1]['mountUnit'].name} on {defender.name}: {total_wounds}")
-        #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-        defender.nmodels-=total_wounds
+    #if True: #if unit models has mounts do attacks with the mounts
+    for rule in attacker.model.special_rules:
+        if rule.get('mountUnit'):
+            attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(rule['mountUnit'], defender,charge=True)
+            result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
+            # Combine mount's attack result with rider's attack result
+            if results_attacker:
+                last_rider_result = results_attacker.pop()  # Remove the last result (rider's attack)
+                sum_result = [(a + b)  for a, b in zip(result, last_rider_result)]
+                results_attacker.append(sum_result)
+            else:
+                results_attacker.append(result)
+            print(f"Total hits by {rule['mountUnit'].name} on {defender.name}: {total_hits}")
+            print(f"suffered wounds by {rule['mountUnit'].name} on {defender.name}: {suffered_wounds}")
+            print(f"Saves made by {defender.name}: {saves_made}")
+            print(f"Total wounds by {rule['mountUnit'].name} on {defender.name}: {total_wounds}")
+            #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+            defender.nmodels-=total_wounds
 
     
     attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defender, attacker,charge=False)
