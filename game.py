@@ -2,6 +2,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Plane, PlaneNode, Point3, Vec3, BitMask32
 from panda3d.core import CardMaker
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape
+from direct.interval.LerpInterval import LerpPosInterval
 
 
 class MyApp(ShowBase):
@@ -24,6 +25,12 @@ class MyApp(ShowBase):
         self.smiley.reparentTo(self.render)
         self.smiley.setPos(0, 50, 2)
         self.smiley.setScale(2)
+
+        # Make a copy of the smiley model and position it differently
+        self.smiley_copy = self.loader.loadModel('models/smiley')
+        self.smiley_copy.reparentTo(self.render)
+        self.smiley_copy.setPos(5, 50, 2)
+        self.smiley_copy.setScale(2)
 
         # Position the camera above the plane, looking straight down
         self.camera.setPos(0, -300, 0)
@@ -60,6 +67,10 @@ class MyApp(ShowBase):
         bodyNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(bodyNP.node())
     
+    def move_node_smoothly(self, node, target_pos, duration=1.0):
+        interval = LerpPosInterval(node, duration, target_pos)
+        interval.start()
+
     def upAndDown(self):
         #time = task.time
         #surface.setZ(0+sin(time)*3)
@@ -90,8 +101,10 @@ class MyApp(ShowBase):
             print(result.getNode())
             #surface.set_shader_input("pos", result.getHitPos())
 
-            self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
-
+            #self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
+            self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,2), duration=0.5)
+            dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
+            print(f"Distance between smilies: {dist}")
         return 
 
 app = MyApp()
