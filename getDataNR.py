@@ -78,12 +78,13 @@ defender = orc_boy_unit
 
 attacker = night_goblin_unit
 night_goblin_unit.model.equip_weapon('short bow')
-
+goblin_wolf_rider_unit.model.equip_weapon('cavalry spear')
 attacker = goblin_wolf_rider_unit
 defender = pegasus_knight_unit
-
+defender_nmodels = defender.nmodels
 for i in range(1000):
-    defender.nmodels=10
+    print(f"--- BATTLE SIMULATION {i+1} ---")
+    defender.nmodels=defender_nmodels
     #attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle_ranged(attacker, defender,charge=False)
     attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=True)
     result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
@@ -124,7 +125,8 @@ for i in range(1000):
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
     for rule in defender.model.special_rules:
         if rule.get('mountUnit'):
-            attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(rule['mountUnit'], attacker,charge=True)
+            rule['mountUnit'].nmodels=defender.nmodels
+            attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(rule['mountUnit'], attacker,charge=False)
             result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
             # Combine mount's attack result with rider's attack result
             if results_attacker:

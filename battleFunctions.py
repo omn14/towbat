@@ -52,6 +52,8 @@ def check_armor_save(model, armor_save_value, AP):
 def simulate_battle(unit1, unit2,charge: bool):
 
     # how many attacks
+    print(unit1.name, "has", unit1.nmodels, "models", unit1.files, "files,", unit1.ranks, "ranks")
+    unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
     if charge:
         unit1.model.charging = True
         for rule in unit1.model.special_rules:
@@ -60,6 +62,8 @@ def simulate_battle(unit1, unit2,charge: bool):
             else:
                 attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
         attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
+        if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
+            attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
     else: #defends
         attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
         if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
@@ -101,6 +105,9 @@ def simulate_battle(unit1, unit2,charge: bool):
             if check_armor_save(unit2.model,unit2.model.armor_save, unit1.model.AP):
                 saves_made += 1
                 total_wounds -= 1
+            #if total_wounds >= unit2.nmodels:
+            #    total_wounds = unit2.nmodels
+            #    break # cannot wound more models than you have
     
     unit1.model.reset_characteristics()
     unit2.model.reset_characteristics()

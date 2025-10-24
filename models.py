@@ -249,6 +249,7 @@ class PegasusKnight(model):
                                    'mountUnit': mountUnit})
 
         self.AP = 0  # Example Armor Penetration value for Pegasus Knights
+        self.armor_save = 3  # Example improved armor save for Pegasus Knights
 
 class GiantWolf(model):
     def __init__(self, name: str, url: str):
@@ -272,3 +273,13 @@ class GoblinWolfRider(model):
                                    'mountUnit': mountUnit})
 
         self.AP = 0  # Example Armor Penetration value for Goblin Wolf Riders
+        self.armor_save = 6  # Example improved armor save for Goblin Wolf Riders
+
+        self.weapons.update({
+            'cavalry spear': {'name': 'cavalry spear',
+                      'description': 'This model adds +1 to its Armor Penetration (AP) and Strength (S) when it charges.',
+                      'tag': 'combat',
+                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
+                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
+            'sword': {'name': 'sword'}
+        })
