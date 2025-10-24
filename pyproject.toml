@@ -2,7 +2,7 @@
 name = "wh"
 version = "0.1.0"
 description = ""
-authors = ["Ole Eiesland <ole.eiesland@ngi.no>"]
+authors = ["Ole"]
 readme = "README.md"
 package-mode = false
 
