@@ -23,7 +23,8 @@ url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-
 url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
 url_pegasus_knight = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/f3ae-ef6d-bb9-6ac4/pegasus-knight"
 url_barded_pegasus = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/1446-229e-72bd-4b1e/barded-pegasus"
-
+url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
+url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
 
 black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
@@ -54,7 +55,10 @@ barded_pegasus_unit = unit("Barded Pegasus Unit", barded_pegasus, 3,3,1)
 pegasus_knight = PegasusKnight("Pegasus Knight", url_pegasus_knight, mountUnit=barded_pegasus_unit)
 pegasus_knight_unit = unit("Pegasus Knight Unit", pegasus_knight, 3,3,1)
 
-
+giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
+giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 5,5,1)
+goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
+goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 5,5,1)
 
 
 black_orc_unit = unit("Black Orc Unit", black_orc, 10,5,2)
@@ -75,8 +79,8 @@ defender = orc_boy_unit
 attacker = night_goblin_unit
 night_goblin_unit.model.equip_weapon('short bow')
 
-attacker = pegasus_knight_unit
-defender = black_orc_unit
+attacker = goblin_wolf_rider_unit
+defender = pegasus_knight_unit
 
 for i in range(1000):
     defender.nmodels=10
@@ -118,6 +122,22 @@ for i in range(1000):
     print(f"Saves made by {attacker.name}: {saves_made}")
     print(f"Total wounds by {defender.name} on {attacker.name}: {total_wounds}\n")
     #battle_graph(attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+    for rule in defender.model.special_rules:
+        if rule.get('mountUnit'):
+            attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(rule['mountUnit'], attacker,charge=True)
+            result = [attacks, total_hits, suffered_wounds,  saves_made, total_wounds]
+            # Combine mount's attack result with rider's attack result
+            if results_attacker:
+                last_rider_result = results_defender.pop()  # Remove the last result (rider's attack)
+                sum_result = [(a + b)  for a, b in zip(result, last_rider_result)]
+                results_defender.append(sum_result)
+            else:
+                results_defender.append(result)
+            print(f"Total hits by {rule['mountUnit'].name} on {attacker.name}: {total_hits}")
+            print(f"suffered wounds by {rule['mountUnit'].name} on {attacker.name}: {suffered_wounds}")
+            print(f"Saves made by {attacker.name}: {saves_made}")
+            print(f"Total wounds by {rule['mountUnit'].name} on {attacker.name}: {total_wounds}")
+    
 
 def analyze_results(unit, results):
     results_attacker = np.array(results)

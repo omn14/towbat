@@ -249,3 +249,26 @@ class PegasusKnight(model):
                                    'mountUnit': mountUnit})
 
         self.AP = 0  # Example Armor Penetration value for Pegasus Knights
+
+class GiantWolf(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Giant Wolf specific attributes can be added here
+        self.special_rules.append({'name': 'Giant Wolf',
+                                   'description': 'This model has special rules for Giant Wolves.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Giant Wolves
+
+class GoblinWolfRider(model):
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        # Additional Goblin Wolf Rider specific attributes can be added here
+        self.special_rules.append({'name': 'Goblin Wolf Rider',
+                                   'description': 'This model has special rules for Goblin Wolf Riders.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on Giant Wolf',
+                                   'description': 'This model is mounted on a Giant Wolf, granting it additional movement and combat abilities.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+
+        self.AP = 0  # Example Armor Penetration value for Goblin Wolf Riders
