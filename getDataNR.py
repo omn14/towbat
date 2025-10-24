@@ -21,6 +21,10 @@ url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/o
 url_orc_boyz = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/9d5a-280f-c336-5226/orc-boy"
 url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
 url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
+url_pegasus_knight = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/f3ae-ef6d-bb9-6ac4/pegasus-knight"
+url_barded_pegasus = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/1446-229e-72bd-4b1e/barded-pegasus"
+
+
 black_orc = BlackOrc("Black Orc", url_black_orc)
 black_orc.armor_save = 3
 man_at_arm = model("Man_at_Arm", url_man_at_arm)
@@ -45,6 +49,11 @@ mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Rea
 mounted_knight_of_the_realm.armor_save = 3
 mounted_knight_of_the_realm.equip_weapon('lance')
 
+barded_pegasus = BardedPegasus("Barded Pegasus", url_barded_pegasus)
+barded_pegasus_unit = unit("Barded Pegasus Unit", barded_pegasus, 3,3,1)
+pegasus_knight = PegasusKnight("Pegasus Knight", url_pegasus_knight, mountUnit=barded_pegasus_unit)
+pegasus_knight_unit = unit("Pegasus Knight Unit", pegasus_knight, 3,3,1)
+
 
 
 
@@ -65,6 +74,9 @@ defender = orc_boy_unit
 
 attacker = night_goblin_unit
 night_goblin_unit.model.equip_weapon('short bow')
+
+attacker = pegasus_knight_unit
+defender = black_orc_unit
 
 for i in range(1000):
     defender.nmodels=10

@@ -226,3 +226,26 @@ class BretonnianWarhorse(model):
                                    'description': 'This model has special rules for Bretonnian Warhorses.',
                                    'tag': 'special'})
         self.AP = 0  # Example Armor Penetration value for Bretonnian Warhorses
+
+class BardedPegasus(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Barded Pegasus specific attributes can be added here
+        self.special_rules.append({'name': 'Barded Pegasus',
+                                   'description': 'This model has special rules for Barded Pegasi.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Barded Pegasi
+
+class PegasusKnight(model):
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        # Additional Pegasus Knight specific attributes can be added here
+        self.special_rules.append({'name': 'Pegasus Knight',
+                                   'description': 'This model has special rules for Pegasus Knights.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Flying Mount',
+                                   'description': 'This model has a flying mount, granting it enhanced mobility and combat advantages.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+
+        self.AP = 0  # Example Armor Penetration value for Pegasus Knights
