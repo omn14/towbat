@@ -77,10 +77,11 @@ attacker = mounted_knight_of_the_realm_unit
 defender = orc_boy_unit
 
 attacker = night_goblin_unit
-night_goblin_unit.model.equip_weapon('short bow')
+#night_goblin_unit.model.equip_weapon('short bow')
 goblin_wolf_rider_unit.model.equip_weapon('cavalry spear')
 attacker = goblin_wolf_rider_unit
 defender = pegasus_knight_unit
+defender=night_goblin_unit
 defender_nmodels = defender.nmodels
 for i in range(1000):
     print(f"--- BATTLE SIMULATION {i+1} ---")

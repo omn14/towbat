@@ -140,10 +140,12 @@ class SaurusWarrior(model):
         self.special_rules.append({'name': 'Stubborn',
                                    'description': 'This model is stubborn and has a higher Leadership.',
                                    'tag': 'psychology'})
+        """ 
         self.special_rules.append({'name': 'Morks curse',
                                    'description': 'This model must reroll saves of 6',
                                    'tag': 'saving throw',
                                    'to_save': lambda roll: reroll1d6(roll,[6],False)})
+         """
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
         self.weapons.update({
