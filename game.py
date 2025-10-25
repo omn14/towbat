@@ -3,6 +3,11 @@ from panda3d.core import Plane, PlaneNode, Point3, Vec3, BitMask32
 from panda3d.core import CardMaker
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape
 from direct.interval.LerpInterval import LerpPosInterval
+from panda3d.core import Shader
+
+from shaders.chargedistshaders import *
+from panda3d.core import Texture
+
 
 
 class MyApp(ShowBase):
@@ -15,10 +20,12 @@ class MyApp(ShowBase):
         # Create a flat plane using CardMaker
         cm = CardMaker("ground")
         cm.setFrame(-10, 10, -10, 10)  # 20x20 plane
-        ground = self.render.attachNewNode(cm.generate())
-        ground.setPos(0, 50, 0)
-        ground.setHpr(0, 0, 0)
-        ground.setColor(0, 1, 0, 1)  # Set plane color to green (RGBA)
+        self.ground = self.render.attachNewNode(cm.generate())
+        self.ground.setPos(0, 50, 0)
+        self.ground.setHpr(0, 0, 0)
+        self.ground.setColor(0, 1, 0, 1)  # Set plane color to green (RGBA)
+        tex = self.loader.loadTexture('maps/noise.rgb')
+        self.ground.setTexture(tex)
 
         # Load a smiley model and position it above the ground
         self.smiley = self.loader.loadModel('models/smiley')
@@ -34,12 +41,18 @@ class MyApp(ShowBase):
 
         # Position the camera above the plane, looking straight down
         self.camera.setPos(0, -300, 0)
-        self.camera.lookAt(ground)
+        self.camera.lookAt(self.ground)
         #self.camera.setP(-90)  # Pitch downwards
-
+        self.setup_shader()
         self.setup_bullet()
         self.accept('mouse1', self.upAndDown)
 
+    def setup_shader(self):
+        #surface = self.render.find("**/ground")
+        surface = self.ground
+        shader = Shader.make(Shader.SL_GLSL, chargedist_vertex_shader, chargedist_fragment_shader)
+        surface.setShader(shader)
+        surface.setShaderInput("pos", Vec3(0,0,0))
 
     def setup_bullet(self):
         self.world = BulletWorld()
@@ -53,10 +66,10 @@ class MyApp(ShowBase):
             print("fant node")
             geomNode = geomNP.node()
             ts = geomNP.getTransform(np)
-            print(ts)
+            #print(ts)
             for geom in geomNode.getGeoms():
                 mesh.addGeom(geom, ts=ts)
-                print(geom)
+                #print(geom)
         #lol
 
         worldNP = render.attachNewNode('World')
@@ -105,6 +118,8 @@ class MyApp(ShowBase):
             self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,2), duration=0.5)
             dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
             print(f"Distance between smilies: {dist}")
+
+            self.ground.set_shader_input("pos", result.getHitPos())
         return 
 
 app = MyApp()
