@@ -66,7 +66,7 @@ void main() {
     //vec2 uv = gl_FragCoord.xy / vec2(textureSize(p3d_Texture0, 0));
     vec2 uv = texcoord;
     // Center at (0.5, 0.5)
-    vec2 pos_uv = ((pos.xz)/10.0+vec2(1.0,1.0))*0.5;
+    vec2 pos_uv = ((pos.xy)/1.0+vec2(1.0,1.0))*0.5;
     //vec2 center = uv - vec2(0.5, 0.5);
     vec2 center = uv - (pos_uv );
     float dist = length(center);
@@ -76,11 +76,13 @@ void main() {
     // Draw a circle with radius 0.4
     float radius = 0.1;
     if (dist < radius) {
-        p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
+        //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
+        p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
     } else {
         //discard;
         //p3d_FragColor = texture(p3d_Texture0, texcoord);
-        p3d_FragColor = texture(p3d_Texture0, texcoord);
+        //p3d_FragColor = texture(p3d_Texture0, texcoord);
+        p3d_FragColor = color-texture(p3d_Texture0, texcoord)/2.0;
     }
 }
 """
