@@ -61,6 +61,8 @@ in vec2 texcoord;
 // Output to the screen
 out vec4 p3d_FragColor;
 
+
+
 void main() {
     // Get normalized coordinates in [0,1]
     //vec2 uv = gl_FragCoord.xy / vec2(textureSize(p3d_Texture0, 0));
@@ -78,7 +80,9 @@ void main() {
     if (dist < radius) {
         //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
         p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
-    } else {
+    } 
+    
+    else {
         //discard;
         //p3d_FragColor = texture(p3d_Texture0, texcoord);
         //p3d_FragColor = texture(p3d_Texture0, texcoord);

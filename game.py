@@ -1,8 +1,10 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Plane, PlaneNode, Point3, Vec3, Vec4, BitMask32
+from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32
 from panda3d.core import CardMaker
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape
-from direct.interval.LerpInterval import LerpPosInterval
+from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
+from direct.interval.IntervalGlobal import Sequence
+from direct.interval.FunctionInterval import Func
 from panda3d.core import Shader
 
 from shaders.chargedistshaders import *
@@ -12,6 +14,10 @@ from panda3d.core import MeshDrawer, NodePath
 import math
 from panda3d.bullet import BulletSphereShape, BulletRigidBodyNode
 from panda3d.bullet import BulletDebugNode
+from direct.directutil import Mopath
+from direct.interval.MopathInterval import MopathInterval
+from panda3d.core import NurbsCurveEvaluator, NurbsCurveResult
+from panda3d.core import NurbsCurve
 
 
 
@@ -67,6 +73,7 @@ class MyApp(ShowBase):
         self.setup_shader()
         self.setup_bullet()
         self.accept('mouse1', self.upAndDown)
+        self.accept('q-up', self.pathTowardsMouse)
 
 
     
@@ -74,9 +81,20 @@ class MyApp(ShowBase):
     def setup_shader(self):
         #surface = self.render.find("**/ground")
         surface = self.ground
-        shader = Shader.make(Shader.SL_GLSL, chargedist_vertex_shader, chargedist_fragment_shader)
+        shader = Shader.load(Shader.SL_GLSL, "shaders/c2.vert", "shaders/c1.frag")
         surface.setShader(shader)
         surface.setShaderInput("pos", Vec3(0,0,0))
+        # Define polygon points for the shader
+        self.polygonpoints = []
+        """ num_points = 6  # Example: hexagon
+        radius = 0.5
+        for i in range(num_points):
+            angle = 2 * math.pi * i / num_points
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+            self.polygonpoints.append(Vec2(x, y)) """
+        surface.setShaderInput("polygonpoints", self.polygonpoints)
+        self.polygonpoints = []
 
     def setup_bullet(self):
         self.world = BulletWorld()
@@ -84,7 +102,8 @@ class MyApp(ShowBase):
         node = BulletRigidBodyNode('Ground')
         node.addShape(shape)
         np = render.attachNewNode(node)
-        mesh = BulletTriangleMesh()
+        self.world.attachRigidBody(node)
+        """ mesh = BulletTriangleMesh()
 
         for geomNP in render.findAllMatches('**/+GeomNode'):
             print("fant node")
@@ -101,8 +120,8 @@ class MyApp(ShowBase):
         shape = BulletTriangleMeshShape(mesh, False)
         bodyNP = worldNP.attachNewNode(body)
         bodyNP.node().addShape(shape)
-        bodyNP.setCollideMask(BitMask32.allOn())
-        self.world.attachRigidBody(bodyNP.node())
+        bodyNP.setCollideMask(BitMask32.allOn()) 
+        self.world.attachRigidBody(bodyNP.node())"""
 
         # Show Bullet debug nodes
         debugNode = BulletDebugNode('Debug')
@@ -120,7 +139,7 @@ class MyApp(ShowBase):
         bounds = self.smiley_copy.getTightBounds()
         center = (bounds[0] + bounds[1]) * 0.5
         radius = max((bounds[1] - bounds[0]).length() * 0.5, 0.1)
-        #radius *= 10.5  # Adjust scale factor as needed
+        radius *= 0.5  # Adjust scale factor as needed
 
         smiley_copy_shape = BulletSphereShape(radius)
         smiley_copy_body = BulletRigidBodyNode('SmileyCopy')
@@ -130,16 +149,19 @@ class MyApp(ShowBase):
         self.world.attachRigidBody(smiley_copy_body)
 
         # Add a task to update Bullet physics every frame
-        def update_physics(task):
+        
+
+        self.taskMgr.add(self.update_physics, "update_physics")
+
+    def update_physics(self,task):
             dt = globalClock.getDt()
             self.world.doPhysics(dt)
+            
             return task.cont
-
-        self.taskMgr.add(update_physics, "update_physics")
-    
     def move_node_smoothly(self, node, target_pos, duration=1.0):
-        interval = LerpPosInterval(node, duration, target_pos)
-        interval.start()
+        interval = LerpPosInterval(node, duration, target_pos,blendType='easeInOut')
+        mySequence = Sequence(interval)
+        mySequence.start()
 
     def draw_circle(self, center=Point3(0, 0, 0), radius=5, segments=32, color=(1, 0, 0, 1)):
 
@@ -254,10 +276,45 @@ class MyApp(ShowBase):
         body = BulletRigidBodyNode('movearea')
         shape = BulletTriangleMeshShape(mesh, False)
         body.addShape(shape)
+        # Detach any existing BulletRigidBodyNode children from mesh_drawer_node
+        for child in self.mesh_drawer_node.getChildren():
+            if child.node().isOfType(BulletRigidBodyNode.getClassType()):
+                self.world.removeRigidBody(child.node())
+                child.detachNode()
         bodyNP = self.mesh_drawer_node.attachNewNode(body)
         bodyNP.node().setMass(0)
         bodyNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(bodyNP.node())
+        #self.world.doPhysics(0.01)
+         
+        # Calculate points along the arc's centerline
+        motionpath_points = []
+        for i in range(segments + 1):
+            angle = start_angle * (math.pi / 180) + i * angle_step
+            x = center.x + (radius - rect_width / 2) * math.cos(angle)
+            y = center.y + (radius - rect_width / 2) * math.sin(angle)
+            z = center.z
+            motionpath_points.append({
+                "pos": Point3(x, y, z),
+                "hpr": (math.degrees(angle), 0, 0)
+            })
+        
+        # Add points along the rectangle's centerline (straight out from arc end)
+        # Centerline starts at the end of the arc and goes straight in the arc's end direction
+        for i in range(1, 6):
+            t = i / 5.0
+            x = center.x + radius * math.cos(angle_rad) + t * rect_width * dir_x
+            y = center.y + radius * math.sin(angle_rad) + t * rect_width * dir_y
+            z = center.z
+            motionpath_points.append({
+            "pos": Point3(-x, y, z),
+            "hpr": (math.degrees(angle_rad), 0, 0)
+            })
+
+    
+        
+        
+
 
     def check_bullet_collision(self, node_a, node_b):
         """
@@ -314,8 +371,8 @@ class MyApp(ShowBase):
             print(result.getNode())
             #surface.set_shader_input("pos", result.getHitPos())
 
-            #self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
-            self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
+            self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
+            #self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
             dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
             print(f"Distance between smilies: {dist}")
 
@@ -328,17 +385,68 @@ class MyApp(ShowBase):
             unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
             print(f"Unit Width: {unitWidth}, Unit Height: {unitHeight}")
             self.ground.set_shader_input("unitSize", Vec3(unitWidth, unitHeight, 0))
-
+            """ 
             #self.draw_circle(center=Point3(0, 0, 5), radius=10, segments=64, color=(1, 1, 1, 1))
             self.draw_arc(center=Point3(0,0, 0), radius=self.unitHeight/2, remainingmove=5, start_angle=0, end_angle=45, segments=64, color=(1, 1, 1, 1))
             #self.mesh_drawer_node.reparentTo(self.smiley)
-            print(self.mesh_drawer_node.getPos())
+            print(self.smiley.ls())
             self.mesh_drawer_node.setPos(Vec3(-self.unitWidth/4, -self.unitHeight/4, 0))
             self.mesh_drawer_node.setZ(0)
             self.mesh_drawer_node.setHpr(90,0,0)
             collision = self.check_bullet_collision(self.mesh_drawer_node, self.smiley_copy)
-            self.mesh_drawer_node.hide()
+            #self.mesh_drawer_node.hide() 
+            """
             return
+    
+    def pathTowardsMouse(self):
+        
+        #time = task.time
+        #surface.setZ(0+sin(time)*3)
+        if base.mouseWatcherNode.hasMouse():
+            x = base.mouseWatcherNode.getMouseX()
+            y = base.mouseWatcherNode.getMouseY()
+            #print(x,y)
+            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
+            #pFrom = Point3(0, 0, 0)
+            #pTo = Point3(10, 0, 0)
+
+            # Get to and from pos in camera coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
+
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            result = self.world.rayTestClosest(pFrom, pTo)
+
+            print(result.hasHit())
+            print(result.getHitPos())
+            print(result.getHitNormal())
+            print(result.getHitFraction())
+            print(result.getNode())
+            #surface.set_shader_input("pos", result.getHitPos())
+
+            #self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
+            #self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
+
+            groundSizeboundingbox=self.ground.getTightBounds()
+            print(groundSizeboundingbox)
+            pos=result.getHitPos()/abs(groundSizeboundingbox[0][0])
+            self.ground.set_shader_input("pos", pos)
+            #self.polygonpoints = []
+            pos += Vec3(1, 1, 1)
+            pos *= 0.5
+            self.polygonpoints.append(Vec2(pos.x, pos.y))
+
+            self.ground.setShaderInput("polygonpoints", self.polygonpoints)
+            return
+
+
+
+
 
 app = MyApp()
 app.run()
