@@ -86,13 +86,13 @@ class MyApp(ShowBase):
         surface.setShaderInput("pos", Vec3(0,0,0))
         # Define polygon points for the shader
         self.polygonpoints = []
-        """ num_points = 6  # Example: hexagon
+        num_points = 6  # Example: hexagon
         radius = 0.5
         for i in range(num_points):
             angle = 2 * math.pi * i / num_points
             x = radius * math.cos(angle)
             y = radius * math.sin(angle)
-            self.polygonpoints.append(Vec2(x, y)) """
+            self.polygonpoints.append(Vec2(x, y))
         surface.setShaderInput("polygonpoints", self.polygonpoints)
         self.polygonpoints = []
 
@@ -398,6 +398,44 @@ class MyApp(ShowBase):
             """
             return
     
+
+    def pointArc(self, num_points=40, mouse_pos=None):
+        width=0.5
+
+        points =[]
+        origo   = Vec2(0.25,0.25)
+        points.append(origo)
+
+        arcmax = math.pi/4
+
+        for i in range(0,num_points):
+            angle = arcmax * i / num_points
+            x = width * math.cos(angle)
+            y = width * math.sin(angle)
+            points.append(Vec2(0.25,0.25)+Vec2(x,y))
+            vector=points[-1]-origo
+            pointmid=origo+vector*.5
+            vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
+            print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
+            if abs(vectormouse.dot(vector)) < .1:
+                break
+        points.append(points[-1]+Vec2(-math.sin(angle),math.cos(angle))*0.2)
+        points.append(points[0]+Vec2(-math.sin(angle),math.cos(angle))*0.2)
+
+        for i in range(len(points),num_points+3):
+            points.append(points[-1])
+        
+        print(len(points))
+
+        return points
+    
+    def mirrorPointArc(self, points):
+        mirrored_points = []
+        for p in points:
+            mirrored_points.append(Vec2(0.5 - (p.x - 0.5), p.y))
+        return mirrored_points
+    
+
     def pathTowardsMouse(self):
         
         #time = task.time
@@ -439,8 +477,11 @@ class MyApp(ShowBase):
             #self.polygonpoints = []
             pos += Vec3(1, 1, 1)
             pos *= 0.5
-            self.polygonpoints.append(Vec2(pos.x, pos.y))
-
+            self.polygonpoints.insert(0, Vec2(pos.x, pos.y))
+            if len(self.polygonpoints) > 6:
+                self.polygonpoints.pop()
+            self.polygonpoints = self.pointArc(40, mouse_pos=Vec2(pos.x, pos.y))
+            #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
             return
 
