@@ -408,19 +408,26 @@ class MyApp(ShowBase):
 
         arcmax = math.pi/4
 
+        rotationangle= math.pi/4/2
+
         for i in range(0,num_points):
             angle = arcmax * i / num_points
-            x = width * math.cos(angle)
+            x = width * math.cos(angle) 
             y = width * math.sin(angle)
             points.append(Vec2(0.25,0.25)+Vec2(x,y))
+
+            points[-1] = self.rotatePoint(points[-1], 45)
+
             vector=points[-1]-origo
             pointmid=origo+vector*.5
             vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
             print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
-            if abs(vectormouse.dot(vector)) < .1:
+            if abs(vectormouse.dot(vector)) < .01:
                 break
-        points.append(points[-1]+Vec2(-math.sin(angle),math.cos(angle))*0.2)
-        points.append(points[0]+Vec2(-math.sin(angle),math.cos(angle))*0.2)
+        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(45)),math.cos(angle+math.radians(45)))*0.2)
+        points[-1] = self.rotatePoint(points[-1], rotationangle)
+        points.append(points[0]+Vec2(-math.sin(angle+math.radians(45)),math.cos(angle+math.radians(45)))*0.2)
+        points[-1] = self.rotatePoint(points[-1], rotationangle)
 
         for i in range(len(points),num_points+3):
             points.append(points[-1])
@@ -435,6 +442,17 @@ class MyApp(ShowBase):
             mirrored_points.append(Vec2(0.5 - (p.x - 0.5), p.y))
         return mirrored_points
     
+    def rotatePoint(self, point, angle_degrees):
+        angle_radians = math.radians(angle_degrees)
+        cos_angle = math.cos(angle_radians)
+        sin_angle = math.sin(angle_radians)
+        origo = Vec2(0.25, 0.25)
+        x = point.x - origo.x
+        y = point.y - origo.y
+        # Counter-clockwise rotation
+        x_rotated = x * cos_angle - y * sin_angle
+        y_rotated = x * sin_angle + y * cos_angle
+        return Vec2(x_rotated + origo.x, y_rotated + origo.y)
 
     def pathTowardsMouse(self):
         
@@ -482,6 +500,7 @@ class MyApp(ShowBase):
                 self.polygonpoints.pop()
             self.polygonpoints = self.pointArc(40, mouse_pos=Vec2(pos.x, pos.y))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
+
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
             return
 
