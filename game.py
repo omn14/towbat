@@ -63,6 +63,8 @@ class MyApp(ShowBase):
         self.unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
         self.smiley.setH(self.smiley.getH()+11)
         #lol
+        self.arcPoint=Vec2(0.55,0.55)
+        self.arcPointRotation=0
 
         # Make a copy of the smiley model and position it differently
         self.smiley_copy = self.loader.loadModel('models/smiley')
@@ -80,7 +82,8 @@ class MyApp(ShowBase):
         self.setup_bullet()
         self.accept('mouse1', self.upAndDown)
         self.accept('q-up', self.pathTowardsMouse)
-        self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse])
+        self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        self.accept('mouse3', self.moveUnit)
 
 
     def taskLoopPathTowardsMouse(self, task):
@@ -436,7 +439,7 @@ class MyApp(ShowBase):
             #mouse_pos = self.rotatePoint(mouse_pos, 90, origo=midpoint)
 
             
-
+        nums=0
         for i in range(0,num_points):
             angle = arcmax * i / num_points
             x = width * math.cos(angle) 
@@ -449,22 +452,33 @@ class MyApp(ShowBase):
             pointmid=origo+vector*.5
             vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
             #print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
+            nums=i
             if abs(vectormouse.dot(vector)) < .01:
+                
                 break
+
         points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
         points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
+        print(points)
 
-        for i in range(len(points),num_points+3):
+        for n in range(len(points),num_points+3):
             points.append(points[-1])
         
         print(len(points))
 
         if filipped:
             mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
+            self.arcPoint=mirrored_points[nums+2]
+            self.arcPointRotation=math.degrees(-angle)
             return mirrored_points
+        
+        print(points)
+        self.arcPoint=points[nums+2]
+        self.arcPointRotation=math.degrees(angle)
 
+        
         return points
 
     def mirrorPointArc(self, points, mirror_vec, origin):
@@ -614,8 +628,26 @@ class MyApp(ShowBase):
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
-            self.polygonpoints = self.meshPointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y))
+            #self.polygonpoints = self.meshPointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y))
             return
+    
+    def moveUnit(self):
+        taskMgr.remove("taskLoopPathTowardsMouse")
+        pos = self.arcPoint
+        print("Normalized position:", pos)
+        pos=pos*2
+        print("Moving unit to arc point:", self.arcPoint)
+        pos -= Vec2(1,1)
+        
+        
+        print("Normalized position:", pos)
+        #pos.x *= abs(self.ground.getTightBounds()[0][0])
+        pos.x *= 50
+        pos.y *= 50
+        print("Calculated position:", pos)
+        self.smiley.setPos(pos.x , pos.y , 0)
+        self.smiley.setH(self.smiley.getH() + self.arcPointRotation)
+
 
 
 
