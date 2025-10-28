@@ -399,7 +399,7 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=0):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=1):
         width=0.5
 
         points =[]
@@ -408,18 +408,19 @@ class MyApp(ShowBase):
 
         arcmax = math.pi/2
 
-        rotationangle= 0
+        #rotationangle= 30
         midpoint=Vec2(width*math.cos(math.radians(rotationangle) ), width*math.sin(math.radians(rotationangle) ))*0.5+origo
         midpoint_unit_vector = midpoint - origo
         midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
         print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.dot(midpoint_mouse_vector))
         print("before mouse pos:", mouse_pos, "midpoint:", midpoint)
         filipped=False
-        if midpoint_unit_vector.dot(midpoint_mouse_vector) > 0:
+        if midpoint_unit_vector.normalized().dot(midpoint_mouse_vector) > 0:
             #rotationangle += 180
             print("flipped")
             filipped=True
-            mouse_pos = self.mirrorPointArc([mouse_pos], mirror_vec=Vec2(0, 10), origin=midpoint)[0]
+            vinkel=rotationangle+90
+            mouse_pos = self.mirrorPointArc([mouse_pos], mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)[0]
             print("after mouse pos:", mouse_pos)
             #mouse_pos = self.rotatePoint(mouse_pos, 90, origo=midpoint)
 
@@ -450,7 +451,7 @@ class MyApp(ShowBase):
         print(len(points))
 
         if filipped:
-            mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(0, 10), origin=midpoint)
+            mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
             return mirrored_points
 
         return points
