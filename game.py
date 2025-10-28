@@ -399,54 +399,97 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self, num_points=40, mouse_pos=None):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=0):
         width=0.5
 
         points =[]
-        origo   = Vec2(0.25,0.25)
+        #origo   = Vec2(0.55,0.55)
         points.append(origo)
 
-        arcmax = math.pi/4
+        arcmax = math.pi/2
 
-        rotationangle= math.pi/4/2
+        rotationangle= 0
+        midpoint=Vec2(width*math.cos(math.radians(rotationangle) ), width*math.sin(math.radians(rotationangle) ))*0.5+origo
+        midpoint_unit_vector = midpoint - origo
+        midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
+        print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.dot(midpoint_mouse_vector))
+        print("before mouse pos:", mouse_pos, "midpoint:", midpoint)
+        filipped=False
+        if midpoint_unit_vector.dot(midpoint_mouse_vector) > 0:
+            #rotationangle += 180
+            print("flipped")
+            filipped=True
+            mouse_pos = self.mirrorPointArc([mouse_pos], mirror_vec=Vec2(0, 10), origin=midpoint)[0]
+            print("after mouse pos:", mouse_pos)
+            #mouse_pos = self.rotatePoint(mouse_pos, 90, origo=midpoint)
+
+            
 
         for i in range(0,num_points):
             angle = arcmax * i / num_points
             x = width * math.cos(angle) 
             y = width * math.sin(angle)
-            points.append(Vec2(0.25,0.25)+Vec2(x,y))
+            points.append(origo+Vec2(x,y))
 
-            points[-1] = self.rotatePoint(points[-1], 45)
+            points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
 
             vector=points[-1]-origo
             pointmid=origo+vector*.5
             vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
-            print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
+            #print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
             if abs(vectormouse.dot(vector)) < .01:
                 break
-        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(45)),math.cos(angle+math.radians(45)))*0.2)
-        points[-1] = self.rotatePoint(points[-1], rotationangle)
-        points.append(points[0]+Vec2(-math.sin(angle+math.radians(45)),math.cos(angle+math.radians(45)))*0.2)
-        points[-1] = self.rotatePoint(points[-1], rotationangle)
+        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
+        #points[-1] = self.rotatePoint(points[-1], rotationangle)
+        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
+        #points[-1] = self.rotatePoint(points[-1], rotationangle)
 
         for i in range(len(points),num_points+3):
             points.append(points[-1])
         
         print(len(points))
 
+        if filipped:
+            mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(0, 10), origin=midpoint)
+            return mirrored_points
+
         return points
-    
-    def mirrorPointArc(self, points):
+
+    def mirrorPointArc(self, points, mirror_vec, origin):
         mirrored_points = []
+        # Mirror about a vector (not necessarily passing through (0,0); use 'origin' as the base point)
+        # To mirror about an arbitrary vector, you need to specify the vector direction.
+        # Here, let's add an optional argument for the mirror vector:
+        # Usage: mirrorPointArc(points, mirror_vec=Vec2(1,0))
+        #mirror_vec = getattr(self, 'mirror_vec', Vec2(1, 0))  # Default to x-axis if not set
+        #mirror_vec = mirror_vec
+        mirror_vec = mirror_vec.normalized()
+        print("Mirroring with vector:", mirror_vec)
         for p in points:
-            mirrored_points.append(Vec2(0.5 - (p.x - 0.5), p.y))
+            # Vector from origin to point
+            print("Original point:", p)
+            v = p - origin
+            # Project v onto mirror_vec
+            print(v.dot(mirror_vec))
+            print(v.normalized().dot(mirror_vec))
+            proj =  (mirror_vec * v.normalized().dot(mirror_vec)) * v.length()
+            # Perpendicular component
+            print("v:", v, "proj:", proj)
+            perp = v - proj
+            print("perp:", perp)
+            # Mirror: subtract twice the perpendicular component
+            mirrored_v = p -  perp * 2
+            mirrored_points.append(Vec2(mirrored_v.x, mirrored_v.y))
+        """ for p in points:
+            mirrored_points.append(Vec2(0.5 - (p.x - 0.5), p.y)) """
         return mirrored_points
     
-    def rotatePoint(self, point, angle_degrees):
+
+    
+    def rotatePoint(self, point, angle_degrees, origo=Vec2(0.25,0.25)):
         angle_radians = math.radians(angle_degrees)
         cos_angle = math.cos(angle_radians)
         sin_angle = math.sin(angle_radians)
-        origo = Vec2(0.25, 0.25)
         x = point.x - origo.x
         y = point.y - origo.y
         # Counter-clockwise rotation
@@ -498,7 +541,7 @@ class MyApp(ShowBase):
             self.polygonpoints.insert(0, Vec2(pos.x, pos.y))
             if len(self.polygonpoints) > 6:
                 self.polygonpoints.pop()
-            self.polygonpoints = self.pointArc(40, mouse_pos=Vec2(pos.x, pos.y))
+            self.polygonpoints = self.pointArc(origo=Vec2(0.25, 0.25), num_points=40, mouse_pos=Vec2(pos.x, pos.y))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
