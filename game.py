@@ -30,13 +30,15 @@ class MyApp(ShowBase):
 
         # Create a flat plane using CardMaker
         cm = CardMaker("ground")
-        cm.setFrame(-25, 25, -25, 25)  # 200x200 plane
+        cm.setFrame(-50, 50, -50, 50)  # 200x200 plane
         self.ground = self.render.attachNewNode(cm.generate())
         self.ground.setPos(0, 0, 0)
         self.ground.setHpr(0, -90, 0)
         self.ground.setColor(0, 1, 0, 1)  # Set plane color to green (RGBA)
         tex = self.loader.loadTexture('maps/noise.rgb')
+        #tex = self.loader.loadTexture('maps/panda_head.rgb')
         self.ground.setTexture(tex)
+        self.groundSizeboundingbox=self.ground.getTightBounds()
 
         # Directional light
         dlight = DirectionalLight('dlight')
@@ -59,6 +61,8 @@ class MyApp(ShowBase):
         print(self.smiley.getTightBounds())
         self.unitWidth=abs(self.smiley.getTightBounds()[1][0]-self.smiley.getTightBounds()[0][0])
         self.unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
+        self.smiley.setH(self.smiley.getH()+11)
+        #lol
 
         # Make a copy of the smiley model and position it differently
         self.smiley_copy = self.loader.loadModel('models/smiley')
@@ -67,15 +71,21 @@ class MyApp(ShowBase):
         self.smiley_copy.setScale(2)
 
         # Position the camera above the plane, looking straight down
-        self.camera.setPos(0, 300, 300)
+        self.disableMouse()
+        self.camera.setPos(0, -75, 150)
         self.camera.lookAt(self.ground)
+        #self.enableMouse()
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
         self.setup_bullet()
         self.accept('mouse1', self.upAndDown)
         self.accept('q-up', self.pathTowardsMouse)
+        self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse])
 
 
+    def taskLoopPathTowardsMouse(self, task):
+        self.pathTowardsMouse()
+        return task.cont
     
 
     def setup_shader(self):
@@ -371,7 +381,7 @@ class MyApp(ShowBase):
             print(result.getNode())
             #surface.set_shader_input("pos", result.getHitPos())
 
-            self.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
+            self.smiley.setPos(result.getHitPos() + Vec3(0,0,0))
             #self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
             dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
             print(f"Distance between smilies: {dist}")
@@ -385,6 +395,9 @@ class MyApp(ShowBase):
             unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
             print(f"Unit Width: {unitWidth}, Unit Height: {unitHeight}")
             self.ground.set_shader_input("unitSize", Vec3(unitWidth, unitHeight, 0))
+
+            
+
             """ 
             #self.draw_circle(center=Point3(0, 0, 5), radius=10, segments=64, color=(1, 1, 1, 1))
             self.draw_arc(center=Point3(0,0, 0), radius=self.unitHeight/2, remainingmove=5, start_angle=0, end_angle=45, segments=64, color=(1, 1, 1, 1))
@@ -399,9 +412,7 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21):
-        width=0.5
-
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5):
         points =[]
         #origo   = Vec2(0.55,0.55)
         points.append(origo)
@@ -533,7 +544,7 @@ class MyApp(ShowBase):
         return points
 
     def pathTowardsMouse(self):
-        
+        #self.smiley.setH(self.smiley.getH()+11)
         #time = task.time
         #surface.setZ(0+sin(time)*3)
         if base.mouseWatcherNode.hasMouse():
@@ -573,14 +584,37 @@ class MyApp(ShowBase):
             #self.polygonpoints = []
             pos += Vec3(1, 1, 1)
             pos *= 0.5
-            self.polygonpoints.insert(0, Vec2(pos.x, pos.y))
+            """ self.polygonpoints.insert(0, Vec2(pos.x, pos.y))
             if len(self.polygonpoints) > 6:
-                self.polygonpoints.pop()
-            self.polygonpoints = self.pointArc(origo=Vec2(0.25, 0.25), num_points=40, mouse_pos=Vec2(pos.x, pos.y))
+                self.polygonpoints.pop() """
+            
+            
+
+            unitwidth=self.unitWidth/abs(groundSizeboundingbox[0][0])/2
+
+            unitheight=self.unitHeight/abs(groundSizeboundingbox[0][1])/2
+
+            unitrotation=self.smiley.getH()
+
+            unitposxy=Vec2(self.smiley.getX()/abs(groundSizeboundingbox[0][0]), self.smiley.getY()/abs(groundSizeboundingbox[0][1]))
+            unitposxy += Vec2(1,1)
+            unitposxy *= 0.5
+
+            #unitposxy += Vec2(-math.cos(math.radians(unitrotation))*unitwidth*0.5, -math.sin(math.radians(unitrotation))*unitheight*0.5)
+            unitposxy.x += -math.cos(math.radians(unitrotation))*unitwidth*0.5
+            unitposxy.y += -math.sin(math.radians(unitrotation))*unitwidth*0.5
+
+            #pos.x = -math.cos(math.radians(unitrotation))*unitwidth*0.5
+            #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
+
+            print(f"unitposxy: {unitposxy} smileypos: {self.smiley.getPos()} groundbb: {groundSizeboundingbox}")
+
+            self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
+                                               width=unitwidth, rotationangle=self.smiley.getH())
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
-            self.polygonpoints = self.meshPointArc(origo=Vec2(0.25, 0.25), num_points=40, mouse_pos=Vec2(pos.x, pos.y))
+            self.polygonpoints = self.meshPointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y))
             return
 
 

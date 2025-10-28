@@ -57,10 +57,12 @@ void main() {
         //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
         p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
         float d = sdPolygon(uv, polygonpoints);
-        vec3 col = (d>0.0) ? vec3(0.9,0.6,0.3) : vec3(0.65,0.85,1.0);
-        col *= 1.0 - exp(-6.0*abs(d));
-        col *= 0.8 + 0.2*cos(140.0*d);
-        col = mix( col, vec3(1.0), 1.0-smoothstep(0.0,0.015,abs(d)) );
+        //vec3 col = (d>0.0) ? vec3(0.9,0.6,0.3) : vec3(0.65,0.85,1.0);
+        //vec3 col = (d>0.0) ? vec3(0.9,0.6,0.3) : texture(p3d_Texture0, texcoord).rgb;
+        vec3 col = (d>0.0) ? texture(p3d_Texture0, texcoord).rgb : vec3(0.65,0.85,1.0);
+        col *= 1.0 - exp(-24.0*abs(d));
+        col *= 0.8 + 0.2*cos(2*140.0*d);
+        col = mix( col, vec3(1.0), 1.0-smoothstep(0.0,0.015,abs(d)+0.0075) );
         p3d_FragColor = vec4(col,1.0);
     } 
     
