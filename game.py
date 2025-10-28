@@ -399,7 +399,7 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=1):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21):
         width=0.5
 
         points =[]
