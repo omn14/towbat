@@ -497,6 +497,40 @@ class MyApp(ShowBase):
         x_rotated = x * cos_angle - y * sin_angle
         y_rotated = x * sin_angle + y * cos_angle
         return Vec2(x_rotated + origo.x, y_rotated + origo.y)
+    
+    def meshPointArc(self, origo, num_points=40, mouse_pos=None, rotationangle=-21):
+        if not hasattr(self, 'mesh_drawer'):
+            self.mesh_drawer = MeshDrawer()
+            self.mesh_drawer.setBudget(1000)
+            
+            self.mesh_drawer_node = self.mesh_drawer.getRoot()
+            self.mesh_drawer_node.setTwoSided(True)
+            self.mesh_drawer_node.reparentTo(self.smiley)
+
+        #self.mesh_drawer.begin(base.cam, self.render)
+        points = self.pointArc(origo, num_points, mouse_pos, rotationangle)
+        mesh = BulletTriangleMesh()
+
+        for i in range(1, len(points)-2):
+            p0 = Point3(points[0].x, points[0].y, 0)
+            p1 = Point3(points[i].x, points[i].y, 0)
+            p2 = Point3(points[i+1].x, points[i+1].y, 0)
+            mesh.add_triangle(p0, p1, p2)
+
+        body = BulletRigidBodyNode('arcarea')
+        shape = BulletTriangleMeshShape(mesh, False)
+        body.addShape(shape)
+        # Detach any existing BulletRigidBodyNode children from mesh_drawer_node
+        for child in self.mesh_drawer_node.getChildren():
+            if child.node().isOfType(BulletRigidBodyNode.getClassType()):
+                self.world.removeRigidBody(child.node())
+                child.detachNode()
+        bodyNP = self.mesh_drawer_node.attachNewNode(body)
+        bodyNP.setHpr(90,0,0)
+        bodyNP.node().setMass(0)
+        bodyNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(bodyNP.node())
+        return points
 
     def pathTowardsMouse(self):
         
@@ -546,6 +580,7 @@ class MyApp(ShowBase):
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
+            self.polygonpoints = self.meshPointArc(origo=Vec2(0.25, 0.25), num_points=40, mouse_pos=Vec2(pos.x, pos.y))
             return
 
 
