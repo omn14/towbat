@@ -457,12 +457,14 @@ class MyApp(ShowBase):
                 
                 break
 
-        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
+        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
-        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.4)
+        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
         print(points)
-
+        nums=len(points)
+        midpointfront = (points[-1] + points[-2]) * 0.5
+        midpointfront = (points[nums-1] + points[nums-2]) * 0.5
         for n in range(len(points),num_points+3):
             points.append(points[-1])
         
@@ -470,12 +472,15 @@ class MyApp(ShowBase):
 
         if filipped:
             mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
-            self.arcPoint=mirrored_points[nums+2]
+            #self.arcPoint=mirrored_points[nums+2]
+            #self.arcPoint=midpointfront
+            self.arcPoint=(mirrored_points[nums-1] + mirrored_points[nums-2]) * 0.5
             self.arcPointRotation=math.degrees(-angle)
             return mirrored_points
         
         print(points)
-        self.arcPoint=points[nums+2]
+        #self.arcPoint=(points[nums+1]+points[nums])*0.5
+        self.arcPoint=midpointfront
         self.arcPointRotation=math.degrees(angle)
 
         
