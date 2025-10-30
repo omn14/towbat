@@ -89,6 +89,9 @@ class MyApp(ShowBase):
         self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.accept('mouse3', self.moveUnit)
 
+        self.numsPoints=0
+        self.unitHitPos=Point3(0,0,0)
+
 
 
 
@@ -486,6 +489,7 @@ class MyApp(ShowBase):
         nums=len(points)
         midpointfront = (points[-1] + points[-2]) * 0.5
         midpointfront = (points[nums-1] + points[nums-2]) * 0.5
+        self.numsPoints=nums
         for n in range(len(points),num_points+3):
             points.append(points[-1])
         
@@ -654,8 +658,57 @@ class MyApp(ShowBase):
                                                movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
+            
+            #self.playerNP.setPos(result.getHitPos()+Vec3(10,10,0))
+            #self.playerNP.node().setLinearMovement(Vec3(10,10,0), True)
+            p1 = (self.polygonpoints[self.numsPoints-3]*2-1)*50
+            p2 = (self.polygonpoints[self.numsPoints-2]*2-1)*50
+            p3 = (self.polygonpoints[0]*2-1)*50
+            p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
+            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.1), Point3(p2.x, p2.y, 0.1))
+            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.1), Point3(p4.x, p4.y, 0.1))
+            ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
+            ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
+            print("Cont:", cont2.hasHit(), cont2.getHitPos())
+            closest_dist=0
+            if cont2.hasHit() or cont.hasHit():
+                # Check which contact point is closest to smiley
+                closest_dist = float('inf')
+                closest_pos = None
+                for hit_pos in [cont.getHitPos(), cont2.getHitPos()]:
+                    if hit_pos:
+                        dist = (hit_pos - self.smiley.getPos()).length()
+                        if dist < closest_dist:
+                            closest_dist = dist
+                            closest_pos = hit_pos
+
+                if closest_pos:
+                    self.unitHitPos = closest_pos
+                    self.playerNP.setPos(closest_pos)
+                    #self.polygonpoints[self.numsPoints-1] = Vec2((closest_pos.x / 50 + 1) * 0.5, (closest_pos.y / 50 + 1) * 0.5)
+                    #self.polygonpoints[self.numsPoints-2] = self.polygonpoints[self.numsPoints-1]-\
+                    #                                        Vec2(math.cos(math.radians(self.arcPointRotation)),\
+                    #                                              math.sin(math.radians(self.arcPointRotation))).normalized()*\
+                    #                                                self.unitWidth/2/abs(groundSizeboundingbox[0][0])
+                #else:
+                #self.unitHitPos=cont2.getHitPos()
+                #self.playerNP.setPos(cont2.getHitPos())
+                    newmove = closest_dist+math.radians(self.arcPointRotation)*self.unitHeight
+                    self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
+                                                    width=unitwidth, rotationangle=self.smiley.getH(), 
+                                                    movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
+
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
-            self.playerNP.setPos(result.getHitPos()+Vec3(10,10,0))
+            """ contacts = self.world.contactTest(self.playerNP.node())
+            for contact in contacts.getContacts():
+                print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
+                mpoint = contact.getManifoldPoint()
+            print(mpoint.getDistance())
+            print(mpoint.getAppliedImpulse())
+            print(mpoint.getPositionWorldOnA())
+            print(mpoint.getPositionWorldOnB())
+            print(mpoint.getLocalPointA())
+            print(mpoint.getLocalPointB()) """
             return
     
     def moveUnit(self):
@@ -666,7 +719,6 @@ class MyApp(ShowBase):
         print("Moving unit to arc point:", self.arcPoint)
         pos -= Vec2(1,1)
         
-        
         print("Normalized position:", pos)
         #pos.x *= abs(self.ground.getTightBounds()[0][0])
         pos.x *= 50
@@ -674,6 +726,7 @@ class MyApp(ShowBase):
         print("Calculated position:", pos)
         self.smiley.setPos(pos.x , pos.y , 0)
         self.smiley.setH(self.smiley.getH() + self.arcPointRotation)
+
 
 
 
