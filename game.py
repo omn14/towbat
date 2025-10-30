@@ -19,6 +19,10 @@ from direct.interval.MopathInterval import MopathInterval
 from panda3d.core import NurbsCurveEvaluator, NurbsCurveResult
 from panda3d.core import NurbsCurve
 
+from panda3d.bullet import BulletCharacterControllerNode
+from panda3d.bullet import BulletCapsuleShape
+from panda3d.bullet import ZUp
+
 
 
 class MyApp(ShowBase):
@@ -84,6 +88,8 @@ class MyApp(ShowBase):
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.accept('mouse3', self.moveUnit)
+
+
 
 
     def taskLoopPathTowardsMouse(self, task):
@@ -152,7 +158,7 @@ class MyApp(ShowBase):
         bounds = self.smiley_copy.getTightBounds()
         center = (bounds[0] + bounds[1]) * 0.5
         radius = max((bounds[1] - bounds[0]).length() * 0.5, 0.1)
-        radius *= 0.5  # Adjust scale factor as needed
+        radius *= 1.5  # Adjust scale factor as needed
 
         smiley_copy_shape = BulletSphereShape(radius)
         smiley_copy_body = BulletRigidBodyNode('SmileyCopy')
@@ -161,9 +167,21 @@ class MyApp(ShowBase):
         smiley_copy_np.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(smiley_copy_body)
 
-        # Add a task to update Bullet physics every frame
-        
+        # Add a simple Bullet character controller for the player
+        height = 1.75
+        radius = 0.4
+        shape = BulletCapsuleShape(radius, height - 2*radius, ZUp)
 
+        playerNode = BulletCharacterControllerNode(shape, 0.4, 'Player')
+        #self.playerNP = self.worldNP.attachNewNode(playerNode)
+        self.playerNP = render.attachNewNode(playerNode)
+        self.playerNP.setPos(-2, 0, 14)
+        self.playerNP.setH(45)
+        self.playerNP.setCollideMask(BitMask32.allOn())
+        #self.playerNP.setKinematic(True)
+
+        self.world.attachCharacter(self.playerNP.node())
+        # Add a task to update Bullet physics every frame
         self.taskMgr.add(self.update_physics, "update_physics")
 
     def update_physics(self,task):
@@ -637,6 +655,7 @@ class MyApp(ShowBase):
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
+            self.playerNP.setPos(result.getHitPos()+Vec3(10,10,0))
             return
     
     def moveUnit(self):
