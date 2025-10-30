@@ -415,7 +415,7 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,movedistance=8):
         points =[]
         #origo   = Vec2(0.55,0.55)
         points.append(origo)
@@ -457,9 +457,12 @@ class MyApp(ShowBase):
                 
                 break
 
-        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+        movedistance-=angle*width
+        #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
-        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+        #points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
         print(points)
         nums=len(points)
@@ -629,11 +632,11 @@ class MyApp(ShowBase):
             print(f"unitposxy: {unitposxy} smileypos: {self.smiley.getPos()} groundbb: {groundSizeboundingbox}")
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                               width=unitwidth, rotationangle=self.smiley.getH())
+                                               width=unitwidth, rotationangle=self.smiley.getH(), 
+                                               movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
-            #self.polygonpoints = self.meshPointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y))
             return
     
     def moveUnit(self):
