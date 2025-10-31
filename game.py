@@ -24,7 +24,8 @@ from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import ZUp
 
 class unitGraphics():
-    def __init__(self, modelpath, scale=1.0,BulletWorld=None):
+    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None):
+        self.unitName=name
         self.world=BulletWorld
         self.model = loader.loadModel(modelpath)
         self.model.setScale(scale)
@@ -32,7 +33,7 @@ class unitGraphics():
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
         print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
-        self.model.setPos(35,0,0)
+        #self.model.setPos(35,0,0)
         self.setUpCollisions()
 
     def setUpCollisions(self):
@@ -44,13 +45,18 @@ class unitGraphics():
 
             # Create box shape from bounding box dimensions
             box_size = bounds[1] - bounds[0]
-            shape = BulletBoxShape(box_size * 0.25)  # BulletBoxShape takes half-extents
-            body = BulletRigidBodyNode('UnitCollision')
+            shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
+            body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
             body.addShape(shape)
             body.setMass(0)  # Static object
-            bodyNP = self.model.attachNewNode(body)
-            bodyNP.setCollideMask(BitMask32.allOn())
+            self.bodyNP = render.attachNewNode(body)
+            self.bodyNP.setCollideMask(BitMask32.allOn())
             self.world.attachRigidBody(body)
+            self.model.reparentTo(self.bodyNP)
+            self.bodyNP.setScale(2.0)
+            self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
+            self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
+
 
 
 
@@ -87,6 +93,7 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
 
+        """ 
         # Load a smiley model and position it above the ground
         self.smiley = self.loader.loadModel('models/goblin_archers.bam')
         self.smiley.reparentTo(self.render)
@@ -97,7 +104,10 @@ class MyApp(ShowBase):
         self.unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
         print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
         #lol
-        self.smiley.setH(self.smiley.getH()+11)
+        self.smiley.setH(self.smiley.getH()+11) """
+
+        
+
         #lol
         self.arcPoint=Vec2(0.55,0.55)
         self.arcPointRotation=0
@@ -126,10 +136,10 @@ class MyApp(ShowBase):
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
-        self.bretBowmen = unitGraphics('models/bret_bowmen.bam', scale=2.0, BulletWorld=self.world)
-
-
-
+        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world)
+        self.bretBowmen.bodyNP.setPos(35,0,0)
+        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world)
+        self.goblins.bodyNP.setPos(0,-20,0)
 
     def taskLoopPathTowardsMouse(self, task):
         self.pathTowardsMouse()
@@ -441,18 +451,19 @@ class MyApp(ShowBase):
             print(result.getNode())
             #surface.set_shader_input("pos", result.getHitPos())
 
-            self.smiley.setPos(result.getHitPos() + Vec3(0,0,0))
+            #self.smiley.setPos(result.getHitPos() + Vec3(0,0,0))
+            self.goblins.bodyNP.setPos(result.getHitPos())
             #self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
-            dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
-            print(f"Distance between smilies: {dist}")
+            #dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
+            #print(f"Distance between smilies: {dist}")
 
             
             groundSizeboundingbox=self.ground.getTightBounds()
             print(groundSizeboundingbox)
             self.ground.set_shader_input("pos", result.getHitPos()/abs(groundSizeboundingbox[0][0]))
-            print(self.smiley.getTightBounds())
-            unitWidth=abs(self.smiley.getTightBounds()[1][0]-self.smiley.getTightBounds()[0][0])
-            unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
+            print(self.goblins.model.getTightBounds())
+            unitWidth=abs(self.goblins.model.getTightBounds()[1][0]-self.goblins.model.getTightBounds()[0][0])
+            unitHeight=abs(self.goblins.model.getTightBounds()[1][1]-self.goblins.model.getTightBounds()[0][1])
             print(f"Unit Width: {unitWidth}, Unit Height: {unitHeight}")
             self.ground.set_shader_input("unitSize", Vec3(unitWidth, unitHeight, 0))
 
@@ -670,13 +681,13 @@ class MyApp(ShowBase):
             
             
 
-            unitwidth=self.unitWidth/abs(groundSizeboundingbox[0][0])/2
+            unitwidth=self.goblins.unitWidth/abs(groundSizeboundingbox[0][0])/2
 
-            unitheight=self.unitHeight/abs(groundSizeboundingbox[0][1])/2
+            unitheight=self.goblins.unitHeight/abs(groundSizeboundingbox[0][1])/2
 
-            unitrotation=self.smiley.getH()
+            unitrotation=self.goblins.bodyNP.getH()
 
-            unitposxy=Vec2(self.smiley.getX()/abs(groundSizeboundingbox[0][0]), self.smiley.getY()/abs(groundSizeboundingbox[0][1]))
+            unitposxy=Vec2(self.goblins.bodyNP.getX()/abs(groundSizeboundingbox[0][0]), self.goblins.bodyNP.getY()/abs(groundSizeboundingbox[0][1]))
             unitposxy += Vec2(1,1)
             unitposxy *= 0.5
 
@@ -687,10 +698,10 @@ class MyApp(ShowBase):
             #pos.x = -math.cos(math.radians(unitrotation))*unitwidth*0.5
             #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
 
-            print(f"unitposxy: {unitposxy} smileypos: {self.smiley.getPos()} groundbb: {groundSizeboundingbox}")
+            print(f"unitposxy: {unitposxy} smileypos: {self.goblins.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                               width=unitwidth, rotationangle=self.smiley.getH(), 
+                                               width=unitwidth, rotationangle=self.goblins.bodyNP.getH(),
                                                movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
@@ -734,10 +745,10 @@ class MyApp(ShowBase):
                 self.unitHitPos = closest_pos
                 self.playerNP.setPos(closest_pos)
 
-                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*self.unitWidth
+                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*self.goblins.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
                 self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                                width=unitwidth, rotationangle=self.smiley.getH(), 
+                                                width=unitwidth, rotationangle=self.goblins.bodyNP.getH(), 
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
@@ -766,12 +777,12 @@ class MyApp(ShowBase):
         pos.x *= 50
         pos.y *= 50
         print("Calculated position:", pos)
-        self.smiley.setPos(pos.x , pos.y , 0)
-        self.smiley.setH(self.smiley.getH() + self.arcPointRotation)
-        #self.checkUnitContact(self.smiley)
+        self.goblins.bodyNP.setPos(pos.x , pos.y , 0)
+        self.goblins.bodyNP.setH(self.goblins.bodyNP.getH() + self.arcPointRotation)
+        self.checkUnitContact(self.goblins.bodyNP)
 
     def checkUnitContact(self, unit):
-        contacts = self.world.contactTest(unit.node)
+        contacts = self.world.contactTest(unit.node())
         for contact in contacts.getContacts():
             print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
             mpoint = contact.getManifoldPoint()
