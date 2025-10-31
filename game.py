@@ -65,6 +65,8 @@ class MyApp(ShowBase):
         print(self.smiley.getTightBounds())
         self.unitWidth=abs(self.smiley.getTightBounds()[1][0]-self.smiley.getTightBounds()[0][0])
         self.unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
+        print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
+        #lol
         self.smiley.setH(self.smiley.getH()+11)
         #lol
         self.arcPoint=Vec2(0.55,0.55)
@@ -677,7 +679,12 @@ class MyApp(ShowBase):
                 closest_pos = None
                 for hit_pos in [cont.getHitPos(), cont2.getHitPos()]:
                     if hit_pos:
-                        dist = (hit_pos - self.smiley.getPos()).length()
+                        #dist = (hit_pos - self.smiley.getPos()).length()
+                        dist = (hit_pos - Point3(p1.x, p1.y, 0.1)).length()
+                        if dist < closest_dist:
+                            closest_dist = dist
+                            closest_pos = hit_pos
+                        dist = (hit_pos - Point3(p3.x, p3.y, 0.1)).length()
                         if dist < closest_dist:
                             closest_dist = dist
                             closest_pos = hit_pos
@@ -693,7 +700,7 @@ class MyApp(ShowBase):
                 #else:
                 #self.unitHitPos=cont2.getHitPos()
                 #self.playerNP.setPos(cont2.getHitPos())
-                    newmove = closest_dist+math.radians(self.arcPointRotation)*self.unitHeight
+                    newmove = closest_dist+math.radians(self.arcPointRotation)*self.unitWidth
                     self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
                                                     width=unitwidth, rotationangle=self.smiley.getH(), 
                                                     movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
