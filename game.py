@@ -128,10 +128,11 @@ class MyApp(ShowBase):
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
         self.setup_bullet()
-        self.accept('mouse1', self.upAndDown)
+        #self.accept('mouse1', self.upAndDown)
+        self.accept('mouse1', self.setActiveUnit)
         self.accept('q-up', self.pathTowardsMouse)
-        self.accept('w-up', taskMgr.add,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
-        self.accept('mouse3', self.moveUnit)
+        self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
@@ -140,10 +141,50 @@ class MyApp(ShowBase):
         self.bretBowmen.bodyNP.setPos(35,0,0)
         self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world)
         self.goblins.bodyNP.setPos(0,-20,0)
+        self.unitToMove=self.bretBowmen
+        self.accept('mouse3', self.moveUnit,[self.unitToMove])
+
+    def startTaskFunction(self,taskfunction,taskname):
+        if taskMgr.hasTaskNamed(taskname):
+            taskMgr.remove(taskname)
+        taskMgr.add(taskfunction, taskname)
+        return
 
     def taskLoopPathTowardsMouse(self, task):
-        self.pathTowardsMouse()
+        self.pathTowardsMouse(self.unitToMove)
         return task.cont
+    
+    def setActiveUnit(self):
+        if base.mouseWatcherNode.hasMouse():
+            # Get mouse position in normalized device coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
+            
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+            
+            # Perform ray test
+            result = self.world.rayTestClosest(pFrom, pTo)
+            
+            if result.hasHit():
+                hit_node = result.getNode()
+                # Check if hit node is a unit
+                if isinstance(hit_node, BulletRigidBodyNode):
+                    node_name = hit_node.getName()
+                    if node_name.startswith('UnitCollision-'):
+                        unit_name = node_name.replace('UnitCollision-', '')
+                        # Set the active unit based on which was clicked
+                        if unit_name == self.bretBowmen.unitName:
+                            self.unitToMove = self.bretBowmen
+                            print(f"Selected unit: {self.bretBowmen.unitName}")
+                        elif unit_name == self.goblins.unitName:
+                            self.unitToMove = self.goblins
+                            print(f"Selected unit: {self.goblins.unitName}")
+                        self.accept('mouse3', self.moveUnit,[self.unitToMove])
+            self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
     
 
     def setup_shader(self):
@@ -634,11 +675,10 @@ class MyApp(ShowBase):
         self.world.attachRigidBody(bodyNP.node())
         return points
 
-    def pathTowardsMouse(self):
-        #self.smiley.setH(self.smiley.getH()+11)
-        #time = task.time
-        #surface.setZ(0+sin(time)*3)
+    def pathTowardsMouse(self,unit):
+        
         if base.mouseWatcherNode.hasMouse():
+            self.unitToMove=unit
             x = base.mouseWatcherNode.getMouseX()
             y = base.mouseWatcherNode.getMouseY()
             #print(x,y)
@@ -681,13 +721,13 @@ class MyApp(ShowBase):
             
             
 
-            unitwidth=self.goblins.unitWidth/abs(groundSizeboundingbox[0][0])/2
+            unitwidth=unit.unitWidth/abs(groundSizeboundingbox[0][0])/2
 
-            unitheight=self.goblins.unitHeight/abs(groundSizeboundingbox[0][1])/2
+            unitheight=unit.unitHeight/abs(groundSizeboundingbox[0][1])/2
 
-            unitrotation=self.goblins.bodyNP.getH()
+            unitrotation=unit.bodyNP.getH()
 
-            unitposxy=Vec2(self.goblins.bodyNP.getX()/abs(groundSizeboundingbox[0][0]), self.goblins.bodyNP.getY()/abs(groundSizeboundingbox[0][1]))
+            unitposxy=Vec2(unit.bodyNP.getX()/abs(groundSizeboundingbox[0][0]), unit.bodyNP.getY()/abs(groundSizeboundingbox[0][1]))
             unitposxy += Vec2(1,1)
             unitposxy *= 0.5
 
@@ -698,10 +738,10 @@ class MyApp(ShowBase):
             #pos.x = -math.cos(math.radians(unitrotation))*unitwidth*0.5
             #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
 
-            print(f"unitposxy: {unitposxy} smileypos: {self.goblins.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
+            print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                               width=unitwidth, rotationangle=self.goblins.bodyNP.getH(),
+                                               width=unitwidth, rotationangle=unit.bodyNP.getH(),
                                                movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
@@ -745,10 +785,10 @@ class MyApp(ShowBase):
                 self.unitHitPos = closest_pos
                 self.playerNP.setPos(closest_pos)
 
-                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*self.goblins.unitWidth
+                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
                 self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                                width=unitwidth, rotationangle=self.goblins.bodyNP.getH(), 
+                                                width=unitwidth, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
@@ -763,8 +803,8 @@ class MyApp(ShowBase):
             print(mpoint.getLocalPointA())
             print(mpoint.getLocalPointB()) """
             return
-    
-    def moveUnit(self):
+
+    def moveUnit(self, unit):
         taskMgr.remove("taskLoopPathTowardsMouse")
         pos = self.arcPoint
         print("Normalized position:", pos)
@@ -777,9 +817,9 @@ class MyApp(ShowBase):
         pos.x *= 50
         pos.y *= 50
         print("Calculated position:", pos)
-        self.goblins.bodyNP.setPos(pos.x , pos.y , 0)
-        self.goblins.bodyNP.setH(self.goblins.bodyNP.getH() + self.arcPointRotation)
-        self.checkUnitContact(self.goblins.bodyNP)
+        unit.bodyNP.setPos(pos.x , pos.y , 0)
+        unit.bodyNP.setH(unit.bodyNP.getH() + self.arcPointRotation)
+        self.checkUnitContact(unit.bodyNP)
 
     def checkUnitContact(self, unit):
         contacts = self.world.contactTest(unit.node())
