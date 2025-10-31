@@ -1,7 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32
 from panda3d.core import CardMaker
-from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape
+from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape
 from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
 from direct.interval.IntervalGlobal import Sequence
 from direct.interval.FunctionInterval import Func
@@ -22,6 +22,36 @@ from panda3d.core import NurbsCurve
 from panda3d.bullet import BulletCharacterControllerNode
 from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import ZUp
+
+class unitGraphics():
+    def __init__(self, modelpath, scale=1.0,BulletWorld=None):
+        self.world=BulletWorld
+        self.model = loader.loadModel(modelpath)
+        self.model.setScale(scale)
+        self.model.reparentTo(render)
+        self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
+        self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
+        print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
+        self.model.setPos(35,0,0)
+        self.setUpCollisions()
+
+    def setUpCollisions(self):
+        if self.world:
+            # Estimate radius from bounding box
+            bounds = self.model.getTightBounds()
+            
+            
+
+            # Create box shape from bounding box dimensions
+            box_size = bounds[1] - bounds[0]
+            shape = BulletBoxShape(box_size * 0.25)  # BulletBoxShape takes half-extents
+            body = BulletRigidBodyNode('UnitCollision')
+            body.addShape(shape)
+            body.setMass(0)  # Static object
+            bodyNP = self.model.attachNewNode(body)
+            bodyNP.setCollideMask(BitMask32.allOn())
+            self.world.attachRigidBody(body)
+
 
 
 
@@ -72,6 +102,8 @@ class MyApp(ShowBase):
         self.arcPoint=Vec2(0.55,0.55)
         self.arcPointRotation=0
 
+        
+
         # Make a copy of the smiley model and position it differently
         self.smiley_copy = self.loader.loadModel('models/smiley')
         self.smiley_copy.reparentTo(self.render)
@@ -93,6 +125,8 @@ class MyApp(ShowBase):
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
+
+        self.bretBowmen = unitGraphics('models/bret_bowmen.bam', scale=2.0, BulletWorld=self.world)
 
 
 
@@ -487,7 +521,7 @@ class MyApp(ShowBase):
         #points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
         points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
         #points[-1] = self.rotatePoint(points[-1], rotationangle)
-        print(points)
+        #print(points)
         nums=len(points)
         midpointfront = (points[-1] + points[-2]) * 0.5
         midpointfront = (points[nums-1] + points[nums-2]) * 0.5
@@ -495,7 +529,7 @@ class MyApp(ShowBase):
         for n in range(len(points),num_points+3):
             points.append(points[-1])
         
-        print(len(points))
+        #print(len(points))
 
         if filipped:
             mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
@@ -505,7 +539,7 @@ class MyApp(ShowBase):
             self.arcPointRotation=math.degrees(-angle)
             return mirrored_points
         
-        print(points)
+        #print(points)
         #self.arcPoint=(points[nums+1]+points[nums])*0.5
         self.arcPoint=midpointfront
         self.arcPointRotation=math.degrees(angle)
@@ -522,19 +556,19 @@ class MyApp(ShowBase):
         #mirror_vec = getattr(self, 'mirror_vec', Vec2(1, 0))  # Default to x-axis if not set
         #mirror_vec = mirror_vec
         mirror_vec = mirror_vec.normalized()
-        print("Mirroring with vector:", mirror_vec)
+        #print("Mirroring with vector:", mirror_vec)
         for p in points:
             # Vector from origin to point
-            print("Original point:", p)
+            #print("Original point:", p)
             v = p - origin
             # Project v onto mirror_vec
-            print(v.dot(mirror_vec))
-            print(v.normalized().dot(mirror_vec))
+            #print(v.dot(mirror_vec))
+            #print(v.normalized().dot(mirror_vec))
             proj =  (mirror_vec * v.normalized().dot(mirror_vec)) * v.length()
             # Perpendicular component
-            print("v:", v, "proj:", proj)
+            #print("v:", v, "proj:", proj)
             perp = v - proj
-            print("perp:", perp)
+            #print("perp:", perp)
             # Mirror: subtract twice the perpendicular component
             mirrored_v = p -  perp * 2
             mirrored_points.append(Vec2(mirrored_v.x, mirrored_v.y))
@@ -671,39 +705,40 @@ class MyApp(ShowBase):
             cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.1), Point3(p4.x, p4.y, 0.1))
             ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
             ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
-            print("Cont:", cont2.hasHit(), cont2.getHitPos())
-            closest_dist=0
-            if cont2.hasHit() or cont.hasHit():
+            print("Cont2:", cont2.hasHit(), cont2.getHitPos())
+            print("Cont:", cont.hasHit(), cont.getHitPos())
+            #closest_dist=0
+            closest_dist = float('inf')
+            closest_pos = None
+            if cont.hasHit():
                 # Check which contact point is closest to smiley
-                closest_dist = float('inf')
-                closest_pos = None
-                for hit_pos in [cont.getHitPos(), cont2.getHitPos()]:
-                    if hit_pos:
-                        #dist = (hit_pos - self.smiley.getPos()).length()
-                        dist = (hit_pos - Point3(p1.x, p1.y, 0.1)).length()
-                        if dist < closest_dist:
-                            closest_dist = dist
-                            closest_pos = hit_pos
-                        dist = (hit_pos - Point3(p3.x, p3.y, 0.1)).length()
-                        if dist < closest_dist:
-                            closest_dist = dist
-                            closest_pos = hit_pos
+                
+                
+                hit_pos = cont.getHitPos()
+                #dist = (hit_pos - self.smiley.getPos()).length()
+                dist = (hit_pos - Point3(p1.x, p1.y, 0.1)).length()
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_pos = hit_pos
+            if cont2.hasHit():
+                # Check which contact point is closest to smiley
+                hit_pos = cont2.getHitPos()
+                dist = (hit_pos - Point3(p3.x, p3.y, 0.1)).length()
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_pos = hit_pos
 
-                if closest_pos:
-                    self.unitHitPos = closest_pos
-                    self.playerNP.setPos(closest_pos)
-                    #self.polygonpoints[self.numsPoints-1] = Vec2((closest_pos.x / 50 + 1) * 0.5, (closest_pos.y / 50 + 1) * 0.5)
-                    #self.polygonpoints[self.numsPoints-2] = self.polygonpoints[self.numsPoints-1]-\
-                    #                                        Vec2(math.cos(math.radians(self.arcPointRotation)),\
-                    #                                              math.sin(math.radians(self.arcPointRotation))).normalized()*\
-                    #                                                self.unitWidth/2/abs(groundSizeboundingbox[0][0])
-                #else:
-                #self.unitHitPos=cont2.getHitPos()
-                #self.playerNP.setPos(cont2.getHitPos())
-                    newmove = closest_dist+math.radians(self.arcPointRotation)*self.unitWidth
-                    self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
-                                                    width=unitwidth, rotationangle=self.smiley.getH(), 
-                                                    movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
+                        
+
+            if closest_pos:
+                self.unitHitPos = closest_pos
+                self.playerNP.setPos(closest_pos)
+
+                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*self.unitWidth
+                print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
+                self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
+                                                width=unitwidth, rotationangle=self.smiley.getH(), 
+                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
             """ contacts = self.world.contactTest(self.playerNP.node())
@@ -733,6 +768,19 @@ class MyApp(ShowBase):
         print("Calculated position:", pos)
         self.smiley.setPos(pos.x , pos.y , 0)
         self.smiley.setH(self.smiley.getH() + self.arcPointRotation)
+        self.checkUnitContact(self.smiley)
+
+    def checkUnitContact(self, unit):
+        contacts = self.world.contactTest(unit.node)
+        for contact in contacts.getContacts():
+            print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
+            mpoint = contact.getManifoldPoint()
+            print(mpoint.getDistance())
+            print(mpoint.getAppliedImpulse())
+            print(mpoint.getPositionWorldOnA())
+            print(mpoint.getPositionWorldOnB())
+            print(mpoint.getLocalPointA())
+            print(mpoint.getLocalPointB())
 
 
 
