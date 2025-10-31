@@ -768,7 +768,7 @@ class MyApp(ShowBase):
         print("Calculated position:", pos)
         self.smiley.setPos(pos.x , pos.y , 0)
         self.smiley.setH(self.smiley.getH() + self.arcPointRotation)
-        self.checkUnitContact(self.smiley)
+        #self.checkUnitContact(self.smiley)
 
     def checkUnitContact(self, unit):
         contacts = self.world.contactTest(unit.node)
