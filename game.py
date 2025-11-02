@@ -22,6 +22,7 @@ from panda3d.core import NurbsCurve
 from panda3d.bullet import BulletCharacterControllerNode
 from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import ZUp
+from direct.gui.OnscreenText import OnscreenText
 
 class unitGraphics():
     def __init__(self,name, modelpath, scale=1.0,BulletWorld=None):
@@ -146,6 +147,9 @@ class MyApp(ShowBase):
         self.unitToMove=self.bretBowmen
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
 
+        self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
+        self.debugText.setText("Debug Info test")
+
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
             taskMgr.remove(taskname)
@@ -188,6 +192,29 @@ class MyApp(ShowBase):
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
             self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
     
+    def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
+        """
+        Creates and returns a text node for displaying text on screen.
+        
+        Args:
+            text: The text to display
+            pos: (x, y) position in aspect2d coordinates (-1 to 1)
+            scale: Text scale
+            color: Text color as (r, g, b, a) tuple
+        
+        Returns:
+            TextNode object that can be updated with .setText()
+        """
+        
+        text_node = OnscreenText(
+            text=text,
+            pos=pos,
+            scale=scale,
+            fg=color,
+            align=0,  # Center alignment
+            mayChange=True
+        )
+        return text_node
 
     def setup_shader(self):
         #surface = self.render.find("**/ground")
