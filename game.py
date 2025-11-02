@@ -139,6 +139,8 @@ class MyApp(ShowBase):
 
         self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world)
         self.bretBowmen.bodyNP.setPos(35,0,0)
+        self.bretBowmen.bodyNP.setH(45)
+
         self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world)
         self.goblins.bodyNP.setPos(0,-20,0)
         self.unitToMove=self.bretBowmen
@@ -819,12 +821,13 @@ class MyApp(ShowBase):
         print("Calculated position:", pos)
         unit.bodyNP.setPos(pos.x , pos.y , 0)
         unit.bodyNP.setH(unit.bodyNP.getH() + self.arcPointRotation)
-        self.checkUnitContact(unit.bodyNP)
+        self.checkUnitContact(unit)
 
     def checkUnitContact(self, unit):
-        contacts = self.world.contactTest(unit.node())
+        contacts = self.world.contactTest(unit.bodyNP.node())
         for contact in contacts.getContacts():
             print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
+            
             mpoint = contact.getManifoldPoint()
             print(mpoint.getDistance())
             print(mpoint.getAppliedImpulse())
@@ -832,6 +835,94 @@ class MyApp(ShowBase):
             print(mpoint.getPositionWorldOnB())
             print(mpoint.getLocalPointA())
             print(mpoint.getLocalPointB())
+            if 'UnitCollision-' in contact.getNode1().getName():
+                print("Unit collision detected!")
+                # Handle unit collision (e.g., stop movement, apply damage, etc.)
+                angleAttacker = unit.bodyNP.getH()
+                defenderNP = render.find(f"**/{contact.getNode1().getName()}")
+                angleDefender = defenderNP.getH()
+                print(f"contact position in defender coordsystem: {self.playerNP.getPos(defenderNP)}")
+                hitloc = self.playerNP.getPos(defenderNP) 
+
+                shape = contact.getNode1().getShape(0)
+                if isinstance(shape, BulletBoxShape):
+                    half_extents = shape.getHalfExtentsWithMargin()
+                    width = half_extents.x * 2
+                    height = half_extents.y * 2
+                    print(f"Defender unit width: {width}")
+
+                angleToRotate = angleDefender - angleAttacker
+                print(f"Attacker angle: {angleAttacker}, Defender angle: {angleDefender}")
+                print(f"Rotating attacker by {angleToRotate} degrees to face defender.")
+                angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
+                print(f"normalized {angleToRotate} degrees to face defender.")
+                if abs(hitloc.x*2*2 - width) < 0.1:
+                    print("Hit on right side of defender")
+                    print(f"Initial angle to rotate: {angleToRotate}")
+                    #angleToRotate = (angleToRotate + 90) % 360 - 180
+                    if angleToRotate < 0:
+                        angleToRotate += 90
+                    if angleToRotate > 90:
+                        angleToRotate = 360-90- angleToRotate
+                        angleToRotate *= -1
+                    
+                    print(f"Adjusted angle to rotate: {angleToRotate}")
+                elif abs(hitloc.x*2*2 + width) < 0.1:
+                    print("Hit on left side of defender")
+                    print(f"Initial angle to rotate: {angleToRotate}")
+                    #angleToRotate = (angleToRotate - 90) % 360 - 180
+                    if angleToRotate > 90:
+                        angleToRotate -= 90
+                    else:
+                        angleToRotate = 90 - angleToRotate
+                        angleToRotate *= -1
+                    print(f"Adjusted angle to rotate: {angleToRotate}")
+                elif abs(hitloc.y*2*2 - height) < 0.1:
+                    print("Hit front side of defender")
+                    print(f"Initial angle to rotate: {angleToRotate}")
+                    #angleToRotate = (angleToRotate + 180) % 180
+                    if angleToRotate > 90:
+                        angleToRotate -= 180
+                        #angleToRotate *= -1
+                    print(f"Adjusted angle to rotate: {angleToRotate}")
+                elif abs(hitloc.y*2*2 + height) < 0.1:
+                    print("Hit rear side of defender")
+                    print(f"Initial angle to rotate: {angleToRotate}")
+                    #angleToRotate = (angleToRotate + 180) % 90
+                    
+                    if angleToRotate > 90:
+                        #angleToRotate -= 90
+                        angleToRotate = (360 -angleToRotate) * -1
+                        #angleToRotate *= -1
+                    """ if angleToRotate < -90:
+                        angleToRotate += 90
+                        angleToRotate *= -1 """
+                    
+                else:
+                    print("Hit i dont know where")
+
+                
+                parent = unit.bodyNP.getParent()
+                newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+                newnode.setPos(self.playerNP.getPos())
+                unit.bodyNP.wrtReparentTo(newnode)
+                # Rotate the new node smoothly to align with defender
+                rotation_interval = LerpPosHprInterval(
+                    newnode, 
+                    duration=0.5, 
+                    pos=newnode.getPos(),
+                    hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+                    blendType='easeInOut'
+                )
+                sequence = Sequence(
+                    rotation_interval,
+                    Func(unit.bodyNP.wrtReparentTo, parent),
+                    Func(newnode.removeNode)
+                )
+                sequence.start()
+                return
+
+            #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
 
 
 
