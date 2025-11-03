@@ -941,21 +941,94 @@ class MyApp(ShowBase):
                     hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
                     blendType='easeInOut'
                 )
+
+                
                 sequence = Sequence(
                     rotation_interval,
                     Func(unit.bodyNP.wrtReparentTo, parent),
-                    Func(newnode.removeNode)
+                    Func(newnode.removeNode),
+                    Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
                 )
                 sequence.start()
                 return
 
             #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
 
+    def verySimpleBattle(self, attacker, defender, flank):
 
+        print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
+        self.fallBack(attacker, defender)
+        
+    def fallBack(self, winner, loser):
+        print(f"{winner.node().getName()} is victorious!")
+        print(f"{loser.node().getName()} falls back!")
+        winnerPos=winner.getPos()
+        loserPos=loser.getPos()
+        direction = (loserPos - winnerPos).normalized()
+        fallback_distance = 15.0  # Adjust as needed
+        newPos = loserPos + direction * fallback_distance
+        oldHpr=loser.getHpr()
+        loser.lookAt(winnerPos)
+        fleeHpr=loser.getHpr()-Vec3(180,0,0)
+        newHpr=loser.getHpr()
+        loser.setHpr(oldHpr)
+        rotate_interval = LerpPosHprInterval(
+            loser, 
+            duration=0.5, 
+            pos=loser.getPos(),
+            hpr=fleeHpr,
+            blendType='easeInOut'
+        )
+        move_interval = LerpPosInterval(
+            loser, 
+            duration=1.0, 
+            pos=newPos,
+            blendType='easeInOut'
+        )
+        rotate_interval2 = LerpPosHprInterval(
+            loser, 
+            duration=0.5, 
+            pos=newPos,
+            hpr=newHpr,
+            blendType='easeInOut'
+        )
+        sequence = Sequence(
+            rotate_interval,
+            move_interval,
+            rotate_interval2,
+            Func(self.persuitMove, winner, loser)
+        )
+        sequence.start()
 
-
-
-
+    def persuitMove(self, winner, loser):
+        print(f"{winner.node().getName()} pursues {loser.node().getName()}!")
+        winnerPos=winner.getPos()
+        loserPos=loser.getPos()
+        oldhpr=winner.getHpr()
+        winner.lookAt(loserPos)
+        pursueHpr=winner.getHpr()
+        winner.setHpr(oldhpr)
+        rotate_interval = LerpPosHprInterval(
+            winner, 
+            duration=0.5, 
+            pos=winner.getPos(),
+            hpr=pursueHpr,
+            blendType='easeInOut'
+        )
+        direction = (loserPos - winnerPos).normalized()
+        pursue_distance = 15.0  # Adjust as needed
+        newPos = winnerPos + direction * pursue_distance
+        move_interval = LerpPosInterval(
+            winner, 
+            duration=1.0, 
+            pos=newPos,
+            blendType='easeInOut'
+        )
+        sequence = Sequence(
+            rotate_interval,
+            move_interval
+        )
+        sequence.start()
 
 app = MyApp()
 app.run()
