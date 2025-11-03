@@ -51,6 +51,10 @@ class unitGraphics():
             body.addShape(shape)
             body.setMass(0)  # Static object
             self.bodyNP = render.attachNewNode(body)
+            self.bodyNPfront = self.bodyNP.attachNewNode("front")
+            self.bodyNPfront.setPos(0, box_size.y * 0.45, 0)  # Front point
+            self.bodyNPback = self.bodyNP.attachNewNode("back")
+            self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)  # Back point
             self.bodyNP.setCollideMask(BitMask32.allOn())
             self.world.attachRigidBody(body)
             self.model.reparentTo(self.bodyNP)
@@ -808,7 +812,18 @@ class MyApp(ShowBase):
                     closest_dist = dist
                     closest_pos = hit_pos
 
-                        
+            
+            p1_5 = (p1 + p3) * 0.5
+            p2_5 = (p2 + p4) * 0.5
+            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.1), Point3(p2_5.x, p2_5.y, 0.1))
+            print("Cont3:", cont3.hasHit(), cont3.getHitPos())
+            if cont3.hasHit():
+                # Check which contact point is closest to smiley
+                hit_pos = cont3.getHitPos()
+                dist = (hit_pos - Point3(p1_5.x, p1_5.y, 0.1)).length()
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_pos = hit_pos
 
             if closest_pos:
                 self.unitHitPos = closest_pos
@@ -848,6 +863,7 @@ class MyApp(ShowBase):
         print("Calculated position:", pos)
         unit.bodyNP.setPos(pos.x , pos.y , 0)
         unit.bodyNP.setH(unit.bodyNP.getH() + self.arcPointRotation)
+        unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
         self.checkUnitContact(unit)
 
     def checkUnitContact(self, unit):
@@ -934,6 +950,7 @@ class MyApp(ShowBase):
                 newnode.setPos(self.playerNP.getPos())
                 unit.bodyNP.wrtReparentTo(newnode)
                 # Rotate the new node smoothly to align with defender
+                
                 rotation_interval = LerpPosHprInterval(
                     newnode, 
                     duration=0.5, 
