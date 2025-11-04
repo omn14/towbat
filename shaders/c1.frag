@@ -2,7 +2,7 @@
 
 uniform sampler2D p3d_Texture0;
 uniform vec3 pos;
-#define maxpoints 43
+#define maxpoints 83
 uniform vec2 polygonpoints[maxpoints];
 
 // Input from vertex shader

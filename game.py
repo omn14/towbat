@@ -774,7 +774,7 @@ class MyApp(ShowBase):
 
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
-            self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
+            self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth, rotationangle=unit.bodyNP.getH(),
                                                movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
@@ -832,7 +832,7 @@ class MyApp(ShowBase):
 
                 newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
-                self.polygonpoints = self.pointArc(origo=unitposxy, num_points=40, mouse_pos=Vec2(pos.x, pos.y),
+                self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
