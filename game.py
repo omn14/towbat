@@ -593,9 +593,9 @@ class MyApp(ShowBase):
             vector=points[-1]-origo
             pointmid=origo+vector*.5
             vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
-            #print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
+            print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
             nums=i
-            if abs(vectormouse.dot(vector)) < .01:
+            if abs(vectormouse.dot(vector)) < .001:
                 
                 break
 
@@ -765,6 +765,7 @@ class MyApp(ShowBase):
             unitposxy *= 0.5
 
             #unitposxy += Vec2(-math.cos(math.radians(unitrotation))*unitwidth*0.5, -math.sin(math.radians(unitrotation))*unitheight*0.5)
+            
             unitposxy.x += -math.cos(math.radians(unitrotation))*unitwidth*0.5
             unitposxy.y += -math.sin(math.radians(unitrotation))*unitwidth*0.5
 
