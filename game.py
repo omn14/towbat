@@ -597,10 +597,10 @@ class MyApp(ShowBase):
                 y = width * math.sin(0)
                 points.append(origo+Vec2(x,y))
                 points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
-                points.append(points[-1]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/2)
-                points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/2)
+                points.append(points[-1]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/4)
+                points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/4)
                 for i, p in enumerate(points):
-                    points[i] = p-Vec2(quarternion.getForward().x, quarternion.getForward().y)*movedistance/2
+                    points[i] = p-Vec2(quarternion.getForward().x, quarternion.getForward().y)*movedistance/4
                 points = points[2:] + points[:2]
 
                 #return points
