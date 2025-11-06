@@ -19,10 +19,12 @@ from direct.interval.MopathInterval import MopathInterval
 from panda3d.core import NurbsCurveEvaluator, NurbsCurveResult
 from panda3d.core import NurbsCurve
 
+
 from panda3d.bullet import BulletCharacterControllerNode
 from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import ZUp
 from direct.gui.OnscreenText import OnscreenText
+from panda3d.core import LQuaterniond, LVector3d
 
 class unitGraphics():
     def __init__(self,name, modelpath, scale=1.0,BulletWorld=None):
@@ -568,10 +570,10 @@ class MyApp(ShowBase):
         midpoint=Vec2(width*math.cos(math.radians(rotationangle) ), width*math.sin(math.radians(rotationangle) ))*0.5+origo
         midpoint_unit_vector = midpoint - origo
         midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
-        print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.dot(midpoint_mouse_vector))
+        print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()))
         print("before mouse pos:", mouse_pos, "midpoint:", midpoint)
         filipped=False
-        if midpoint_unit_vector.normalized().dot(midpoint_mouse_vector) > 0:
+        if midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()) > 0:
             #rotationangle += 180
             print("flipped")
             filipped=True
@@ -580,33 +582,56 @@ class MyApp(ShowBase):
             print("after mouse pos:", mouse_pos)
             #mouse_pos = self.rotatePoint(mouse_pos, 90, origo=midpoint)
 
-            
+        quarternion = LQuaterniond()
+        quarternion.set_from_axis_angle(rotationangle, LVector3d(0,0,1))
+        print(quarternion.getForward())
+        behind= quarternion.getForward().dot(LVector3d(midpoint_mouse_vector.normalized().x, midpoint_mouse_vector.normalized().y,0))
+        print(behind)
         nums=0
-        for i in range(0,num_points):
-            angle = arcmax * i / num_points
-            x = width * math.cos(angle) 
-            y = width * math.sin(angle)
-            points.append(origo+Vec2(x,y))
+        if behind < 0 and abs(behind) > 0.8:
+            print("behind arc")
+            if abs(behind) > 0.8:
+                angle = 0
+                print("right behind")
+                x = width * math.cos(0) 
+                y = width * math.sin(0)
+                points.append(origo+Vec2(x,y))
+                points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
+                points.append(points[-1]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/2)
+                points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*movedistance/2)
+                for i, p in enumerate(points):
+                    points[i] = p-Vec2(quarternion.getForward().x, quarternion.getForward().y)*movedistance/2
+                points = points[2:] + points[:2]
 
-            points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
+                #return points
 
-            vector=points[-1]-origo
-            pointmid=origo+vector*.5
-            vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
-            print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
-            nums=i
-            if abs(vectormouse.dot(vector)) < .001:
-                
-                break
 
-        movedistance-=angle*width
-        #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
-        points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
-        #points[-1] = self.rotatePoint(points[-1], rotationangle)
-        #points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
-        points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
-        #points[-1] = self.rotatePoint(points[-1], rotationangle)
-        #print(points)
+        else:
+            for i in range(0,num_points):
+                angle = arcmax * i / num_points
+                x = width * math.cos(angle) 
+                y = width * math.sin(angle)
+                points.append(origo+Vec2(x,y))
+
+                points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
+
+                vector=points[-1]-origo
+                pointmid=origo+vector*.5
+                vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
+                #print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
+                nums=i
+                if abs(vectormouse.dot(vector)) < .001:
+                    
+                    break
+
+            movedistance-=angle*width
+            #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+            points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
+            #points[-1] = self.rotatePoint(points[-1], rotationangle)
+            #points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
+            points.append(points[0]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
+            #points[-1] = self.rotatePoint(points[-1], rotationangle)
+            #print(points)
         nums=len(points)
         midpointfront = (points[-1] + points[-2]) * 0.5
         midpointfront = (points[nums-1] + points[nums-2]) * 0.5
