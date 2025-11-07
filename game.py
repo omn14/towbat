@@ -559,7 +559,7 @@ class MyApp(ShowBase):
             return
     
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,movedistance=8):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,height=0.5,movedistance=8):
         points =[]
         #origo   = Vec2(0.55,0.55)
         points.append(origo)
@@ -604,7 +604,47 @@ class MyApp(ShowBase):
                 points = points[2:] + points[:2]
 
                 #return points
+        elif behind < 0 and abs(behind) < 0.8:
+            print("somewhat behind arc")
+            angle = 0
+            print("right behind")
+            x = width * math.cos(0) 
+            y = width * math.sin(0)
+            points.append(origo+Vec2(x,y))
+            points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
+            points.append(points[-1])
+            points.append(points[-1]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*height)
+            points.append(points[-1])
+            points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*height)
+            #for i, p in enumerate(points):
+            print(points)
+            for i in [2,3]:
+                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*movedistance/4 
+                #points[i] -= Vec2(quarternion.getForward().x, quarternion.getForward().y)*height    
+            print(points)
+            for i in [1,4]:
+                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*(movedistance/4 -width)
+                #points[i] -= Vec2(quarternion.getForward().x, quarternion.getForward().y)*height    
+            print(points)
 
+            for i in range(len(points)):
+                #points[i] = p-Vec2(quarternion.getRight().x, quarternion.getRight().y)*movedistance/4   
+                #   
+                #print(Vec2(quarternion.getForward().x, quarternion.getForward().y)*height/2)
+                #print(points[i])
+                points[i] = points[i]-Vec2(quarternion.getForward().x, quarternion.getForward().y)*height/2
+                #print(points[i])
+            print(points)
+            points = [points[-1]] + points[:-1]
+            print(points)
+            
+            for i in [-1,-2]:
+                print(points[i])
+            vinkel=rotationangle+90
+            filipped = not filipped
+        
+        
+            
 
         else:
             for i in range(0,num_points):
@@ -800,7 +840,7 @@ class MyApp(ShowBase):
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
-                                               width=unitwidth, rotationangle=unit.bodyNP.getH(),
+                                               width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
@@ -858,7 +898,7 @@ class MyApp(ShowBase):
                 newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
                 self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
-                                                width=unitwidth, rotationangle=unit.bodyNP.getH(),
+                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
