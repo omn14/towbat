@@ -124,7 +124,7 @@ class MyApp(ShowBase):
         # Make a copy of the smiley model and position it differently
         self.smiley_copy = self.loader.loadModel('models/smiley')
         self.smiley_copy.reparentTo(self.render)
-        self.smiley_copy.setPos(0, 0, 0)
+        self.smiley_copy.setPos(-50, 0, 0)
         self.smiley_copy.setScale(2)
 
         # Position the camera above the plane, looking straight down
@@ -570,6 +570,8 @@ class MyApp(ShowBase):
         midpoint=Vec2(width*math.cos(math.radians(rotationangle) ), width*math.sin(math.radians(rotationangle) ))*0.5+origo
         midpoint_unit_vector = midpoint - origo
         midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
+        maxMoveDistance=movedistance
+        #movedistance = min(movedistance, midpoint_mouse_vector.length())
         print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()))
         print("before mouse pos:", mouse_pos, "midpoint:", midpoint)
         filipped=False
@@ -664,7 +666,15 @@ class MyApp(ShowBase):
                     
                     break
 
-            movedistance-=angle*width
+            #if movedistance 
+            #if movedistance + angle * width/2 > maxMoveDistance:
+            print(movedistance, angle*width, vectormouse.length()+angle*width)
+            movedistance = min(movedistance, vectormouse.length()+angle*width)
+            if movedistance - angle*width > 0:
+                movedistance -= angle*width
+
+            print("final movedistance:", movedistance)
+            #movedistance = min(movedistance, angle*width)
             #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
             points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
             #points[-1] = self.rotatePoint(points[-1], rotationangle)
