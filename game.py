@@ -134,11 +134,12 @@ class gameFSM(FSM):
         print("Exiting Combat Phase")
 
 class unitGraphics():
-    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None):
+    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None,color=(1,0,0,1)):
         self.unitName=name
         self.world=BulletWorld
         self.model = loader.loadModel(modelpath)
         self.model.setScale(scale)
+        self.model.setColor(*color)
         self.model.reparentTo(render)
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
@@ -239,11 +240,11 @@ class MyApp(ShowBase):
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
-        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world)
+        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.bretBowmen.bodyNP.setPos(35,0,0)
         self.bretBowmen.bodyNP.setH(45)
 
-        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world)
+        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblins.bodyNP.setPos(0,-20,0)
         self.unitToMove=self.bretBowmen
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
