@@ -25,6 +25,110 @@ from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import ZUp
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import LQuaterniond, LVector3d
+from direct.fsm.FSM import FSM
+from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
+from panda3d.core import Vec3, BitMask32
+
+class gameFSM(FSM):
+    def __init__(self, Game):
+        FSM.__init__(self, 'GameFSM')
+        self.game = Game
+        self.strategyMenuCube = self.createMenuCollisionCube("StrategyPhase",Point3(5,20,0))
+        self.movementMenuCube = self.createMenuCollisionCube("MovementPhase",Point3(5,20,3))
+        
+        self.menuCubes= base.camera.findAllMatches("**/*MenuCube")
+        print(self.menuCubes)
+
+
+        self.accept('mouse1', self.mouseMenuCollide)
+
+    def createMenuCollisionCube(self, name='StrategyPhase',pos=Point3(5, 20, 0)):
+        # Create a Bullet collision cube (visible + physics) for debugging
+
+        half_extents = Vec3(1, 1, 1)  # Half sizes (so cube is 2x2x2)
+        shape = BulletBoxShape(half_extents)
+        cube_node = BulletRigidBodyNode(name)
+        cube_node.setMass(0)  # 0 = static; set >0 to make it dynamic
+        cube_node.addShape(shape)
+
+        cubeNP = base.camera.attachNewNode(cube_node)
+        cubeNP.setPos(pos)  # Raise slightly above ground
+        cubeNP.setCollideMask(BitMask32.bit(2))  # Set collision mask
+        cubeNP.setName(name)
+
+        # Attach to existing Bullet world (created in MyApp.setup_bullet)
+        base.world.attachRigidBody(cube_node)
+
+        # Optional visible geometry
+        try:
+            model = loader.loadModel('models/box')
+            model.reparentTo(cubeNP)
+            model.setScale(2)  # Box model is unit-sized; scale to match 2x2x2
+            model.setPos(-1,-1,-1)
+        except Exception:
+            pass
+        return cubeNP
+
+    def mouseMenuCollide(self):
+        
+        if base.mouseWatcherNode.hasMouse():
+            x = base.mouseWatcherNode.getMouseX()
+            y = base.mouseWatcherNode.getMouseY()
+            #print(x,y)
+            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
+            #pFrom = Point3(0, 0, 0)
+            #pTo = Point3(10, 0, 0)
+
+            # Get to and from pos in camera coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
+
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            result = base.world.rayTestClosest(pFrom, pTo,BitMask32.bit(2))
+
+            if result.hasHit():
+                print(result.hasHit())
+                print(result.getHitPos())
+                print(result.getHitNormal())
+                print(result.getHitFraction())
+                print(result.getNode())
+                self.game.debugText.setText(f"Hit Node: {result.getNode().getName()}")
+                self.request(result.getNode().getName())
+
+    def enterStrategyPhase(self):
+        print("Entering Strategy Phase")
+        self.strategyMenuCube.show()
+        self.strategyMenuCube.setCollideMask(BitMask32.bit(2))
+
+    def exitStrategyPhase(self):
+        print("Exiting Strategy Phase")
+        self.strategyMenuCube.hide()
+        self.strategyMenuCube.setCollideMask(BitMask32.allOff())
+
+    def enterMovementPhase(self):
+        print("Entering Movement Phase")
+        self.movementMenuCube.show()
+
+    def exitMovementPhase(self):
+        print("Exiting Movement Phase")
+        self.movementMenuCube.hide()
+
+    def enterShootingPhase(self):
+        print("Entering Shooting Phase")
+
+    def exitShootingPhase(self):
+        print("Exiting Shooting Phase")
+
+    def enterCombatPhase(self):
+        print("Entering Combat Phase")
+
+    def exitCombatPhase(self):
+        print("Exiting Combat Phase")
 
 class unitGraphics():
     def __init__(self,name, modelpath, scale=1.0,BulletWorld=None):
@@ -57,7 +161,7 @@ class unitGraphics():
             self.bodyNPfront.setPos(0, box_size.y * 0.45, 0)  # Front point
             self.bodyNPback = self.bodyNP.attachNewNode("back")
             self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)  # Back point
-            self.bodyNP.setCollideMask(BitMask32.allOn())
+            self.bodyNP.setCollideMask(BitMask32.bit(1))
             self.world.attachRigidBody(body)
             self.model.reparentTo(self.bodyNP)
             self.bodyNP.setScale(2.0)
@@ -74,6 +178,7 @@ class MyApp(ShowBase):
 
         # Disable default camera controls
         #self.disableMouse()
+        
 
         # Create a flat plane using CardMaker
         cm = CardMaker("ground")
@@ -100,20 +205,7 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
 
-        """ 
-        # Load a smiley model and position it above the ground
-        self.smiley = self.loader.loadModel('models/goblin_archers.bam')
-        self.smiley.reparentTo(self.render)
-        self.smiley.setPos(0, 50, 0)
-        self.smiley.setScale(2)
-        print(self.smiley.getTightBounds())
-        self.unitWidth=abs(self.smiley.getTightBounds()[1][0]-self.smiley.getTightBounds()[0][0])
-        self.unitHeight=abs(self.smiley.getTightBounds()[1][1]-self.smiley.getTightBounds()[0][1])
-        print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
-        #lol
-        self.smiley.setH(self.smiley.getH()+11) """
-
-        
+              
 
         #lol
         self.arcPoint=Vec2(0.55,0.55)
@@ -155,6 +247,8 @@ class MyApp(ShowBase):
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
+        
+        self.fsm = gameFSM(self)
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -179,7 +273,7 @@ class MyApp(ShowBase):
             pTo = render.getRelativePoint(base.cam, pTo)
             
             # Perform ray test
-            result = self.world.rayTestClosest(pFrom, pTo)
+            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
             
             if result.hasHit():
                 hit_node = result.getNode()
@@ -196,7 +290,7 @@ class MyApp(ShowBase):
                             self.unitToMove = self.goblins
                             print(f"Selected unit: {self.goblins.unitName}")
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-            self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
+                        self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
         """
@@ -246,6 +340,7 @@ class MyApp(ShowBase):
         node = BulletRigidBodyNode('Ground')
         node.addShape(shape)
         np = render.attachNewNode(node)
+        np.setCollideMask(BitMask32.bit(1))
         self.world.attachRigidBody(node)
         """ mesh = BulletTriangleMesh()
 
@@ -271,7 +366,7 @@ class MyApp(ShowBase):
         debugNode = BulletDebugNode('Debug')
         debugNode.showWireframe(True)
         debugNode.showConstraints(True)
-        debugNode.showBoundingBoxes(True)
+        debugNode.showBoundingBoxes(False)
         debugNode.showNormals(True)
         debugNP = render.attachNewNode(debugNode)
         
@@ -289,7 +384,7 @@ class MyApp(ShowBase):
         smiley_copy_body = BulletRigidBodyNode('SmileyCopy')
         smiley_copy_body.addShape(smiley_copy_shape)
         smiley_copy_np = self.smiley_copy.attachNewNode(smiley_copy_body)
-        smiley_copy_np.setCollideMask(BitMask32.allOn())
+        smiley_copy_np.setCollideMask(BitMask32.bit(1))
         self.world.attachRigidBody(smiley_copy_body)
 
         # Add a simple Bullet character controller for the player
@@ -302,7 +397,7 @@ class MyApp(ShowBase):
         self.playerNP = render.attachNewNode(playerNode)
         self.playerNP.setPos(-2, 0, 14)
         self.playerNP.setH(45)
-        self.playerNP.setCollideMask(BitMask32.allOn())
+        self.playerNP.setCollideMask(BitMask32.bit(1))
         #self.playerNP.setKinematic(True)
 
         self.world.attachCharacter(self.playerNP.node())
@@ -804,7 +899,7 @@ class MyApp(ShowBase):
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
 
-            result = self.world.rayTestClosest(pFrom, pTo)
+            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
             print(result.hasHit())
             print(result.getHitPos())
