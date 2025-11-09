@@ -123,6 +123,10 @@ class gameFSM(FSM):
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
+        self.shootingArcPoints = self.game.shootingArc(self.game.goblins.bodyNPfront.getPos(render), 
+                                                       num_points=80, rotationangle=self.game.goblins.bodyNPfront.getH()+45)
+        print(self.shootingArcPoints)
+        self.game.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
 
     def exitShootingPhase(self):
         print("Exiting Shooting Phase")
@@ -657,6 +661,24 @@ class MyApp(ShowBase):
             """
             return
     
+    def shootingArc(self, origo, num_points=40, rotationangle=30):
+        points =[]
+        origo=(origo/50 +1)*0.5
+        origo   = Vec2(origo.x,origo.y)
+        points.append(origo)
+
+        arcmax = math.pi/2
+
+        for i in range(0,num_points):
+            angle = arcmax * i / (num_points - 1)
+            x = 0.5 * math.cos(angle) 
+            y = 0.5 * math.sin(angle)
+            points.append(origo+Vec2(x,y))
+            points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
+
+        for n in range(len(points),num_points+3):
+            points.append(points[-1])
+        return points
 
     def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,height=0.5,movedistance=8):
         points =[]
