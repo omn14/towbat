@@ -33,9 +33,13 @@ class gameFSM(FSM):
     def __init__(self, Game):
         FSM.__init__(self, 'GameFSM')
         self.game = Game
-        self.strategyMenuCube = self.createMenuCollisionCube("StrategyPhase",Point3(5,20,0))
-        self.movementMenuCube = self.createMenuCollisionCube("MovementPhase",Point3(5,20,3))
         
+        self.endPhaseCube = self.createMenuCollisionCube("endPhase",Point3(5,20,3))
+        
+        self.phases = ['StrategyPhase', 'MovementPhase', 'ShootingPhase', 'CombatPhase']
+        self.currentPhaseIndex=0
+        self.request(self.phases[self.currentPhaseIndex])
+
         self.menuCubes= base.camera.findAllMatches("**/*MenuCube")
         print(self.menuCubes)
 
@@ -97,26 +101,25 @@ class gameFSM(FSM):
                 print(result.getHitNormal())
                 print(result.getHitFraction())
                 print(result.getNode())
-                self.game.debugText.setText(f"Hit Node: {result.getNode().getName()}")
-                self.request(result.getNode().getName())
+                
+                self.currentPhaseIndex = (self.currentPhaseIndex + 1) % len(self.phases)
+                self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+                self.request(self.phases[self.currentPhaseIndex])
 
     def enterStrategyPhase(self):
         print("Entering Strategy Phase")
-        self.strategyMenuCube.show()
-        self.strategyMenuCube.setCollideMask(BitMask32.bit(2))
+        
 
     def exitStrategyPhase(self):
         print("Exiting Strategy Phase")
-        self.strategyMenuCube.hide()
-        self.strategyMenuCube.setCollideMask(BitMask32.allOff())
+        
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
-        self.movementMenuCube.show()
+        
 
     def exitMovementPhase(self):
         print("Exiting Movement Phase")
-        self.movementMenuCube.hide()
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
