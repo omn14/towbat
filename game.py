@@ -38,6 +38,8 @@ class gameFSM(FSM):
         
         self.phases = ['StrategyPhase', 'MovementPhase', 'ShootingPhase', 'CombatPhase']
         self.currentPhaseIndex=0
+
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.request(self.phases[self.currentPhaseIndex])
 
         self.menuCubes= base.camera.findAllMatches("**/*MenuCube")
@@ -140,6 +142,8 @@ class gameFSM(FSM):
     def exitShootingPhase(self):
         print("Exiting Shooting Phase")
         self.game.ignore('mouse1')
+        self.cleanup()
+        
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
@@ -147,13 +151,22 @@ class gameFSM(FSM):
     def exitCombatPhase(self):
         print("Exiting Combat Phase")
 
+    def cleanup(self):
+        for unit in self.game.units:
+            unit.model.setColor(unit.color)
+            unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+
+
+
 class unitGraphics():
-    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None,color=(1,0,0,1)):
+    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None,color=(1,0,0,1),bitmask=1):
         self.unitName=name
         self.world=BulletWorld
+        self.color=color
+        self.bitmask=bitmask
         self.model = loader.loadModel(modelpath)
         self.model.setScale(scale)
-        self.model.setColor(*color)
+        self.model.setColor(self.color)
         self.model.reparentTo(render)
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
@@ -255,12 +268,15 @@ class MyApp(ShowBase):
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
+        self.units = []
         self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.bretBowmen.bodyNP.setPos(35,0,0)
         self.bretBowmen.bodyNP.setH(45)
+        self.units.append(self.bretBowmen)
 
         self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblins.bodyNP.setPos(0,-20,0)
+        self.units.append(self.goblins)
         self.unitToMove=self.bretBowmen
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
 
@@ -268,6 +284,7 @@ class MyApp(ShowBase):
         self.debugText.setText("Debug Info test")
         
         self.fsm = gameFSM(self)
+        #self.toCleanup= []
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -308,6 +325,8 @@ class MyApp(ShowBase):
                         np = NodePath.anyPath(c)
                         np.setColor(1,0,1,1)
                         NodePath.anyPath(result.getNode()).setCollideMask(BitMask32.bit(3))
+                        #self.toCleanup.append(np)
+
     
 
 

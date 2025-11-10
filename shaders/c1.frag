@@ -77,7 +77,10 @@ void main() {
         //discard;
         //p3d_FragColor = texture(p3d_Texture0, texcoord);
         //p3d_FragColor = texture(p3d_Texture0, texcoord);
-        p3d_FragColor = color-texture(p3d_Texture0, texcoord)/2.0;
+        //p3d_FragColor = color-texture(p3d_Texture0, texcoord)/2.0;
+        vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
+        tex = mix(tex, vec3(0.4, .7, 0.4), 0.6);
+        p3d_FragColor = vec4(tex,1.0);
 
     }
 }
