@@ -181,6 +181,7 @@ class unitGraphics():
             self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)  # Back point
             self.bodyNP.setCollideMask(BitMask32.bit(1))
             self.world.attachRigidBody(body)
+            self.model.node().setName('Model-' + self.unitName)
             self.model.reparentTo(self.bodyNP)
             self.bodyNP.setScale(2.0)
             self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
@@ -282,7 +283,31 @@ class MyApp(ShowBase):
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        self.checkArrows()
         return task.done
+    
+    def checkArrows(self):
+        for point in self.shootingArcPoints:
+            point = point * 2
+            point -= Vec2(1,1)
+            point = point * 50
+            pFrom = self.unitToMove.bodyNP.getPos(render)
+            pTo = Point3(point.x, point.y, pFrom.z)
+
+            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
+
+            if result.hasHit():
+                print(result.hasHit())
+                print(result.getHitPos())
+                print(result.getHitNormal())
+                print(result.getHitFraction())
+                print(result.getNode().getChildren())
+                for c in result.getNode().getChildren():
+                    print(c.getName())
+                    if "Model" in c.getName():
+                        np = NodePath.anyPath(c)
+                        np.setColor(1,0,1,1)
+                        NodePath.anyPath(result.getNode()).setCollideMask(BitMask32.bit(3))
     
 
 
@@ -318,6 +343,17 @@ class MyApp(ShowBase):
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
+
+            result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))    
+            if result2.hasHit():
+                print("shooting an arrow at", result2.getNode().getName())
+                for c in result2.getNode().getChildren():
+                    print(c.getName())
+                    if "Model" in c.getName():
+                        np = NodePath.anyPath(c)
+                        np.setColor(0,1,0,1)
+                        NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1))
+
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
         """
