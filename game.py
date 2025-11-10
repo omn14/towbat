@@ -112,24 +112,34 @@ class gameFSM(FSM):
 
     def exitStrategyPhase(self):
         print("Exiting Strategy Phase")
+        self.game.ignore('mouse1')
         
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
 
     def exitMovementPhase(self):
         print("Exiting Movement Phase")
+        taskMgr.remove("taskLoopPathTowardsMouse")
+        self.game.ignore('mouse1')
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
+        
+        
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
+
+        """ print(self.game.goblins.bodyNP.getH()+45)
         self.shootingArcPoints = self.game.shootingArc(self.game.goblins.bodyNPfront.getPos(render), 
-                                                       num_points=80, rotationangle=self.game.goblins.bodyNPfront.getH()+45)
+                                                       num_points=80, rotationangle=self.game.goblins.bodyNP.getH()+45)
         print(self.shootingArcPoints)
-        self.game.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        self.game.ground.setShaderInput("polygonpoints", self.shootingArcPoints) """
 
     def exitShootingPhase(self):
         print("Exiting Shooting Phase")
+        self.game.ignore('mouse1')
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
@@ -236,7 +246,7 @@ class MyApp(ShowBase):
         self.setup_shader()
         self.setup_bullet()
         #self.accept('mouse1', self.upAndDown)
-        self.accept('mouse1', self.setActiveUnit)
+        #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
@@ -268,7 +278,15 @@ class MyApp(ShowBase):
         self.pathTowardsMouse(self.unitToMove)
         return task.cont
     
-    def setActiveUnit(self):
+    def taskShootingArcUpdate(self, task):
+        self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
+                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
+        self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        return task.done
+    
+
+
+    def setActiveUnit(self,taskfunction,taskname):
         if base.mouseWatcherNode.hasMouse():
             # Get mouse position in normalized device coordinates
             pMouse = base.mouseWatcherNode.getMouse()
@@ -298,7 +316,8 @@ class MyApp(ShowBase):
                             self.unitToMove = self.goblins
                             print(f"Selected unit: {self.goblins.unitName}")
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-                        self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
+                        #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
+                        self.startTaskFunction(taskfunction, taskname)
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
         """
