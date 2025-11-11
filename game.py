@@ -29,6 +29,11 @@ from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from panda3d.core import Vec3, BitMask32
 
+from models import *
+from units import *
+from toHitAndToWound import *
+from battleFunctions import *
+
 class gameFSM(FSM):
     def __init__(self, Game):
         FSM.__init__(self, 'GameFSM')
@@ -159,8 +164,9 @@ class gameFSM(FSM):
 
 
 class unitGraphics():
-    def __init__(self,name, modelpath, scale=1.0,BulletWorld=None,color=(1,0,0,1),bitmask=1):
+    def __init__(self,name, modelpath, unit=None, scale=1.0,BulletWorld=None,color=(1,0,0,1),bitmask=1):
         self.unitName=name
+        self.unit =unit
         self.world=BulletWorld
         self.color=color
         self.bitmask=bitmask
@@ -173,6 +179,9 @@ class unitGraphics():
         print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
         #self.model.setPos(35,0,0)
         self.setUpCollisions()
+
+        
+
 
     def setUpCollisions(self):
         if self.world:
@@ -264,17 +273,28 @@ class MyApp(ShowBase):
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
+        self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
+        self.debugTextUnit.setText("Debug Info test")
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
         self.units = []
-        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam', scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+        man_at_arm = model("Man_at_Arm", url_man_at_arm)
+        man_at_arm.armor_save = 7
+        man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
+        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam',man_at_arm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.bretBowmen.bodyNP.setPos(35,0,0)
         self.bretBowmen.bodyNP.setH(45)
         self.units.append(self.bretBowmen)
 
-        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam', scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+
+        url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
+        night_goblin = NightGoblin("Night Goblin", url_night_goblin)
+        night_goblin.armor_save = 7 
+        night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
+        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblins.bodyNP.setPos(0,-20,0)
         self.units.append(self.goblins)
         self.unitToMove=self.bretBowmen
@@ -362,16 +382,43 @@ class MyApp(ShowBase):
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
+                        self.debugTextUnit.setText(f"Selected unit: {self.unitToMove.unitName}\nStats: {self.unitToMove.unit.model.characteristics}")
 
             result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))    
             if result2.hasHit():
-                print("shooting an arrow at", result2.getNode().getName())
-                for c in result2.getNode().getChildren():
-                    print(c.getName())
+                total_hits = 0
+                selected_unit = self.getSelectedUnit(result2.getNode())
+                attacker = self.unitToMove.unit
+                defender = selected_unit.unit
+                print(attacker.name, "shooting an arrow at",defender.name)
+                attacker.model.equip_weapon('short bow')
+                attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
+                print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
+                print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
+                print(f"Saves made by {defender.name}: {saves_made}")
+                print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
+                #unit.model.setColor(unit.color)
+                #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+                """ for c in result2.getNode().getChildren():
+                    #print(c.getName())
                     if "Model" in c.getName():
                         np = NodePath.anyPath(c)
                         np.setColor(0,1,0,1)
-                        NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1))
+                        NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
+
+    def getSelectedUnit(self,cnode):
+        if isinstance(cnode, BulletRigidBodyNode):
+            node_name = cnode.getName()
+            if node_name.startswith('UnitCollision-'):
+                unit_name = node_name.replace('UnitCollision-', '')
+                # Set the active unit based on which was clicked
+                if unit_name == self.bretBowmen.unitName:
+                    selected = self.bretBowmen
+                    print(f"Selected unit: {self.bretBowmen.unitName}")
+                elif unit_name == self.goblins.unitName:
+                    selected = self.goblins
+                    print(f"Selected unit: {self.goblins.unitName}")
+        return selected
 
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
