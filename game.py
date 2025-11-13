@@ -285,8 +285,8 @@ class MyApp(ShowBase):
         man_at_arm.armor_save = 7
         man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
         self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam',man_at_arm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
-        self.bretBowmen.bodyNP.setPos(35,0,0)
-        self.bretBowmen.bodyNP.setH(45)
+        self.bretBowmen.bodyNP.setPos(25,35,0)
+        self.bretBowmen.bodyNP.setH(180)
         self.units.append(self.bretBowmen)
 
 
@@ -298,7 +298,21 @@ class MyApp(ShowBase):
         self.goblins.bodyNP.setPos(0,-20,0)
         self.units.append(self.goblins)
         self.unitToMove=self.bretBowmen
+        
+        url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
+        url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
+        giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
+        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 5,5,1)
+        goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
+        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 5,5,1)
+        self.goblinWolfRiders = unitGraphics('GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblinWolfRiders.bodyNP.setPos(-20,-20,0)
+        self.units.append(self.goblinWolfRiders)
+        
+        
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
+
+
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
@@ -373,12 +387,16 @@ class MyApp(ShowBase):
                     if node_name.startswith('UnitCollision-'):
                         unit_name = node_name.replace('UnitCollision-', '')
                         # Set the active unit based on which was clicked
-                        if unit_name == self.bretBowmen.unitName:
+                        for unit in self.units:
+                            if unit_name == unit.unitName:
+                                self.unitToMove = unit
+                                print(f"Selected unit: {unit.unitName}")
+                        """ if unit_name == self.bretBowmen.unitName:
                             self.unitToMove = self.bretBowmen
                             print(f"Selected unit: {self.bretBowmen.unitName}")
                         elif unit_name == self.goblins.unitName:
                             self.unitToMove = self.goblins
-                            print(f"Selected unit: {self.goblins.unitName}")
+                            print(f"Selected unit: {self.goblins.unitName}") """
                         self.accept('mouse3', self.moveUnit,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
@@ -412,12 +430,16 @@ class MyApp(ShowBase):
             if node_name.startswith('UnitCollision-'):
                 unit_name = node_name.replace('UnitCollision-', '')
                 # Set the active unit based on which was clicked
-                if unit_name == self.bretBowmen.unitName:
+                for unit in self.units:
+                    if unit_name == unit.unitName:
+                        selected = unit
+                        print(f"Selected unit: {unit.unitName}")
+                """ if unit_name == self.bretBowmen.unitName:
                     selected = self.bretBowmen
                     print(f"Selected unit: {self.bretBowmen.unitName}")
                 elif unit_name == self.goblins.unitName:
                     selected = self.goblins
-                    print(f"Selected unit: {self.goblins.unitName}")
+                    print(f"Selected unit: {self.goblins.unitName}") """
         return selected
 
     
