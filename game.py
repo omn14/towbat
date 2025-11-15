@@ -11,6 +11,7 @@ from shaders.chargedistshaders import *
 from panda3d.core import Texture
 from panda3d.core import DirectionalLight, AmbientLight
 from panda3d.core import MeshDrawer, NodePath
+from panda3d.core import TextNode
 import math
 from panda3d.bullet import BulletSphereShape, BulletRigidBodyNode
 from panda3d.bullet import BulletDebugNode
@@ -28,6 +29,7 @@ from panda3d.core import LQuaterniond, LVector3d
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from panda3d.core import Vec3, BitMask32
+from panda3d.core import LineSegs
 
 from models import *
 from units import *
@@ -130,6 +132,7 @@ class gameFSM(FSM):
     def exitMovementPhase(self):
         print("Exiting Movement Phase")
         taskMgr.remove("taskLoopPathTowardsMouse")
+        self.cleanup()
         self.game.ignore('mouse1')
 
     def enterShootingPhase(self):
@@ -152,14 +155,20 @@ class gameFSM(FSM):
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskStartCombat, "taskStartCombat"])
+
 
     def exitCombatPhase(self):
         print("Exiting Combat Phase")
+        self.game.ignore('mouse1')
 
     def cleanup(self):
+        
         for unit in self.game.units:
             unit.model.setColor(unit.color)
             unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+            unit.hasMovedThisTurn=False
+            unit.updateTextNode()
 
 
 
@@ -180,8 +189,35 @@ class unitGraphics():
         #self.model.setPos(35,0,0)
         self.setUpCollisions()
 
+        self.isInCombat=False
+        self.isInCombatWith=None
+        self.isInCombatFlank=""
+        self.hasMovedThisTurn=False
+        self.hasAttackedThisTurn=False
+        text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
         
+        """ self.text_node = OnscreenText(
+            text=text,
+            scale=scale,
+            fg=color,
+            align=0,  # Center alignment
+            mayChange=True
+        ) """
+        self.text = TextNode('node name')
+        self.text.setText(text)
+        self.text_node = self.model.attachNewNode(self.text)
+        self.text_node.setPos(self.unitWidth/3, self.unitHeight, 5)
+        self.text_node.setScale(0.1)
+        self.text_node.setBillboardPointEye(-5, fixed_depth=True)
+        self.text_node.setBin("fixed", 0)
+        self.text_node.setDepthWrite(False)
+        self.text_node.setDepthTest(False)
+        self.text_node.hide()
 
+        
+    def updateTextNode(self):
+        text=f"In Combat: {self.isInCombat}\nMoved This Turn: {self.hasMovedThisTurn}\nAttacked This Turn: {self.hasAttackedThisTurn}"
+        self.text.setText(text)
 
     def setUpCollisions(self):
         if self.world:
@@ -196,6 +232,9 @@ class unitGraphics():
             body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
             body.addShape(shape)
             body.setMass(0)  # Static object
+            #body = BulletCharacterControllerNode(shape, 0.4, 'UnitCollision-' + self.unitName)
+            
+            
             self.bodyNP = render.attachNewNode(body)
             self.bodyNPfront = self.bodyNP.attachNewNode("front")
             self.bodyNPfront.setPos(0, box_size.y * 0.45, 0)  # Front point
@@ -203,6 +242,8 @@ class unitGraphics():
             self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)  # Back point
             self.bodyNP.setCollideMask(BitMask32.bit(1))
             self.world.attachRigidBody(body)
+            #self.world.attachCharacter(self.bodyNP.node())
+
             self.model.node().setName('Model-' + self.unitName)
             self.model.reparentTo(self.bodyNP)
             self.bodyNP.setScale(2.0)
@@ -306,7 +347,8 @@ class MyApp(ShowBase):
         goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
         goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 5,5,1)
         self.goblinWolfRiders = unitGraphics('GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
-        self.goblinWolfRiders.bodyNP.setPos(-20,-20,0)
+        self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
+        #self.goblinWolfRiders.bodyNP.setH(90)
         self.units.append(self.goblinWolfRiders)
         
         
@@ -319,6 +361,8 @@ class MyApp(ShowBase):
         
         self.fsm = gameFSM(self)
         #self.toCleanup= []
+
+        self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -335,6 +379,11 @@ class MyApp(ShowBase):
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.checkArrows()
+        return task.done
+    
+    def taskStartCombat(self, task):
+        if self.unitToMove.isInCombat:
+            self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
         return task.done
     
     def checkArrows(self):
@@ -362,7 +411,42 @@ class MyApp(ShowBase):
                         #self.toCleanup.append(np)
 
     
+    def mouseHoverUnit(self,task):
+        if base.mouseWatcherNode.hasMouse():
+            # Get mouse position in normalized device coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
 
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            # Perform ray test
+            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.allOn())
+            #self.debug_ray(pFrom, pTo)
+            if result.hasHit():
+                hit_node = result.getNode()
+                # Check if hit node is a unit
+                #if isinstance(hit_node, BulletRigidBodyNode):
+                if True:
+                    node_name = hit_node.getName()
+                    #print(node_name)
+                    if node_name.startswith('UnitCollision-'):
+                        unit_name = node_name.replace('UnitCollision-', '')
+                        # Set the active unit based on which was clicked
+                        for unit in self.units:
+                            if unit_name == unit.unitName:
+                                hovered_unit = unit
+                                print(f"Hovered unit: {unit.unitName}")
+                                unit.text_node.show()
+                    else:
+                        for unit in self.units:
+                            unit.text_node.hide()
+        
+        return task.cont
+                        
 
     def setActiveUnit(self,taskfunction,taskname):
         if base.mouseWatcherNode.hasMouse():
@@ -382,7 +466,8 @@ class MyApp(ShowBase):
             if result.hasHit():
                 hit_node = result.getNode()
                 # Check if hit node is a unit
-                if isinstance(hit_node, BulletRigidBodyNode):
+                #if isinstance(hit_node, BulletRigidBodyNode):
+                if True:
                     node_name = hit_node.getName()
                     if node_name.startswith('UnitCollision-'):
                         unit_name = node_name.replace('UnitCollision-', '')
@@ -425,7 +510,8 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
 
     def getSelectedUnit(self,cnode):
-        if isinstance(cnode, BulletRigidBodyNode):
+        #if isinstance(cnode, BulletRigidBodyNode):
+        if True:
             node_name = cnode.getName()
             if node_name.startswith('UnitCollision-'):
                 unit_name = node_name.replace('UnitCollision-', '')
@@ -487,6 +573,7 @@ class MyApp(ShowBase):
 
     def setup_bullet(self):
         self.world = BulletWorld()
+        self.world.setGravity(Vec3(0, 0, -9.81))
         shape = BulletPlaneShape(Vec3(0, 0, 1), 1)
         node = BulletRigidBodyNode('Ground')
         node.addShape(shape)
@@ -1125,12 +1212,16 @@ class MyApp(ShowBase):
             p2 = (self.polygonpoints[self.numsPoints-2]*2-1)*50
             p3 = (self.polygonpoints[0]*2-1)*50
             p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
-            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.1), Point3(p2.x, p2.y, 0.1))
-            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.1), Point3(p4.x, p4.y, 0.1))
+            self.world.doPhysics(0.016)
+            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.91), Point3(p2.x, p2.y, 0.91),BitMask32.bit(1))
+            
+            #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
+            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.91), Point3(p4.x, p4.y, 0.91),BitMask32.bit(1))
             ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
             ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
             print("Cont2:", cont2.hasHit(), cont2.getHitPos())
             print("Cont:", cont.hasHit(), cont.getHitPos())
+            
             #closest_dist=0
             closest_dist = float('inf')
             closest_pos = None
@@ -1155,7 +1246,7 @@ class MyApp(ShowBase):
             
             p1_5 = (p1 + p3) * 0.5
             p2_5 = (p2 + p4) * 0.5
-            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.1), Point3(p2_5.x, p2_5.y, 0.1))
+            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.91), Point3(p2_5.x, p2_5.y, 0.91))
             print("Cont3:", cont3.hasHit(), cont3.getHitPos())
             if cont3.hasHit():
                 # Check which contact point is closest to smiley
@@ -1188,8 +1279,23 @@ class MyApp(ShowBase):
             print(mpoint.getLocalPointB()) """
             return
 
+    def debug_ray(self, pFrom, pTo):
+        # Create a line to visualize the ray
+        line = LineSegs()
+        line.setColor(1, 0, 0, 1)  # Red line
+        line.moveTo(pFrom)
+        line.drawTo(pTo)
+        
+        line_node = render.attachNewNode(line.create())
+        # Remove after 2 seconds
+        #self.taskMgr.doMethodLater(2.0, line_node.removeNode, "remove-debug-ray")
+
     def moveUnit(self, unit):
         taskMgr.remove("taskLoopPathTowardsMouse")
+        if unit.hasMovedThisTurn:
+            print("Unit has already moved this turn.")
+            return
+        print("Moving unit to arc point...")
         pos = self.arcPoint
         print("Normalized position:", pos)
         pos=pos*2
@@ -1204,6 +1310,9 @@ class MyApp(ShowBase):
         unit.bodyNP.setPos(pos.x , pos.y , 0)
         unit.bodyNP.setH(unit.bodyNP.getH() + self.arcPointRotation)
         unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
+        unit.hasMovedThisTurn=True
+        unit.updateTextNode()
+        unit.bodyNP.setCollideMask(BitMask32.bit(4))
         self.checkUnitContact(unit)
 
     def checkUnitContact(self, unit):
@@ -1303,10 +1412,22 @@ class MyApp(ShowBase):
                 sequence = Sequence(
                     rotation_interval,
                     Func(unit.bodyNP.wrtReparentTo, parent),
-                    Func(newnode.removeNode),
-                    Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
+                    Func(newnode.removeNode)
+                    #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
                 )
                 sequence.start()
+                unit.isInCombat=True
+                unit.bodyNP.setCollideMask(BitMask32.bit(4))
+                
+                defenderUnit=self.getSelectedUnit(defenderNP.node())
+                unit.isInCombatWith=defenderUnit
+                unit.isInCombatFlank="front"
+                defenderUnit.isInCombatWith=unit
+                defenderUnit.isInCombat=True
+                defenderUnit.isInCombatFlank="front"
+                defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+                unit.updateTextNode()
+                defenderUnit.updateTextNode()
                 return
 
             #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
