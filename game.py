@@ -337,6 +337,7 @@ class MyApp(ShowBase):
         night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
         self.goblins = unitGraphics('Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblins.bodyNP.setPos(0,-20,0)
+        self.goblins.unit.model.equip_weapon('short bow')
         self.units.append(self.goblins)
         self.unitToMove=self.bretBowmen
         
@@ -375,6 +376,19 @@ class MyApp(ShowBase):
         return task.cont
     
     def taskShootingArcUpdate(self, task):
+        for unit in self.units:
+            unit.model.setColor(unit.color)
+            unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+        if self.unitToMove.isInCombat:
+            print("Unit is in combat, cant shoot.")
+            return task.done
+        print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
+        if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
+            print("Unit has no equiped weapon equipped, cant shoot.")
+            return task.done
+        if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
+            print("Unit has no ranged weapon equipped, cant shoot.")
+            return task.done
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
@@ -439,7 +453,7 @@ class MyApp(ShowBase):
                         for unit in self.units:
                             if unit_name == unit.unitName:
                                 hovered_unit = unit
-                                print(f"Hovered unit: {unit.unitName}")
+                                #print(f"Hovered unit: {unit.unitName}")
                                 unit.text_node.show()
                     else:
                         for unit in self.units:
@@ -494,7 +508,7 @@ class MyApp(ShowBase):
                 attacker = self.unitToMove.unit
                 defender = selected_unit.unit
                 print(attacker.name, "shooting an arrow at",defender.name)
-                attacker.model.equip_weapon('short bow')
+                #attacker.model.equip_weapon('short bow')
                 attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
                 print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
                 print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
@@ -502,6 +516,8 @@ class MyApp(ShowBase):
                 print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
                 #unit.model.setColor(unit.color)
                 #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+                self.unitToMove.bodyNP.setCollideMask(BitMask32.bit(4))
+                selected_unit.bodyNP.setCollideMask(BitMask32.bit(4))
                 """ for c in result2.getNode().getChildren():
                     #print(c.getName())
                     if "Model" in c.getName():
