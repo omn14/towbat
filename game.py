@@ -7,6 +7,7 @@ from direct.interval.IntervalGlobal import Sequence
 from direct.interval.FunctionInterval import Func
 from panda3d.core import Shader
 
+import charge_impact_effect
 from shaders.chargedistshaders import *
 from panda3d.core import Texture
 from panda3d.core import DirectionalLight, AmbientLight
@@ -35,6 +36,9 @@ from models import *
 from units import *
 from toHitAndToWound import *
 from battleFunctions import *
+
+#import charge_impact_effect
+from direct.particles.ParticleEffect import ParticleEffect
 
 class gameFSM(FSM):
     def __init__(self, Game):
@@ -260,6 +264,7 @@ class MyApp(ShowBase):
 
         # Disable default camera controls
         #self.disableMouse()
+        base.enableParticles()
         
 
         # Create a flat plane using CardMaker
@@ -364,6 +369,9 @@ class MyApp(ShowBase):
         #self.toCleanup= []
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
+        #self.p = charge_impact_effect.ChargeImpactEffect(parent=render)
+        self.p = ParticleEffect()
+        self.p.loadConfig("particles/whburst2.ptf")
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -474,11 +482,24 @@ class MyApp(ShowBase):
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
             
+            
+            
             # Perform ray test
             result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
             
             if result.hasHit():
                 hit_node = result.getNode()
+                print("Mouse click hit:",result.getHitPos())
+                #self.p.play(result.getHitPos(),duration=1.0,scale=3.0)
+                self.p.start(parent=render, renderParent=render)
+                self.p.setPos(result.getHitPos())
+                #self.camera.lookAt(self.p)
+
+                """ # Check if particle effect is currently playing
+                if self.p.isPlaying():
+                    print("Particle effect is already playing, skipping...")
+                else:
+                    self.p.play(result.getHitPos(),duration=1.0,scale=3.0) """
                 # Check if hit node is a unit
                 #if isinstance(hit_node, BulletRigidBodyNode):
                 if True:
