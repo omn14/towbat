@@ -3,11 +3,10 @@ from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32
 from panda3d.core import CardMaker
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape
 from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
-from direct.interval.IntervalGlobal import Sequence
+from direct.interval.IntervalGlobal import Sequence, ProjectileInterval
 from direct.interval.FunctionInterval import Func
 from panda3d.core import Shader
 
-import charge_impact_effect
 from shaders.chargedistshaders import *
 from panda3d.core import Texture
 from panda3d.core import DirectionalLight, AmbientLight
@@ -373,6 +372,16 @@ class MyApp(ShowBase):
         self.p = ParticleEffect()
         self.p.loadConfig("particles/whburst2.ptf")
 
+        # load the ball model
+        self.ball = loader.loadModel("smiley")
+        self.ball.reparentTo(render)
+        self.ball.setPos(-15,0,0)
+
+        # setup the projectile interval
+        self.trajectory = ProjectileInterval(self.ball, duration=1,
+                                            endPos=Point3(15,0, 0))
+
+
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
             taskMgr.remove(taskname)
@@ -432,6 +441,22 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result.getNode()).setCollideMask(BitMask32.bit(3))
                         #self.toCleanup.append(np)
 
+    def cameraShake(self, intensity=1.0, duration=0.5):
+        original_pos = self.camera.getPos()
+
+        def shake_task(task):
+            elapsed = task.time
+            if elapsed < duration:
+                offset_x = (random.uniform(-1, 1) * intensity)
+                offset_y = (random.uniform(-1, 1) * intensity)
+                offset_z = (random.uniform(-1, 1) * intensity)
+                self.camera.setPos(original_pos + Vec3(offset_x, offset_y, offset_z))
+                return task.cont
+            else:
+                self.camera.setPos(original_pos)
+                return task.done
+
+        self.taskMgr.add(shake_task, "cameraShakeTask")
     
     def mouseHoverUnit(self,task):
         if base.mouseWatcherNode.hasMouse():
@@ -494,6 +519,13 @@ class MyApp(ShowBase):
                 self.p.start(parent=render, renderParent=render)
                 self.p.setPos(result.getHitPos())
                 #self.camera.lookAt(self.p)
+
+                self.cameraShake(intensity=0.5, duration=0.3)
+                #self.trajectory.endPos = result.getHitPos()
+                self.trajectory.__init__(self.ball, duration=1,
+                                        endPos=result.getHitPos())
+                #print("Projectile from", self.trajectory.startPos, "to", self.trajectory.endPos)
+                self.trajectory.start()
 
                 """ # Check if particle effect is currently playing
                 if self.p.isPlaying():
