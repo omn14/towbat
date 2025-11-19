@@ -372,6 +372,9 @@ class MyApp(ShowBase):
         self.p = ParticleEffect()
         self.p.loadConfig("particles/whburst2.ptf")
 
+        self.p_miss = ParticleEffect()
+        self.p_miss.loadConfig("particles/whmiss.ptf")
+
         # load the ball model
         self.ball = loader.loadModel("smiley")
         self.ball.reparentTo(render)
@@ -380,7 +383,23 @@ class MyApp(ShowBase):
         # setup the projectile interval
         self.trajectory = ProjectileInterval(self.ball, duration=1,
                                             endPos=Point3(15,0, 0))
-
+        
+    def spawnProjectiles(self,n,startPos,endPos):
+        # setup the projectile interval
+        self.trajectories = []
+        self.projectiles = []
+        for i in range(n):
+            ball = loader.loadModel("smiley")
+            ball.reparentTo(render)
+            ball.setPos(startPos+Vec3(random.uniform(-2,2),random.uniform(-2,2),0))
+            self.projectiles.append(ball)
+            pos = endPos + Vec3(random.uniform(-2,2),random.uniform(-2,2),0)
+            duration = random.uniform(0.9, 1.1)
+            trajectory = ProjectileInterval(ball, duration=duration,
+                                            endPos=pos)
+            self.trajectories.append(trajectory)
+        for trajectory in self.trajectories:
+            trajectory.start()
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -520,12 +539,15 @@ class MyApp(ShowBase):
                 self.p.setPos(result.getHitPos())
                 #self.camera.lookAt(self.p)
 
+                self.p_miss.start(parent=render, renderParent=render)
+                self.p_miss.setPos(result.getHitPos())
+
                 self.cameraShake(intensity=0.5, duration=0.3)
-                #self.trajectory.endPos = result.getHitPos()
-                self.trajectory.__init__(self.ball, duration=1,
+                
+                """ self.trajectory.__init__(self.ball, duration=1,
                                         endPos=result.getHitPos())
-                #print("Projectile from", self.trajectory.startPos, "to", self.trajectory.endPos)
-                self.trajectory.start()
+                self.trajectory.start() """
+                self.spawnProjectiles(5,Point3(-15,-5,0),result.getHitPos())
 
                 """ # Check if particle effect is currently playing
                 if self.p.isPlaying():
