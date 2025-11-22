@@ -140,6 +140,7 @@ class gameFSM(FSM):
         taskMgr.remove("taskLoopPathTowardsMouse")
         self.cleanup()
         self.game.ignore('mouse1')
+        self.game.ground.setShaderInput("active", False)
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
@@ -154,6 +155,8 @@ class gameFSM(FSM):
         print("Exiting Shooting Phase")
         self.game.ignore('mouse1')
         self.cleanup()
+        self.game.ground.setShaderInput("active", False)
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
         
 
     def enterCombatPhase(self):
@@ -470,6 +473,7 @@ class MyApp(ShowBase):
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        self.ground.setShaderInput("active", True)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
         self.checkArrows()
@@ -753,6 +757,7 @@ class MyApp(ShowBase):
             y = radius * math.sin(angle)
             self.polygonpoints.append(Vec2(x, y))
         surface.setShaderInput("polygonpoints", self.polygonpoints)
+        surface.setShaderInput("active", False)
         self.polygonpoints = []
 
     def setup_bullet(self):
@@ -1451,6 +1456,7 @@ class MyApp(ShowBase):
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
+            self.ground.setShaderInput("active", True)
             """ contacts = self.world.contactTest(self.playerNP.node())
             for contact in contacts.getContacts():
                 print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())

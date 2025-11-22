@@ -4,6 +4,7 @@ uniform sampler2D p3d_Texture0;
 uniform vec3 pos;
 #define maxpoints 83
 uniform vec2 polygonpoints[maxpoints];
+uniform bool active;
 
 // Input from vertex shader
 in vec4 color;
@@ -53,7 +54,8 @@ void main() {
 
     // Draw a circle with radius 0.4
     float radius = 10.1;
-    if (dist < radius) {
+    //if (dist < radius) {
+    if (active) {
         //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
         p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
         float d = sdPolygon(uv, polygonpoints);
@@ -67,7 +69,8 @@ void main() {
 
         vec3 col = (d>0.0) ? tex : vec3(0.65,0.85,1.0);
         col *= 1.0 - exp(-24.0*abs(d));
-        col *= 0.8 + 0.2*cos(2*140.0*d);
+        //col *= 0.8 + 0.2*cos(2*140.0*d);
+        col *= 0.8 + 0.2*cos(2*140.0*d)*exp(-10.0*abs(d));
         col = mix( col, vec3(1.0), 1.0-smoothstep(0.0,0.015,abs(d)+0.0075) );
         //col = mix(col, vec3(0.7, 1.0, 0.7), 0.6);
         p3d_FragColor = vec4(col,1.0);
