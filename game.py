@@ -478,7 +478,7 @@ class MyApp(ShowBase):
         # if you need the same shader, leave the shader/material assignments as-is
 
         #target_np.setTexture(tex, 1)         # stage 1 (or 0 if you prefer)
-        #target_np.setTransparency(TransparencyAttrib.MAlpha)  # if the shader outputs alpha
+        target_np.setTransparency(TransparencyAttrib.MAlpha)  # if the shader outputs alpha
         # If you want to drive a custom shader input:
         target_np.setShaderInput("bakedMap", tex)
         
