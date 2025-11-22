@@ -115,10 +115,11 @@ class gameFSM(FSM):
                 print(result.getNode())
                 
                 self.currentPhaseIndex = (self.currentPhaseIndex + 1) % len(self.phases)
-                self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+                #self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
                 self.request(self.phases[self.currentPhaseIndex])
 
     def enterStrategyPhase(self):
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         print("Entering Strategy Phase")
         
 
@@ -129,6 +130,7 @@ class gameFSM(FSM):
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
 
@@ -140,6 +142,7 @@ class gameFSM(FSM):
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         
         
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
@@ -158,6 +161,7 @@ class gameFSM(FSM):
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskStartCombat, "taskStartCombat"])
 
 
@@ -365,6 +369,14 @@ class MyApp(ShowBase):
         self.debugText.setText("Debug Info test")
         
         self.fsm = gameFSM(self)
+        ###Shooting scenario testing
+        if True:
+            self.fsm.currentPhaseIndex=2
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,0,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+
         #self.toCleanup= []
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
@@ -383,6 +395,35 @@ class MyApp(ShowBase):
         # setup the projectile interval
         self.trajectory = ProjectileInterval(self.ball, duration=1,
                                             endPos=Point3(15,0, 0))
+        
+        self.mousePosOnGround=Point3(0,0,0)
+        
+    def drawProjectileTrajectory(self,startPos,endPos,n=20):
+        # Remove existing trajectory line if it exists
+        if hasattr(self, 'trajectoryLine'):
+            self.trajectoryLine.removeNode()
+        
+        line_segs = LineSegs()
+        line_segs.setColor(1, 0, 0, 1)  # Red color for the trajectory
+        line_segs.setThickness(2.0)
+
+        for i in range(n + 1):
+            t = i / n
+            # Simple linear interpolation for demonstration; replace with actual trajectory calculation
+            x = (1 - t) * startPos.x + t * endPos.x
+            y = (1 - t) * startPos.y + t * endPos.y
+            z = (1 - t) * startPos.z + t * endPos.z + (4 * t * (1 - t)) * 10  # Adding a parabolic arc
+
+            if i == 0:
+                line_segs.moveTo(x, y, z)
+            else:
+                line_segs.drawTo(x, y, z)
+
+        trajectory_node = line_segs.create()
+        self.trajectoryLine = render.attachNewNode(trajectory_node)
+        self.trajectoryLine.setName("ProjectileTrajectory")
+
+        return self.trajectoryLine
         
     def spawnProjectiles(self,n,startPos,endPos):
         # setup the projectile interval
@@ -428,6 +469,8 @@ class MyApp(ShowBase):
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
+            taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
         self.checkArrows()
         return task.done
     
@@ -435,6 +478,10 @@ class MyApp(ShowBase):
         if self.unitToMove.isInCombat:
             self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
         return task.done
+    
+    def taskShootingTrajectoryDrawLine(self, task):
+        self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), self.mousePosOnGround)
+        return task.cont
     
     def checkArrows(self):
         for point in self.shootingArcPoints:
@@ -489,6 +536,9 @@ class MyApp(ShowBase):
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
 
+            
+            
+
             # Perform ray test
             result = self.world.rayTestClosest(pFrom, pTo, BitMask32.allOn())
             #self.debug_ray(pFrom, pTo)
@@ -496,6 +546,9 @@ class MyApp(ShowBase):
                 hit_node = result.getNode()
                 # Check if hit node is a unit
                 #if isinstance(hit_node, BulletRigidBodyNode):
+                self.mousePosOnGround = result.getHitPos()
+                #self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), result.getHitPos())
+                #self.drawProjectileTrajectory(Point3(-15,-5,0), Point3(-15,5,0), n=50)
                 if True:
                     node_name = hit_node.getName()
                     #print(node_name)
@@ -525,29 +578,14 @@ class MyApp(ShowBase):
             # Transform to global coordinates
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
-            
-            
-            
+
             # Perform ray test
             result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
             
             if result.hasHit():
                 hit_node = result.getNode()
                 print("Mouse click hit:",result.getHitPos())
-                #self.p.play(result.getHitPos(),duration=1.0,scale=3.0)
-                self.p.start(parent=render, renderParent=render)
-                self.p.setPos(result.getHitPos())
-                #self.camera.lookAt(self.p)
-
-                self.p_miss.start(parent=render, renderParent=render)
-                self.p_miss.setPos(result.getHitPos())
-
-                self.cameraShake(intensity=0.5, duration=0.3)
                 
-                """ self.trajectory.__init__(self.ball, duration=1,
-                                        endPos=result.getHitPos())
-                self.trajectory.start() """
-                self.spawnProjectiles(5,Point3(-15,-5,0),result.getHitPos())
 
                 """ # Check if particle effect is currently playing
                 if self.p.isPlaying():
@@ -593,12 +631,28 @@ class MyApp(ShowBase):
                 #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
                 self.unitToMove.bodyNP.setCollideMask(BitMask32.bit(4))
                 selected_unit.bodyNP.setCollideMask(BitMask32.bit(4))
+                self.shootingAnimation(self.unitToMove,selected_unit)
                 """ for c in result2.getNode().getChildren():
                     #print(c.getName())
                     if "Model" in c.getName():
                         np = NodePath.anyPath(c)
                         np.setColor(0,1,0,1)
                         NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
+
+    def shootingAnimation(self,attackerUnit,defenderUnit):
+        #self.p.play(result.getHitPos(),duration=1.0,scale=3.0)
+        self.p.start(parent=render, renderParent=render)
+        self.p.setPos(defenderUnit.bodyNP.getPos())
+        #self.camera.lookAt(self.p)
+
+        self.p_miss.start(parent=render, renderParent=render)
+        self.p_miss.setPos(defenderUnit.bodyNP.getPos())
+
+        self.cameraShake(intensity=0.5, duration=0.3)
+        
+        
+        self.spawnProjectiles(5,attackerUnit.bodyNP.getPos(),defenderUnit.bodyNP.getPos())
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
 
     def getSelectedUnit(self,cnode):
         #if isinstance(cnode, BulletRigidBodyNode):
