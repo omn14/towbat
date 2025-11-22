@@ -1,10 +1,12 @@
 #version 150
 
 uniform sampler2D p3d_Texture0;
+//uniform sampler2D p3d_Texture1;
 uniform vec3 pos;
 #define maxpoints 83
 uniform vec2 polygonpoints[maxpoints];
 uniform bool active;
+uniform sampler2D bakedMap;
 
 // Input from vertex shader
 in vec4 color;
@@ -64,7 +66,8 @@ void main() {
 
         //vec3 col = (d>0.0) ? texture(p3d_Texture0, texcoord).rgb : vec3(0.65,0.85,1.0);
         //vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, vec3(0.9,1.0,0.8), 0.8);
-        vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
+        //vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
+        vec3 tex = mix( texture(bakedMap, texcoord).rgb, texture(bakedMap, texcoord).bgr, 0.5);
         tex = mix(tex, vec3(0.4, .7, 0.4), 0.6);
 
         vec3 col = (d>0.0) ? tex : vec3(0.65,0.85,1.0);
@@ -82,6 +85,7 @@ void main() {
         //p3d_FragColor = texture(p3d_Texture0, texcoord);
         //p3d_FragColor = color-texture(p3d_Texture0, texcoord)/2.0;
         vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
+        //vec3 tex = mix( texture(bakedMap, texcoord).rgb, texture(bakedMap, texcoord).bgr, 0.5);
         tex = mix(tex, vec3(0.4, .7, 0.4), 0.6);
         p3d_FragColor = vec4(tex,1.0);
 

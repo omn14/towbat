@@ -19,6 +19,7 @@ from direct.directutil import Mopath
 from direct.interval.MopathInterval import MopathInterval
 from panda3d.core import NurbsCurveEvaluator, NurbsCurveResult
 from panda3d.core import NurbsCurve
+from panda3d.core import GraphicsPipe
 
 
 from panda3d.bullet import BulletCharacterControllerNode
@@ -39,6 +40,10 @@ from battleFunctions import *
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
 from direct.interval.IntervalGlobal import Parallel
+from panda3d.core import GraphicsOutput, Camera, OrthographicLens, RenderState
+from panda3d.core import Texture, FrameBufferProperties, WindowProperties
+from panda3d.core import CardMaker, TransparencyAttrib
+from panda3d.core import RenderState, TextureStage
 
 class gameFSM(FSM):
     def __init__(self, Game):
@@ -397,7 +402,127 @@ class MyApp(ShowBase):
                                             endPos=Point3(15,0, 0))
         
         self.mousePosOnGround=Point3(0,0,0)
+
+        self.bakeTextures(self.ground)
+    
+
+    def bakeTextures(self, target_np, texture_size=512, name_suffix="_baked"):
+        tex = Texture()
+        tex.setMinfilter(Texture.FTLinear)
+        tex.setMagfilter(Texture.FTLinear)
+
+        win_props = WindowProperties.size(256, 256)
+        fb_props = FrameBufferProperties()
+        fb_props.setRgbColor(True)
+        fb_props.setDepthBits(24)
+
+        buffer = base.graphicsEngine.makeOutput(
+            base.pipe, "rtBuffer", -2,
+            fb_props, win_props,
+            GraphicsPipe.BFRefuseWindow, base.win.getGsg(), base.win
+        )
+
+        buffer.addRenderTexture(tex, GraphicsOutput.RTMBindOrCopy)
+
+        rt_scene = NodePath("rt-scene-root")
+        # Create the same directional light as the main scene
+        dlight = DirectionalLight('rt-dlight')
+        dlight.setColor((0.8, 0.8, 0.7, 1))
+        dlnp = rt_scene.attachNewNode(dlight)
+        dlnp.setHpr(-45, -60, 0)
+        rt_scene.setLight(dlnp)
+
+        # Create the same ambient light as the main scene
+        alight = AmbientLight('rt-alight')
+        alight.setColor((0.2, 0.2, 0.3, 1))
+        alnp = rt_scene.attachNewNode(alight)
+        rt_scene.setLight(alnp)
+        # reparent any models you want baked into the texture under rt_scene
+        #model_copy = original_model.copyTo(rt_scene)
+        model_copy = target_np.copyTo(rt_scene)
+
+        rt_camera = base.makeCamera(buffer)
+        rt_camera.reparentTo(rt_scene)
+        #rt_camera.setPos(0, -10, 5)
+        rt_camera.setPos(0, 0, 300)
+        rt_camera.lookAt(model_copy)
+        min_pt, max_pt = model_copy.getTightBounds()
+        size = max_pt - min_pt
+        width = size.x
+        height = size.z   # or size.y depending on orientation
+
+        # Get texture dimensions
+        texture = model_copy.getTexture()
+        if texture:
+            width_pixels = texture.getXSize()
+            height_pixels = texture.getYSize()
+            print(texture)
+        else:
+            width_pixels = texture_size
+            height_pixels = texture_size
+
+        lens = OrthographicLens(); lens.setFilmSize(100, 100); rt_camera.node().setLens(lens)
+        center = (min_pt + max_pt) * 0.5
+        rt_camera.setPos(center.x, center.y , center.z + 10)
+        rt_camera.lookAt(center)
+        """ pivot = NodePath('bake-pivot')
+        model_copy.reparentTo(pivot)
+        model_copy.setPos(-center)  # center it at origin
+        rt_camera.reparentTo(pivot)
+        rt_camera.setPos(0, -10, 0)
+        rt_camera.lookAt(0, 0, 0) """
         
+        base.graphicsEngine.renderFrame()  # ensure at least one frame is rendered
+        #tex.write(name_suffix + ".png")  # optional: save to disk for inspection
+
+        # if you need the same shader, leave the shader/material assignments as-is
+
+        #target_np.setTexture(tex, 1)         # stage 1 (or 0 if you prefer)
+        #target_np.setTransparency(TransparencyAttrib.MAlpha)  # if the shader outputs alpha
+        # If you want to drive a custom shader input:
+        target_np.setShaderInput("bakedMap", tex)
+        
+        return tex
+
+    def applyBakedTexture(self, node, baked_texture):
+        """
+        Applies a baked texture to a node, replacing its current appearance.
+        
+        Args:
+            node: The NodePath to apply the texture to
+            baked_texture: The baked texture to apply
+        """
+        # Clear existing shaders and textures
+        node.clearShader()
+        node.clearTexture()
+        
+        # Apply the baked texture
+        node.setTexture(baked_texture)
+        
+        # Set up simple texture rendering
+        ts = TextureStage.getDefault()
+        node.setTexture(ts, baked_texture)
+        
+        # Enable transparency if the baked texture has alpha
+        if baked_texture.getNumComponents() == 4:
+            node.setTransparency(TransparencyAttrib.MAlpha)
+
+    def bakeAndApply(self, node, texture_size=512):
+        """
+        Convenience method to bake a node's appearance and immediately apply it.
+        
+        Args:
+            node: The NodePath to bake and apply to
+            texture_size: Size of the baked texture
+            
+        Returns:
+            Texture: The baked texture that was applied
+        """
+        baked_texture = self.bakeTextures(node, texture_size)
+        if baked_texture:
+            self.applyBakedTexture(node, baked_texture)
+        return baked_texture
+
     def drawProjectileTrajectory(self,startPos,endPos,n=20):
         # Remove existing trajectory line if it exists
         if hasattr(self, 'trajectoryLine'):
@@ -1504,6 +1629,7 @@ class MyApp(ShowBase):
         unit.updateTextNode()
         unit.bodyNP.setCollideMask(BitMask32.bit(4))
         self.checkUnitContact(unit)
+        self.bakeTextures(self.ground)
 
     def checkUnitContact(self, unit):
         contacts = self.world.contactTest(unit.bodyNP.node())
