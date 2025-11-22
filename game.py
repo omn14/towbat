@@ -38,6 +38,7 @@ from battleFunctions import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
+from direct.interval.IntervalGlobal import Parallel
 
 class gameFSM(FSM):
     def __init__(self, Game):
@@ -147,11 +148,7 @@ class gameFSM(FSM):
         
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
 
-        """ print(self.game.goblins.bodyNP.getH()+45)
-        self.shootingArcPoints = self.game.shootingArc(self.game.goblins.bodyNPfront.getPos(render), 
-                                                       num_points=80, rotationangle=self.game.goblins.bodyNP.getH()+45)
-        print(self.shootingArcPoints)
-        self.game.ground.setShaderInput("polygonpoints", self.shootingArcPoints) """
+        
 
     def exitShootingPhase(self):
         print("Exiting Shooting Phase")
@@ -439,8 +436,12 @@ class MyApp(ShowBase):
             trajectory = ProjectileInterval(ball, duration=duration,
                                             endPos=pos)
             self.trajectories.append(trajectory)
-        for trajectory in self.trajectories:
-            trajectory.start()
+        # Create a Parallel interval to run all trajectories simultaneously
+        parallel_trajectories = Parallel(*self.trajectories)
+        #parallel_trajectories.start()
+        #for trajectory in self.trajectories:
+        #    trajectory.start()
+        return parallel_trajectories
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -479,10 +480,41 @@ class MyApp(ShowBase):
             self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
         return task.done
     
+    def checkIfInsidePolygon(self, point, polygonPoints):
+        # Ray-casting algorithm to determine if point is inside polygon
+        n = len(polygonPoints)
+        inside = False
+
+        x, y = point.x, point.y
+        p1x, p1y = polygonPoints[0].x, polygonPoints[0].y
+
+        for i in range(n + 1):
+            p2x, p2y = polygonPoints[i % n].x, polygonPoints[i % n].y
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
+
     def taskShootingTrajectoryDrawLine(self, task):
-        self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), self.mousePosOnGround)
+        if self.checkIfInsidePolygon(self.mousePosOnGround, self.coordsToWorld(self.shootingArcPoints)):
+            self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), self.mousePosOnGround)
         return task.cont
     
+    def coordsToWorld(self, points):
+        worldPoints = []
+        for point in points:
+            point = point * 2
+            point -= Vec2(1,1)
+            point = point * 50
+            worldPoints.append(Point3(point.x, point.y, 0))
+        return worldPoints
+
     def checkArrows(self):
         for point in self.shootingArcPoints:
             point = point * 2
@@ -640,18 +672,25 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
 
     def shootingAnimation(self,attackerUnit,defenderUnit):
-        #self.p.play(result.getHitPos(),duration=1.0,scale=3.0)
-        self.p.start(parent=render, renderParent=render)
+        
+        #self.p.start(parent=render, renderParent=render)
         self.p.setPos(defenderUnit.bodyNP.getPos())
-        #self.camera.lookAt(self.p)
+        
 
-        self.p_miss.start(parent=render, renderParent=render)
+        #self.p_miss.start(parent=render, renderParent=render)
         self.p_miss.setPos(defenderUnit.bodyNP.getPos())
 
         self.cameraShake(intensity=0.5, duration=0.3)
         
         
-        self.spawnProjectiles(5,attackerUnit.bodyNP.getPos(),defenderUnit.bodyNP.getPos())
+        parTra = self.spawnProjectiles(5,attackerUnit.bodyNP.getPos(),defenderUnit.bodyNP.getPos())
+        seq = Sequence(parTra,
+                       Func(self.p.start, parent=render, renderParent=render),
+                       Func(taskMgr.doMethodLater, 4.0, lambda task: self.p.disable(), 'stopParticles'),
+                       Func(self.p_miss.start, parent=render, renderParent=render),
+                       Func(taskMgr.doMethodLater, 4.0, lambda task: self.p_miss.disable(), 'stopMissParticles')
+                       )
+        seq.start()
         taskMgr.remove("taskShootingTrajectoryDrawLine")
 
     def getSelectedUnit(self,cnode):
