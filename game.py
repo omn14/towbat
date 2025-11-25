@@ -198,8 +198,35 @@ class unitGraphics():
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
         print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
+        self.model.ls()
+        children = self.model.getChildren()
+        #children.sort(key=lambda np: np.getName())
+        #children[-1].removeNode()
+        ranks=self.unit.ranks
+        files=self.unit.files
+        self.modelWidth=abs(children[0].getTightBounds()[1][0]-children[0].getTightBounds()[0][0])
+        self.modelHeight=abs(children[0].getTightBounds()[1][1]-children[0].getTightBounds()[0][1])
+        print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")
+
+        for i, child in enumerate(children):
+            row = i // files
+            col = i % files
+            print(f"Positioning child {child.getName()} at row {row}, col {col}")
+            p=Point3(col * (self.modelWidth ),-row * (self.modelHeight ), 0)
+            pp=p-Point3(self.unitWidth*2, -self.modelHeight/2,0)
+            child.setPos(p)
+            #child.setPos((col - (files - 1) / 2) * (self.modelWidth / files), (row - (ranks - 1) / 2) * (self.modelHeight / ranks), 0)
+
+        self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
+        self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
+
+        #self.model.setPos(self.unitWidth*2, -self.modelHeight/2,0)
+
+
         #self.model.setPos(35,0,0)
         self.setUpCollisions()
+
+        #children[-1].removeNode()
 
         self.isInCombat=False
         self.isInCombatWith=None
@@ -234,7 +261,10 @@ class unitGraphics():
     def setUpCollisions(self):
         if self.world:
             # Estimate radius from bounding box
+            #self.model.clearBounds()
+            #self.model.calcTightBounds(render)
             bounds = self.model.getTightBounds()
+            print(f"Unit {self.unitName} bounding box: {bounds}")
             
             
 
@@ -261,6 +291,8 @@ class unitGraphics():
             self.bodyNP.setScale(2.0)
             self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
             self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
+            self.model.setPos(-box_size.x/2+self.modelWidth/2, box_size.y/2-self.modelHeight/2,0)
+            #self.model.flattenLight()
 
 
 
@@ -375,10 +407,18 @@ class MyApp(ShowBase):
         
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
-        if True:
+        if False:
             self.fsm.currentPhaseIndex=2
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,0,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+
+        if True:
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,50,0)
+            self.goblinWolfRiders.bodyNP.setPos(0,40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
@@ -1762,19 +1802,91 @@ class MyApp(ShowBase):
         print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
         defenderUnit.unit.nmodels-=total_wounds
         attacker_score = total_wounds
+        self.removeModelsFromUnit(defenderUnit,total_wounds)
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defenderUnit.unit, attackerUnit.unit,charge=False)
         print(f"Total hits by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {total_hits}")
         print(f"suffered wounds by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {suffered_wounds}")
         print(f"Saves made by {attackerUnit.unit.name}: {saves_made}")
         print(f"Total wounds by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {total_wounds}")
+        attackerUnit.unit.nmodels-=total_wounds
+        self.removeModelsFromUnit(attackerUnit,total_wounds)
         defender_score = total_wounds
-        defenderUnit.unit.nmodels=defender_nmodels
+        #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         if attacker_score < defender_score:
             self.fallBack(defender, attacker)
         else:
             self.fallBack(attacker, defender)
         
+    
+    def centerOfModels(self, unit):
+        coords=[]
+        for child in unit.model.getChildren():
+            coords.append(child.getPos(render))
+        
+        min_x = min(pos.x for pos in coords)
+        max_x = max(pos.x for pos in coords)
+        min_y = min(pos.y for pos in coords)
+        max_y = max(pos.y for pos in coords)
+        min_z = min(pos.z for pos in coords)
+        max_z = max(pos.z for pos in coords)
+
+        center = Point3((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2)
+        return center
+
+    def getCenterOfUnit(self, unit):
+        bounds = unit.model.getTightBounds()
+        center = (bounds[0] + bounds[1]) * 0.5
+        # Convert from local model coordinates to world coordinates
+        world_center = unit.model.getPos(render) + center
+        return world_center
+        
+    def removeModelsFromUnit(self, unit,models_to_remove):
+        #unit.unit.nmodels = max(0, unit.nmodels - num_models)
+        cildren = unit.model.getChildren()
+        models_to_remove = min(len(cildren), models_to_remove)
+        for i in range(models_to_remove):
+            cildren[-1*(i+1)].removeNode()
+        
+        self.world.removeRigidBody(unit.bodyNP.node())
+        for shape in unit.bodyNP.node().shapes:
+            unit.bodyNP.node().removeShape(shape)
+        bounds = unit.model.getTightBounds()
+        box_size = bounds[1] - bounds[0]
+        shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
+        #body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
+        unit.bodyNP.node().addShape(shape)
+        unit.bodyNP.node().setMass(0)  # Static object
+        self.world.attachRigidBody(unit.bodyNP.node())
+        
+        print(unit.bodyNP.getPos())
+        print(self.getCenterOfUnit(unit))
+        diff = unit.bodyNP.getPos() - self.getCenterOfUnit(unit)
+        diff.z = 0
+        print("Diff:", diff)
+        print(unit.model.getPos(render))
+        print(unit.model.getPos())
+        #unit.model.flattenLight()
+        print(unit.model.getPos())
+        print(self.centerOfModels(unit))
+        #unit.bodyNP.setPos(self.getCenterOfUnit(unit))
+        #unit.bodyNP.setPos(unit.model.getPos(render))
+        #unit.bodyNP.setPos(unit.bodyNP.getPos() - Vec3(box_size.x/2 - unit.modelWidth/2, box_size.y/2 - unit.modelHeight/2, 0))
+        #unit.bodyNP.setPos(self.centerOfModels(unit))
+        #unit.bodyNP.setPos(unit.bodyNP.getPos() - diff)
+        #unit.model.setPos(unit.model.getPos() + diff)
+        unit.model.setPos(0,0,0)
+        print(unit.bodyNP.getPos())
+        print(self.getCenterOfUnit(unit))
+        diff = unit.bodyNP.getPos() - self.getCenterOfUnit(unit)
+        diff.z = 0
+        print("Diff:", diff)
+        unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
+
+
+        
+        #unit.setUpCollisions()
+
         
     def fallBack(self, winner, loser):
         print(f"{winner.node().getName()} is victorious!")
