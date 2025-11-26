@@ -5,7 +5,7 @@ uniform sampler2D p3d_Texture0;
 uniform vec3 pos;
 #define maxpoints 83
 uniform vec2 polygonpoints[maxpoints];
-uniform bool active;
+uniform bool isActive;
 uniform sampler2D bakedMap;
 
 // Input from vertex shader
@@ -57,7 +57,7 @@ void main() {
     // Draw a circle with radius 0.4
     float radius = 10.1;
     //if (dist < radius) {
-    if (active) {
+    if (isActive) {
         //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
         p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
         float d = sdPolygon(uv, polygonpoints);
