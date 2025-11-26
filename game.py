@@ -1818,7 +1818,7 @@ class MyApp(ShowBase):
             hpr=attacker.getHpr(),
             blendType='easeInOut'
         )
-        attackSequence = Sequence(
+        self.attackSequence = Sequence(
             back_int,
             forward_int
         )
@@ -1829,25 +1829,26 @@ class MyApp(ShowBase):
         defenderUnit.unit.nmodels-=total_wounds
         attacker_score = total_wounds
         #self.removeModelsFromUnit(defenderUnit,total_wounds)
-        attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
+        self.attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
 
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defenderUnit.unit, attackerUnit.unit,charge=False)
         self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
         attackerUnit.unit.nmodels-=total_wounds
         #self.removeModelsFromUnit(attackerUnit,total_wounds)
-        attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
+        self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
         
         defender_score = total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         if attacker_score < defender_score:
             #self.fallBack(defender, attacker)
-            attackSequence.append(Func(self.fallBack, defender, attacker))
+            self.attackSequence.append(Func(self.fallBack, defender, attacker))
         else:
             #self.fallBack(attacker, defender)
-            attackSequence.append(Func(self.fallBack, attacker, defender))
+            self.attackSequence.append(Func(self.fallBack, attacker, defender))
 
-        attackSequence.start()
+        if not self.attackSequence.isPlaying():
+            self.attackSequence.start()
         
     
     def centerOfModels(self, unit):
@@ -1879,6 +1880,20 @@ class MyApp(ShowBase):
         for i in range(models_to_remove):
             cildren[-1*(i+1)].removeNode()
         
+        cildren = unit.model.getChildren()
+        if len(cildren) == 0:
+            print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
+            if self.attackSequence.isPlaying():
+                print("Pausing attack sequence")
+                self.attackSequence.pause()
+                print(self.attackSequence.isPlaying())
+            #self.attackSequence.finish()
+            self.world.removeRigidBody(unit.bodyNP.node())
+            unit.bodyNP.removeNode()
+            unit.model.removeNode()
+            self.units.remove(unit)
+            
+            return
         self.world.removeRigidBody(unit.bodyNP.node())
         for shape in unit.bodyNP.node().shapes:
             unit.bodyNP.node().removeShape(shape)
@@ -1920,6 +1935,15 @@ class MyApp(ShowBase):
 
         
     def fallBack(self, winner, loser):
+        if loser.isEmpty():
+            print("looser is destryed, no fallback")
+            self.getSelectedUnit(winner.node()).isInCombat=False
+            self.getSelectedUnit(winner.node()).isInCombatWith=None
+            #TODO: winner overruns
+            return
+        if winner is None or loser is None or winner.isEmpty() or loser.isEmpty():
+            print("Error: winner or loser is None or empty.")
+            return
         print(f"{winner.node().getName()} is victorious!")
         print(f"{loser.node().getName()} falls back!")
         winnerPos=winner.getPos()
@@ -1961,6 +1985,13 @@ class MyApp(ShowBase):
         sequence.start()
 
     def persuitMove(self, winner, loser):
+        if loser.isEmpty():
+            "looser is destryed, no pursuit"
+            #TODO: winner overruns
+            return
+        if winner is None or loser is None or winner.isEmpty() or loser.isEmpty():
+            print("Error: winner or loser is None or empty.")
+            return
         print(f"{winner.node().getName()} pursues {loser.node().getName()}!")
         winnerPos=winner.getPos()
         loserPos=loser.getPos()
