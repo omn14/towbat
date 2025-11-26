@@ -1788,6 +1788,12 @@ class MyApp(ShowBase):
 
             #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
 
+    def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds):
+        print(f"Total hits by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_hits}")
+        print(f"suffered wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {suffered_wounds}")
+        print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
+        print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
+
     def verySimpleBattle(self, attacker, defender, flank):
         
         print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
@@ -1795,28 +1801,53 @@ class MyApp(ShowBase):
         defenderUnit=self.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels
         print(f"{attackerUnit.unit.name} attacks {defenderUnit.unit.name} in {flank}!")
+
+        #attackSequence = Sequence()
+        apos=attacker.getPos()
+        back_int = LerpPosHprInterval(
+            attacker,
+            duration=0.5,
+            pos=attacker.getPos() - (defender.getPos() - attacker.getPos()).normalized() * 2,
+            hpr=attacker.getHpr(),
+            blendType='easeInOut'
+        )
+        forward_int = LerpPosHprInterval(
+            attacker,
+            duration=0.5,
+            pos=apos,
+            hpr=attacker.getHpr(),
+            blendType='easeInOut'
+        )
+        attackSequence = Sequence(
+            back_int,
+            forward_int
+        )
+        
+
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attackerUnit.unit, defenderUnit.unit,charge=True)
-        print(f"Total hits by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_hits}")
-        print(f"suffered wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {suffered_wounds}")
-        print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
-        print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
+        self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
         defenderUnit.unit.nmodels-=total_wounds
         attacker_score = total_wounds
-        self.removeModelsFromUnit(defenderUnit,total_wounds)
+        #self.removeModelsFromUnit(defenderUnit,total_wounds)
+        attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
+
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defenderUnit.unit, attackerUnit.unit,charge=False)
-        print(f"Total hits by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {total_hits}")
-        print(f"suffered wounds by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {suffered_wounds}")
-        print(f"Saves made by {attackerUnit.unit.name}: {saves_made}")
-        print(f"Total wounds by {defenderUnit.unit.name} on {attackerUnit.unit.name}: {total_wounds}")
+        self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
         attackerUnit.unit.nmodels-=total_wounds
-        self.removeModelsFromUnit(attackerUnit,total_wounds)
+        #self.removeModelsFromUnit(attackerUnit,total_wounds)
+        attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
+        
         defender_score = total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         if attacker_score < defender_score:
-            self.fallBack(defender, attacker)
+            #self.fallBack(defender, attacker)
+            attackSequence.append(Func(self.fallBack, defender, attacker))
         else:
-            self.fallBack(attacker, defender)
+            #self.fallBack(attacker, defender)
+            attackSequence.append(Func(self.fallBack, attacker, defender))
+
+        attackSequence.start()
         
     
     def centerOfModels(self, unit):
