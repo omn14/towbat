@@ -251,7 +251,8 @@ class unitGraphics():
         ) """
         self.text = TextNode('node name')
         self.text.setText(text)
-        self.text_node = self.model.attachNewNode(self.text)
+        #self.text_node = self.model.attachNewNode(self.text)
+        self.text_node = self.bodyNP.attachNewNode(self.text)
         self.text_node.setPos(self.unitWidth/3, self.unitHeight, 5)
         self.text_node.setScale(0.1)
         self.text_node.setBillboardPointEye(-5, fixed_depth=True)
@@ -414,14 +415,14 @@ class MyApp(ShowBase):
         
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
-        if False:
+        if 1:
             self.fsm.currentPhaseIndex=2
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,0,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if True:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,50,0)
@@ -625,6 +626,9 @@ class MyApp(ShowBase):
         return
 
     def taskLoopPathTowardsMouse(self, task):
+        if self.unitToMove.isInCombat:
+            print("Unit is in combat, cant move.")
+            return task.done
         self.pathTowardsMouse(self.unitToMove)
         return task.cont
     
@@ -1884,8 +1888,12 @@ class MyApp(ShowBase):
         #unit.unit.nmodels = max(0, unit.nmodels - num_models)
         cildren = unit.model.getChildren()
         models_to_remove = min(len(cildren), models_to_remove)
+        #unit.model.ls()
         for i in range(models_to_remove):
-            cildren[-1*(i+1)].removeNode()
+            #cildren[-1*(i+1)].removeNode()
+            cildren = unit.model.getChildren()
+            print(f"Removing model {cildren[-1].getName()} from unit {unit.unit.name}")
+            cildren[-1].removeNode()
         
         cildren = unit.model.getChildren()
         if len(cildren) == 0:
@@ -1912,28 +1920,9 @@ class MyApp(ShowBase):
         unit.bodyNP.node().setMass(0)  # Static object
         self.world.attachRigidBody(unit.bodyNP.node())
         
-        print(unit.bodyNP.getPos())
-        print(self.getCenterOfUnit(unit))
-        diff = unit.bodyNP.getPos() - self.getCenterOfUnit(unit)
-        diff.z = 0
-        print("Diff:", diff)
-        print(unit.model.getPos(render))
-        print(unit.model.getPos())
-        #unit.model.flattenLight()
-        print(unit.model.getPos())
-        print(self.centerOfModels(unit))
-        #unit.bodyNP.setPos(self.getCenterOfUnit(unit))
-        #unit.bodyNP.setPos(unit.model.getPos(render))
-        #unit.bodyNP.setPos(unit.bodyNP.getPos() - Vec3(box_size.x/2 - unit.modelWidth/2, box_size.y/2 - unit.modelHeight/2, 0))
-        #unit.bodyNP.setPos(self.centerOfModels(unit))
-        #unit.bodyNP.setPos(unit.bodyNP.getPos() - diff)
-        #unit.model.setPos(unit.model.getPos() + diff)
+        
         unit.model.setPos(0,0,0)
-        print(unit.bodyNP.getPos())
-        print(self.getCenterOfUnit(unit))
-        diff = unit.bodyNP.getPos() - self.getCenterOfUnit(unit)
-        diff.z = 0
-        print("Diff:", diff)
+        
         unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
 
 
