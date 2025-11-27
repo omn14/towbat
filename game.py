@@ -38,6 +38,7 @@ from toHitAndToWound import *
 from battleFunctions import *
 
 from dice import *
+from choiceFunctions import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -174,6 +175,15 @@ class gameFSM(FSM):
 
     def exitCombatPhase(self):
         print("Exiting Combat Phase")
+        self.game.ignore('mouse1')
+
+    def enterMakeChoice(self):
+        print("Entering Make Choice Phase")
+        self.game.debugText.setText(f"Current phase: MakeChoice")
+        self.game.accept('mouse1', self.game.makeChoiceSelection)
+    
+    def exitMakeChoice(self):
+        print("Exiting Make Choice Phase")
         self.game.ignore('mouse1')
 
     def cleanup(self):
@@ -816,6 +826,8 @@ class MyApp(ShowBase):
                 for terning in self.terninger:
                     terning.roll()
                 taskMgr.add(checkDice, "checkDiceTask", extraArgs=[self.terninger], appendTask=True) """
+                #print(self.fsm.state)
+                
                 
                 if True:
                     node_name = hit_node.getName()
@@ -1958,6 +1970,7 @@ class MyApp(ShowBase):
             return
         print(f"{winner.node().getName()} is victorious!")
         print(f"{loser.node().getName()} falls back!")
+
         winnerPos=winner.getPos()
         loserPos=loser.getPos()
         direction = (loserPos - winnerPos).normalized()
