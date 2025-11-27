@@ -204,6 +204,11 @@ class unitGraphics():
         #children[-1].removeNode()
         ranks=self.unit.ranks
         files=self.unit.files
+        if self.unit.nmodels!=len(children):
+            diffnmodel=self.unit.nmodels-len(children)
+            for i in range(diffnmodel):
+                clone=children[0].copyTo(self.model)
+                children.append(clone)
         self.modelWidth=abs(children[0].getTightBounds()[1][0]-children[0].getTightBounds()[0][0])
         self.modelHeight=abs(children[0].getTightBounds()[1][1]-children[0].getTightBounds()[0][1])
         print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")
@@ -389,9 +394,9 @@ class MyApp(ShowBase):
         url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
         url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
         giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
-        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 5,5,1)
+        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 15,5,3)
         goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
-        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 5,5,1)
+        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 15,5,3)
         self.goblinWolfRiders = unitGraphics('GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
         #self.goblinWolfRiders.bodyNP.setH(90)
