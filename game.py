@@ -37,6 +37,8 @@ from units import *
 from toHitAndToWound import *
 from battleFunctions import *
 
+from dice import *
+
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
 from direct.interval.IntervalGlobal import Parallel
@@ -791,15 +793,15 @@ class MyApp(ShowBase):
             if result.hasHit():
                 hit_node = result.getNode()
                 print("Mouse click hit:",result.getHitPos())
-                
 
-                """ # Check if particle effect is currently playing
-                if self.p.isPlaying():
-                    print("Particle effect is already playing, skipping...")
-                else:
-                    self.p.play(result.getHitPos(),duration=1.0,scale=3.0) """
-                # Check if hit node is a unit
-                #if isinstance(hit_node, BulletRigidBodyNode):
+                """ self.terninger=[]
+                for i in range(5):
+                    terning = Dice(self.world, position=result.getHitPos()+Vec3(i,0,10), size=1.0)
+                    self.terninger.append(terning)
+                for terning in self.terninger:
+                    terning.roll()
+                taskMgr.add(checkDice, "checkDiceTask", extraArgs=[self.terninger], appendTask=True) """
+                
                 if True:
                     node_name = hit_node.getName()
                     if node_name.startswith('UnitCollision-'):
