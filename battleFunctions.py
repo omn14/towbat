@@ -14,7 +14,7 @@ def simulate_attack(model1,model2):
 
     if model1.equipedWeapon.get('tag') == 'ranged':
         weaponIsRanged = True
-    print(f"Weapon is ranged: {weaponIsRanged}")
+    #print(f"Weapon is ranged: {weaponIsRanged}")
     if not weaponIsRanged: # for to hit modifications
         to_hit_target_roll = to_hit(model1,model2)
         if model1.attack_roll >= to_hit_target_roll:
@@ -24,7 +24,7 @@ def simulate_attack(model1,model2):
     else:
         hit = to_hit_ranged(model1,long_range=False)
         model1.characteristics['S'] = model1.equipedWeapon.get('ranged_strength')
-        print(model1.characteristics['S'])
+        #print(model1.characteristics['S'])
 
 
     to_wound_roll = to_wound(model1,model2)

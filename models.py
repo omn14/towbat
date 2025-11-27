@@ -95,7 +95,11 @@ class model:
         return pairs
     def equip_weapon(self, weapon_name: str):
         try:
+            self.special_rules = [rule for rule in self.special_rules if rule != self.equipedWeapon]
             self.equipedWeapon = self.weapons.get(weapon_name)
+            # Remove existing weapon rule if it has the same name
+            #self.special_rules = [rule for rule in self.special_rules if rule.get('name') != weapon_name]
+            self.special_rules = [rule for rule in self.special_rules if rule != self.equipedWeapon]
             self.special_rules.append(self.equipedWeapon)
         except Exception as e:
             print(f"Error equipping weapon '{weapon_name}' for {self.name}: {e}")

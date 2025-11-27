@@ -61,7 +61,7 @@ def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,part
 
     #hit_roll = random.randint(1, 6)
     hit_roll = model1.attack_roll
-    print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
+    #print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
     if moved:
         bs1 -= 1
     if long_range:

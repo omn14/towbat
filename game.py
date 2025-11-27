@@ -643,9 +643,20 @@ class MyApp(ShowBase):
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
             print("Unit has no equiped weapon equipped, cant shoot.")
             return task.done
-        if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
-            print("Unit has no ranged weapon equipped, cant shoot.")
+        r=False
+        print(self.unitToMove.unit.model.weapons)
+        for weapon in self.unitToMove.unit.model.weapons:
+            print("checking weapon: ",self.unitToMove.unit.model.weapons.get(weapon))
+            if self.unitToMove.unit.model.weapons.get(weapon).get('tag') == 'ranged':
+                r=True
+                self.unitToMove.unit.model.equip_weapon(weapon)
+                print("Equipping weapon: ",weapon)
+        if not r:
+            print("Unit has no ranged weapon, cant shoot.")
             return task.done
+            if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
+                print("Unit has no ranged weapon equipped, cant shoot.")
+                return task.done
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
@@ -835,15 +846,12 @@ class MyApp(ShowBase):
                 print(attacker.name, "shooting an arrow at",defender.name)
                 #attacker.model.equip_weapon('short bow')
                 attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
-                print(f"Total hits by {attacker.name} on {defender.name}: {total_hits}")
-                print(f"suffered wounds by {attacker.name} on {defender.name}: {suffered_wounds}")
-                print(f"Saves made by {defender.name}: {saves_made}")
-                print(f"Total wounds by {attacker.name} on {defender.name}: {total_wounds}")
+                self.printBattleResults(self.unitToMove, selected_unit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
                 #unit.model.setColor(unit.color)
                 #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
                 self.unitToMove.bodyNP.setCollideMask(BitMask32.bit(4))
                 selected_unit.bodyNP.setCollideMask(BitMask32.bit(4))
-                self.shootingAnimation(self.unitToMove,selected_unit)
+                self.shootingAnimation(self.unitToMove,selected_unit,total_wounds)
                 """ for c in result2.getNode().getChildren():
                     #print(c.getName())
                     if "Model" in c.getName():
@@ -851,7 +859,7 @@ class MyApp(ShowBase):
                         np.setColor(0,1,0,1)
                         NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
 
-    def shootingAnimation(self,attackerUnit,defenderUnit):
+    def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
         
         #self.p.start(parent=render, renderParent=render)
         self.p.setPos(defenderUnit.bodyNP.getPos())
@@ -868,6 +876,7 @@ class MyApp(ShowBase):
                        Func(self.p.start, parent=render, renderParent=render),
                        Func(taskMgr.doMethodLater, 4.0, lambda task: self.p.disable(), 'stopParticles'),
                        Func(self.p_miss.start, parent=render, renderParent=render),
+                       Func(self.removeModelsFromUnit, defenderUnit, total_wounds),
                        Func(taskMgr.doMethodLater, 4.0, lambda task: self.p_miss.disable(), 'stopMissParticles')
                        )
         seq.start()
@@ -1800,6 +1809,7 @@ class MyApp(ShowBase):
             #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
 
     def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds):
+        print(f"Battle results for {attackerUnit.unit.name} attacking with weapon {attackerUnit.unit.model.equipedWeapon.get('name')}:")
         print(f"Total hits by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_hits}")
         print(f"suffered wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {suffered_wounds}")
         print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
@@ -1812,6 +1822,12 @@ class MyApp(ShowBase):
         defenderUnit=self.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels
         print(f"{attackerUnit.unit.name} attacks {defenderUnit.unit.name} in {flank}!")
+        if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
+            print("attacker unit has ranged weapon equiped, switch to melee weapon for combat.")
+            attackerUnit.unit.model.equip_weapon('hand weapon')
+        if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
+            print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
+            defenderUnit.unit.model.equip_weapon('hand weapon')
 
         #attackSequence = Sequence()
         apos=attacker.getPos()
