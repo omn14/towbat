@@ -433,7 +433,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,50,0)
@@ -1659,16 +1659,7 @@ class MyApp(ShowBase):
 
             self.ground.setShaderInput("polygonpoints", self.polygonpoints)
             self.ground.setShaderInput("isActive", True)
-            """ contacts = self.world.contactTest(self.playerNP.node())
-            for contact in contacts.getContacts():
-                print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
-                mpoint = contact.getManifoldPoint()
-            print(mpoint.getDistance())
-            print(mpoint.getAppliedImpulse())
-            print(mpoint.getPositionWorldOnA())
-            print(mpoint.getPositionWorldOnB())
-            print(mpoint.getLocalPointA())
-            print(mpoint.getLocalPointB()) """
+            
             return
 
     def debug_ray(self, pFrom, pTo):
@@ -1699,14 +1690,191 @@ class MyApp(ShowBase):
         pos.x *= 50
         pos.y *= 50
         print("Calculated position:", pos)
+        oposUnit=unit.bodyNP.getPos()
+        orotUnit=unit.bodyNP.getHpr()
         unit.bodyNP.setPos(pos.x , pos.y , 0)
         unit.bodyNP.setH(unit.bodyNP.getH() + self.arcPointRotation)
         unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
-        unit.hasMovedThisTurn=True
-        unit.updateTextNode()
-        unit.bodyNP.setCollideMask(BitMask32.bit(4))
-        self.checkUnitContact(unit)
+        #self.checkUnitContact(unit)
+        c = self.checkUnitContactSmall(unit)
+        if c:
+            taskMgr.add(self.chargeAndChargeReaction, "chargeAndChargeReactionTask",extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
+            #self.getFlankFromContact(unit, c)
+            
         self.bakeTextures(self.ground)
+
+    async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
+        chargeYesNo = ["Yes", "No"]
+        self.cyn = Choice(chargeYesNo, Vec3(-20,0,10))
+        self.cyn.ma = taskMgr.add(self.cyn.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
+        await self.cyn.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
+        print("event recieced")
+        cynchoice = self.cyn.choice
+        
+        print('Event delivered with args:', self.cyn.choice)
+        del self.cyn
+
+        if cynchoice == "Yes":
+            print("Charging into combat...")
+
+            chargeReaction = ["hold", "flee"]
+            self.cyn = Choice(chargeReaction, Vec3(20,0,10))
+            self.cyn.ma = taskMgr.add(self.cyn.mouseActivate, "mouseActivateTask")
+            self.ignore('mouse1')
+            print("Waiting for choice...")
+            await self.cyn.ma
+            self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
+            print("event recieced")
+            crchoice = self.cyn.choice
+            
+            print('Event delivered with args:', self.cyn.choice)
+            del self.cyn
+
+            if crchoice == "hold":
+                print("Defender holds position.")
+                defenderNP = render.find(f"**/{c.getNode1().getName()}")
+                angleToRotate = self.getFlankFromContact(unit, c)
+                self.engageCombat(unit, defenderNP, angleToRotate)
+                unit.hasMovedThisTurn=True
+
+                unit.updateTextNode()
+                unit.bodyNP.setCollideMask(BitMask32.bit(4))
+            elif crchoice == "flee":
+                print("Defender flees!")
+                
+        else:
+            print("Charge cancelled.")
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
+            
+        return task.done
+
+    def checkUnitContactSmall(self, unit):
+        contacts = self.world.contactTest(unit.bodyNP.node())
+        for contact in contacts.getContacts():
+            print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
+            
+            mpoint = contact.getManifoldPoint()
+            print(mpoint.getDistance())
+            print(mpoint.getAppliedImpulse())
+            print(mpoint.getPositionWorldOnA())
+            print(mpoint.getPositionWorldOnB())
+            print(mpoint.getLocalPointA())
+            print(mpoint.getLocalPointB())
+            if 'UnitCollision-' in contact.getNode1().getName():
+                print("Unit collision detected!")
+                return contact
+        return None
+    
+    def getFlankFromContact(self, unit, contact):
+        print("Unit collision detected!")
+        # Handle unit collision (e.g., stop movement, apply damage, etc.)
+        angleAttacker = unit.bodyNP.getH()
+        defenderNP = render.find(f"**/{contact.getNode1().getName()}")
+        angleDefender = defenderNP.getH()
+        print(f"contact position in defender coordsystem: {self.playerNP.getPos(defenderNP)}")
+        hitloc = self.playerNP.getPos(defenderNP) 
+
+        shape = contact.getNode1().getShape(0)
+        if isinstance(shape, BulletBoxShape):
+            half_extents = shape.getHalfExtentsWithMargin()
+            width = half_extents.x * 2
+            height = half_extents.y * 2
+            print(f"Defender unit width: {width}")
+
+        angleToRotate = angleDefender - angleAttacker
+        print(f"Attacker angle: {angleAttacker}, Defender angle: {angleDefender}")
+        print(f"Rotating attacker by {angleToRotate} degrees to face defender.")
+        angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
+        print(f"normalized {angleToRotate} degrees to face defender.")
+        print(f"Hit location in defender coords: {hitloc}")
+        if abs(hitloc.x*2*2 - width) < 2:
+            print("Hit on right side of defender")
+            print(f"Initial angle to rotate: {angleToRotate}")
+            #angleToRotate = (angleToRotate + 90) % 360 - 180
+            if angleToRotate < 0:
+                angleToRotate += 90
+            if angleToRotate > 90:
+                angleToRotate = 360-90- angleToRotate
+                angleToRotate *= -1
+            
+            print(f"Adjusted angle to rotate: {angleToRotate}")
+        elif abs(hitloc.x*2*2 + width) < 2:
+            print("Hit on left side of defender")
+            print(f"Initial angle to rotate: {angleToRotate}")
+            #angleToRotate = (angleToRotate - 90) % 360 - 180
+            if angleToRotate > 90:
+                angleToRotate -= 90
+            else:
+                angleToRotate = 90 - angleToRotate
+                angleToRotate *= -1
+            print(f"Adjusted angle to rotate: {angleToRotate}")
+        elif abs(hitloc.y*2*2 - height) < 2:
+            print("Hit front side of defender")
+            print(f"Initial angle to rotate: {angleToRotate}")
+            #angleToRotate = (angleToRotate + 180) % 180
+            if angleToRotate > 90:
+                angleToRotate -= 180
+                #angleToRotate *= -1
+            print(f"Adjusted angle to rotate: {angleToRotate}")
+        elif abs(hitloc.y*2*2 + height) < 2:
+            print("Hit rear side of defender")
+            print(f"Initial angle to rotate: {angleToRotate}")
+            #angleToRotate = (angleToRotate + 180) % 90
+            
+            if angleToRotate > 90:
+                #angleToRotate -= 90
+                angleToRotate = (360 -angleToRotate) * -1
+                #angleToRotate *= -1
+            """ if angleToRotate < -90:
+                angleToRotate += 90
+                angleToRotate *= -1 """
+            
+        else:
+            print("Hit i dont know where")
+        return angleToRotate
+    
+    def engageCombat(self, unit, defenderNP, angleToRotate):
+        
+        parent = unit.bodyNP.getParent()
+        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+        newnode.setPos(self.playerNP.getPos())
+        unit.bodyNP.wrtReparentTo(newnode)
+        # Rotate the new node smoothly to align with defender
+        
+        rotation_interval = LerpPosHprInterval(
+            newnode, 
+            duration=0.5, 
+            pos=newnode.getPos(),
+            hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+            blendType='easeInOut'
+        )
+
+        
+        sequence = Sequence(
+            rotation_interval,
+            Func(unit.bodyNP.wrtReparentTo, parent),
+            Func(newnode.removeNode)
+            #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
+        )
+        sequence.start()
+        unit.isInCombat=True
+        unit.bodyNP.setCollideMask(BitMask32.bit(4))
+        
+        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        unit.isInCombatWith=defenderUnit
+        unit.isInCombatFlank="front"
+        defenderUnit.isInCombatWith=unit
+        defenderUnit.isInCombat=True
+        defenderUnit.isInCombatFlank="front"
+        defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+        unit.updateTextNode()
+        defenderUnit.updateTextNode()
+        return
 
     def checkUnitContact(self, unit):
         contacts = self.world.contactTest(unit.bodyNP.node())
@@ -1840,7 +2008,6 @@ class MyApp(ShowBase):
         #await self.weaponChoise.helper1.messenger.future("choice-made")
         #await messenger.future("mouse1")
         weps =self.unitToMove.unit.model.weapons
-        #self.weaponChoise = Choice(["yes", "no"], Vec3(0,0,10))
         self.weaponChoise = Choice(weps, Vec3(0,0,10))
         self.weaponChoise.ma = taskMgr.add(self.weaponChoise.mouseActivate, "mouseActivateTask")
         self.ignore('mouse1')
