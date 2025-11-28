@@ -31,6 +31,7 @@ from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from panda3d.core import Vec3, BitMask32
 from panda3d.core import LineSegs
+#from panda3d.core import AsyncFuture
 
 from models import *
 from units import *
@@ -425,14 +426,14 @@ class MyApp(ShowBase):
         
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=2
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,0,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,50,0)
@@ -678,7 +679,11 @@ class MyApp(ShowBase):
     
     def taskStartCombat(self, task):
         if self.unitToMove.isInCombat:
-            self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
+            #self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
+            base.messenger.toggleVerbose()
+            #taskMgr.add(self.verySimpleBattle, "verySimpleBattle", extraArgs=[self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, self.unitToMove.isInCombatFlank], appendTask=True)
+            self.weaponChoise = Choice(2, Vec3(0,0,10))
+            self.taskMgr.add(self.verySimpleBattleStart)
         return task.done
     
     def checkIfInsidePolygon(self, point, polygonPoints):
@@ -1827,8 +1832,29 @@ class MyApp(ShowBase):
         print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
         print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
 
+    def waitForChoice(self, choice,function,task):
+        pass
+
+    async def verySimpleBattleStart(self,task):
+        #await messenger.future("choice-made")
+        #await self.weaponChoise.helper1.messenger.future("choice-made")
+        #await messenger.future("mouse1")
+        self.weaponChoise.ma = taskMgr.add(self.weaponChoise.mouseActivate, "mouseActivateTask")
+        await self.weaponChoise.ma
+        print("event recieced")
+        #messenger.send("start-attack-sequence")
+        self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
+        return task.done
+
     def verySimpleBattle(self, attacker, defender, flank):
-        
+        #if not hasattr(self, 'weaponChoise'):
+        #self.weaponChoise = Choice(2, Vec3(0,0,10))
+        print("Waiting for choice...")
+        #await base.messenger.future('choice-made')
+        #await self.weaponChoise.ma
+        print('Event delivered with args:')
+        del self.weaponChoise
+
         print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
         attackerUnit=self.getSelectedUnit(attacker.node())
         defenderUnit=self.getSelectedUnit(defender.node())
@@ -1840,6 +1866,8 @@ class MyApp(ShowBase):
         if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
             print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
             defenderUnit.unit.model.equip_weapon('hand weapon')
+
+            
 
         #attackSequence = Sequence()
         apos=attacker.getPos()

@@ -11,14 +11,15 @@ class Choice:
             loc=pos+Vec3(i*4,0,0)
             box=self.create_bullet_rigidbody_cube(None, location=loc, size=2.0, name=f"ChoiceCube_{i}")
             self.boxes.append(box)
-        taskMgr.add(self.mouseActivate, "mouseActivateTask")
+        #self.ma = taskMgr.add(self.mouseActivate, "mouseActivateTask")
         self.helper1 = DirectObject()
         self.helper1.accept('mouse1', self.onMouseClick)
         #self.old = messenger.whoAccepts('mouse1')
         #base.accept("mouse1", self.onMouseClick)
 
     def cleanup(self):
-        taskMgr.remove("mouseActivateTask")
+        #taskMgr.remove("mouseActivateTask")
+        self.choiceMade = True
         self.helper1.ignore('mouse1')
         for box in self.boxes:
             base.world.removeRigidBody(box.node())
@@ -29,6 +30,7 @@ class Choice:
         print("Mouse clicked")
         if self.hitbox:
             print(f"Choice selected: {self.hitbox.getName()}")
+            base.messenger.send('choice-made', [self.hitbox.getName()])
             self.cleanup()
             
     def mouseActivate(self,task):
@@ -53,6 +55,8 @@ class Choice:
                 #print(f"Choice selected: {hit_node.getName()}")
             else:
                 self.hitbox=None
+            if self.choiceMade:
+                return task.done    
         return task.cont
     
     def create_bullet_rigidbody_cube(self, world, location=Vec3(0, 0, 0), size=1.0, name="BulletCube"):
