@@ -680,9 +680,9 @@ class MyApp(ShowBase):
     def taskStartCombat(self, task):
         if self.unitToMove.isInCombat:
             #self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
-            base.messenger.toggleVerbose()
+            #base.messenger.toggleVerbose()
             #taskMgr.add(self.verySimpleBattle, "verySimpleBattle", extraArgs=[self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, self.unitToMove.isInCombatFlank], appendTask=True)
-            self.weaponChoise = Choice(2, Vec3(0,0,10))
+            
             self.taskMgr.add(self.verySimpleBattleStart)
         return task.done
     
@@ -1839,9 +1839,19 @@ class MyApp(ShowBase):
         #await messenger.future("choice-made")
         #await self.weaponChoise.helper1.messenger.future("choice-made")
         #await messenger.future("mouse1")
+        weps =self.unitToMove.unit.model.weapons
+        #self.weaponChoise = Choice(["yes", "no"], Vec3(0,0,10))
+        self.weaponChoise = Choice(weps, Vec3(0,0,10))
         self.weaponChoise.ma = taskMgr.add(self.weaponChoise.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
         await self.weaponChoise.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
         print("event recieced")
+        wepchoice = self.weaponChoise.choice
+        self.unitToMove.unit.model.equip_weapon(wepchoice)
+        print('Event delivered with args:', self.weaponChoise.choice)
+        del self.weaponChoise
         #messenger.send("start-attack-sequence")
         self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
         return task.done
@@ -1849,11 +1859,10 @@ class MyApp(ShowBase):
     def verySimpleBattle(self, attacker, defender, flank):
         #if not hasattr(self, 'weaponChoise'):
         #self.weaponChoise = Choice(2, Vec3(0,0,10))
-        print("Waiting for choice...")
+        #print("Waiting for choice...")
         #await base.messenger.future('choice-made')
         #await self.weaponChoise.ma
-        print('Event delivered with args:')
-        del self.weaponChoise
+        #print('Event delivered with args:')
 
         print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
         attackerUnit=self.getSelectedUnit(attacker.node())

@@ -3,13 +3,15 @@ from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from direct.showbase.DirectObject import DirectObject
 
 class Choice:
-    def __init__(self, num_choices,pos):
-        self.num_choices = num_choices
+    def __init__(self, choices,pos):
+        self.num_choices = len(choices)
+        self.choices = choices
         self.choiceMade = False
+        self.choice = None
         self.boxes = []
-        for i in range(num_choices):
-            loc=pos+Vec3(i*4,0,0)
-            box=self.create_bullet_rigidbody_cube(None, location=loc, size=2.0, name=f"ChoiceCube_{i}")
+        for i, c in enumerate(self.choices):
+            loc=pos+Vec3(i*16,0,0)
+            box=self.create_bullet_rigidbody_cube(None, location=loc, size=8.0, name=c)
             self.boxes.append(box)
         #self.ma = taskMgr.add(self.mouseActivate, "mouseActivateTask")
         self.helper1 = DirectObject()
@@ -27,9 +29,10 @@ class Choice:
         
 
     def onMouseClick(self):
-        print("Mouse clicked")
+        print("Mouse clicked in choice function")
         if self.hitbox:
             print(f"Choice selected: {self.hitbox.getName()}")
+            self.choice = self.hitbox.getName()
             base.messenger.send('choice-made', [self.hitbox.getName()])
             self.cleanup()
             
@@ -64,12 +67,13 @@ class Choice:
         
         # Create cube geometry
         cube_geom = CardMaker(name)
-        cube_geom.setFrame(-size/2, size/2, -size/2, size/2)
+        #cube_geom.setFrame(-size/2, size/2, -size/2, size/2)
         cube_node = cube_geom.generate()
         
         # Create visual model
         cube_model = render.attachNewNode(cube_node)
         #cube_model.setPos(location[0], location[1], location[2])
+        cube_model.setPos(-Vec3(size/2, size/2, size/2))
         cube_model.setScale(size)
         
         # Create bullet collision shape
