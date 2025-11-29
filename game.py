@@ -1303,7 +1303,10 @@ class MyApp(ShowBase):
 
     def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,height=0.5,movedistance=8):
         points =[]
+        forward= Vec2(-math.sin(math.radians(rotationangle)), math.cos(math.radians(rotationangle)))*height/2.0
+        origo = origo + forward
         #origo   = Vec2(0.55,0.55)
+        #origo= origo+Vec2(math.cos(math.radians(rotationangle))*height/2,-math.sin(math.radians(rotationangle))*height/2)
         points.append(origo)
 
         arcmax = math.pi/2
@@ -1700,7 +1703,7 @@ class MyApp(ShowBase):
         if c:
             taskMgr.add(self.chargeAndChargeReaction, "chargeAndChargeReactionTask",extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
             #self.getFlankFromContact(unit, c)
-            
+        
         self.bakeTextures(self.ground)
 
     async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
@@ -1720,6 +1723,7 @@ class MyApp(ShowBase):
         if cynchoice == "Yes":
             print("Charging into combat...")
 
+
             chargeReaction = ["hold", "flee"]
             self.cyn = Choice(chargeReaction, Vec3(20,0,10))
             self.cyn.ma = taskMgr.add(self.cyn.mouseActivate, "mouseActivateTask")
@@ -1727,23 +1731,35 @@ class MyApp(ShowBase):
             print("Waiting for choice...")
             await self.cyn.ma
             self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
-            print("event recieced")
+            print("event received")
             crchoice = self.cyn.choice
             
             print('Event delivered with args:', self.cyn.choice)
             del self.cyn
-
+            defenderNP = render.find(f"**/{c.getNode1().getName()}")
             if crchoice == "hold":
+                #chargeSequence = Sequence()
+
                 print("Defender holds position.")
-                defenderNP = render.find(f"**/{c.getNode1().getName()}")
+                
                 angleToRotate = self.getFlankFromContact(unit, c)
-                self.engageCombat(unit, defenderNP, angleToRotate)
+
+                #self.engageCombat(unit, defenderNP, angleToRotate)
                 unit.hasMovedThisTurn=True
 
                 unit.updateTextNode()
                 unit.bodyNP.setCollideMask(BitMask32.bit(4))
+                taskMgr.add(self.chargeInterval,"chargeIntervalTask", extraArgs=[unit, defenderNP, angleToRotate,oposUnit, orotUnit], appendTask=False)
             elif crchoice == "flee":
+                angleToRotate = self.getFlankFromContact(unit, c)
                 print("Defender flees!")
+                taskMgr.add(self.fleeInterval,"fleeIntervalTask", extraArgs=[unit, defenderNP, angleToRotate,oposUnit, orotUnit], appendTask=False)
+                fleeDirection = defenderNP.getPos() - unit.bodyNP.getPos()
+                storeRotation = defenderNP.getHpr()
+                defenderNP.lookAt(defenderNP.getPos() + fleeDirection)
+                fleeRotation = defenderNP.getHpr()
+                defenderNP.setHpr(storeRotation)
+
                 
         else:
             print("Charge cancelled.")
@@ -1770,6 +1786,179 @@ class MyApp(ShowBase):
                 return contact
         return None
     
+    async def fleeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
+        contactPos=unit.bodyNP.getPos()
+        contactRot=unit.bodyNP.getHpr()
+        self.zax = loader.loadModel("models/zup-axis")
+        self.z2= loader.loadModel("models/zup-axis")
+        self.z2.reparentTo(render)
+        self.z2.setPos(oposUnit)
+        #self.zax.reparentTo(render)
+        
+        shape = unit.bodyNP.node().getShape(0)
+        if isinstance(shape, BulletBoxShape):
+            half_extents = shape.getHalfExtentsWithMargin()
+            width = half_extents.x 
+            height = half_extents.y 
+            print(f"Defender unit width: {width}")
+        parent = unit.bodyNP.getParent()
+        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+        unit.bodyNP.setPos(oposUnit)
+        unit.bodyNP.setHpr(Vec3(0,0,0))
+        newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
+        unit.bodyNP.setHpr(orotUnit)
+        unit.bodyNP.wrtReparentTo(newnode)
+        self.zax.reparentTo(newnode)
+        # Rotate the new node smoothly to align with defender
+        
+        rotation_interval = LerpPosHprInterval(
+            newnode, 
+            duration=0.5, 
+            pos=newnode.getPos(),
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+        await rotation_interval
+        unit.bodyNP.wrtReparentTo(parent)
+
+        #defenderUnit=self.getSelectedUnit(defenderNP.node())
+
+        rotation_interval = LerpPosHprInterval(
+            defenderNP, 
+            duration=0.5, 
+            pos=defenderNP.getPos(),
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+        await rotation_interval
+        angle = contactRot.x
+        vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
+
+        pos_interval = LerpPosHprInterval(
+            unit.bodyNP, 
+            duration=1.5, 
+            pos=unit.bodyNP.getPos() + Vec3(vector.x, vector.y, 0)*20,
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+
+        #await pos_interval
+
+
+        pos_interval2 = LerpPosHprInterval(
+            defenderNP, 
+            duration=1.5, 
+            pos=defenderNP.getPos() + Vec3(vector.x, vector.y, 0)*6,
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+
+        #await pos_interval2
+
+        par = Parallel(
+            pos_interval,
+            pos_interval2
+        )
+
+        await par
+
+        
+        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        cont = self.checkUnitContactSmall(defenderUnit)
+        if cont:
+            print("Fleeing Unit caught, and are slayed!")
+            self.world.removeRigidBody(defenderUnit.bodyNP.node())
+            defenderUnit.model.removeNode()
+            defenderUnit.bodyNP.removeNode()
+            self.units.remove(defenderUnit)
+
+
+
+        return 
+    
+    async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
+        contactPos=unit.bodyNP.getPos()
+        contactRot=unit.bodyNP.getHpr()
+        self.zax = loader.loadModel("models/zup-axis")
+        self.z2= loader.loadModel("models/zup-axis")
+        self.z2.reparentTo(render)
+        self.z2.setPos(oposUnit)
+        #self.zax.reparentTo(render)
+        
+        shape = unit.bodyNP.node().getShape(0)
+        if isinstance(shape, BulletBoxShape):
+            half_extents = shape.getHalfExtentsWithMargin()
+            width = half_extents.x 
+            height = half_extents.y 
+            print(f"Defender unit width: {width}")
+        parent = unit.bodyNP.getParent()
+        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+        unit.bodyNP.setPos(oposUnit)
+        unit.bodyNP.setHpr(Vec3(0,0,0))
+        newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
+        unit.bodyNP.setHpr(orotUnit)
+        unit.bodyNP.wrtReparentTo(newnode)
+        self.zax.reparentTo(newnode)
+        # Rotate the new node smoothly to align with defender
+        
+        rotation_interval = LerpPosHprInterval(
+            newnode, 
+            duration=0.5, 
+            pos=newnode.getPos(),
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+        await rotation_interval
+        unit.bodyNP.wrtReparentTo(parent)
+
+        pos_interval = LerpPosHprInterval(
+            unit.bodyNP, 
+            duration=0.5, 
+            pos=contactPos,
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+
+        await pos_interval
+
+        parent = unit.bodyNP.getParent()
+        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+        newnode.setPos(self.playerNP.getPos())
+        unit.bodyNP.wrtReparentTo(newnode)
+        # Rotate the new node smoothly to align with defender
+        
+        rotation_interval = LerpPosHprInterval(
+            newnode, 
+            duration=0.5, 
+            pos=newnode.getPos(),
+            hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+            blendType='easeInOut'
+        )
+        await rotation_interval
+        unit.bodyNP.wrtReparentTo(parent)
+        newnode.removeNode()
+        """ sequence = Sequence(
+            rotation_interval,
+            Func(unit.bodyNP.wrtReparentTo, parent),
+            Func(newnode.removeNode)
+            #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
+        ) """
+
+
+        unit.isInCombat=True
+        unit.bodyNP.setCollideMask(BitMask32.bit(4))
+        
+        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        unit.isInCombatWith=defenderUnit
+        unit.isInCombatFlank="front"
+        defenderUnit.isInCombatWith=unit
+        defenderUnit.isInCombat=True
+        defenderUnit.isInCombatFlank="front"
+        defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+        unit.updateTextNode()
+        defenderUnit.updateTextNode()
+        return 
+
     def getFlankFromContact(self, unit, contact):
         print("Unit collision detected!")
         # Handle unit collision (e.g., stop movement, apply damage, etc.)
