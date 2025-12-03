@@ -1607,10 +1607,10 @@ class MyApp(ShowBase):
             p3 = (self.polygonpoints[0]*2-1)*50
             p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
             self.world.doPhysics(0.016)
-            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.91), Point3(p2.x, p2.y, 0.91),BitMask32.bit(1))
+            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.91), Point3(p2.x, p2.y, 0.91),BitMask32.allOn())
             
             #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
-            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.91), Point3(p4.x, p4.y, 0.91),BitMask32.bit(1))
+            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.91), Point3(p4.x, p4.y, 0.91),BitMask32.allOn())
             ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
             ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
             print("Cont2:", cont2.hasHit(), cont2.getHitPos())
@@ -1640,7 +1640,7 @@ class MyApp(ShowBase):
             
             p1_5 = (p1 + p3) * 0.5
             p2_5 = (p2 + p4) * 0.5
-            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.91), Point3(p2_5.x, p2_5.y, 0.91))
+            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.91), Point3(p2_5.x, p2_5.y, 0.91),BitMask32.allOn())
             print("Cont3:", cont3.hasHit(), cont3.getHitPos())
             if cont3.hasHit():
                 # Check which contact point is closest to smiley
@@ -1927,7 +1927,37 @@ class MyApp(ShowBase):
         newnode.setHpr(positive_h, positive_p, positive_r)
         print("rotate from to",newnode.getHpr(), contactRot)
 
+        wheel1Angle = contactRot.x - orotUnit.x
+        print("wheel1Angle:", wheel1Angle)
+        newnode.setHpr(contactRot)
+        #wheel1Pos = unit.bodyNP.getPos()
+        wheel1Pos = newnode.getPos(render)
         
+
+
+        if 1:
+            # Calculate distance to move forward to reach contactPos
+            #current_pos = unit.bodyNP.getPos(render)
+            direction = self.playerNP.getPos() - wheel1Pos
+            cdistance = direction.length()
+
+            #math.radians(positive_h)*width
+
+            wdistance = abs(math.radians(wheel1Angle)*width)
+
+            #return distance  # Add a small buffer
+            print ("Calculated distance to move forward:", cdistance,wdistance,width)
+
+        chdist = 10
+        if chdist < wdistance:
+            angle = math.degrees(chdist/width)
+            contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z)*wheel1Angle/abs(wheel1Angle)
+
+
+
+        
+        newnode.setHpr(positive_h, positive_p, positive_r)
+
         rotation_interval = LerpPosHprInterval(
             newnode, 
             duration=1.5, 
@@ -1936,23 +1966,43 @@ class MyApp(ShowBase):
             blendType='easeInOut'
         )
         await rotation_interval
-        unit.bodyNP.wrtReparentTo(parent)
+        if chdist < wdistance:
+            unit.bodyNP.wrtReparentTo(parent)
+            return
+        #unit.bodyNP.wrtReparentTo(parent)
+        ocdistance=cdistance
+        if chdist < wdistance+cdistance:
+            cdistance = chdist - wdistance
 
+        
+        print((contactPos - newnode.getPos()).normalized()*cdistance)
         pos_interval = LerpPosHprInterval(
-            unit.bodyNP, 
+            #unit.bodyNP, 
+            newnode,
             duration=1.5, 
-            pos=contactPos,
+            #pos=contactPos,
+            #pos=contactPos-direction.normalized()*3,
+            #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
+            #pos=wheel1Pos + direction.normalized(),
+            pos=wheel1Pos + direction.normalized()*cdistance,
+            #pos=ppp,
             hpr=contactRot,
             blendType='easeInOut'
         )
+        
 
         await pos_interval
-
+        unit.bodyNP.wrtReparentTo(parent)
+        if chdist < wdistance+ocdistance:
+            #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+            return
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         newnode.setPos(self.playerNP.getPos())
         unit.bodyNP.wrtReparentTo(newnode)
         # Rotate the new node smoothly to align with defender
+
+        
         
         rotation_interval = LerpPosHprInterval(
             newnode, 
