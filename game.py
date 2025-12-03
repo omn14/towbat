@@ -1788,6 +1788,32 @@ class MyApp(ShowBase):
         return None
     
     async def fleeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
+        self.terningerCharge=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(-20,0,10), size=1.0)
+            self.terningerCharge.append(terning)
+        for terning in self.terningerCharge:
+            terning.roll()
+        chtask=taskMgr.add(checkDice, "checkDiceTaskCharge", extraArgs=[self.terningerCharge], appendTask=True)
+        
+        
+
+        self.terningerFlee=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(20,0,10), size=1.0)
+            self.terningerFlee.append(terning)
+        for terning in self.terningerFlee:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[self.terningerFlee], appendTask=True)
+        await chtask
+        chdice = []
+        for terning in self.terningerCharge:
+            chdice.append(terning.currentValue)
+        print("Charge dice results:", chdice)
+        fldice = []
+        for terning in self.terningerFlee:
+            fldice.append(terning.currentValue)
+        print("Flee dice results:", fldice)
         contactPos=unit.bodyNP.getPos()
         contactRot=unit.bodyNP.getHpr()
         self.zax = loader.loadModel("models/zup-axis")
@@ -1838,7 +1864,40 @@ class MyApp(ShowBase):
         newnode.setHpr(positive_h, positive_p, positive_r)
         print("rotate from to",newnode.getHpr(), contactRot)
 
+        wheel1Angle = contactRot.x - orotUnit.x
+        print("wheel1Angle:", wheel1Angle)
+        newnode.setHpr(contactRot)
+        #wheel1Pos = unit.bodyNP.getPos()
+        wheel1Pos = newnode.getPos(render)
         
+
+
+        if 1:
+            # Calculate distance to move forward to reach contactPos
+            #current_pos = unit.bodyNP.getPos(render)
+            direction = self.playerNP.getPos() - wheel1Pos
+            cdistance = direction.length()
+
+            #math.radians(positive_h)*width
+
+            wdistance = abs(math.radians(wheel1Angle)*width)
+
+            #return distance  # Add a small buffer
+            print ("Calculated distance to move forward:", cdistance,wdistance,width)
+
+        chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        fldist = sum(fldice)
+        print("Charge distance:", chdist)
+        print("Flee distance:", fldist)
+        if chdist < wdistance:
+            angle = math.degrees(chdist/width)
+            contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z)*wheel1Angle/abs(wheel1Angle)
+
+
+
+        
+        newnode.setHpr(positive_h, positive_p, positive_r)
+
         rotation_interval = LerpPosHprInterval(
             newnode, 
             duration=1.5, 
@@ -1847,9 +1906,44 @@ class MyApp(ShowBase):
             blendType='easeInOut'
         )
         await rotation_interval
-        unit.bodyNP.wrtReparentTo(parent)
+        if chdist < wdistance:
+            unit.bodyNP.wrtReparentTo(parent)
+            for terning in self.terningerCharge:
+                terning.remove(self.world)
+            #return
+        #unit.bodyNP.wrtReparentTo(parent)
+        ocdistance=cdistance
+        if chdist < wdistance+cdistance:
+            cdistance = chdist - wdistance
+            cdistance = max(cdistance, 0)
 
-        #defenderUnit=self.getSelectedUnit(defenderNP.node())
+        angle = contactRot.x
+        vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
+        print((contactPos - newnode.getPos()).normalized()*cdistance)
+        pos_interval = LerpPosHprInterval(
+            #unit.bodyNP, 
+            newnode,
+            duration=1.5, 
+            #pos=contactPos,
+            #pos=contactPos-direction.normalized()*3,
+            #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
+            #pos=wheel1Pos + direction.normalized(),
+            #pos=wheel1Pos + direction.normalized()*cdistance,
+            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cdistance,
+            #pos=ppp,
+            hpr=contactRot,
+            blendType='easeInOut'
+        )
+        
+
+        #await pos_interval
+        #unit.bodyNP.wrtReparentTo(parent)
+        
+        if chdist < wdistance+ocdistance:
+            #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+            for terning in self.terningerCharge:
+                terning.remove(self.world)
+            #return
 
         rotation_interval = LerpPosHprInterval(
             defenderNP, 
@@ -1859,7 +1953,7 @@ class MyApp(ShowBase):
             blendType='easeInOut'
         )
         await rotation_interval
-        angle = contactRot.x
+        """ angle = contactRot.x
         vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
 
         pos_interval = LerpPosHprInterval(
@@ -1869,14 +1963,14 @@ class MyApp(ShowBase):
             hpr=contactRot,
             blendType='easeInOut'
         )
-
+        """
         #await pos_interval
-
-
+        angle = contactRot.x
+        vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
         pos_interval2 = LerpPosHprInterval(
             defenderNP, 
             duration=1.5, 
-            pos=defenderNP.getPos() + Vec3(vector.x, vector.y, 0)*6,
+            pos=defenderNP.getPos() + Vec3(vector.x, vector.y, 0)*fldist,
             hpr=contactRot,
             blendType='easeInOut'
         )
@@ -1889,7 +1983,7 @@ class MyApp(ShowBase):
         )
 
         await par
-
+        unit.bodyNP.wrtReparentTo(parent)
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
         cont = self.checkUnitContactSmall(defenderUnit)
@@ -2018,6 +2112,8 @@ class MyApp(ShowBase):
             cdistance = chdist - wdistance
 
         
+        angle = contactRot.x
+        vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
         print((contactPos - newnode.getPos()).normalized()*cdistance)
         pos_interval = LerpPosHprInterval(
             #unit.bodyNP, 
@@ -2027,7 +2123,8 @@ class MyApp(ShowBase):
             #pos=contactPos-direction.normalized()*3,
             #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
             #pos=wheel1Pos + direction.normalized(),
-            pos=wheel1Pos + direction.normalized()*cdistance,
+            #pos=wheel1Pos + direction.normalized()*cdistance,
+            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cdistance,
             #pos=ppp,
             hpr=contactRot,
             blendType='easeInOut'
