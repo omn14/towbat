@@ -17,26 +17,32 @@ def checkDice(allDice,task):
     #print("Dice orientations:", hpr)
     if all(h is not None for h in hpr):
         print("All dice have settled.")
-        for o in hpr:
+        for i, o in enumerate(hpr):
             q = LRotationf()
             q.setHpr(o)
             #print(f"Orientation HPR: {o} -> Quat: {q}")
             if q.getUp().normalized().dot(Vec3(0,0,1)) > 0.9:
                 print(6,"Z is up")
+                allDice[i].currentValue = 6
             if q.getUp().normalized().dot(Vec3(0,0,-1)) > 0.9:
                 print(1,"Z is down")
+                allDice[i].currentValue   = 1
             if q.getForward().normalized().dot(Vec3(0,0,1)) > 0.9:
                 print(5,"Y is up")
+                allDice[i].currentValue = 5
             if q.getForward().normalized().dot(Vec3(0,0,-1)) > 0.9:
                 print(2,"Y is down")
+                allDice[i].currentValue = 2
             if q.getRight().normalized().dot(Vec3(0,0,1)) > 0.9:
                 print(4,"X is up")
+                allDice[i].currentValue = 4
             if q.getRight().normalized().dot(Vec3(0,0,-1)) > 0.9:
                 print(3,"X is down")
+                allDice[i].currentValue = 3
             
             #print(q.getUp().normalized(), q.getForward().normalized(), q.getRight().normalized())
-        for dice in allDice:
-            dice.remove(base.world)
+        #for dice in allDice:
+        #    dice.remove(base.world)
         return task.done
     return task.cont
 
@@ -51,10 +57,20 @@ class Dice:
             size: Size of the dice cube
         """
         self.size = size
+        self.currentValue = None  # To store the result after rolling
         
         # Create bullet rigid body node
         self.node = BulletRigidBodyNode('Dice')
         self.node.setMass(10.0)
+        self.node.setFriction(2.5)
+        self.node.setDeactivationTime(0.05)
+
+        # Higher values = stops faster:
+        #self.node.setLinearDamping(0.9)
+        #self.node.setAngularDamping(0.9)
+
+        self.node.setLinearSleepThreshold(0.1)   # Very sensitive
+        self.node.setAngularSleepThreshold(0.1)
         
         # Add box shape for physics collision
         shape = BulletBoxShape(Vec3(size / 2, size / 2, size / 2))
