@@ -1804,16 +1804,43 @@ class MyApp(ShowBase):
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         unit.bodyNP.setPos(oposUnit)
-        unit.bodyNP.setHpr(Vec3(0,0,0))
-        newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
+        unit.bodyNP.setHpr(orotUnit)
+        #unit.bodyNP.setHpr(Vec3(0,0,0))
+
+        newnode.reparentTo(unit.bodyNP)
+
+        rot = LRotationf()
+        rot.setHpr(unit.bodyNP.getHpr())
+        #fwd=rot.getForward()
+        rgt = rot.getRight()
+        dire = contactPos - oposUnit
+        angle_between = rgt.dot(dire.normalized())
+        if angle_between >=0:
+            sign = 1
+        else:
+            sign = -1
+        
+        #newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
+        newnode.setPos(Vec3(width*sign/2,height/2,0))
+        newnode.wrtReparentTo(render)
+
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
         self.zax.reparentTo(newnode)
         # Rotate the new node smoothly to align with defender
+        print("rotate from to",newnode.getHpr(), contactRot)
+        newnode_hpr = newnode.getHpr()
+        # Ensure all angles are positive (0-360 range)
+        positive_h = newnode_hpr.x % 360
+        positive_p = newnode_hpr.y % 360  
+        positive_r = newnode_hpr.z % 360
+        newnode.setHpr(positive_h, positive_p, positive_r)
+        print("rotate from to",newnode.getHpr(), contactRot)
+
         
         rotation_interval = LerpPosHprInterval(
             newnode, 
-            duration=0.5, 
+            duration=1.5, 
             pos=newnode.getPos(),
             hpr=contactRot,
             blendType='easeInOut'
