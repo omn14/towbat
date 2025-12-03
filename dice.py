@@ -93,8 +93,9 @@ class Dice:
         """Apply random force and torque to simulate rolling."""
         force_vec = Vec3(
             random.uniform(-force, force),
-            random.uniform(-force, force),
-            random.uniform(5, force)
+            #random.uniform(-force, force),
+            random.uniform(5, force)*4,
+            random.uniform(5, force)*-2
         )
         torque_vec = Vec3(
             random.uniform(-10, 10),

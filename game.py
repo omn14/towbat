@@ -1790,7 +1790,7 @@ class MyApp(ShowBase):
     async def fleeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
         self.terningerCharge=[]
         for i in range(2):
-            terning = Dice(self.world, position=Vec3(-20,0,10), size=1.0)
+            terning = Dice(self.world, position=Vec3(-20+i*2,0,10), size=1.0)
             self.terningerCharge.append(terning)
         for terning in self.terningerCharge:
             terning.roll()
@@ -1800,7 +1800,7 @@ class MyApp(ShowBase):
 
         self.terningerFlee=[]
         for i in range(2):
-            terning = Dice(self.world, position=Vec3(20,0,10), size=1.0)
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0)
             self.terningerFlee.append(terning)
         for terning in self.terningerFlee:
             terning.roll()
@@ -1861,7 +1861,14 @@ class MyApp(ShowBase):
         positive_h = newnode_hpr.x % 360
         positive_p = newnode_hpr.y % 360  
         positive_r = newnode_hpr.z % 360
+
+        if positive_h > 180:
+            positive_h -= 360
+
+        if positive_h - contactRot.x > 180:
+            contactRot = Vec3(contactRot.x + 360, contactRot.y, contactRot.z)
         newnode.setHpr(positive_h, positive_p, positive_r)
+
         print("rotate from to",newnode.getHpr(), contactRot)
 
         wheel1Angle = contactRot.x - orotUnit.x
@@ -1908,8 +1915,8 @@ class MyApp(ShowBase):
         await rotation_interval
         if chdist < wdistance:
             unit.bodyNP.wrtReparentTo(parent)
-            for terning in self.terningerCharge:
-                terning.remove(self.world)
+            """ for terning in self.terningerCharge:
+                terning.remove(self.world) """
             #return
         #unit.bodyNP.wrtReparentTo(parent)
         ocdistance=cdistance
@@ -1941,8 +1948,8 @@ class MyApp(ShowBase):
         
         if chdist < wdistance+ocdistance:
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
-            for terning in self.terningerCharge:
-                terning.remove(self.world)
+            """ for terning in self.terningerCharge:
+                terning.remove(self.world) """
             #return
 
         rotation_interval = LerpPosHprInterval(
@@ -1983,6 +1990,10 @@ class MyApp(ShowBase):
         )
 
         await par
+        for terning in self.terningerCharge:
+                terning.remove(self.world)
+        for terning in self.terningerFlee:
+                terning.remove(self.world)
         unit.bodyNP.wrtReparentTo(parent)
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
@@ -2058,6 +2069,13 @@ class MyApp(ShowBase):
         positive_h = newnode_hpr.x % 360
         positive_p = newnode_hpr.y % 360  
         positive_r = newnode_hpr.z % 360
+
+        if positive_h > 180:
+            positive_h -= 360
+
+        if positive_h - contactRot.x > 180:
+            contactRot = Vec3(contactRot.x + 360, contactRot.y, contactRot.z)
+
         newnode.setHpr(positive_h, positive_p, positive_r)
         print("rotate from to",newnode.getHpr(), contactRot)
 
