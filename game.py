@@ -640,6 +640,7 @@ class MyApp(ShowBase):
         if self.unitToMove.isInCombat:
             print("Unit is in combat, cant move.")
             return task.done
+        
         self.pathTowardsMouse(self.unitToMove)
         return task.cont
     
@@ -1877,6 +1878,18 @@ class MyApp(ShowBase):
         return 
     
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
+        self.terninger=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(0,0,10), size=1.0)
+            self.terninger.append(terning)
+        for terning in self.terninger:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTask", extraArgs=[self.terninger], appendTask=True)
+        
+        chdice = []
+        for terning in self.terninger:
+            chdice.append(terning.currentValue)
+        print("Charge dice results:", chdice)
         contactPos=unit.bodyNP.getPos()
         contactRot=unit.bodyNP.getHpr()
         self.zax = loader.loadModel("models/zup-axis")
@@ -1948,7 +1961,8 @@ class MyApp(ShowBase):
             #return distance  # Add a small buffer
             print ("Calculated distance to move forward:", cdistance,wdistance,width)
 
-        chdist = 10
+        chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        print("Charge distance:", chdist)
         if chdist < wdistance:
             angle = math.degrees(chdist/width)
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z)*wheel1Angle/abs(wheel1Angle)
@@ -1968,6 +1982,8 @@ class MyApp(ShowBase):
         await rotation_interval
         if chdist < wdistance:
             unit.bodyNP.wrtReparentTo(parent)
+            for terning in self.terninger:
+                terning.remove(self.world)
             return
         #unit.bodyNP.wrtReparentTo(parent)
         ocdistance=cdistance
@@ -1995,6 +2011,8 @@ class MyApp(ShowBase):
         unit.bodyNP.wrtReparentTo(parent)
         if chdist < wdistance+ocdistance:
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+            for terning in self.terninger:
+                terning.remove(self.world)
             return
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
