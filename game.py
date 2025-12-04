@@ -437,15 +437,26 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-30,0)
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
+        if 1:
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-13,0)
+            self.goblinWolfRiders.bodyNP.setPos(10,-15,0)
+            self.bretBowmen.bodyNP.setPos(0,13,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
 
-        #self.toCleanup= []
+
+        self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
+        self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
         #self.p = charge_impact_effect.ChargeImpactEffect(parent=render)
@@ -1687,6 +1698,49 @@ class MyApp(ShowBase):
         line_node = render.attachNewNode(line.create())
         # Remove after 2 seconds
         #self.taskMgr.doMethodLater(2.0, line_node.removeNode, "remove-debug-ray")
+
+    def drawRectangle(self, center=Point3(0, 0, 0), width=5, height=3, color=(1, 0, 0, 1)):
+        """
+        Draws a rectangle using LineSegs.
+        
+        Args:
+            center: Center position of the rectangle
+            width: Width of the rectangle
+            height: Height of the rectangle
+            color: Color of the rectangle as (r, g, b, a) tuple
+        
+        Returns:
+            NodePath of the created rectangle
+        """
+        
+        
+        line_segs = LineSegs()
+        line_segs.setColor(*color)
+        line_segs.setThickness(2.0)
+        
+        # Calculate corner points
+        half_width = width / 2
+        half_height = height / 2
+        
+        corners = [
+            Point3(center.x - half_width, center.y - half_height, center.z),  # Bottom-left
+            Point3(center.x + half_width, center.y - half_height, center.z),  # Bottom-right
+            Point3(center.x + half_width, center.y + half_height, center.z),  # Top-right
+            Point3(center.x - half_width, center.y + half_height, center.z),  # Top-left
+        ]
+        
+        # Draw the rectangle by connecting corners
+        line_segs.moveTo(corners[0])
+        for i in range(1, len(corners)):
+            line_segs.drawTo(corners[i])
+        # Close the rectangle
+        line_segs.drawTo(corners[0])
+        
+        rectangle_node = line_segs.create()
+        rectangleLine = render.attachNewNode(rectangle_node)
+        rectangleLine.setName("Rectangle")
+        
+        return rectangleLine
 
     def moveUnit(self, unit):
         taskMgr.remove("taskLoopPathTowardsMouse")
