@@ -2278,7 +2278,7 @@ class MyApp(ShowBase):
 
 
         unit.isInCombat=True
-        unit.bodyNP.setCollideMask(BitMask32.bit(4))
+        #unit.bodyNP.setCollideMask(BitMask32.bit(4))
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
         unit.isInCombatWith=defenderUnit
@@ -2286,7 +2286,7 @@ class MyApp(ShowBase):
         defenderUnit.isInCombatWith=unit
         defenderUnit.isInCombat=True
         defenderUnit.isInCombatFlank="front"
-        defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+        #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
         for terning in self.terninger:
@@ -2562,16 +2562,19 @@ class MyApp(ShowBase):
         print('Event delivered with args:', self.weaponChoise.choice)
         del self.weaponChoise
         #messenger.send("start-attack-sequence")
-        self.verySimpleBattle(self.unitToMove.bodyNP, self.unitToMove.isInCombatWith.bodyNP, "front")
+        self.verySimpleBattle()
         return task.done
 
-    def verySimpleBattle(self, attacker, defender, flank):
+    def verySimpleBattle(self):
         #if not hasattr(self, 'weaponChoise'):
         #self.weaponChoise = Choice(2, Vec3(0,0,10))
         #print("Waiting for choice...")
         #await base.messenger.future('choice-made')
         #await self.weaponChoise.ma
         #print('Event delivered with args:')
+        attacker = self.unitToMove.bodyNP
+        defender = self.unitToMove.isInCombatWith.bodyNP
+        flank = self.unitToMove.isInCombatFlank
 
         print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
         attackerUnit=self.getSelectedUnit(attacker.node())
