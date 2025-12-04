@@ -1617,9 +1617,17 @@ class MyApp(ShowBase):
 
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
+            move = int(self.unitToMove.unit.model.characteristics['M'])*2
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    mountmove= int(rule['mountUnit'].model.characteristics['M'])*2
+                    move = max(move, mountmove)
+            print("Unit move:", move)
+            
+
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                               movedistance=8/(2*abs(groundSizeboundingbox[0][1])))
+                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             
@@ -1836,7 +1844,7 @@ class MyApp(ShowBase):
         return task.done
 
     def checkUnitContactSmall(self, unit):
-        contacts = self.world.contactTest(unit.bodyNP.node())
+        contacts = self.world.contactTest(unit.bodyNP.node(), BitMask32.allOn())
         for contact in contacts.getContacts():
             print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
             
@@ -1948,16 +1956,21 @@ class MyApp(ShowBase):
             # Calculate distance to move forward to reach contactPos
             #current_pos = unit.bodyNP.getPos(render)
             direction = self.playerNP.getPos() - wheel1Pos
-            cdistance = direction.length()
+            
 
             #math.radians(positive_h)*width
 
-            wdistance = abs(math.radians(wheel1Angle)*width)
+            wdistance = abs(math.radians(wheel1Angle)*width*2)
+            #cdistance = direction.length()
+            cdistance = self.moveArceDistance - wdistance
 
             #return distance  # Add a small buffer
-            print ("Calculated distance to move forward:", cdistance,wdistance,width)
+            print ("Calculated distance to move forward:", cdistance,wdistance,width*2)
 
         chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        for rule in unit.unit.model.special_rules:
+            if rule.get('mountUnit'):
+                chdist= int(rule['mountUnit'].model.characteristics['M'])+ max(chdice)
         fldist = sum(fldice)
         print("Charge distance:", chdist)
         print("Flee distance:", fldist)
@@ -1992,6 +2005,8 @@ class MyApp(ShowBase):
         angle = contactRot.x
         vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
         print((contactPos - newnode.getPos()).normalized()*cdistance)
+        print(cdistance,"aplpied to vector:", Vec3(vector.x, vector.y, 0),wdistance, chdist)
+        cmove = chdist - wdistance
         pos_interval = LerpPosHprInterval(
             #unit.bodyNP, 
             newnode,
@@ -2001,7 +2016,7 @@ class MyApp(ShowBase):
             #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
             #pos=wheel1Pos + direction.normalized(),
             #pos=wheel1Pos + direction.normalized()*cdistance,
-            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cdistance,
+            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cmove,
             #pos=ppp,
             hpr=contactRot,
             blendType='easeInOut'
@@ -2011,11 +2026,7 @@ class MyApp(ShowBase):
         #await pos_interval
         #unit.bodyNP.wrtReparentTo(parent)
         
-        if chdist < wdistance+ocdistance:
-            #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
-            """ for terning in self.terningerCharge:
-                terning.remove(self.world) """
-            #return
+        
 
         rotation_interval = LerpPosHprInterval(
             defenderNP, 
@@ -2062,7 +2073,10 @@ class MyApp(ShowBase):
         unit.bodyNP.wrtReparentTo(parent)
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
-        cont = self.checkUnitContactSmall(defenderUnit)
+        print("Checking if fleeing unit is caught...")
+        print(defenderNP.getCollideMask())
+        print(unit.bodyNP.getCollideMask())
+        cont = self.checkUnitContactSmall(unit)
         if cont:
             print("Fleeing Unit caught, and are slayed!")
             self.world.removeRigidBody(defenderUnit.bodyNP.node())
@@ -2168,7 +2182,9 @@ class MyApp(ShowBase):
             print ("Calculated distance to move forward:", cdistance,wdistance,width*2)
 
         chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
-        
+        for rule in unit.unit.model.special_rules:
+            if rule.get('mountUnit'):
+                chdist= int(rule['mountUnit'].model.characteristics['M'])+ max(chdice)
         print("Charge distance:", chdist)
         if chdist < wdistance:
             angle = math.degrees(chdist/width)
