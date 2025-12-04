@@ -307,7 +307,7 @@ class unitGraphics():
 
             self.model.node().setName('Model-' + self.unitName)
             self.model.reparentTo(self.bodyNP)
-            self.bodyNP.setScale(2.0)
+            self.bodyNP.setScale(1.0)
             self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
             self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
             self.model.setPos(-box_size.x/2+self.modelWidth/2, box_size.y/2-self.modelHeight/2,0)
@@ -381,6 +381,9 @@ class MyApp(ShowBase):
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugTextUnit.setText("Debug Info test")
 
+        self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=(1, 1, 0, 1))
+        self.debugTextInfo.setText("Debug Arch test")
+
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
@@ -433,11 +436,11 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
-            self.goblins.bodyNP.setPos(0,50,0)
-            self.goblinWolfRiders.bodyNP.setPos(0,40,0)
+            self.goblins.bodyNP.setPos(0,-30,0)
+            self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
@@ -966,7 +969,7 @@ class MyApp(ShowBase):
     def setup_bullet(self):
         self.world = BulletWorld()
         self.world.setGravity(Vec3(0, 0, -9.81))
-        shape = BulletPlaneShape(Vec3(0, 0, 1), 1)
+        shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
         node = BulletRigidBodyNode('Ground')
         node.addShape(shape)
         np = render.attachNewNode(node)
@@ -1018,7 +1021,7 @@ class MyApp(ShowBase):
         self.world.attachRigidBody(smiley_copy_body)
 
         # Add a simple Bullet character controller for the player
-        height = 1.75
+        height = .01
         radius = 0.4
         shape = BulletCapsuleShape(radius, height - 2*radius, ZUp)
 
@@ -1424,7 +1427,8 @@ class MyApp(ShowBase):
             else:
                 movedistance = 0
 
-            print("final movedistance:", movedistance)
+            print("final movedistance:", movedistance,movedistance*2*50,(movedistance+angle*width)*2*50)
+            self.debugTextInfo.setText(f"Arc distance: {(movedistance+angle*width)*2*50:.1f} cm")
             #movedistance = min(movedistance, angle*width)
             #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
             points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
@@ -1613,10 +1617,10 @@ class MyApp(ShowBase):
             p3 = (self.polygonpoints[0]*2-1)*50
             p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
             self.world.doPhysics(0.016)
-            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.91), Point3(p2.x, p2.y, 0.91),BitMask32.allOn())
+            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.25), Point3(p2.x, p2.y, 0.25),BitMask32.allOn())
             
             #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
-            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.91), Point3(p4.x, p4.y, 0.91),BitMask32.allOn())
+            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.25), Point3(p4.x, p4.y, 0.25),BitMask32.allOn())
             ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
             ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
             print("Cont2:", cont2.hasHit(), cont2.getHitPos())
@@ -1646,7 +1650,7 @@ class MyApp(ShowBase):
             
             p1_5 = (p1 + p3) * 0.5
             p2_5 = (p2 + p4) * 0.5
-            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.91), Point3(p2_5.x, p2_5.y, 0.91),BitMask32.allOn())
+            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.25), Point3(p2_5.x, p2_5.y, 0.25),BitMask32.allOn())
             print("Cont3:", cont3.hasHit(), cont3.getHitPos())
             if cont3.hasHit():
                 # Check which contact point is closest to smiley
@@ -1853,7 +1857,7 @@ class MyApp(ShowBase):
             sign = -1
         
         #newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
-        newnode.setPos(Vec3(width*sign/2,height/2,0))
+        newnode.setPos(Vec3(width*sign/unit.bodyNP.getScale().x,height/unit.bodyNP.getScale().y,0))
         newnode.wrtReparentTo(render)
 
         unit.bodyNP.setHpr(orotUnit)
