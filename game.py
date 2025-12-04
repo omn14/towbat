@@ -1411,6 +1411,9 @@ class MyApp(ShowBase):
                 if abs(vectormouse.dot(vector)) < .001:
                     
                     break
+                if width * angle >= movedistance:
+                    print("break because width*angle >= movedistance:", width*angle, movedistance)
+                    break
 
             #if movedistance 
             #if movedistance + angle * width/2 > maxMoveDistance:
@@ -1418,6 +1421,8 @@ class MyApp(ShowBase):
             movedistance = min(movedistance, vectormouse.length()+angle*width)
             if movedistance - angle*width > 0:
                 movedistance -= angle*width
+            else:
+                movedistance = 0
 
             print("final movedistance:", movedistance)
             #movedistance = min(movedistance, angle*width)
@@ -1597,7 +1602,7 @@ class MyApp(ShowBase):
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                               movedistance=36/(2*abs(groundSizeboundingbox[0][1])))
+                                               movedistance=8/(2*abs(groundSizeboundingbox[0][1])))
             #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
 
             

@@ -82,12 +82,13 @@ class Dice:
         world.attachRigidBody(self.node)
         
         # Load or create visual model
-        self.model = loader.loadModel('models/box')
+        #self.model = loader.loadModel('models/box')
+        self.model = loader.loadModel('models/bdie.bam')
         self.model.setScale(size)
         self.model.reparentTo(self.np)
-        self.model.setPos(-Vec3(size / 2, size / 2, size / 2))
-        self.zup = loader.loadModel('models/zup-axis')
-        self.zup.reparentTo(self.model)
+        #self.model.setPos(-Vec3(size / 2, size / 2, size / 2))
+        #self.zup = loader.loadModel('models/zup-axis')
+        #self.zup.reparentTo(self.model)
     
     def roll(self, force=10):
         """Apply random force and torque to simulate rolling."""
