@@ -2151,6 +2151,9 @@ class MyApp(ShowBase):
 
         if positive_h > 180:
             positive_h -= 360
+        
+        if positive_h < 0:
+            positive_h += 360
 
         if positive_h - contactRot.x > 180:
             contactRot = Vec3(contactRot.x + 360, contactRot.y, contactRot.z)
@@ -2310,7 +2313,22 @@ class MyApp(ShowBase):
         angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
         print(f"normalized {angleToRotate} degrees to face defender.")
         print(f"Hit location in defender coords: {hitloc}")
-        if abs(hitloc.x*unit.bodyNP.getScale().x - width) < .5:
+        """ rot = LRotationf()
+        rot.setHpr(defenderNP.getHpr())
+        fwd=rot.getForward()
+        fwd2 = Vec2(fwd.x, fwd.y)
+        print("Defender forward vector:", fwd)
+        vec = hitloc - defenderNP.getPos()
+        vec2 = Vec2(vec.x, vec.y)
+        print("Vector from defender to hit location:", vec) """
+        #angle_between = math.acos(fwd2.normalized().dot(vec2.normalized())) * (180.0 / math.pi)
+        angle_between = math.acos(Vec3(0,1,0).dot(hitloc.normalized())) * (180.0 / math.pi)
+        print("Angle between forward and hit location vector:", angle_between)
+        frontArcAngle = 90 - math.atan2(height, width) * (180.0 / math.pi)
+        print("Front arc angle:", frontArcAngle)
+
+        #if abs(hitloc.x*unit.bodyNP.getScale().x - width) < .03:
+        if angle_between > frontArcAngle and hitloc.x > 0:
             print("Hit on right side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 90) % 360 - 180
@@ -2321,7 +2339,8 @@ class MyApp(ShowBase):
                 angleToRotate *= -1
             
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.x*unit.bodyNP.getScale().x + width) < .5:
+        #elif abs(hitloc.x*unit.bodyNP.getScale().x + width) < .03:
+        elif angle_between > frontArcAngle and hitloc.x < 0:
             print("Hit on left side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate - 90) % 360 - 180
@@ -2331,7 +2350,8 @@ class MyApp(ShowBase):
                 angleToRotate = 90 - angleToRotate
                 angleToRotate *= -1
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.y*unit.bodyNP.getScale().y - height) < .5:
+        #elif abs(hitloc.y*unit.bodyNP.getScale().y - height) < .03:
+        elif angle_between < frontArcAngle:
             print("Hit front side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 180
@@ -2339,7 +2359,8 @@ class MyApp(ShowBase):
                 angleToRotate -= 180
                 #angleToRotate *= -1
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.y*unit.bodyNP.getScale().y + height) < .5:
+        #elif abs(hitloc.y*unit.bodyNP.getScale().y + height) < .03:
+        elif angle_between > frontArcAngle+90:
             print("Hit rear side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 90
