@@ -382,6 +382,7 @@ class MyApp(ShowBase):
         self.debugTextUnit.setText("Debug Info test")
 
         self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=(1, 1, 0, 1))
+        self.moveArceDistance = 0
         self.debugTextInfo.setText("Debug Arch test")
 
         self.numsPoints=0
@@ -1428,7 +1429,8 @@ class MyApp(ShowBase):
                 movedistance = 0
 
             print("final movedistance:", movedistance,movedistance*2*50,(movedistance+angle*width)*2*50)
-            self.debugTextInfo.setText(f"Arc distance: {(movedistance+angle*width)*2*50:.1f} cm")
+            self.moveArceDistance = (movedistance+angle*width)*2*50
+            self.debugTextInfo.setText(f"Arc distance: {(self.moveArceDistance):.1f} ")
             #movedistance = min(movedistance, angle*width)
             #points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*0.2)
             points.append(points[-1]+Vec2(-math.sin(angle+math.radians(rotationangle)),math.cos(angle+math.radians(rotationangle)))*movedistance)
@@ -2100,14 +2102,16 @@ class MyApp(ShowBase):
             # Calculate distance to move forward to reach contactPos
             #current_pos = unit.bodyNP.getPos(render)
             direction = self.playerNP.getPos() - wheel1Pos
-            cdistance = direction.length()
+            
 
             #math.radians(positive_h)*width
 
-            wdistance = abs(math.radians(wheel1Angle)*width)
+            wdistance = abs(math.radians(wheel1Angle)*width*2)
+            #cdistance = direction.length()
+            cdistance = self.moveArceDistance - wdistance
 
             #return distance  # Add a small buffer
-            print ("Calculated distance to move forward:", cdistance,wdistance,width)
+            print ("Calculated distance to move forward:", cdistance,wdistance,width*2)
 
         chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
         
@@ -2163,25 +2167,30 @@ class MyApp(ShowBase):
 
         await pos_interval
         unit.bodyNP.wrtReparentTo(parent)
-        if chdist < wdistance+ocdistance:
+        if chdist < self.moveArceDistance:
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
             for terning in self.terninger:
                 terning.remove(self.world)
-            print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance)
+            print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance, self.moveArceDistance)
             return
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         newnode.setPos(self.playerNP.getPos())
+        newnode.setHpr(unit.bodyNP.getHpr())
         unit.bodyNP.wrtReparentTo(newnode)
         # Rotate the new node smoothly to align with defender
 
         
-        
+        finalHpr = (newnode.getH() + angleToRotate, newnode.getP(), newnode.getR())
+        print("Final HPR:", finalHpr)
+        print("Angle to rotate:", angleToRotate)
+        print("Current HPR before final rotation:", newnode.getHpr())
         rotation_interval = LerpPosHprInterval(
             newnode, 
             duration=1.5, 
             pos=newnode.getPos(),
-            hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+            #hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+            hpr=finalHpr,
             blendType='easeInOut'
         )
         await rotation_interval
@@ -2221,9 +2230,9 @@ class MyApp(ShowBase):
         shape = contact.getNode1().getShape(0)
         if isinstance(shape, BulletBoxShape):
             half_extents = shape.getHalfExtentsWithMargin()
-            width = half_extents.x * 2
-            height = half_extents.y * 2
-            print(f"Defender unit width: {width}")
+            width = half_extents.x * unit.bodyNP.getScale().x 
+            height = half_extents.y * unit.bodyNP.getScale().y 
+            print(f"Defender unit width: {width}, height: {height}")
 
         angleToRotate = angleDefender - angleAttacker
         print(f"Attacker angle: {angleAttacker}, Defender angle: {angleDefender}")
@@ -2231,7 +2240,7 @@ class MyApp(ShowBase):
         angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
         print(f"normalized {angleToRotate} degrees to face defender.")
         print(f"Hit location in defender coords: {hitloc}")
-        if abs(hitloc.x*2*2 - width) < 2:
+        if abs(hitloc.x*unit.bodyNP.getScale().x - width) < .5:
             print("Hit on right side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 90) % 360 - 180
@@ -2242,7 +2251,7 @@ class MyApp(ShowBase):
                 angleToRotate *= -1
             
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.x*2*2 + width) < 2:
+        elif abs(hitloc.x*unit.bodyNP.getScale().x + width) < .5:
             print("Hit on left side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate - 90) % 360 - 180
@@ -2252,7 +2261,7 @@ class MyApp(ShowBase):
                 angleToRotate = 90 - angleToRotate
                 angleToRotate *= -1
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.y*2*2 - height) < 2:
+        elif abs(hitloc.y*unit.bodyNP.getScale().y - height) < .5:
             print("Hit front side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 180
@@ -2260,7 +2269,7 @@ class MyApp(ShowBase):
                 angleToRotate -= 180
                 #angleToRotate *= -1
             print(f"Adjusted angle to rotate: {angleToRotate}")
-        elif abs(hitloc.y*2*2 + height) < 2:
+        elif abs(hitloc.y*unit.bodyNP.getScale().y + height) < .5:
             print("Hit rear side of defender")
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 90
