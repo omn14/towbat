@@ -2065,7 +2065,7 @@ class MyApp(ShowBase):
             sign = -1
         
         #newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
-        newnode.setPos(Vec3(width*sign/2,height/2,0))
+        newnode.setPos(Vec3(width*sign/unit.bodyNP.getScale().x,height/unit.bodyNP.getScale().y,0))
         newnode.wrtReparentTo(render)
 
         unit.bodyNP.setHpr(orotUnit)
@@ -2110,6 +2110,7 @@ class MyApp(ShowBase):
             print ("Calculated distance to move forward:", cdistance,wdistance,width)
 
         chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        
         print("Charge distance:", chdist)
         if chdist < wdistance:
             angle = math.degrees(chdist/width)
@@ -2132,6 +2133,7 @@ class MyApp(ShowBase):
             unit.bodyNP.wrtReparentTo(parent)
             for terning in self.terninger:
                 terning.remove(self.world)
+            print("Charge distance less than wheel distance, returning.")
             return
         #unit.bodyNP.wrtReparentTo(parent)
         ocdistance=cdistance
@@ -2142,6 +2144,7 @@ class MyApp(ShowBase):
         angle = contactRot.x
         vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
         print((contactPos - newnode.getPos()).normalized()*cdistance)
+        cmove = min(chdist, cdistance)
         pos_interval = LerpPosHprInterval(
             #unit.bodyNP, 
             newnode,
@@ -2151,7 +2154,7 @@ class MyApp(ShowBase):
             #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
             #pos=wheel1Pos + direction.normalized(),
             #pos=wheel1Pos + direction.normalized()*cdistance,
-            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cdistance,
+            pos=wheel1Pos + Vec3(vector.x, vector.y, 0)*cmove,
             #pos=ppp,
             hpr=contactRot,
             blendType='easeInOut'
@@ -2164,6 +2167,7 @@ class MyApp(ShowBase):
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
             for terning in self.terninger:
                 terning.remove(self.world)
+            print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance)
             return
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")

@@ -28,17 +28,17 @@ def checkDice(allDice,task):
                 print(1,"Z is down")
                 allDice[i].currentValue   = 1
             if q.getForward().normalized().dot(Vec3(0,0,1)) > 0.9:
-                print(5,"Y is up")
-                allDice[i].currentValue = 5
-            if q.getForward().normalized().dot(Vec3(0,0,-1)) > 0.9:
-                print(2,"Y is down")
+                print(2,"Y is up")
                 allDice[i].currentValue = 2
+            if q.getForward().normalized().dot(Vec3(0,0,-1)) > 0.9:
+                print(5,"Y is down")
+                allDice[i].currentValue = 5
             if q.getRight().normalized().dot(Vec3(0,0,1)) > 0.9:
-                print(4,"X is up")
-                allDice[i].currentValue = 4
-            if q.getRight().normalized().dot(Vec3(0,0,-1)) > 0.9:
-                print(3,"X is down")
+                print(3,"X is up")
                 allDice[i].currentValue = 3
+            if q.getRight().normalized().dot(Vec3(0,0,-1)) > 0.9:
+                print(4,"X is down")
+                allDice[i].currentValue = 4
             
             #print(q.getUp().normalized(), q.getForward().normalized(), q.getRight().normalized())
         #for dice in allDice:
@@ -87,8 +87,8 @@ class Dice:
         self.model.setScale(size)
         self.model.reparentTo(self.np)
         #self.model.setPos(-Vec3(size / 2, size / 2, size / 2))
-        #self.zup = loader.loadModel('models/zup-axis')
-        #self.zup.reparentTo(self.model)
+        self.zup = loader.loadModel('models/zup-axis')
+        self.zup.reparentTo(self.model)
     
     def roll(self, force=10):
         """Apply random force and torque to simulate rolling."""
