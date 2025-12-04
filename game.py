@@ -2289,6 +2289,9 @@ class MyApp(ShowBase):
         defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
+        for terning in self.terninger:
+            terning.remove(self.world)
+        del self.terninger
         return 
 
     def getFlankFromContact(self, unit, contact):
