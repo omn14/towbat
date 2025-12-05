@@ -1,6 +1,7 @@
 from panda3d.core import Vec3, CardMaker, Point3, BitMask32
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from direct.showbase.DirectObject import DirectObject
+from panda3d.core import TextNode
 
 class Choice:
     def __init__(self, choices,pos):
@@ -92,6 +93,15 @@ class Choice:
         # Attach to scene
         rigidbody_np = render.attachNewNode(rigidbody)
         rigidbody_np.setPos(location[0], location[1], location[2])
+        
+        # Create and attach text node
+        text = TextNode('text')
+        text.setText(name)
+        text.setAlign(TextNode.ACenter)
+        textNodePath = rigidbody_np.attachNewNode(text)
+        textNodePath.setScale(2)
+        textNodePath.setPos(0, 0, size)  # Position above the rigid body
+        textNodePath.setBillboardPointEye()  # Make it face the camera
         
         # Add to bullet world
         base.world.attachRigidBody(rigidbody)
