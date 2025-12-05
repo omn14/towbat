@@ -247,8 +247,8 @@ class unitGraphics():
         #children[-1].removeNode()
 
         self.isInCombat=False
-        self.isInCombatWith=None
-        self.isInCombatFlank=""
+        self.isInCombatWith=[]
+        self.isInCombatFlank=[]
         self.hasMovedThisTurn=False
         self.hasAttackedThisTurn=False
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
@@ -275,7 +275,12 @@ class unitGraphics():
         
     def updateTextNode(self):
         text=f"In Combat: {self.isInCombat}\nMoved This Turn: {self.hasMovedThisTurn}\nAttacked This Turn: {self.hasAttackedThisTurn}"
-        self.text.setText(text)
+        row = f"In Combat: {self.isInCombat}\n"
+        row += f"Moved This Turn: {self.hasMovedThisTurn}\n"
+        row += f"Attacked This Turn: {self.hasAttackedThisTurn}"
+        row += f"\nEngaged With: {[unit.unitName for unit in self.isInCombatWith]}"
+        row += f"\nFlanks: {self.isInCombatFlank}"
+        self.text.setText(row)
 
     def setUpCollisions(self):
         if self.world:
@@ -444,12 +449,22 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
             self.goblinWolfRiders.bodyNP.setPos(10,-15,0)
             self.bretBowmen.bodyNP.setPos(0,13,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+
+        if 1:
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(10,5,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
@@ -1818,7 +1833,7 @@ class MyApp(ShowBase):
                 
                 angleToRotate = self.getFlankFromContact(unit, c)
 
-                #self.engageCombat(unit, defenderNP, angleToRotate)
+                
                 unit.hasMovedThisTurn=True
 
                 unit.updateTextNode()
@@ -2200,7 +2215,7 @@ class MyApp(ShowBase):
 
         rotation_interval = LerpPosHprInterval(
             newnode, 
-            duration=1.5, 
+            duration=0.5, 
             pos=newnode.getPos(),
             hpr=contactRot,
             blendType='easeInOut'
@@ -2225,7 +2240,7 @@ class MyApp(ShowBase):
         pos_interval = LerpPosHprInterval(
             #unit.bodyNP, 
             newnode,
-            duration=1.5, 
+            duration=0.5, 
             #pos=contactPos,
             #pos=contactPos-direction.normalized()*3,
             #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
@@ -2260,7 +2275,7 @@ class MyApp(ShowBase):
         print("Current HPR before final rotation:", newnode.getHpr())
         rotation_interval = LerpPosHprInterval(
             newnode, 
-            duration=1.5, 
+            duration=0.5, 
             pos=newnode.getPos(),
             #hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
             hpr=finalHpr,
@@ -2281,11 +2296,11 @@ class MyApp(ShowBase):
         #unit.bodyNP.setCollideMask(BitMask32.bit(4))
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
-        unit.isInCombatWith=defenderUnit
-        unit.isInCombatFlank="front"
-        defenderUnit.isInCombatWith=unit
+        unit.isInCombatWith.append(defenderUnit)
+        unit.isInCombatFlank.append("front")
+        defenderUnit.isInCombatWith.append(unit)
         defenderUnit.isInCombat=True
-        defenderUnit.isInCombatFlank="front"
+        defenderUnit.isInCombatFlank.append("front")
         #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
@@ -2380,160 +2395,9 @@ class MyApp(ShowBase):
             print("Hit i dont know where")
         return angleToRotate
     
-    def engageCombat(self, unit, defenderNP, angleToRotate):
-        
-        parent = unit.bodyNP.getParent()
-        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
-        newnode.setPos(self.playerNP.getPos())
-        unit.bodyNP.wrtReparentTo(newnode)
-        # Rotate the new node smoothly to align with defender
-        
-        rotation_interval = LerpPosHprInterval(
-            newnode, 
-            duration=0.5, 
-            pos=newnode.getPos(),
-            hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
-            blendType='easeInOut'
-        )
+    
 
-        
-        sequence = Sequence(
-            rotation_interval,
-            Func(unit.bodyNP.wrtReparentTo, parent),
-            Func(newnode.removeNode)
-            #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
-        )
-        sequence.start()
-        unit.isInCombat=True
-        unit.bodyNP.setCollideMask(BitMask32.bit(4))
-        
-        defenderUnit=self.getSelectedUnit(defenderNP.node())
-        unit.isInCombatWith=defenderUnit
-        unit.isInCombatFlank="front"
-        defenderUnit.isInCombatWith=unit
-        defenderUnit.isInCombat=True
-        defenderUnit.isInCombatFlank="front"
-        defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
-        unit.updateTextNode()
-        defenderUnit.updateTextNode()
-        return
-
-    def checkUnitContact(self, unit):
-        contacts = self.world.contactTest(unit.bodyNP.node())
-        for contact in contacts.getContacts():
-            print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
-            
-            mpoint = contact.getManifoldPoint()
-            print(mpoint.getDistance())
-            print(mpoint.getAppliedImpulse())
-            print(mpoint.getPositionWorldOnA())
-            print(mpoint.getPositionWorldOnB())
-            print(mpoint.getLocalPointA())
-            print(mpoint.getLocalPointB())
-            if 'UnitCollision-' in contact.getNode1().getName():
-                print("Unit collision detected!")
-                # Handle unit collision (e.g., stop movement, apply damage, etc.)
-                angleAttacker = unit.bodyNP.getH()
-                defenderNP = render.find(f"**/{contact.getNode1().getName()}")
-                angleDefender = defenderNP.getH()
-                print(f"contact position in defender coordsystem: {self.playerNP.getPos(defenderNP)}")
-                hitloc = self.playerNP.getPos(defenderNP) 
-
-                shape = contact.getNode1().getShape(0)
-                if isinstance(shape, BulletBoxShape):
-                    half_extents = shape.getHalfExtentsWithMargin()
-                    width = half_extents.x * 2
-                    height = half_extents.y * 2
-                    print(f"Defender unit width: {width}")
-
-                angleToRotate = angleDefender - angleAttacker
-                print(f"Attacker angle: {angleAttacker}, Defender angle: {angleDefender}")
-                print(f"Rotating attacker by {angleToRotate} degrees to face defender.")
-                angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
-                print(f"normalized {angleToRotate} degrees to face defender.")
-                if abs(hitloc.x*2*2 - width) < 0.1:
-                    print("Hit on right side of defender")
-                    print(f"Initial angle to rotate: {angleToRotate}")
-                    #angleToRotate = (angleToRotate + 90) % 360 - 180
-                    if angleToRotate < 0:
-                        angleToRotate += 90
-                    if angleToRotate > 90:
-                        angleToRotate = 360-90- angleToRotate
-                        angleToRotate *= -1
-                    
-                    print(f"Adjusted angle to rotate: {angleToRotate}")
-                elif abs(hitloc.x*2*2 + width) < 0.1:
-                    print("Hit on left side of defender")
-                    print(f"Initial angle to rotate: {angleToRotate}")
-                    #angleToRotate = (angleToRotate - 90) % 360 - 180
-                    if angleToRotate > 90:
-                        angleToRotate -= 90
-                    else:
-                        angleToRotate = 90 - angleToRotate
-                        angleToRotate *= -1
-                    print(f"Adjusted angle to rotate: {angleToRotate}")
-                elif abs(hitloc.y*2*2 - height) < 0.1:
-                    print("Hit front side of defender")
-                    print(f"Initial angle to rotate: {angleToRotate}")
-                    #angleToRotate = (angleToRotate + 180) % 180
-                    if angleToRotate > 90:
-                        angleToRotate -= 180
-                        #angleToRotate *= -1
-                    print(f"Adjusted angle to rotate: {angleToRotate}")
-                elif abs(hitloc.y*2*2 + height) < 0.1:
-                    print("Hit rear side of defender")
-                    print(f"Initial angle to rotate: {angleToRotate}")
-                    #angleToRotate = (angleToRotate + 180) % 90
-                    
-                    if angleToRotate > 90:
-                        #angleToRotate -= 90
-                        angleToRotate = (360 -angleToRotate) * -1
-                        #angleToRotate *= -1
-                    """ if angleToRotate < -90:
-                        angleToRotate += 90
-                        angleToRotate *= -1 """
-                    
-                else:
-                    print("Hit i dont know where")
-
-                
-                parent = unit.bodyNP.getParent()
-                newnode = render.attachNewNode(f"Temp-{unit.unitName}")
-                newnode.setPos(self.playerNP.getPos())
-                unit.bodyNP.wrtReparentTo(newnode)
-                # Rotate the new node smoothly to align with defender
-                
-                rotation_interval = LerpPosHprInterval(
-                    newnode, 
-                    duration=0.5, 
-                    pos=newnode.getPos(),
-                    hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
-                    blendType='easeInOut'
-                )
-
-                
-                sequence = Sequence(
-                    rotation_interval,
-                    Func(unit.bodyNP.wrtReparentTo, parent),
-                    Func(newnode.removeNode)
-                    #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
-                )
-                sequence.start()
-                unit.isInCombat=True
-                unit.bodyNP.setCollideMask(BitMask32.bit(4))
-                
-                defenderUnit=self.getSelectedUnit(defenderNP.node())
-                unit.isInCombatWith=defenderUnit
-                unit.isInCombatFlank="front"
-                defenderUnit.isInCombatWith=unit
-                defenderUnit.isInCombat=True
-                defenderUnit.isInCombatFlank="front"
-                defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
-                unit.updateTextNode()
-                defenderUnit.updateTextNode()
-                return
-
-            #self.playerNP.setH(self.playerNP.getH() + angleToRotate)
+    
 
     def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds):
         print(f"Battle results for {attackerUnit.unit.name} attacking with weapon {attackerUnit.unit.model.equipedWeapon.get('name')}:")
@@ -2562,20 +2426,39 @@ class MyApp(ShowBase):
         print('Event delivered with args:', self.weaponChoise.choice)
         del self.weaponChoise
         #messenger.send("start-attack-sequence")
-        self.verySimpleBattle()
+        taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
+    
+    async def makeChoice(self, choice):
+        choice.ma = taskMgr.add(choice.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
+        await choice.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
+        print("event recieced")
+        selected_choice = choice.choice
+        print('Event delivered with args:', choice.choice)
+        return
 
-    def verySimpleBattle(self):
-        #if not hasattr(self, 'weaponChoise'):
-        #self.weaponChoise = Choice(2, Vec3(0,0,10))
-        #print("Waiting for choice...")
-        #await base.messenger.future('choice-made')
-        #await self.weaponChoise.ma
-        #print('Event delivered with args:')
+    async def verySimpleBattle(self,task):
+        print("Starting very simple battle...")
         attacker = self.unitToMove.bodyNP
-        defender = self.unitToMove.isInCombatWith.bodyNP
-        flank = self.unitToMove.isInCombatFlank
-
+        defender = self.unitToMove.isInCombatWith[0].bodyNP
+        flank = self.unitToMove.isInCombatFlank[0]
+        engagedWith = [x.unitName for x in self.unitToMove.isInCombatWith]
+        print("Attacker:", attacker.node().getName())
+        print("engaged in battle with:", engagedWith)
+        print("on flanks:", self.unitToMove.isInCombatFlank)
+        choice = Choice(engagedWith, Vec3(0,0,10))
+        battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
+        await battleChoice
+        selected_choice = choice.choice
+        del choice
+        print(f"Selected choice: {selected_choice}")
+        for unit in self.unitToMove.isInCombatWith:
+            if unit.unitName == selected_choice:
+                defender = unit.bodyNP
+                break
         print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
         attackerUnit=self.getSelectedUnit(attacker.node())
         defenderUnit=self.getSelectedUnit(defender.node())
@@ -2588,9 +2471,6 @@ class MyApp(ShowBase):
             print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
             defenderUnit.unit.model.equip_weapon('hand weapon')
 
-            
-
-        #attackSequence = Sequence()
         apos=attacker.getPos()
         back_int = LerpPosHprInterval(
             attacker,
@@ -2619,25 +2499,68 @@ class MyApp(ShowBase):
         #self.removeModelsFromUnit(defenderUnit,total_wounds)
         self.attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
 
-        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defenderUnit.unit, attackerUnit.unit,charge=False)
-        self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
-        attackerUnit.unit.nmodels-=total_wounds
-        #self.removeModelsFromUnit(attackerUnit,total_wounds)
-        self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
+        for unit in self.unitToMove.isInCombatWith:
+            defender=unit.bodyNP
+            defenderUnit=self.getSelectedUnit(defender.node())
+            apos=defender.getPos()
+            back_int = LerpPosHprInterval(
+                defender,
+                duration=0.5,
+                pos=defender.getPos() - (attacker.getPos() - defender.getPos()).normalized() * 2,
+                hpr=defender.getHpr(),
+                blendType='easeInOut'
+            )
+            forward_int = LerpPosHprInterval(
+                defender,
+                duration=0.5,
+                pos=apos,
+                hpr=defender.getHpr(),
+                blendType='easeInOut'
+            )
+            self.attackSequence.append(back_int)
+            self.attackSequence.append(forward_int)
+
+            attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(defenderUnit.unit, attackerUnit.unit,charge=False)
+            self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
+            attackerUnit.unit.nmodels-=total_wounds
+            #self.removeModelsFromUnit(attackerUnit,total_wounds)
+            self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
         
         defender_score = total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         if attacker_score < defender_score:
-            #self.fallBack(defender, attacker)
-            self.attackSequence.append(Func(self.fallBack, defender, attacker))
+            #attacker loses
+            #self.attackSequence.append(Func(self.fallBack, defender, attacker))
+            direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
+            self.attackSequence.append(Func(self.fallBack, attacker,direction))
         else:
-            #self.fallBack(attacker, defender)
-            self.attackSequence.append(Func(self.fallBack, attacker, defender))
+            #defender loses
+            direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
+            self.attackSequence.append(Func(self.fallBack, defender,direction))
+            #self.attackSequence.append(Func(self.fallBack, attacker, defender))
 
         if not self.attackSequence.isPlaying():
             self.attackSequence.start()
-        
+    
+
+
+    def fleeDirectionMultUnits(self, loser,winners):
+        winPos=Vec3(0,0,0)
+        lPos=loser.bodyNP.getPos()
+        for w in winners:
+            winPos+=w.bodyNP.getPos()
+        winPos=winPos/len(winners)
+        ldir=[]
+        for w in winners:
+            dir = (lPos - w.bodyNP.getPos()).normalized()
+            ldir.append(dir)
+        finalDir=Vec3(0,0,0)
+        for d in ldir:
+            finalDir+=d
+        return finalDir.normalized()
+
+
     
     def centerOfModels(self, unit):
         coords=[]
@@ -2707,11 +2630,62 @@ class MyApp(ShowBase):
         #unit.setUpCollisions()
 
         
-    def fallBack(self, winner, loser):
+    def fallBack(self, loser,direction):
         if loser.isEmpty():
             print("looser is destryed, no fallback")
-            self.getSelectedUnit(winner.node()).isInCombat=False
-            self.getSelectedUnit(winner.node()).isInCombatWith=None
+            w=self.getSelectedUnit(winner.node())
+            w.isInCombat=False
+            w.isInCombatWith=[]
+            w.isInCombatFlank=[]
+            #TODO: winner overruns
+            return
+        
+        print(f"{loser.node().getName()} falls back!")
+
+        loserPos=loser.getPos()
+        #direction = (loserPos - winnerPos).normalized()
+        fallback_distance = 15.0  # Adjust as needed
+        newPos = loserPos + direction * fallback_distance
+        oldHpr=loser.getHpr()
+        loser.lookAt(loserPos + direction)
+        fleeHpr=loser.getHpr()
+        newHpr=loser.getHpr()
+        loser.setHpr(oldHpr)
+        rotate_interval = LerpPosHprInterval(
+            loser, 
+            duration=0.5, 
+            pos=loser.getPos(),
+            hpr=fleeHpr,
+            blendType='easeInOut'
+        )
+        move_interval = LerpPosInterval(
+            loser, 
+            duration=1.0, 
+            pos=newPos,
+            blendType='easeInOut'
+        )
+        rotate_interval2 = LerpPosHprInterval(
+            loser, 
+            duration=0.5, 
+            pos=newPos,
+            hpr=newHpr,
+            blendType='easeInOut'
+        )
+        sequence = Sequence(
+            rotate_interval,
+            move_interval,
+            rotate_interval2,
+            #Func(self.persuitMove, winner, loser)
+        )
+        sequence.start()
+
+    def fallBack2(self, winner, loser):
+        if loser.isEmpty():
+            print("looser is destryed, no fallback")
+            w=self.getSelectedUnit(winner.node())
+            w.isInCombat=False
+            w.isInCombatWith=[]
+            w.isInCombatFlank=[]
             #TODO: winner overruns
             return
         if winner is None or loser is None or winner.isEmpty() or loser.isEmpty():
