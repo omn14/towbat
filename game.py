@@ -468,6 +468,27 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
+        if 1:
+            self.fsm.currentPhaseIndex=3
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(10,5,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+            self.bretBowmen.isInCombatWith.append(self.goblins)
+            self.bretBowmen.isInCombatWith.append(self.goblinWolfRiders)
+            self.bretBowmen.isInCombatFlank.append('front')
+            self.bretBowmen.isInCombatFlank.append('front')
+            self.bretBowmen.isInCombat=True
+            self.goblins.isInCombatWith.append(self.bretBowmen)
+            self.goblins.isInCombat=True
+            self.goblins.isInCombatFlank.append('front')
+            self.goblinWolfRiders.isInCombatWith.append(self.bretBowmen)
+            self.goblinWolfRiders.isInCombat=True
+            self.goblinWolfRiders.isInCombatFlank.append('left')
+
 
         self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
@@ -2529,19 +2550,88 @@ class MyApp(ShowBase):
         defender_score = total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
-        if attacker_score < defender_score:
+        await self.attackSequence
+        self.attackSequence2 = Sequence()
+        if attacker_score-99 < defender_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
-            direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
-            self.attackSequence.append(Func(self.fallBack, attacker,direction))
+            loserUnit = attackerUnit
+            winnerUnit = defenderUnit
+            #direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
+            #self.attackSequence2.append(Func(self.fallBack, attacker,direction))
         else:
             #defender loses
-            direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
-            self.attackSequence.append(Func(self.fallBack, defender,direction))
+            loserUnit = defenderUnit
+            winnerUnit = attackerUnit
+            #direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
+            #self.attackSequence.append(Func(self.fallBack, defender,direction))
             #self.attackSequence.append(Func(self.fallBack, attacker, defender))
+        
+        direction=self.fleeDirectionMultUnits(loserUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
+        persuitDiceTasks=[]
+        persuitDiceDices=[]
+        persuingUnit=[]
+        
+        
+        for unit in loserUnit.isInCombatWith:
+            persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
+            choice = Choice(persuitOrNot, Vec3(0,0,10))
+            battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
+            await battleChoice
+            selected_choice = choice.choice
+            del choice
+            print(f"Selected choice: {selected_choice}")
+            if selected_choice == persuitOrNot[0]:
+                print(f"{defenderUnit.unit.name} chooses to pursue!")
+                #pursuit
+                #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction))
+                persuingUnit.append(unit)
+                """ 
+                terningerPersuit=[]
+                for i in range(2):
+                    terning = Dice(self.world, position=unit.bodyNP.getPos() + Vec3(-20+i*4,0,10), size=1.0)
+                    terningerPersuit.append(terning)
+                
+                persuitDiceDices.append(terningerPersuit)
+                """
 
+
+        
+
+        persuingUnit.append(loserUnit)
+
+        for i, unit in enumerate(persuingUnit):
+            terningerPersuit=[]
+            for j in range(2):
+                terning = Dice(self.world, position=unit.bodyNP.getPos() + Vec3(-20+j*4,0,10), size=1.0)
+                terningerPersuit.append(terning)
+            for terning in terningerPersuit:
+                terning.roll()
+        
+
+            persuitDiceTasks.append(taskMgr.add(checkDice, "checkDiceTaskPersuit"+str(loserUnit.unitName), extraArgs=[terningerPersuit], appendTask=True))
+            persuitDiceDices.append(terningerPersuit)
+
+
+        for task in persuitDiceTasks:
+            await task
+        for i, unit in enumerate(persuingUnit):
+            persuitDices = persuitDiceDices[i]
+            persuit_results = [terning.currentValue for terning in persuitDices]
+            persuit_score = sum(persuit_results)
+            print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
+            
+            print(f"{unit.unit.name} successfully pursues the fleeing unit!")
+            self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0))
+            
+        for dices in persuitDiceDices:
+            for terning in dices:
+                terning.remove(self.world)
+
+
+        #self.attackSequence2.append(Func(self.fallBack, loserUnit.bodyNP,direction))
         if not self.attackSequence.isPlaying():
-            self.attackSequence.start()
+            self.attackSequence2.start()
     
 
 
@@ -2629,8 +2719,7 @@ class MyApp(ShowBase):
         
         #unit.setUpCollisions()
 
-        
-    def fallBack(self, loser,direction):
+    def fallBack(self, loser,direction,length=10.0):
         if loser.isEmpty():
             print("looser is destryed, no fallback")
             w=self.getSelectedUnit(winner.node())
@@ -2644,8 +2733,8 @@ class MyApp(ShowBase):
 
         loserPos=loser.getPos()
         #direction = (loserPos - winnerPos).normalized()
-        fallback_distance = 15.0  # Adjust as needed
-        newPos = loserPos + direction * fallback_distance
+        #length = 15.0  # Adjust as needed
+        newPos = loserPos + direction * length
         oldHpr=loser.getHpr()
         loser.lookAt(loserPos + direction)
         fleeHpr=loser.getHpr()
