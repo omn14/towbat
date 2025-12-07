@@ -1918,7 +1918,7 @@ class MyApp(ShowBase):
 
         self.terningerFlee=[]
         for i in range(2):
-            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0)
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
             self.terningerFlee.append(terning)
         for terning in self.terningerFlee:
             terning.roll()
