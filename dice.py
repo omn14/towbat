@@ -47,7 +47,7 @@ def checkDice(allDice,task):
     return task.cont
 
 class Dice:
-    def __init__(self, world, position=(0, 0, 5), size=1.0):
+    def __init__(self, world, position=(0, 0, 5), size=1.0,color=(1,1,1,1)):
         """
         Initialize a 6-sided dice cube with Bullet physics.
         
@@ -86,6 +86,7 @@ class Dice:
         self.model = loader.loadModel('models/bdie.bam')
         self.model.setScale(size)
         self.model.reparentTo(self.np)
+        self.model.setColorScale(*color)
         #self.model.setPos(-Vec3(size / 2, size / 2, size / 2))
         #self.zup = loader.loadModel('models/zup-axis')
         #self.zup.reparentTo(self.model)
