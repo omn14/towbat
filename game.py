@@ -2561,17 +2561,22 @@ class MyApp(ShowBase):
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         await self.attackSequence
         self.attackSequence2 = Sequence()
-        if attacker_score -99< defender_score:
+        if attacker_score == defender_score:
+            print("Combat is a draw, no units flee.")
+            return
+        elif attacker_score < defender_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
             loserUnit = attackerUnit
             winnerUnit = defenderUnit
+            diff = defender_score - attacker_score
             #direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
             #self.attackSequence2.append(Func(self.fallBack, attacker,direction))
         else:
             #defender loses
             loserUnit = defenderUnit
             winnerUnit = attackerUnit
+            diff = attacker_score - defender_score
             #direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
             #self.attackSequence.append(Func(self.fallBack, defender,direction))
             #self.attackSequence.append(Func(self.fallBack, attacker, defender))
@@ -2585,7 +2590,30 @@ class MyApp(ShowBase):
             w.isInCombatFlank=[]
             #TODO: winner overruns """
             return
-        taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+        print("losing unit original LD:", loserUnit.unit.model.characteristics['Ld'], "modified by combat diff:", diff, "final LD to beat:", int(loserUnit.unit.model.characteristics['Ld']) - diff)
+        terningerLd=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+            terningerLd.append(terning)
+        for terning in terningerLd:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+        ldDice = []
+        for terning in terningerLd:
+            ldDice.append(terning.currentValue)
+        leadership_score = sum(ldDice)
+        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
+        #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
+        
+        if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
+            print("losing unit flees from combat!")
+            taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+        elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            print("losing unit FBIG!")
+            taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+        else:
+            print("losing unit gives ground!")
+            taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
         
     
     async def GiveGroundFromCombat(self, loserUnit):
@@ -2616,15 +2644,6 @@ class MyApp(ShowBase):
                 persuitDiceDices.append(terningerPersuit)
                 """
 
-
-        
-
-        
-
-        
-
-
-        
         for i, unit in enumerate(persuingUnit):
             
             persuit_results = 2
@@ -2637,9 +2656,6 @@ class MyApp(ShowBase):
             #self.attackSequence2 = Sequence()
             self.attackSequence2.append(Wait(0.25))
             
-        
-
-
         #self.attackSequence2.append(Func(self.fallBack, loserUnit.bodyNP,direction))
         if not self.attackSequence.isPlaying():
             self.attackSequence2.start()
