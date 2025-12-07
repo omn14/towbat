@@ -40,6 +40,7 @@ from battleFunctions import *
 
 from dice import *
 from choiceFunctions import *
+from ClassOutOfBounds import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -118,11 +119,11 @@ class gameFSM(FSM):
             result = base.world.rayTestClosest(pFrom, pTo,BitMask32.bit(2))
 
             if result.hasHit():
-                print(result.hasHit())
+                """ print(result.hasHit())
                 print(result.getHitPos())
                 print(result.getHitNormal())
                 print(result.getHitFraction())
-                print(result.getNode())
+                print(result.getNode()) """
                 
                 self.currentPhaseIndex = (self.currentPhaseIndex + 1) % len(self.phases)
                 #self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
@@ -143,6 +144,7 @@ class gameFSM(FSM):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
+        
 
     def exitMovementPhase(self):
         print("Exiting Movement Phase")
@@ -150,6 +152,10 @@ class gameFSM(FSM):
         self.cleanup()
         self.game.ignore('mouse1')
         self.game.ground.setShaderInput("isActive", False)
+        self.game.boundries.contactTest(self.game.boundries.northBoundry,180,Vec3(0,-0.1,0))
+        self.game.boundries.contactTest(self.game.boundries.southBoundry,0,Vec3(0,0.1,0))
+        self.game.boundries.contactTest(self.game.boundries.westBoundry,270,Vec3(0.1,0,0))
+        self.game.boundries.contactTest(self.game.boundries.eastBoundry,90,Vec3(-0.1,0,0))
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
@@ -432,7 +438,7 @@ class MyApp(ShowBase):
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
-        
+        self.boundries = OutOfBounds()
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -468,7 +474,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=3
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -491,7 +497,9 @@ class MyApp(ShowBase):
 
 
         self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
+        
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+
 
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
@@ -1067,7 +1075,7 @@ class MyApp(ShowBase):
         smiley_copy_np = self.smiley_copy.attachNewNode(smiley_copy_body)
         smiley_copy_np.setCollideMask(BitMask32.bit(1))
         self.world.attachRigidBody(smiley_copy_body)
-
+        """ 
         # Add a simple Bullet character controller for the player
         height = .01
         radius = 0.4
@@ -1078,10 +1086,11 @@ class MyApp(ShowBase):
         self.playerNP = render.attachNewNode(playerNode)
         self.playerNP.setPos(-2, 0, 14)
         self.playerNP.setH(45)
-        self.playerNP.setCollideMask(BitMask32.bit(1))
+        self.playerNP.setCollideMask(BitMask32.bit(6))
         #self.playerNP.setKinematic(True)
 
-        self.world.attachCharacter(self.playerNP.node())
+        self.world.attachCharacter(self.playerNP.node()) """
+        self.playerNP = render.attachNewNode("player")
         # Add a task to update Bullet physics every frame
         self.taskMgr.add(self.update_physics, "update_physics")
 
