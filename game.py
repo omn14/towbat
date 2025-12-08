@@ -2623,6 +2623,8 @@ class MyApp(ShowBase):
         for terning in terningerLd:
             ldDice.append(terning.currentValue)
         leadership_score = sum(ldDice)
+        for terning in terningerLd:
+            terning.remove(self.world)
         print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
         #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
         
