@@ -409,6 +409,7 @@ class MyApp(ShowBase):
         self.bretBowmen.bodyNP.setH(180)
         self.units.append(self.bretBowmen)
 
+        
 
         url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
         night_goblin = NightGoblin("Night Goblin", url_night_goblin)
@@ -431,6 +432,20 @@ class MyApp(ShowBase):
         #self.goblinWolfRiders.bodyNP.setH(90)
         self.units.append(self.goblinWolfRiders)
         
+        url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
+        url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
+        bretonnian_warhorse = BretonnianWarhorse("Bretonnian Warhorse", url_bretonnian_warhorse)
+        bretonnian_warhorse.armor_save = 7
+        bretonnian_warhorse_unit = unit("Bretonnian Warhorse Unit", bretonnian_warhorse, 5,5,1)
+        mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", 
+                                                            url_knight_of_the_realm, 
+                                                            mountUnit=bretonnian_warhorse_unit)
+        mounted_knight_of_the_realm.armor_save = 3
+        mounted_knight_of_the_realm.equip_weapon('lance')
+        mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
+        self.mountedKnightOfTheRealm = unitGraphics('MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        self.mountedKnightOfTheRealm.bodyNP.setPos(20,20,0)
+        self.units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
 
@@ -1661,8 +1676,14 @@ class MyApp(ShowBase):
             #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
 
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
+            M=self.unitToMove.unit.model.characteristics['M']
+            if M.isdigit():
+                M = int(M)
+            else:
+                print(f"Warning: M value '{M}' is not a number, defaulting to 1")
+                M = 0
+            move = M*2
 
-            move = int(self.unitToMove.unit.model.characteristics['M'])*2
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
                     mountmove= int(rule['mountUnit'].model.characteristics['M'])*2
