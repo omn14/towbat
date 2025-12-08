@@ -41,6 +41,7 @@ from battleFunctions import *
 from dice import *
 from choiceFunctions import *
 from ClassOutOfBounds import *
+from ClassRoundCounter import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -132,6 +133,8 @@ class gameFSM(FSM):
     def enterStrategyPhase(self):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         print("Entering Strategy Phase")
+        self.game.roundCounter.next_turn()
+        self.game.roundCounter.update_round_display()
         
 
     def exitStrategyPhase(self):
@@ -454,6 +457,7 @@ class MyApp(ShowBase):
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds()
+        self.roundCounter = RoundCounter(6)
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -537,6 +541,8 @@ class MyApp(ShowBase):
         self.mousePosOnGround=Point3(0,0,0)
 
         self.bakeTextures(self.ground)
+
+        
     
 
     def bakeTextures(self, target_np, texture_size=512, name_suffix="_baked"):
