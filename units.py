@@ -41,6 +41,8 @@ class unitGraphics(FSM):
         self.modelHeight=abs(children[0].getTightBounds()[1][1]-children[0].getTightBounds()[0][1])
         print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")
 
+        self.request('Idle')
+
         for i, child in enumerate(children):
             row = i // files
             col = i % files
@@ -135,3 +137,7 @@ class unitGraphics(FSM):
     
     def enterIdle(self):
         pass
+
+    def enterMoved(self):
+        self.hasMovedThisTurn=True
+        self.updateTextNode()

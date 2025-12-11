@@ -133,8 +133,6 @@ class gameFSM(FSM):
     def enterStrategyPhase(self):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         print("Entering Strategy Phase")
-        self.game.roundCounter.next_turn()
-        self.game.roundCounter.update_round_display()
         
 
     def exitStrategyPhase(self):
@@ -186,6 +184,8 @@ class gameFSM(FSM):
     def exitCombatPhase(self):
         print("Exiting Combat Phase")
         self.game.ignore('mouse1')
+        self.game.roundCounter.next_turn()
+        self.game.roundCounter.update_round_display()
 
     def enterMakeChoice(self):
         print("Entering Make Choice Phase")
@@ -283,7 +283,10 @@ class MyApp(ShowBase):
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
+        
         self.units = []
+        self.player1Units = []
+        self.player2Units = []
         url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
         man_at_arm = model("Man_at_Arm", url_man_at_arm)
         man_at_arm.armor_save = 7
@@ -292,6 +295,7 @@ class MyApp(ShowBase):
         self.bretBowmen.bodyNP.setPos(25,35,0)
         self.bretBowmen.bodyNP.setH(180)
         self.units.append(self.bretBowmen)
+        self.player2Units.append(self.bretBowmen)
 
         
 
@@ -303,6 +307,7 @@ class MyApp(ShowBase):
         self.goblins.bodyNP.setPos(0,-20,0)
         self.goblins.unit.model.equip_weapon('short bow')
         self.units.append(self.goblins)
+        self.player1Units.append(self.goblins)
         self.unitToMove=self.bretBowmen
         
         url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
@@ -315,6 +320,7 @@ class MyApp(ShowBase):
         self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
         #self.goblinWolfRiders.bodyNP.setH(90)
         self.units.append(self.goblinWolfRiders)
+        self.player1Units.append(self.goblinWolfRiders)
         
         url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
         url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
@@ -330,15 +336,15 @@ class MyApp(ShowBase):
         self.mountedKnightOfTheRealm = unitGraphics('MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.mountedKnightOfTheRealm.bodyNP.setPos(20,20,0)
         self.units.append(self.mountedKnightOfTheRealm)
+        self.player2Units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
 
-
+        self.roundCounter = RoundCounter(self,6)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds()
-        self.roundCounter = RoundCounter(6)
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -598,6 +604,10 @@ class MyApp(ShowBase):
         return
 
     def taskLoopPathTowardsMouse(self, task):
+        if self.unitToMove.state != "Idle":
+            print("Unit is not idle, cannot move.")
+            return task.done
+        
         if self.unitToMove.isInCombat:
             print("Unit is in combat, cant move.")
             return task.done
@@ -1705,9 +1715,14 @@ class MyApp(ShowBase):
 
     def moveUnit(self, unit):
         taskMgr.remove("taskLoopPathTowardsMouse")
+        if unit.state != "Idle":
+            print("Unit is not idle, cannot move.")
+            return
+        
         if unit.hasMovedThisTurn:
             print("Unit has already moved this turn.")
             return
+        unit.request("Moved")
         print("Moving unit to arc point...")
         pos = self.arcPoint
         print("Normalized position:", pos)
@@ -1797,7 +1812,8 @@ class MyApp(ShowBase):
         return task.done
 
     def checkUnitContactSmall(self, unit):
-        contacts = self.world.contactTest(unit.bodyNP.node(), BitMask32.allOn())
+        #contacts = self.world.contactTest(unit.bodyNP.node(), BitMask32.allOn())
+        contacts = self.world.contactTest(unit.bodyNP.node())
         for contact in contacts.getContacts():
             print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
             

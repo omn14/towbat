@@ -1,11 +1,12 @@
 from direct.fsm.FSM import FSM
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import TextNode
+from panda3d.core import TextNode, BitMask32
 
 
 class RoundCounter(FSM):
-    def __init__(self, max_rounds):
+    def __init__(self, Game, max_rounds):
         FSM.__init__(self, 'counterFSM')
+        self.game=Game
         self.max_rounds = max_rounds
         self.nPlayers = 2
         self.currentRoundPlayer = [0] * self.nPlayers
@@ -18,11 +19,19 @@ class RoundCounter(FSM):
         print(f"Entering Player One's turn in Round {self.currentRoundPlayer[0] + 1}")
         self.current_player = 1
         # Additional logic for Player One's turn can be added here
+        for unit in self.game.player1Units:
+            unit.bodyNP.setCollideMask(BitMask32.bit(1))
+        for unit in self.game.player2Units:
+            unit.bodyNP.setCollideMask(BitMask32.bit(7))
 
     def enterPlayerTwo(self):
         print(f"Entering Player Two's turn in Round {self.currentRoundPlayer[1] + 1}")
         self.current_player = 2
         # Additional logic for Player Two's turn can be added here
+        for unit in self.game.player1Units:
+            unit.bodyNP.setCollideMask(BitMask32.bit(7))
+        for unit in self.game.player2Units:
+            unit.bodyNP.setCollideMask(BitMask32.bit(1))
 
     def next_turn(self):
         if self.current_player == 1:
