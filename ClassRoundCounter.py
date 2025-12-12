@@ -20,18 +20,30 @@ class RoundCounter(FSM):
         self.current_player = 1
         # Additional logic for Player One's turn can be added here
         for unit in self.game.player1Units:
-            unit.bodyNP.setCollideMask(BitMask32.bit(1))
+            if not unit.bodyNP.isEmpty():
+                unit.bodyNP.setCollideMask(BitMask32.bit(1))
+            else:
+                self.game.player1Units.remove(unit)
         for unit in self.game.player2Units:
-            unit.bodyNP.setCollideMask(BitMask32.bit(7))
+            if not unit.bodyNP.isEmpty():
+                unit.bodyNP.setCollideMask(BitMask32.bit(7))
+            else:
+                self.game.player2Units.remove(unit)
 
     def enterPlayerTwo(self):
         print(f"Entering Player Two's turn in Round {self.currentRoundPlayer[1] + 1}")
         self.current_player = 2
         # Additional logic for Player Two's turn can be added here
         for unit in self.game.player1Units:
-            unit.bodyNP.setCollideMask(BitMask32.bit(7))
+            if not unit.bodyNP.isEmpty():
+                unit.bodyNP.setCollideMask(BitMask32.bit(7))
+            else:
+                self.game.player1Units.remove(unit)
         for unit in self.game.player2Units:
-            unit.bodyNP.setCollideMask(BitMask32.bit(1))
+            if not unit.bodyNP.isEmpty():
+                unit.bodyNP.setCollideMask(BitMask32.bit(1))
+            else:
+                self.game.player2Units.remove(unit)
 
     def next_turn(self):
         if self.current_player == 1:

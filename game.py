@@ -1879,10 +1879,10 @@ class MyApp(ShowBase):
         print("Flee dice results:", fldice)
         contactPos=unit.bodyNP.getPos()
         contactRot=unit.bodyNP.getHpr()
-        self.zax = loader.loadModel("models/zup-axis")
+        """ self.zax = loader.loadModel("models/zup-axis")
         self.z2= loader.loadModel("models/zup-axis")
         self.z2.reparentTo(render)
-        self.z2.setPos(oposUnit)
+        self.z2.setPos(oposUnit) """
         #self.zax.reparentTo(render)
         
         shape = unit.bodyNP.node().getShape(0)
@@ -2096,10 +2096,10 @@ class MyApp(ShowBase):
         print("Charge dice results:", chdice)
         contactPos=unit.bodyNP.getPos()
         contactRot=unit.bodyNP.getHpr()
-        self.zax = loader.loadModel("models/zup-axis")
+        """ self.zax = loader.loadModel("models/zup-axis")
         self.z2= loader.loadModel("models/zup-axis")
         self.z2.reparentTo(render)
-        self.z2.setPos(oposUnit)
+        self.z2.setPos(oposUnit) """
         #self.zax.reparentTo(render)
         
         shape = unit.bodyNP.node().getShape(0)
@@ -2133,7 +2133,7 @@ class MyApp(ShowBase):
 
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
-        self.zax.reparentTo(newnode)
+        #self.zax.reparentTo(newnode)
         # Rotate the new node smoothly to align with defender
         print("rotate from to",newnode.getHpr(), contactRot)
         newnode_hpr = newnode.getHpr()
@@ -2456,7 +2456,7 @@ class MyApp(ShowBase):
             print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
             defenderUnit.unit.model.equip_weapon('hand weapon')
 
-        apos=attacker.getPos()
+        """ apos=attacker.getPos()
         back_int = LerpPosHprInterval(
             attacker,
             duration=0.5,
@@ -2484,12 +2484,38 @@ class MyApp(ShowBase):
         attacker_score = total_wounds
         #self.removeModelsFromUnit(defenderUnit,total_wounds)
         self.attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
-        defender_score = 0
+        defender_score = 0 """
+        self.attackSequence = Sequence()
+        self.attackers=[]
+        self.attackers.append(attackerUnit)
+        self.defenders=[]
+        self.defenders.append(defenderUnit)
         for unit in self.unitToMove.isInCombatWith:
+            self.attackers.append(self.getSelectedUnit(unit.bodyNP.node()))
+            self.defenders.append(self.unitToMove)
+        for unit in defenderUnit.isInCombatWith:
+            self.attackers.append(self.getSelectedUnit(unit.bodyNP.node()))
+            self.defenders.append(defenderUnit)
+        defender_score = 0
+        attacker_score = 0
+        #for unit in self.unitToMove.isInCombatWith:
+        for i in range(len(self.attackers)):
+            unit = self.attackers[i]
+            if unit.hasAttackedThisTurn:
+                print(f"Unit {unit.unit.name} has already attacked this turn, skipping.")
+                continue
+            attackerUnit = self.defenders[i]
+            attacker=attackerUnit.bodyNP
             defender=unit.bodyNP
             defenderUnit=self.getSelectedUnit(defender.node())
             defenderUnit.hasAttackedThisTurn=True
             defenderUnit.updateTextNode()
+            if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
+                print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
+                defenderUnit.unit.model.equip_weapon('hand weapon')
+            if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
+                print("attacker unit has ranged weapon equiped, switch to melee weapon for combat.")
+                attackerUnit.unit.model.equip_weapon('hand weapon')
             apos=defender.getPos()
             back_int = LerpPosHprInterval(
                 defender,
@@ -2513,8 +2539,10 @@ class MyApp(ShowBase):
             attackerUnit.unit.nmodels-=total_wounds
             #self.removeModelsFromUnit(attackerUnit,total_wounds)
             self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
-        
-            defender_score += total_wounds
+            if defenderUnit in self.player1Units:
+                defender_score += total_wounds
+            else:
+                attacker_score += total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         await self.attackSequence
@@ -2525,15 +2553,15 @@ class MyApp(ShowBase):
         elif attacker_score < defender_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
-            loserUnit = attackerUnit
-            winnerUnit = defenderUnit
+            loserUnit = defenderUnit
+            #winnerUnit = defenderUnit
             diff = defender_score - attacker_score
             #direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
             #self.attackSequence2.append(Func(self.fallBack, attacker,direction))
         else:
             #defender loses
-            loserUnit = defenderUnit
-            winnerUnit = attackerUnit
+            loserUnit = attackerUnit
+            #winnerUnit = attackerUnit
             diff = attacker_score - defender_score
             #direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
             #self.attackSequence.append(Func(self.fallBack, defender,direction))
@@ -2816,6 +2844,10 @@ class MyApp(ShowBase):
             fleeUnit.model.removeNode()
             fleeUnit.bodyNP.removeNode()
             self.units.remove(fleeUnit)
+            if fleeUnit in self.player1Units:
+                self.player1Units.remove(fleeUnit)
+            if fleeUnit in self.player2Units:
+                self.player2Units.remove(fleeUnit)
             return task.done
         return task.cont
 
@@ -2883,6 +2915,10 @@ class MyApp(ShowBase):
             unit.bodyNP.removeNode()
             unit.model.removeNode()
             self.units.remove(unit)
+            if unit in self.player1Units:
+                self.player1Units.remove(unit)
+            if unit in self.player2Units:
+                self.player2Units.remove(unit)
             
             return
         self.world.removeRigidBody(unit.bodyNP.node())
