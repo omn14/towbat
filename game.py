@@ -389,6 +389,7 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setH(90)
             self.bretBowmen.bodyNP.setPos(0,5,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
             self.unitToMove=self.goblins
 
         if 0:
@@ -1025,7 +1026,8 @@ class MyApp(ShowBase):
 
     def update_physics(self,task):
             dt = globalClock.getDt()
-            self.world.doPhysics(dt)
+            self.world.doPhysics(dt*2.0, 10, 0.008)
+            #self.world.doPhysics(dt, 10, 0.008)
             
             return task.cont
     def move_node_smoothly(self, node, target_pos, duration=1.0):
@@ -2082,7 +2084,7 @@ class MyApp(ShowBase):
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
         self.terninger=[]
         for i in range(2):
-            terning = Dice(self.world, position=Vec3(0,0,10), size=1.0)
+            terning = Dice(self.world, position=Vec3(0+i*4,0,10), size=1.0)
             self.terninger.append(terning)
         for terning in self.terninger:
             terning.roll()
@@ -2270,16 +2272,19 @@ class MyApp(ShowBase):
         ) """
 
 
-        unit.isInCombat=True
+        
         unit.request("InCombat")
+        unit.isInCombat=True
         #unit.bodyNP.setCollideMask(BitMask32.bit(4))
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
+        if defenderUnit.state != "InCombat":
+            defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
         unit.isInCombatFlank.append("front")
         defenderUnit.isInCombatWith.append(unit)
         defenderUnit.isInCombat=True
-        defenderUnit.request("InCombat")
+        
         defenderUnit.isInCombatFlank.append("front")
         #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
@@ -2479,7 +2484,7 @@ class MyApp(ShowBase):
         attacker_score = total_wounds
         #self.removeModelsFromUnit(defenderUnit,total_wounds)
         self.attackSequence.append(Func(self.removeModelsFromUnit, defenderUnit, total_wounds))
-        
+        defender_score = 0
         for unit in self.unitToMove.isInCombatWith:
             defender=unit.bodyNP
             defenderUnit=self.getSelectedUnit(defender.node())
@@ -2509,7 +2514,7 @@ class MyApp(ShowBase):
             #self.removeModelsFromUnit(attackerUnit,total_wounds)
             self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
         
-        defender_score = total_wounds
+            defender_score += total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
         await self.attackSequence
@@ -2643,8 +2648,13 @@ class MyApp(ShowBase):
                 
                 persuitDiceDices.append(terningerPersuit)
                 """
+            else:
+                print(f"{unit.unit.name} chooses to restrain.")
+                unit.request("Idle")
 
-
+        if len(persuingUnit) == 1:
+            print("No units chose to pursue, ending FBIG.")
+            loserUnit.request("Idle")
         
 
         persuingUnit.append(loserUnit)
@@ -2764,7 +2774,7 @@ class MyApp(ShowBase):
             if persuing == loserUnit:
                 continue
             #taskMgr.add(self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
-            taskMgr.doMethodLater(0.7, self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
+            taskMgr.doMethodLater(0.7*(len(persuingUnit)-1), self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
         #self.attackSequence2.append(Func(self.fallBack, loserUnit.bodyNP,direction))
         if not self.attackSequence.isPlaying():
             await self.attackSequence2
@@ -2791,6 +2801,9 @@ class MyApp(ShowBase):
         #pursuerUnit.bodyNP.setCollideMask(BitMask32.bit(2))
         #pursuerUnit.bodyNP.node().setCcdMotionThreshold(1e-7)
         #pursuerUnit.bodyNP.node().setCcdSweptSphereRadius(0.50)
+        if fleeUnit.bodyNP.isEmpty() or pursuerUnit.bodyNP.isEmpty():
+            print("One of the units is already removed, stopping flee catch check.")
+            return task.done
         pursuerUnit.bodyNP.node().setTransformDirty()
         fleeUnit.bodyNP.node().setTransformDirty()
         result = self.world.contactTestPair(fleeUnit.bodyNP.node(), pursuerUnit.bodyNP.node())
