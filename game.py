@@ -372,7 +372,7 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
@@ -381,7 +381,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -2153,6 +2153,8 @@ class MyApp(ShowBase):
         print("rotate from to",newnode.getHpr(), contactRot)
 
         wheel1Angle = contactRot.x - orotUnit.x
+        if wheel1Angle > 180:
+            wheel1Angle -= 360
         print("wheel1Angle:", wheel1Angle)
         newnode.setHpr(contactRot)
         #wheel1Pos = unit.bodyNP.getPos()
@@ -2662,8 +2664,9 @@ class MyApp(ShowBase):
 
         for task in persuitDiceTasks:
             await task
-        maxmove = max([terning.currentValue for terning in persuitDices])
-        for i, unit in enumerate(persuingUnit):
+        maxmove = max([terning.currentValue for terning in persuitDiceDices[-1]])
+        for i in range(len(persuingUnit) - 1, -1, -1):
+            unit = persuingUnit[i]
             persuitDices = persuitDiceDices[i]
             persuit_results = [terning.currentValue for terning in persuitDices]
             if unit == loserUnit:
@@ -2678,7 +2681,7 @@ class MyApp(ShowBase):
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0))
             else:
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,rally=True))
-            
+            self.attackSequence2.append(Wait(0.7))
         for dices in persuitDiceDices:
             for terning in dices:
                 terning.remove(self.world)
