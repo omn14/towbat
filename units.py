@@ -97,6 +97,7 @@ class unitGraphics(FSM):
         row += f"Attacked This Turn: {self.hasAttackedThisTurn}"
         row += f"\nEngaged With: {[unit.unitName for unit in self.isInCombatWith]}"
         row += f"\nFlanks: {self.isInCombatFlank}"
+        row += f"\nState: {self.state}"
         self.text.setText(row)
 
     def setUpCollisions(self):
@@ -136,8 +137,24 @@ class unitGraphics(FSM):
             #self.model.flattenLight()
     
     def enterIdle(self):
-        pass
+        print(f"{self.unitName} is idle!")
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterMoved(self):
         self.hasMovedThisTurn=True
-        self.updateTextNode()
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
+
+    def enterInCombat(self):
+        self.isInCombat=True
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
+    
+    def exitInCombat(self):
+        self.isInCombat=False
+        self.isInCombatWith=[]
+        self.isInCombatFlank=[]
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
+
+    def enterIsFleeing(self):
+        print(f"{self.unitName} is fleeing!")
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
+        pass
