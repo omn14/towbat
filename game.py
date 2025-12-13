@@ -355,7 +355,7 @@ class MyApp(ShowBase):
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
-        self.boundries = OutOfBounds()
+        self.boundries = OutOfBounds(self)
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -2689,7 +2689,7 @@ class MyApp(ShowBase):
                 print(f"{unit.unit.name} chooses to restrain.")
                 unit.request("Idle")
 
-        if len(persuingUnit) == 1:
+        if len(persuingUnit) == 0:
             print("No units chose to pursue, ending FBIG.")
             loserUnit.request("Idle")
         

@@ -10,8 +10,9 @@ from panda3d.core import Vec3, BitMask32
 
 class OutOfBounds:
 
-    def __init__(self):
+    def __init__(self,Game):
         print("OutOfBounds initialized")
+        self.game = Game
         self.mask = BitMask32.bit(31)
         self.northBoundry=self.boundry((0,48/2+5,0),Vec3(72/2, 5, 5))
         self.southBoundry=self.boundry((0,-48/2-5,0),Vec3(72/2, 5, 5))
@@ -64,7 +65,23 @@ class OutOfBounds:
                 print(mpoint.getPositionWorldOnB())
                 print(mpoint.getLocalPointA())
                 print(mpoint.getLocalPointB())
-                np=render.find(f"**/{contact.getNode1().getName()}")
+                #np=render.find(f"**/{contact.getNode1().getName()}")
+                selected_unit = self.game.getSelectedUnit(contact.getNode1())
+                if selected_unit.state == 'InCombat':
+                    print("Unit in combat, cannot be moved in bounds again now!")
+                    return
+                if selected_unit.state == 'IsFleeing':
+                    print("Unit is fleeing out of the battle field, it is destroyed!")
+                    base.world.removeRigidBody(selected_unit.bodyNP.node())
+                    self.game.units.remove(selected_unit)
+                    if selected_unit in self.game.player1Units:
+                        self.game.player1Units.remove(selected_unit)
+                    if selected_unit in self.game.player2Units:
+                        self.game.player2Units.remove(selected_unit)
+                    selected_unit.bodyNP.removeNode()
+                    selected_unit.model.removeNode()
+                    return
+                np=selected_unit.bodyNP
                 np.setHpr(Vec3(H,0,0))
                 cpos=Vec3(np.getPos())
                 np.setPos(cpos+moveVec)
