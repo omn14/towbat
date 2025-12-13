@@ -2496,8 +2496,8 @@ class MyApp(ShowBase):
         for unit in defenderUnit.isInCombatWith:
             self.attackers.append(self.getSelectedUnit(unit.bodyNP.node()))
             self.defenders.append(defenderUnit)
-        defender_score = 0
-        attacker_score = 0
+        player1_score = 0
+        player2_score = 0
         #for unit in self.unitToMove.isInCombatWith:
         for i in range(len(self.attackers)):
             unit = self.attackers[i]
@@ -2540,68 +2540,77 @@ class MyApp(ShowBase):
             #self.removeModelsFromUnit(attackerUnit,total_wounds)
             self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
             if defenderUnit in self.player1Units:
-                defender_score += total_wounds
+                player1_score += total_wounds
             else:
-                attacker_score += total_wounds
+                player2_score += total_wounds
         #defenderUnit.unit.nmodels=defender_nmodels
-        print(f"Attacker score: {attacker_score}, Defender score: {defender_score}")
+        print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
         await self.attackSequence
         self.attackSequence2 = Sequence()
-        if attacker_score == defender_score:
+        loserUnits = []
+        if player2_score == player1_score:
             print("Combat is a draw, no units flee.")
             return
-        elif attacker_score < defender_score:
+        elif player2_score < player1_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
-            loserUnit = defenderUnit
+            for atu in self.attackers:
+                if atu in self.player2Units and atu.bodyNP.isEmpty() == False and atu not in loserUnits:
+                    loserUnits.append(atu)
+            #loserUnit = defenderUnit
             #winnerUnit = defenderUnit
-            diff = defender_score - attacker_score
+            diff = player1_score - player2_score
             #direction=self.fleeDirectionMultUnits(attackerUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in attackerUnit.isInCombatWith])
             #self.attackSequence2.append(Func(self.fallBack, attacker,direction))
         else:
             #defender loses
-            loserUnit = attackerUnit
+            #loserUnit = attackerUnit
+            for atu in self.attackers:
+                if atu in self.player1Units and atu.bodyNP.isEmpty() == False and atu not in loserUnits:
+                    loserUnits.append(atu)
             #winnerUnit = attackerUnit
-            diff = attacker_score - defender_score
+            diff = player2_score - player1_score
             #direction=self.fleeDirectionMultUnits(defenderUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in defenderUnit.isInCombatWith])
             #self.attackSequence.append(Func(self.fallBack, defender,direction))
             #self.attackSequence.append(Func(self.fallBack, attacker, defender))
         #taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
         #taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-        if loserUnit.bodyNP.isEmpty():
-            """ print("looser is destryed, no fallback")
-            w=self.getSelectedUnit(winner.node())
-            w.isInCombat=False
-            w.isInCombatWith=[]
-            w.isInCombatFlank=[]
-            #TODO: winner overruns """
-            return
-        print("losing unit original LD:", loserUnit.unit.model.characteristics['Ld'], "modified by combat diff:", diff, "final LD to beat:", int(loserUnit.unit.model.characteristics['Ld']) - diff)
-        terningerLd=[]
-        for i in range(2):
-            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
-            terningerLd.append(terning)
-        for terning in terningerLd:
-            terning.roll()
-        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
-        ldDice = []
-        for terning in terningerLd:
-            ldDice.append(terning.currentValue)
-        leadership_score = sum(ldDice)
-        for terning in terningerLd:
-            terning.remove(self.world)
-        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
-        #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
-        
-        if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
-            print("losing unit flees from combat!")
-            taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-        elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
-            print("losing unit FBIG!")
-            taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-        else:
-            print("losing unit gives ground!")
-            taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+        #loserUnit = loserUnits[0]
+        for loserUnit in loserUnits:
+            if loserUnit.bodyNP.isEmpty():
+                """ print("looser is destryed, no fallback")
+                w=self.getSelectedUnit(winner.node())
+                w.isInCombat=False
+                w.isInCombatWith=[]
+                w.isInCombatFlank=[]
+                #TODO: winner overruns """
+                return
+            print("losing unit original LD:", loserUnit.unit.model.characteristics['Ld'], "modified by combat diff:", diff, "final LD to beat:", int(loserUnit.unit.model.characteristics['Ld']) - diff)
+            terningerLd=[]
+            for i in range(2):
+                terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            leadership_score = sum(ldDice)
+            for terning in terningerLd:
+                terning.remove(self.world)
+            print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
+            #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
+            
+            if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
+                print("losing unit flees from combat!")
+                await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+                print("losing unit FBIG!")
+                await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+            else:
+                print("losing unit gives ground!")
+                await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
         
     
     async def GiveGroundFromCombat(self, loserUnit):
@@ -2609,7 +2618,7 @@ class MyApp(ShowBase):
         
         persuingUnit=[]
         persuingUnit.append(loserUnit)
-        
+        self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
             choice = Choice(persuitOrNot, Vec3(0,0,10))
@@ -2654,7 +2663,7 @@ class MyApp(ShowBase):
         persuitDiceDices=[]
         persuingUnit=[]
         
-        
+        self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
             choice = Choice(persuitOrNot, Vec3(0,0,10))
@@ -2735,7 +2744,7 @@ class MyApp(ShowBase):
         persuitDiceDices=[]
         persuingUnit=[]
         
-        
+        self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
             choice = Choice(persuitOrNot, Vec3(0,0,10))
