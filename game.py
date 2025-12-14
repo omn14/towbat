@@ -42,6 +42,7 @@ from dice import *
 from choiceFunctions import *
 from ClassOutOfBounds import *
 from ClassRoundCounter import *
+from ClassAI import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -152,6 +153,9 @@ class gameFSM(FSM):
         print("Entering Movement Phase")
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        if self.game.roundCounter.current_player == 2:
+            #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
+            taskMgr.add(self.game.AIplayer2.takeMoveTurn())
         
         
 
@@ -165,6 +169,7 @@ class gameFSM(FSM):
         self.game.boundries.contactTest(self.game.boundries.southBoundry,0,Vec3(0,0.1,0))
         self.game.boundries.contactTest(self.game.boundries.westBoundry,270,Vec3(0.1,0,0))
         self.game.boundries.contactTest(self.game.boundries.eastBoundry,90,Vec3(-0.1,0,0))
+        
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
@@ -302,7 +307,7 @@ class MyApp(ShowBase):
         man_at_arm = model("Man_at_Arm", url_man_at_arm)
         man_at_arm.armor_save = 7
         man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
-        self.bretBowmen = unitGraphics('BretBowmen','models/bret_bowmen.bam',man_at_arm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        self.bretBowmen = unitGraphics(self,'BretBowmen','models/bret_bowmen.bam',man_at_arm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.bretBowmen.bodyNP.setPos(25,35,0)
         self.bretBowmen.bodyNP.setH(180)
         self.units.append(self.bretBowmen)
@@ -314,7 +319,7 @@ class MyApp(ShowBase):
         night_goblin = NightGoblin("Night Goblin", url_night_goblin)
         night_goblin.armor_save = 7 
         night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
-        self.goblins = unitGraphics('Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblins = unitGraphics(self,'Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblins.bodyNP.setPos(0,-20,0)
         self.goblins.unit.model.equip_weapon('short bow')
         self.units.append(self.goblins)
@@ -327,7 +332,7 @@ class MyApp(ShowBase):
         giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 15,5,3)
         goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
         goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 15,5,3)
-        self.goblinWolfRiders = unitGraphics('GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblinWolfRiders = unitGraphics(self,'GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
         self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
         #self.goblinWolfRiders.bodyNP.setH(90)
         self.units.append(self.goblinWolfRiders)
@@ -344,18 +349,19 @@ class MyApp(ShowBase):
         mounted_knight_of_the_realm.armor_save = 3
         mounted_knight_of_the_realm.equip_weapon('lance')
         mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
-        self.mountedKnightOfTheRealm = unitGraphics('MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        self.mountedKnightOfTheRealm = unitGraphics(self,'MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.mountedKnightOfTheRealm.bodyNP.setPos(20,20,0)
         self.units.append(self.mountedKnightOfTheRealm)
         self.player2Units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-
+        self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,6)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
+        self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -372,16 +378,17 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
             self.goblinWolfRiders.bodyNP.setPos(10,-15,0)
             self.bretBowmen.bodyNP.setPos(0,13,0)
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -1527,18 +1534,13 @@ class MyApp(ShowBase):
         self.world.attachRigidBody(bodyNP.node())
         return points
 
-    def pathTowardsMouse(self,unit):
-        
-        if base.mouseWatcherNode.hasMouse():
+    def pathTowardsMouse(self,unit,x=None,y=None):
+        if not base.mouseWatcherNode.hasMouse():
+            return
+        if base.mouseWatcherNode.hasMouse() and x is None and y is None:
             self.unitToMove=unit
             x = base.mouseWatcherNode.getMouseX()
             y = base.mouseWatcherNode.getMouseY()
-            #print(x,y)
-            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
-            #pFrom = Point3(0, 0, 0)
-            #pTo = Point3(10, 0, 0)
-
-            # Get to and from pos in camera coordinates
             pMouse = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
             pTo = Point3()
@@ -1547,6 +1549,24 @@ class MyApp(ShowBase):
             # Transform to global coordinates
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
+        else:# x is not None and y is not None:
+            self.unitToMove=unit
+            pFrom = Point3()
+            #pFrom = render.getRelativePoint(base.cam, pFrom)
+            pFrom = Point3(x, y, 10)
+            pTo = Point3(x, y, -10)
+            #pTo = render.getRelativePoint(base.cam, pTo)
+            
+        if True:
+            print(f"pFrom: {pFrom}, pTo: {pTo}")
+            
+            #print(x,y)
+            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
+            #pFrom = Point3(0, 0, 0)
+            #pTo = Point3(10, 0, 0)
+
+            # Get to and from pos in camera coordinates
+            #pFrom = render.getRelativePoint(base.cam, pFrom)
 
             result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
@@ -1733,7 +1753,9 @@ class MyApp(ShowBase):
         return rectangleLine
 
     def moveUnit(self, unit):
-        taskMgr.remove("taskLoopPathTowardsMouse")
+        if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
+            taskMgr.remove("taskLoopPathTowardsMouse")
+            
         if unit.state != "Idle":
             print("Unit is not idle, cannot move.")
             return
@@ -1741,7 +1763,7 @@ class MyApp(ShowBase):
         if unit.hasMovedThisTurn:
             print("Unit has already moved this turn.")
             return
-        unit.request("Moved")
+        
         print("Moving unit to arc point...")
         pos = self.arcPoint
         print("Normalized position:", pos)
@@ -1764,39 +1786,40 @@ class MyApp(ShowBase):
         if c:
             taskMgr.add(self.chargeAndChargeReaction, "chargeAndChargeReactionTask",extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
             #self.getFlankFromContact(unit, c)
-        
+        else:
+            unit.request("Moved")
         self.bakeTextures(self.ground)
 
     async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
         chargeYesNo = ["Yes", "No"]
-        self.cyn = Choice(chargeYesNo, Vec3(-20,0,10))
-        self.cyn.ma = taskMgr.add(self.cyn.mouseActivate, "mouseActivateTask")
+        cyn = Choice(chargeYesNo, Vec3(-20,0,10))
+        cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.ignore('mouse1')
         print("Waiting for choice...")
-        await self.cyn.ma
+        await cyn.ma
         self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         print("event recieced")
-        cynchoice = self.cyn.choice
+        cynchoice = cyn.choice
         
-        print('Event delivered with args:', self.cyn.choice)
-        del self.cyn
+        print('Event delivered with args:', cyn.choice)
+        del cyn
 
         if cynchoice == "Yes":
             print("Charging into combat...")
 
 
             chargeReaction = ["hold", "flee"]
-            self.cyn = Choice(chargeReaction, Vec3(20,0,10))
-            self.cyn.ma = taskMgr.add(self.cyn.mouseActivate, "mouseActivateTask")
+            cyn = Choice(chargeReaction, Vec3(20,0,10))
+            cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
             self.ignore('mouse1')
             print("Waiting for choice...")
-            await self.cyn.ma
+            await cyn.ma
             self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
             print("event received")
-            crchoice = self.cyn.choice
+            crchoice = cyn.choice
             
-            print('Event delivered with args:', self.cyn.choice)
-            del self.cyn
+            print('Event delivered with args:', cyn.choice)
+            del cyn
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
             if crchoice == "hold":
                 #chargeSequence = Sequence()
@@ -2240,6 +2263,7 @@ class MyApp(ShowBase):
             for terning in self.terninger:
                 terning.remove(self.world)
             print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance, self.moveArceDistance)
+            unit.request("Moved")
             return
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
@@ -2916,6 +2940,8 @@ class MyApp(ShowBase):
                 self.attackSequence.pause()
                 print(self.attackSequence.isPlaying())
             #self.attackSequence.finish()
+            for u in unit.isInCombatWith:
+                u.request("Idle")
             self.world.removeRigidBody(unit.bodyNP.node())
             unit.bodyNP.removeNode()
             unit.model.removeNode()
@@ -2924,6 +2950,7 @@ class MyApp(ShowBase):
                 self.player1Units.remove(unit)
             if unit in self.player2Units:
                 self.player2Units.remove(unit)
+            
             
             return
         self.world.removeRigidBody(unit.bodyNP.node())

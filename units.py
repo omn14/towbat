@@ -12,8 +12,9 @@ class unit:
         self.ranks = ranks
 
 class unitGraphics(FSM):
-    def __init__(self,name, modelpath, unit=None, scale=1.0,BulletWorld=None,color=(1,0,0,1),bitmask=1):
+    def __init__(self,Game, name, modelpath, unit=None, scale=1.0,BulletWorld=None,color=(1,0,0,1),bitmask=1):
         FSM.__init__(self, 'unitFSM')
+        self.game=Game
         self.unitName=name
         self.unit =unit
         self.world=BulletWorld
@@ -142,10 +143,12 @@ class unitGraphics(FSM):
 
     def enterMoved(self):
         self.hasMovedThisTurn=True
+        messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterInCombat(self):
         self.isInCombat=True
+        messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
     
     def exitInCombat(self):
