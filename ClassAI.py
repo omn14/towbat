@@ -26,6 +26,18 @@ class ClassAI:
                 #await self.helper1.future('unit-move-complete')
         return
     
+    async def takeCombatTurn(self):
+        for unit in self.playerUnits:
+            if unit.state == "InCombat":
+                print(f"AI controlling combat for unit: {unit.unit.name}")
+                # Simple AI logic: Attack the first enemy in combat
+                if unit.hasAttackedThisTurn == False:
+                    self.game.unitToMove=unit
+                    taskMgr.add(self.game.taskStartCombat,"taskStartCombat", extraArgs=[], appendTask=True)
+                    await taskMgr.add(self.loopWaitForMoveComplete, self.waitTask, extraArgs=[unit], appendTask=True)
+                    #await self.helper1.future('unit-move-complete')
+        return
+    
     def loopWaitForMoveComplete(self,unit,task):
         print(f"Waiting for move complete for unit: {unit.unit.name}")
         if self._move_complete:

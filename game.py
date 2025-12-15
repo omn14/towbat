@@ -195,6 +195,8 @@ class gameFSM(FSM):
         for unit in self.game.units:
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn=False
+        if self.game.roundCounter.current_player == 2:
+            taskMgr.add(self.game.AIplayer2.takeCombatTurn())
 
 
     def exitCombatPhase(self):
@@ -355,7 +357,7 @@ class MyApp(ShowBase):
         self.player2Units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-        self.messenger.toggleVerbose()
+        #self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,6)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
@@ -378,7 +380,7 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
@@ -388,7 +390,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -1791,18 +1793,22 @@ class MyApp(ShowBase):
         self.bakeTextures(self.ground)
 
     async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
+
         chargeYesNo = ["Yes", "No"]
-        cyn = Choice(chargeYesNo, Vec3(-20,0,10))
-        cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
-        self.ignore('mouse1')
-        print("Waiting for choice...")
-        await cyn.ma
-        self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
-        print("event recieced")
-        cynchoice = cyn.choice
-        
-        print('Event delivered with args:', cyn.choice)
-        del cyn
+        if self.roundCounter.current_player == 2:
+            cynchoice = chargeYesNo[0]
+        else:
+            cyn = Choice(chargeYesNo, Vec3(-20,0,10))
+            cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
+            self.ignore('mouse1')
+            print("Waiting for choice...")
+            await cyn.ma
+            self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+            print("event recieced")
+            cynchoice = cyn.choice
+            
+            print('Event delivered with args:', cyn.choice)
+            del cyn
 
         if cynchoice == "Yes":
             print("Charging into combat...")
@@ -2579,6 +2585,7 @@ class MyApp(ShowBase):
         loserUnits = []
         if player2_score == player1_score:
             print("Combat is a draw, no units flee.")
+            messenger.send('unit-move-complete')
             return
         elif player2_score < player1_score:
             #attacker loses
@@ -2640,6 +2647,9 @@ class MyApp(ShowBase):
             else:
                 print("losing unit gives ground!")
                 await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+        
+        messenger.send('unit-move-complete')
+        return task.done
         
     
     async def GiveGroundFromCombat(self, loserUnit):
