@@ -2,6 +2,7 @@ from panda3d.core import Vec3, CardMaker, Point3, BitMask32
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
+from direct.interval.IntervalGlobal import Parallel, Sequence, LerpPosInterval
 
 class Choice:
     def __init__(self, choices,pos):
@@ -20,11 +21,15 @@ class Choice:
         #self.old = messenger.whoAccepts('mouse1')
         #base.accept("mouse1", self.onMouseClick)
 
-    def cleanup(self):
+    async def cleanup(self):
         #taskMgr.remove("mouseActivateTask")
         self.choiceMade = True
         self.helper1.ignore('mouse1')
+        
         for box in self.boxes:
+            if box.node() == self.hitbox:
+                moveInterval = LerpPosInterval(box, 1.0, box.getPos()+Vec3(0,0,20))
+                await moveInterval
             base.world.removeRigidBody(box.node())
             box.removeNode()
         
@@ -35,7 +40,7 @@ class Choice:
             print(f"Choice selected: {self.hitbox.getName()}")
             self.choice = self.hitbox.getName()
             base.messenger.send('choice-made', [self.hitbox.getName()])
-            self.cleanup()
+            taskMgr.add(self.cleanup())
             
     def mouseActivate(self,task):
         #print("Choice activated")
