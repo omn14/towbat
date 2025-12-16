@@ -69,6 +69,7 @@ class unitGraphics(FSM):
         self.isInCombatFlank=[]
         self.hasMovedThisTurn=False
         self.hasAttackedThisTurn=False
+        self.attemptedRallyThisTurn=False
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
         
         """ self.text_node = OnscreenText(
@@ -158,6 +159,7 @@ class unitGraphics(FSM):
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
 
     def enterIsFleeing(self):
+        self.attemptedRallyThisTurn=False
         print(f"{self.unitName} is fleeing!")
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
         pass

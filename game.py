@@ -134,6 +134,7 @@ class gameFSM(FSM):
 
     def enterStrategyPhase(self):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopStrategy, "taskLoopStrategy"])
         print("Entering Strategy Phase")
         self.game.ground.setShaderInput("isActive", False)
         for unit in self.game.units:
@@ -141,6 +142,7 @@ class gameFSM(FSM):
                 unit.hasMovedThisTurn=False
                 unit.hasAttackedThisTurn=False
                 unit.updateTextNode()
+                unit.attemptedRallyThisTurn=False
                 unit.request("Idle")
 
         
@@ -148,6 +150,8 @@ class gameFSM(FSM):
     def exitStrategyPhase(self):
         print("Exiting Strategy Phase")
         self.game.ignore('mouse1')
+        if taskMgr.hasTaskNamed("taskLoopStrategy"):
+            taskMgr.remove("taskLoopStrategy")
         
 
     def enterMovementPhase(self):
@@ -624,6 +628,39 @@ class MyApp(ShowBase):
             taskMgr.remove(taskname)
         taskMgr.add(taskfunction, taskname)
         return
+
+    async def rallyUnit(self, unit):
+        # Placeholder for rallying logic
+        Ld=int(unit.unit.model.characteristics['Ld'])
+        print("losing unit original LD:", Ld)
+        terningerLd=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+            terningerLd.append(terning)
+        for terning in terningerLd:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+        ldDice = []
+        for terning in terningerLd:
+            ldDice.append(terning.currentValue)
+        leadership_score = sum(ldDice)
+        for terning in terningerLd:
+            terning.remove(self.world)
+        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
+        if leadership_score <= Ld:
+            print(f"Rallying unit: {unit.unit.name}")
+            unit.request("Idle")
+        unit.attemptedRallyThisTurn=True
+        return
+
+    def taskLoopStrategy(self, task):
+        # Placeholder for strategy phase logic
+        if self.unitToMove.state == "IsFleeing" and not self.unitToMove.attemptedRallyThisTurn:
+            if not taskMgr.hasTaskNamed("rallyUnitTask"):
+                print("Attempt to rally fleeing unit.")
+                taskMgr.add(self.rallyUnit(self.unitToMove), "rallyUnitTask")
+            #return task.done
+        return task.done
 
     def taskLoopPathTowardsMouse(self, task):
         if self.unitToMove.state != "Idle":
