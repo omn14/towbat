@@ -39,7 +39,7 @@ class Choice:
         if self.hitbox:
             print(f"Choice selected: {self.hitbox.getName()}")
             self.choice = self.hitbox.getName()
-            base.messenger.send('choice-made', [self.hitbox.getName()])
+            #base.messenger.send('choice-made', [self.hitbox.getName()])
             taskMgr.add(self.cleanup())
             
     def mouseActivate(self,task):

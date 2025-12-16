@@ -6,6 +6,7 @@ from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
 from direct.interval.IntervalGlobal import Sequence, ProjectileInterval, Wait
 from direct.interval.FunctionInterval import Func
 from panda3d.core import Shader
+from direct.task.Task import Task
 
 from shaders.chargedistshaders import *
 from panda3d.core import Texture
@@ -394,7 +395,7 @@ class MyApp(ShowBase):
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
-            self.goblinWolfRiders.bodyNP.setPos(10,5,0)
+            self.goblinWolfRiders.bodyNP.setPos(11,6,0)
             self.goblinWolfRiders.bodyNP.setH(90)
             self.bretBowmen.bodyNP.setPos(0,5,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
@@ -1792,23 +1793,63 @@ class MyApp(ShowBase):
             unit.request("Moved")
         self.bakeTextures(self.ground)
 
+    async def makeChoiceNew(self, choices, position):
+        cyn = Choice(choices, position)
+        cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
+        if self.roundCounter.current_player == 2:
+            #cynchoice = chargeYesNo[0]
+            await Task.pause(1.0)
+            cyn.hitbox = cyn.boxes[0].node()
+            
+            cyn.onMouseClick()
+        else:
+            await cyn.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        print("event recieced")
+        cynchoice = cyn.choice
+        
+        print('Event delivered with args:', cyn.choice)
+        del cyn
+        return cynchoice
+    
+    async def makeChoice(self, choice):
+        choice.ma = taskMgr.add(choice.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
+        await choice.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
+        print("event recieced")
+        selected_choice = choice.choice
+        print('Event delivered with args:', choice.choice)
+        return
+
     async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
 
         chargeYesNo = ["Yes", "No"]
+        
+        """ cyn = Choice(chargeYesNo, Vec3(-20,0,10))
+        cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
+        self.ignore('mouse1')
+        print("Waiting for choice...")
         if self.roundCounter.current_player == 2:
-            cynchoice = chargeYesNo[0]
-        else:
-            cyn = Choice(chargeYesNo, Vec3(-20,0,10))
-            cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
-            self.ignore('mouse1')
-            print("Waiting for choice...")
-            await cyn.ma
-            self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
-            print("event recieced")
-            cynchoice = cyn.choice
+            #cynchoice = chargeYesNo[0]
+            await Task.pause(0.1)
+            cyn.hitbox = cyn.boxes[0].node()
             
-            print('Event delivered with args:', cyn.choice)
-            del cyn
+            cyn.onMouseClick()
+        else:
+            await cyn.ma
+        self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        print("event recieced")
+        cynchoice = cyn.choice
+        
+        print('Event delivered with args:', cyn.choice)
+        del cyn """
+        
+        #cynchoice = await taskMgr.add(self.makeChoiceNew,extraArgs=[chargeYesNo, Vec3(-20,0,10)], appendTask=False)
+        cynchoice = await taskMgr.add(self.makeChoiceNew(chargeYesNo, Vec3(-20,0,10)))
 
         if cynchoice == "Yes":
             print("Charging into combat...")
@@ -2434,31 +2475,25 @@ class MyApp(ShowBase):
         #await self.weaponChoise.helper1.messenger.future("choice-made")
         #await messenger.future("mouse1")
         weps =self.unitToMove.unit.model.weapons
-        self.weaponChoise = Choice(weps, Vec3(0,0,10))
+        """ self.weaponChoise = Choice(weps, Vec3(0,0,10))
         self.weaponChoise.ma = taskMgr.add(self.weaponChoise.mouseActivate, "mouseActivateTask")
         self.ignore('mouse1')
         print("Waiting for choice...")
         await self.weaponChoise.ma
         self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
         print("event recieced")
-        wepchoice = self.weaponChoise.choice
+        wepchoice = self.weaponChoise.choice """
+
+        wepchoice = await taskMgr.add(self.makeChoiceNew(weps, Vec3(0,0,10)))
+
         self.unitToMove.unit.model.equip_weapon(wepchoice)
-        print('Event delivered with args:', self.weaponChoise.choice)
-        del self.weaponChoise
+        print('Event delivered with args:', wepchoice)
+            
         #messenger.send("start-attack-sequence")
         taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
     
-    async def makeChoice(self, choice):
-        choice.ma = taskMgr.add(choice.mouseActivate, "mouseActivateTask")
-        self.ignore('mouse1')
-        print("Waiting for choice...")
-        await choice.ma
-        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
-        print("event recieced")
-        selected_choice = choice.choice
-        print('Event delivered with args:', choice.choice)
-        return
+    
 
     async def verySimpleBattle(self,task):
         print("Starting very simple battle...")
@@ -2469,11 +2504,14 @@ class MyApp(ShowBase):
         print("Attacker:", attacker.node().getName())
         print("engaged in battle with:", engagedWith)
         print("on flanks:", self.unitToMove.isInCombatFlank)
-        choice = Choice(engagedWith, Vec3(0,0,10))
+        """ choice = Choice(engagedWith, Vec3(0,0,10))
         battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
         await battleChoice
         selected_choice = choice.choice
-        del choice
+        del choice """
+
+        selected_choice = await taskMgr.add(self.makeChoiceNew(engagedWith, Vec3(0,0,10)))
+
         print(f"Selected choice: {selected_choice}")
         for unit in self.unitToMove.isInCombatWith:
             if unit.unitName == selected_choice:
@@ -2887,6 +2925,7 @@ class MyApp(ShowBase):
                 self.player1Units.remove(fleeUnit)
             if fleeUnit in self.player2Units:
                 self.player2Units.remove(fleeUnit)
+            #messenger.send('unit-move-complete')
             return task.done
         return task.cont
 
