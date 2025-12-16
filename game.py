@@ -1986,7 +1986,7 @@ class MyApp(ShowBase):
 
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
-        self.zax.reparentTo(newnode)
+        #self.zax.reparentTo(newnode)
         # Rotate the new node smoothly to align with defender
         print("rotate from to",newnode.getHpr(), contactRot)
         newnode_hpr = newnode.getHpr()
@@ -2147,8 +2147,8 @@ class MyApp(ShowBase):
             defenderUnit.bodyNP.removeNode()
             self.units.remove(defenderUnit) """
 
+        unit.request("Moved")
         
-
         return 
     
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
@@ -2276,6 +2276,7 @@ class MyApp(ShowBase):
             for terning in self.terninger:
                 terning.remove(self.world)
             print("Charge distance less than wheel distance, returning.")
+            unit.request("Moved")
             return
         #unit.bodyNP.wrtReparentTo(parent)
         ocdistance=cdistance
