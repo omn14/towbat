@@ -411,6 +411,8 @@ class MyApp(ShowBase):
             self.fsm.currentPhaseIndex=0
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.request("IsFleeing")
+            self.goblins.bodyNP.setPos(0,0,0)
+            self.bretBowmen.bodyNP.setPos(0,4,0)
 
         if 0:
             self.fsm.currentPhaseIndex=3
@@ -636,6 +638,16 @@ class MyApp(ShowBase):
         return
 
     def freeReformUnit(self, unit,task):
+        c = self.checkUnitContactSmall(unit)
+        contact=False
+        if c:
+            print("Unit is in contact with another unit, cannot reform here.")
+            unit.model.setColor(.6,0.6,0.6,1)
+            contact=True
+        else:
+            #return task.cont
+            unit.model.setColor(unit.color)
+            
         if base.mouseWatcherNode.hasMouse():
             mousePos = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
@@ -653,9 +665,10 @@ class MyApp(ShowBase):
                 unit.bodyNP.lookAt(hitPos)
                 #unit.hasMovedThisTurn=True
                 #unit.updateTextNode()
-        if self.signal:
+        if self.signal and not contact:
             self.signal = False
             return task.done
+        self.signal = False
         return task.cont
     
     def giveSignal(self):
@@ -683,7 +696,7 @@ class MyApp(ShowBase):
         if leadership_score <= Ld+99:
             print(f"Rallying unit: {unit.unit.name}")
             self.ignore('mouse1')
-            self.acceptOnce('mouse1', self.giveSignal)
+            self.accept('mouse1', self.giveSignal)
             await taskMgr.add(self.freeReformUnit, "freeReformUnitTask", extraArgs=[unit], appendTask=True)
             print(f"Unit {unit.unit.name} has rallied successfully.")
             self.ignore('mouse1')
