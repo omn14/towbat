@@ -242,6 +242,7 @@ class MyApp(ShowBase):
         # Disable default camera controls
         #self.disableMouse()
         base.enableParticles()
+        self.signal = False
         
 
         # Create a flat plane using CardMaker
@@ -395,7 +396,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -405,6 +406,11 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.mountedKnightOfTheRealm.bodyNP.setH(180)
             self.unitToMove=self.goblins
+
+        if 1:
+            self.fsm.currentPhaseIndex=0
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.request("IsFleeing")
 
         if 0:
             self.fsm.currentPhaseIndex=3
@@ -629,6 +635,33 @@ class MyApp(ShowBase):
         taskMgr.add(taskfunction, taskname)
         return
 
+    def freeReformUnit(self, unit,task):
+        if base.mouseWatcherNode.hasMouse():
+            mousePos = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(mousePos, pFrom, pTo)
+
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            result = base.world.rayTestClosest(pFrom, pTo)
+
+            if result.hasHit():
+                hitPos = result.getHitPos()
+                unit.bodyNP.lookAt(hitPos)
+                #unit.hasMovedThisTurn=True
+                #unit.updateTextNode()
+        if self.signal:
+            self.signal = False
+            return task.done
+        return task.cont
+    
+    def giveSignal(self):
+        self.signal = True
+        return
+
     async def rallyUnit(self, unit):
         # Placeholder for rallying logic
         Ld=int(unit.unit.model.characteristics['Ld'])
@@ -647,8 +680,14 @@ class MyApp(ShowBase):
         for terning in terningerLd:
             terning.remove(self.world)
         print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
-        if leadership_score <= Ld:
+        if leadership_score <= Ld+99:
             print(f"Rallying unit: {unit.unit.name}")
+            self.ignore('mouse1')
+            self.acceptOnce('mouse1', self.giveSignal)
+            await taskMgr.add(self.freeReformUnit, "freeReformUnitTask", extraArgs=[unit], appendTask=True)
+            print(f"Unit {unit.unit.name} has rallied successfully.")
+            self.ignore('mouse1')
+            self.accept('mouse1', self.setActiveUnit,[self.taskLoopStrategy, "taskLoopStrategy"])
             unit.request("Idle")
         unit.attemptedRallyThisTurn=True
         return
