@@ -1,6 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32
 from panda3d.core import CardMaker
+from panda3d.core import PStatClient
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape
 from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
 from direct.interval.IntervalGlobal import Sequence, ProjectileInterval, Wait
@@ -52,6 +53,10 @@ from panda3d.core import GraphicsOutput, Camera, OrthographicLens, RenderState
 from panda3d.core import Texture, FrameBufferProperties, WindowProperties
 from panda3d.core import CardMaker, TransparencyAttrib
 from panda3d.core import RenderState, TextureStage
+from panda3d.core import loadPrcFileData
+
+loadPrcFileData('', 'show-frame-rate-meter true')
+loadPrcFileData('', 'want-pstats 1')
 
 class gameFSM(FSM):
     def __init__(self, Game):
@@ -239,6 +244,9 @@ class MyApp(ShowBase):
     def __init__(self):
         super().__init__()
 
+        # Enable PStats profiling
+        PStatClient.connect()
+        
         # Disable default camera controls
         #self.disableMouse()
         base.enableParticles()
@@ -345,6 +353,7 @@ class MyApp(ShowBase):
         #self.goblinWolfRiders.bodyNP.setH(90)
         self.units.append(self.goblinWolfRiders)
         self.player1Units.append(self.goblinWolfRiders)
+        print("Goblin wolf riders loaded")
         
         url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
         url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
@@ -396,7 +405,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0:
+        if 1:
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -407,7 +416,7 @@ class MyApp(ShowBase):
             self.mountedKnightOfTheRealm.bodyNP.setH(180)
             self.unitToMove=self.goblins
 
-        if 1:
+        if 0: #rally test
             self.fsm.currentPhaseIndex=0
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.request("IsFleeing")
