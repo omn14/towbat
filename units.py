@@ -20,14 +20,16 @@ class unitGraphics(FSM):
         self.world=BulletWorld
         self.color=color
         self.bitmask=bitmask
+        print(f"Creating unit graphics for {self.unitName} with model {modelpath}")
         self.model = loader.loadModel(modelpath)
+        print(f"Model {modelpath} loaded for unit {self.unitName}")
         self.model.setScale(scale)
         self.model.setColor(self.color)
         self.model.reparentTo(render)
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
         print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
-        self.model.ls()
+        #self.model.ls()
         children = self.model.getChildren()
         #children.sort(key=lambda np: np.getName())
         #children[-1].removeNode()
@@ -53,8 +55,8 @@ class unitGraphics(FSM):
             child.setPos(p)
             #child.setPos((col - (files - 1) / 2) * (self.modelWidth / files), (row - (ranks - 1) / 2) * (self.modelHeight / ranks), 0)
 
-        self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
-        self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
+        #self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
+        #self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
 
         #self.model.setPos(self.unitWidth*2, -self.modelHeight/2,0)
 
@@ -107,6 +109,7 @@ class unitGraphics(FSM):
             # Estimate radius from bounding box
             #self.model.clearBounds()
             #self.model.calcTightBounds(render)
+            print(f"Setting up collisions for unit: {self.unitName}")
             bounds = self.model.getTightBounds()
             print(f"Unit {self.unitName} bounding box: {bounds}")
             
@@ -133,8 +136,10 @@ class unitGraphics(FSM):
             self.model.node().setName('Model-' + self.unitName)
             self.model.reparentTo(self.bodyNP)
             self.bodyNP.setScale(1.0)
-            self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
-            self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
+            #self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
+            #self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
+            self.unitWidth=box_size.x*self.bodyNP.getScale().x
+            self.unitHeight=box_size.y*self.bodyNP.getScale().y
             self.model.setPos(-box_size.x/2+self.modelWidth/2, box_size.y/2-self.modelHeight/2,0)
             #self.model.flattenLight()
     

@@ -10,11 +10,12 @@ class model:
         self.name = name
         self.url = url
         self.characteristics = {}
-        self.model_data = self.fetch_model_data(url)
+        
         self.json_file_path = self.name.replace(" ", "_").lower() + '_characteristics.json'
         if os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
         else:
+            self.model_data = self.fetch_model_data(url)
             self.characteristics = self.get_characteristics_from_html(self.model_data)
             store_dict_to_file(self.characteristics, self.json_file_path)
         self.armor_save = 7
