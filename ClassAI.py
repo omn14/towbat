@@ -34,6 +34,7 @@ class ClassAI:
                 if unit.hasAttackedThisTurn == False:
                     self.game.unitToMove=unit
                     taskMgr.add(self.game.taskStartCombat,"taskStartCombat", extraArgs=[], appendTask=True)
+                    self._move_complete = False
                     await taskMgr.add(self.loopWaitForMoveComplete, self.waitTask, extraArgs=[unit], appendTask=True)
                     #await self.helper1.future('unit-move-complete')
         return
@@ -42,6 +43,7 @@ class ClassAI:
         print(f"Waiting for move complete for unit: {unit.unit.name}")
         if self._move_complete:
             self._move_complete = False
+            print(f"signal recieved for unit: {unit.unit.name}")
             return task.done
         return task.cont
 

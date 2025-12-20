@@ -143,12 +143,12 @@ class gameFSM(FSM):
         print("Entering Strategy Phase")
         self.game.ground.setShaderInput("isActive", False)
         for unit in self.game.units:
+            unit.hasAttackedThisTurn=False
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn=False
-                unit.hasAttackedThisTurn=False
-                unit.updateTextNode()
                 unit.attemptedRallyThisTurn=False
                 unit.request("Idle")
+            unit.updateTextNode()
 
         
 
@@ -372,7 +372,7 @@ class MyApp(ShowBase):
         self.player2Units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-        #self.messenger.toggleVerbose()
+        self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,6)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
@@ -2775,10 +2775,10 @@ class MyApp(ShowBase):
             print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
             #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
             
-            if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
+            if leadership_score > int(loserUnit.unit.model.characteristics['Ld'])+99:
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif 99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -2901,7 +2901,9 @@ class MyApp(ShowBase):
             
             print(f"{unit.unit.name} successfully pursues the fleeing unit!")
             if unit != loserUnit:
-                self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0))
+                distBetween = (loserUnit.bodyNP.getPos() - unit.bodyNP.getPos()).length()-loserUnit.unitHeight/2.0-unit.unitHeight/2.0
+                self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0+distBetween))
+                
             else:
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,rally=True))
             self.attackSequence2.append(Wait(0.7))

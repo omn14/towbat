@@ -145,6 +145,7 @@ class unitGraphics(FSM):
     
     def enterIdle(self):
         print(f"{self.unitName} is idle!")
+        self.hasMovedThisTurn=False
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterMoved(self):
