@@ -1755,7 +1755,7 @@ class MyApp(ShowBase):
             p2 = (self.polygonpoints[self.numsPoints-2]*2-1)*50
             p3 = (self.polygonpoints[0]*2-1)*50
             p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
-            self.world.doPhysics(0.016)
+            #self.world.doPhysics(0.016)
             cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.25), Point3(p2.x, p2.y, 0.25),BitMask32.allOn())
             
             #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
@@ -1799,12 +1799,41 @@ class MyApp(ShowBase):
                     closest_dist = dist
                     closest_pos = hit_pos
 
+            for n in range(1,100):
+                p1_5 = p1+ (p3 - p1) * 1/n
+                p2_5 = p2 + (p4 - p2) * 1/n
+                cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.25), Point3(p2_5.x, p2_5.y, 0.25),BitMask32.allOn())
+                print("Cont3:", cont3.hasHit(), cont3.getHitPos())
+                if cont3.hasHit():
+                    # Check which contact point is closest to smiley
+                    hit_pos = cont3.getHitPos()
+                    dist = (hit_pos - Point3(p1_5.x, p1_5.y, 0.1)).length()
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        closest_pos = hit_pos
 
-            
+
+            cda=1e3
+            for n in range(1,10):
+                p1_a = (self.polygonpoints[0]*2-1)*50
+                p2_a = (self.polygonpoints[self.numsPoints-3-n]*2-1)*50
+                cont3=self.world.rayTestClosest(Point3(p1_a.x, p1_a.y, 0.25), Point3(p2_a.x, p2_a.y, 0.25),BitMask32.allOn())
+                print("Cont3:", cont3.hasHit(), cont3.getHitPos())
+                if cont3.hasHit():
+                    # Check which contact point is closest to smiley
+                    hit_pos = cont3.getHitPos()
+                    dist = (hit_pos - Point3(p1_a.x, p1_a.y, 0.1)).length()
+                    if dist < cda:
+                        closest_dist = 0
+                        self.arcPointRotation=abs(self.arcPointRotation)-abs(self.arcPointRotation)/(self.numsPoints-3)
+                        closest_pos = hit_pos
+
+
 
             if closest_pos:
                 self.unitHitPos = closest_pos
                 self.playerNP.setPos(closest_pos)
+                self.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
