@@ -1,5 +1,5 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32
+from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32, TransformState
 from panda3d.core import CardMaker
 from panda3d.core import PStatClient
 from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape
@@ -405,7 +405,19 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1:
+        if 1: #fall back through enemy allay tests
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(11,6,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
+            self.mountedKnightOfTheRealm.bodyNP.setPos(3,10,0)
+            self.unitToMove=self.goblins
+
+        if 0: #charge tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -449,7 +461,10 @@ class MyApp(ShowBase):
         
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
 
-
+        
+        self.z2= loader.loadModel("models/zup-axis")
+        self.z2.reparentTo(render)
+        #self.z2.setPos(oposUnit)
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
         #self.p = charge_impact_effect.ChargeImpactEffect(parent=render)
@@ -1784,6 +1799,9 @@ class MyApp(ShowBase):
                     closest_dist = dist
                     closest_pos = hit_pos
 
+
+            
+
             if closest_pos:
                 self.unitHitPos = closest_pos
                 self.playerNP.setPos(closest_pos)
@@ -2778,7 +2796,7 @@ class MyApp(ShowBase):
             if leadership_score > int(loserUnit.unit.model.characteristics['Ld'])+99:
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif 99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif -1*99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -2816,15 +2834,18 @@ class MyApp(ShowBase):
                 
                 persuitDiceDices.append(terningerPersuit)
                 """
-
+        crashFractionMin = 1.0
         for i, unit in enumerate(persuingUnit):
             
             persuit_results = 2
             persuit_score = persuit_results
             print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
+            print("sweep test for fallback")
+            crashFraction = self.sweepTest(unit, direction, persuit_score)*.95
+            crashFractionMin = min(crashFraction, crashFractionMin) #to stop units going through each other
             
             print(f"{unit.unit.name} successfully pursues the fleeing unit!")
-            self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,GG=True))
+            self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*crashFractionMin,GG=True))
             #await self.attackSequence2
             #self.attackSequence2 = Sequence()
             self.attackSequence2.append(Wait(0.25))
@@ -2905,6 +2926,7 @@ class MyApp(ShowBase):
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0+distBetween))
                 
             else:
+                
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,rally=True))
             self.attackSequence2.append(Wait(0.7))
         for dices in persuitDiceDices:
@@ -3123,6 +3145,44 @@ class MyApp(ShowBase):
         
         #unit.setUpCollisions()
 
+    #def sweepTest(self, shape,startPos,startHpr, endPos,endHpr):
+    def sweepTest(self, unit, direction,length):
+        startPos=unit.bodyNP.getPos()
+        Hpr=unit.bodyNP.getHpr()
+        unit.bodyNP.lookAt(startPos + direction)
+        nHpr = unit.bodyNP.getHpr()
+        unit.bodyNP.setHpr(Hpr)
+
+
+        tsFrom = TransformState.makePosHpr(startPos, nHpr)
+        tsTo = TransformState.makePosHpr(startPos + direction * length, nHpr)
+        shape = unit.bodyNP.node().getShape(0)
+        #shape = BulletSphereShape(0.5)
+        penetration = 0.0
+        omasks=[]
+        for u in self.units:
+            omasks.append(u.bodyNP.getCollideMask())
+            u.bodyNP.setCollideMask(BitMask32.bit(9))
+        unit.bodyNP.setCollideMask(BitMask32.bit(30))
+        for u in unit.isInCombatWith:
+            u.bodyNP.setCollideMask(BitMask32.bit(30))
+        #self.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        #unit.setCollideMask(BitMask32.bit(1))
+        for i,u in enumerate(self.units):
+            u.bodyNP.setCollideMask(omasks[i])
+        if result.hasHit():
+            print(result.hasHit())
+            print(result.getHitPos())
+            print(result.getHitNormal())
+            print(result.getHitFraction())
+            print(result.getNode())
+            self.z2.setPos(result.getHitPos())
+            print("sweep test topos:", result.getToPos())
+            print(startPos + direction * length)
+            return result.getHitFraction()
+        return 1.0
+        
     def fallBack(self, loser,direction,length=10.0,rally=False,GG=False):
         if loser.isEmpty():
             print("looser is destryed, no fallback")
@@ -3134,12 +3194,16 @@ class MyApp(ShowBase):
             return
         
         print(f"{loser.node().getName()} falls back!")
-
+        
+        
         loserPos=loser.getPos()
         newPos = loserPos + direction * length
         oldHpr=loser.getHpr()
         if not GG:
             loser.lookAt(loserPos + direction)
+        #self.sweepTest(loser.node().getShape(0), loser.getPos(), loser.getHpr(), loser.getPos() + direction * length, loser.getHpr())
+        #self.sweepTest(loser, direction, length)
+        
         fleeHpr=loser.getHpr()
         if rally:
             r=Vec3(180,0,0)
