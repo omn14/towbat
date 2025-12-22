@@ -1813,8 +1813,8 @@ class MyApp(ShowBase):
                         closest_pos = hit_pos
 
 
-            cda=1e3
-            for n in range(1,10):
+            """ cda=1e3
+            for n in range(1,self.numsPoints-3):
                 p1_a = (self.polygonpoints[0]*2-1)*50
                 p2_a = (self.polygonpoints[self.numsPoints-3-n]*2-1)*50
                 cont3=self.world.rayTestClosest(Point3(p1_a.x, p1_a.y, 0.25), Point3(p2_a.x, p2_a.y, 0.25),BitMask32.allOn())
@@ -1823,17 +1823,21 @@ class MyApp(ShowBase):
                     # Check which contact point is closest to smiley
                     hit_pos = cont3.getHitPos()
                     dist = (hit_pos - Point3(p1_a.x, p1_a.y, 0.1)).length()
-                    if dist < cda:
-                        closest_dist = 0
-                        self.arcPointRotation=abs(self.arcPointRotation)-abs(self.arcPointRotation)/(self.numsPoints-3)
-                        closest_pos = hit_pos
-
+                    closest_pos = hit_pos
+                    closest_dist = 0
+                    self.arcPointRotation=abs(self.arcPointRotation)-abs(self.arcPointRotation)/(self.numsPoints-3)
+                     """
+            frac,closest_pos_frac = self.sweepTestRot(unit,p3,self.arcPointRotation)
+            if frac < 1.0:
+                self.arcPointRotation *= frac
+                closest_dist = 0
+                closest_pos = closest_pos_frac
 
 
             if closest_pos:
                 self.unitHitPos = closest_pos
                 self.playerNP.setPos(closest_pos)
-                self.z2.setPos(closest_pos + Vec3(0,0,0.5))
+                #self.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
                 print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
@@ -3211,6 +3215,47 @@ class MyApp(ShowBase):
             print(startPos + direction * length)
             return result.getHitFraction()
         return 1.0
+    
+    def sweepTestRot(self, unit, point,angle):
+        startPos=unit.bodyNP.getPos()
+        Hpr=unit.bodyNP.getHpr()
+        shape = unit.bodyNP.node().getShape(0)
+
+        newxy= self.rotatePoint(Vec2(startPos.x, startPos.y), angle, point)
+        
+        #unit.bodyNP.lookAt(startPos + direction)
+        nHpr = Hpr + Vec3(angle,0,0)
+        #unit.bodyNP.setHpr(Hpr)
+
+
+        tsFrom = TransformState.makePosHpr(startPos, Hpr)
+        tsTo = TransformState.makePosHpr(Vec3(newxy[0], newxy[1], startPos.z), nHpr)
+        
+        #shape = BulletSphereShape(0.5)
+        penetration = 0.0
+        omasks=[]
+        for u in self.units:
+            omasks.append(u.bodyNP.getCollideMask())
+            u.bodyNP.setCollideMask(BitMask32.bit(9))
+        unit.bodyNP.setCollideMask(BitMask32.bit(30))
+        """ for u in unit.isInCombatWith:
+            u.bodyNP.setCollideMask(BitMask32.bit(30)) """
+        #self.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        #unit.setCollideMask(BitMask32.bit(1))
+        for i,u in enumerate(self.units):
+            u.bodyNP.setCollideMask(omasks[i])
+        if result.hasHit():
+            print(result.hasHit())
+            print(result.getHitPos())
+            print(result.getHitNormal())
+            print(result.getHitFraction())
+            print(result.getNode())
+            self.z2.setPos(result.getHitPos())
+            print("sweep test topos:", result.getToPos())
+            
+            return result.getHitFraction(),result.getHitPos()
+        return 1.0,None
         
     def fallBack(self, loser,direction,length=10.0,rally=False,GG=False):
         if loser.isEmpty():
