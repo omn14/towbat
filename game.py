@@ -405,7 +405,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1: #fall back through enemy allay tests
+        if 0: #fall back through enemy allay tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -417,7 +417,7 @@ class MyApp(ShowBase):
             self.mountedKnightOfTheRealm.bodyNP.setPos(3,10,0)
             self.unitToMove=self.goblins
 
-        if 0: #charge tests
+        if 1: #charge tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -1756,7 +1756,9 @@ class MyApp(ShowBase):
             p3 = (self.polygonpoints[0]*2-1)*50
             p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
             #self.world.doPhysics(0.016)
-            cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.25), Point3(p2.x, p2.y, 0.25),BitMask32.allOn())
+            closest_dist = float('inf')
+            closest_pos = None
+            """ cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.25), Point3(p2.x, p2.y, 0.25),BitMask32.allOn())
             
             #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
             cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.25), Point3(p4.x, p4.y, 0.25),BitMask32.allOn())
@@ -1810,7 +1812,7 @@ class MyApp(ShowBase):
                     dist = (hit_pos - Point3(p1_5.x, p1_5.y, 0.1)).length()
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest_pos = hit_pos
+                        closest_pos = hit_pos """
 
 
             """ cda=1e3
@@ -1827,11 +1829,23 @@ class MyApp(ShowBase):
                     closest_dist = 0
                     self.arcPointRotation=abs(self.arcPointRotation)-abs(self.arcPointRotation)/(self.numsPoints-3)
                      """
-            frac,closest_pos_frac = self.sweepTestRot(unit,p3,self.arcPointRotation)
+            frac,closest_pos_frac,tsTo = self.sweepTestRot(unit,p3,self.arcPointRotation)
             if frac < 1.0:
                 self.arcPointRotation *= frac
                 closest_dist = 0
                 closest_pos = closest_pos_frac
+
+            else:
+                dire=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).normalized()
+                le=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).length()
+                #le=move/(2*abs(groundSizeboundingbox[0][1]))
+                #le-=math.radians(abs(self.arcPointRotation))*unit.unitWidth
+                frac,closest_pos_frac = self.sweepTestDir(unit,tsTo,dire,le)
+                if frac < 1.0:
+                    closest_dist = le*frac
+                    closest_pos = closest_pos_frac
+
+            
 
 
             if closest_pos:
@@ -2404,7 +2418,7 @@ class MyApp(ShowBase):
                 chdist= int(rule['mountUnit'].model.characteristics['M'])+ max(chdice)
         print("Charge distance:", chdist)
         if chdist < wdistance:
-            angle = math.degrees(chdist/width)
+            angle = math.degrees(chdist/(width*2))
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z)*wheel1Angle/abs(wheel1Angle)
 
 
@@ -3251,7 +3265,40 @@ class MyApp(ShowBase):
             print(result.getHitNormal())
             print(result.getHitFraction())
             print(result.getNode())
-            self.z2.setPos(result.getHitPos())
+            #self.z2.setPos(result.getHitPos())
+            print("sweep test topos:", result.getToPos())
+            
+            return result.getHitFraction(),result.getHitPos(),tsTo
+        return 1.0,None,tsTo
+    
+    def sweepTestDir(self, unit, tsFrom, direction,length):
+        
+        #tsFrom = TransformState.makePosHpr(startPos, nHpr)
+        tsTo = TransformState.makePosHpr(tsFrom.getPos() + direction * length, tsFrom.getHpr())
+
+        shape = unit.bodyNP.node().getShape(0)
+               
+        #shape = BulletSphereShape(0.5)
+        penetration = 0.0
+        omasks=[]
+        for u in self.units:
+            omasks.append(u.bodyNP.getCollideMask())
+            u.bodyNP.setCollideMask(BitMask32.bit(9))
+        unit.bodyNP.setCollideMask(BitMask32.bit(30))
+        """ for u in unit.isInCombatWith:
+            u.bodyNP.setCollideMask(BitMask32.bit(30)) """
+        #self.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        #unit.setCollideMask(BitMask32.bit(1))
+        for i,u in enumerate(self.units):
+            u.bodyNP.setCollideMask(omasks[i])
+        if result.hasHit():
+            print(result.hasHit())
+            print(result.getHitPos())
+            print(result.getHitNormal())
+            print(result.getHitFraction())
+            print(result.getNode())
+            #self.z2.setPos(result.getHitPos())
             print("sweep test topos:", result.getToPos())
             
             return result.getHitFraction(),result.getHitPos()
