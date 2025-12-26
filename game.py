@@ -251,6 +251,8 @@ class MyApp(ShowBase):
         #self.disableMouse()
         base.enableParticles()
         self.signal = False
+        self.autoCharge=False
+        self.autoHold=False
         
 
         # Create a flat plane using CardMaker
@@ -372,7 +374,7 @@ class MyApp(ShowBase):
         self.player2Units.append(self.mountedKnightOfTheRealm)
         
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
-        self.messenger.toggleVerbose()
+        #self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,6)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
@@ -405,7 +407,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 0: #fall back through enemy allay tests
+        if 1: #fall back through enemy allay tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -417,7 +419,7 @@ class MyApp(ShowBase):
             self.mountedKnightOfTheRealm.bodyNP.setPos(3,10,0)
             self.unitToMove=self.goblins
 
-        if 1: #charge tests
+        if 0: #charge tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -1991,45 +1993,20 @@ class MyApp(ShowBase):
     async def chargeAndChargeReaction(self,unit,c,oposUnit, orotUnit,task):
 
         chargeYesNo = ["Yes", "No"]
-        
-        """ cyn = Choice(chargeYesNo, Vec3(-20,0,10))
-        cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
-        self.ignore('mouse1')
-        print("Waiting for choice...")
-        if self.roundCounter.current_player == 2:
-            #cynchoice = chargeYesNo[0]
-            await Task.pause(0.1)
-            cyn.hitbox = cyn.boxes[0].node()
-            
-            cyn.onMouseClick()
+        if self.autoCharge:
+            cynchoice = "Yes"
         else:
-            await cyn.ma
-        self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
-        print("event recieced")
-        cynchoice = cyn.choice
-        
-        print('Event delivered with args:', cyn.choice)
-        del cyn """
-        
-        #cynchoice = await taskMgr.add(self.makeChoiceNew,extraArgs=[chargeYesNo, Vec3(-20,0,10)], appendTask=False)
-        cynchoice = await taskMgr.add(self.makeChoiceNew(chargeYesNo, Vec3(-20,0,10)))
+            cynchoice = await taskMgr.add(self.makeChoiceNew(chargeYesNo, Vec3(-20,0,10)))
 
         if cynchoice == "Yes":
             print("Charging into combat...")
 
 
             chargeReaction = ["hold", "flee"]
-            cyn = Choice(chargeReaction, Vec3(20,0,10))
-            cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
-            self.ignore('mouse1')
-            print("Waiting for choice...")
-            await cyn.ma
-            self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
-            print("event received")
-            crchoice = cyn.choice
-            
-            print('Event delivered with args:', cyn.choice)
-            del cyn
+            if self.autoHold:
+                crchoice = "hold"
+            else:
+                crchoice = await taskMgr.add(self.makeChoiceNew(chargeReaction, Vec3(20,0,10)))
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
             if crchoice == "hold":
                 #chargeSequence = Sequence()
@@ -2062,7 +2039,10 @@ class MyApp(ShowBase):
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
             self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
-            
+            self.autoCharge=False
+            self.autoHold=False
+        
+        
         return task.done
 
     def checkUnitContactSmall(self, unit):
@@ -2314,26 +2294,37 @@ class MyApp(ShowBase):
         
         return 
     
-    async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit):
-        self.terninger=[]
+    async def rullTerninger(self, antall):
+        terninger=[]
         for i in range(2):
             terning = Dice(self.world, position=Vec3(0+i*4,0,10), size=1.0)
-            self.terninger.append(terning)
-        for terning in self.terninger:
+            terninger.append(terning)
+        for terning in terninger:
             terning.roll()
-        await taskMgr.add(checkDice, "checkDiceTask", extraArgs=[self.terninger], appendTask=True)
+        await taskMgr.add(checkDice, "checkDiceTask", extraArgs=[terninger], appendTask=True)
         
         chdice = []
-        for terning in self.terninger:
+        for terning in terninger:
             chdice.append(terning.currentValue)
+        return terninger, chdice
+        
+
+    async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, chdice=None):
+        
+        if not self.autoCharge:
+            self.terninger, chdice = await self.rullTerninger(2)
+        else:
+            #await Task.pause(1.0)
+            while self.attackSequence2.isPlaying():
+                await Task.pause(0.5)
+            await Task.pause(0.5)
+            chdice = [6,6]
+            self.terninger = []
+        self.autoCharge=False
+        self.autoHold=False
         print("Charge dice results:", chdice)
         contactPos=unit.bodyNP.getPos()
         contactRot=unit.bodyNP.getHpr()
-        """ self.zax = loader.loadModel("models/zup-axis")
-        self.z2= loader.loadModel("models/zup-axis")
-        self.z2.reparentTo(render)
-        self.z2.setPos(oposUnit) """
-        #self.zax.reparentTo(render)
         
         shape = unit.bodyNP.node().getShape(0)
         if isinstance(shape, BulletBoxShape):
@@ -2345,13 +2336,11 @@ class MyApp(ShowBase):
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         unit.bodyNP.setPos(oposUnit)
         unit.bodyNP.setHpr(orotUnit)
-        #unit.bodyNP.setHpr(Vec3(0,0,0))
 
         newnode.reparentTo(unit.bodyNP)
 
         rot = LRotationf()
         rot.setHpr(unit.bodyNP.getHpr())
-        #fwd=rot.getForward()
         rgt = rot.getRight()
         dire = contactPos - oposUnit
         angle_between = rgt.dot(dire.normalized())
@@ -2360,13 +2349,11 @@ class MyApp(ShowBase):
         else:
             sign = -1
         
-        #newnode.setPos(unit.bodyNP.getPos()+Vec3(width,height,0))
         newnode.setPos(Vec3(width*sign/unit.bodyNP.getScale().x,height/unit.bodyNP.getScale().y,0))
         newnode.wrtReparentTo(render)
 
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
-        #self.zax.reparentTo(newnode)
         # Rotate the new node smoothly to align with defender
         print("rotate from to",newnode.getHpr(), contactRot)
         newnode_hpr = newnode.getHpr()
@@ -2436,8 +2423,9 @@ class MyApp(ShowBase):
         await rotation_interval
         if chdist < wdistance:
             unit.bodyNP.wrtReparentTo(parent)
-            for terning in self.terninger:
-                terning.remove(self.world)
+            if self.terninger:
+                for terning in self.terninger:
+                    terning.remove(self.world)
             print("Charge distance less than wheel distance, returning.")
             unit.request("Moved")
             return
@@ -2513,7 +2501,7 @@ class MyApp(ShowBase):
         #unit.bodyNP.setCollideMask(BitMask32.bit(4))
         
         defenderUnit=self.getSelectedUnit(defenderNP.node())
-        if defenderUnit.state != "InCombat":
+        if defenderUnit.state != "InCombat": #something gets reset when requesting InCombat again
             defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
         unit.isInCombatFlank.append("front")
@@ -2524,9 +2512,10 @@ class MyApp(ShowBase):
         #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
-        for terning in self.terninger:
-            terning.remove(self.world)
-        del self.terninger
+        if self.terninger:
+            for terning in self.terninger:
+                terning.remove(self.world)
+            del self.terninger
         return 
 
     def getFlankFromContact(self, unit, contact):
@@ -2789,7 +2778,7 @@ class MyApp(ShowBase):
             print("Combat is a draw, no units flee.")
             messenger.send('unit-move-complete')
             return
-        elif player2_score < player1_score:
+        elif player2_score+99 < player1_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
             for atu in self.attackers:
@@ -2843,7 +2832,7 @@ class MyApp(ShowBase):
             if leadership_score > int(loserUnit.unit.model.characteristics['Ld'])+99:
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif -1*99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif 1*99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -2955,6 +2944,7 @@ class MyApp(ShowBase):
 
         for task in persuitDiceTasks:
             await task
+        
         maxmove = max([terning.currentValue for terning in persuitDiceDices[-1]])
         for i in range(len(persuingUnit) - 1, -1, -1):
             unit = persuingUnit[i]
@@ -2970,11 +2960,13 @@ class MyApp(ShowBase):
             print(f"{unit.unit.name} successfully pursues the fleeing unit!")
             if unit != loserUnit:
                 distBetween = (loserUnit.bodyNP.getPos() - unit.bodyNP.getPos()).length()-loserUnit.unitHeight/2.0-unit.unitHeight/2.0
-                self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0+distBetween))
+                self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*0.95+distBetween))
+                
                 
             else:
                 
                 self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,rally=True))
+                #self.attackSequence2.append(Func(self.fallBackContactTest, unit,direction))
             self.attackSequence2.append(Wait(0.7))
         for dices in persuitDiceDices:
             for terning in dices:
@@ -2982,8 +2974,22 @@ class MyApp(ShowBase):
 
 
         #self.attackSequence2.append(Func(self.fallBack, loserUnit.bodyNP,direction))
-        if not self.attackSequence.isPlaying():
-            self.attackSequence2.start()
+        #if not self.attackSequence.isPlaying():
+        #    self.attackSequence2.start()
+        self.attackSequence2.append(Wait(2*(len(persuingUnit)-1)))
+        await self.attackSequence2
+        
+        for i in range(0,len(persuingUnit)-1):
+            unit=persuingUnit[i]
+            unit.request("Idle")
+            opos=unit.bodyNP.getPos()-direction
+            orot=unit.bodyNP.getHpr()
+            self.autoCharge=True
+            self.autoHold=True
+            self.pathTowardsMouse(unit,loserUnit.bodyNP.getPos().x,loserUnit.bodyNP.getPos().y)
+            self.moveUnit(unit)
+            
+            #await taskMgr.add(self.chargeInterval,extraArgs=[unit,loserUnit.bodyNP,0,opos,orot,[6,6]],appendTask=False)
 
     async def fleeFromCombat(self, loserUnit):
         direction=self.fleeDirectionMultUnits(loserUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
@@ -3303,6 +3309,61 @@ class MyApp(ShowBase):
             
             return result.getHitFraction(),result.getHitPos()
         return 1.0,None
+    
+    def fallBackContactTest(self, unitNP,moveVec=Vec3(0,0,0)):
+        unit = self.getSelectedUnit(unitNP.node())
+        print("fallBackContactTest called for unit:", unit.unit.name)
+        unit.bodyNP.setCollideMask(BitMask32.bit(1))
+        unit.bodyNP.node().setTransformDirty()
+        for u in unit.isInCombatWith:
+            u.bodyNP.node().setTransformDirty()
+        ghost = unit.bodyNP.node()
+        
+        result = base.world.contactTest(ghost)
+        unit.bodyNP.setCollideMask(unit.bitmask)
+        for contact in result.getContacts():
+            node_name = contact.getNode1().getName()
+            if node_name.startswith('UnitCollision-') :
+                print(contact.getNode0())
+                print(contact.getNode1())
+
+                mpoint = contact.getManifoldPoint()
+                print(mpoint.getDistance())
+                print(mpoint.getAppliedImpulse())
+                print(mpoint.getPositionWorldOnA())
+                print(mpoint.getPositionWorldOnB())
+                
+                print(mpoint.getLocalPointA())
+                print(mpoint.getLocalPointB())
+                #np=render.find(f"**/{contact.getNode1().getName()}")
+                #selected_unit = self.game.getSelectedUnit(contact.getNode1())
+
+                contact_unit = self.getSelectedUnit(contact.getNode1())
+                #contact_unit.bodyNP.node().setTransformDirty()
+                if contact_unit in unit.isInCombatWith:
+                    print("Contact with unit in combat, no fallback movement applied.")
+                    continue
+                self.z2.setPos(unit.bodyNP.getPos() + mpoint.getLocalPointA())
+                selected_unit = unit
+                """ if selected_unit.state == 'InCombat':
+                    print("Unit in combat, cannot be moved in bounds again now!")
+                    return """
+                if selected_unit.state == 'IsFleeing':
+                    print("Unit is fleeing out of the battle field, it is destroyed!")
+                    base.world.removeRigidBody(selected_unit.bodyNP.node())
+                    self.game.units.remove(selected_unit)
+                    if selected_unit in self.game.player1Units:
+                        self.game.player1Units.remove(selected_unit)
+                    if selected_unit in self.game.player2Units:
+                        self.game.player2Units.remove(selected_unit)
+                    selected_unit.bodyNP.removeNode()
+                    selected_unit.model.removeNode()
+                    return
+                np=unit.bodyNP
+                #np.setHpr(Vec3(H,0,0))
+                cpos=Vec3(np.getPos())
+                np.setPos(cpos+moveVec)
+                return self.fallBackContactTest(unitNP,moveVec)
         
     def fallBack(self, loser,direction,length=10.0,rally=False,GG=False):
         if loser.isEmpty():
@@ -3345,6 +3406,25 @@ class MyApp(ShowBase):
             pos=newPos,
             blendType='easeInOut'
         )
+
+        loser.setPos(newPos)
+        loser.setHpr(newHpr)
+        if rally:
+            self.fallBackContactTest(loser,direction*.1)
+        else:
+            self.fallBackContactTest(loser,-direction*.1)
+
+        newPos = loser.getPos()
+        loser.setPos(loserPos)
+        loser.setHpr(oldHpr)
+
+        move_interval2 = LerpPosInterval(
+            loser, 
+            duration=1.0, 
+            pos=newPos,
+            blendType='easeInOut'
+        )
+
         rotate_interval2 = LerpPosHprInterval(
             loser, 
             duration=0.5, 
@@ -3355,10 +3435,14 @@ class MyApp(ShowBase):
         sequence = Sequence(
             rotate_interval,
             move_interval,
+            move_interval2,
+            #Func(self.fallBackContactTest, loser,direction),
             rotate_interval2,
             #Func(self.persuitMove, winner, loser)
         )
         sequence.start()
+        #if rally:
+        #    self.fallBackContactTest(loser,direction)
         #return sequence
 
     def fallBack2(self, winner, loser):
