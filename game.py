@@ -139,7 +139,10 @@ class gameFSM(FSM):
 
     def enterStrategyPhase(self):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
-        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopStrategy, "taskLoopStrategy"])
+        self.game.setActiveUnitTask=self.game.taskLoopStrategy
+        self.game.setActiveUnitTaskName="taskLoopStrategy"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopStrategy, "taskLoopStrategy"])
         print("Entering Strategy Phase")
         self.game.ground.setShaderInput("isActive", False)
         for unit in self.game.units:
@@ -162,7 +165,10 @@ class gameFSM(FSM):
     def enterMovementPhase(self):
         print("Entering Movement Phase")
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
-        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        self.game.setActiveUnitTask=self.game.taskLoopPathTowardsMouse
+        self.game.setActiveUnitTaskName="taskLoopPathTowardsMouse"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
         if self.game.roundCounter.current_player == 2:
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
             taskMgr.add(self.game.AIplayer2.takeMoveTurn())
@@ -186,7 +192,11 @@ class gameFSM(FSM):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         
         
-        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
+        self.game.setActiveUnitTask=self.game.taskShootingArcUpdate
+        self.game.setActiveUnitTaskName="taskShootingArcUpdate"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        
 
         
 
@@ -201,7 +211,11 @@ class gameFSM(FSM):
     def enterCombatPhase(self):
         print("Entering Combat Phase")
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
-        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskStartCombat, "taskStartCombat"])
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskStartCombat, "taskStartCombat"])
+        self.game.setActiveUnitTask=self.game.taskStartCombat
+        self.game.setActiveUnitTaskName="taskStartCombat"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        
         for unit in self.game.units:
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn=False
@@ -228,6 +242,7 @@ class gameFSM(FSM):
         
         for unit in self.game.units:
             unit.model.setColor(unit.color)
+            unit.endedInUnit=False
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
             #unit.hasMovedThisTurn=False
             unit.updateTextNode()
@@ -302,8 +317,6 @@ class MyApp(ShowBase):
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
         self.setup_bullet()
-        #self.accept('mouse1', self.upAndDown)
-        #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
@@ -381,6 +394,9 @@ class MyApp(ShowBase):
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
+        self.setActiveUnitTask=self.taskLoopStrategy
+        self.setActiveUnitTaskName="taskLoopStrategy"
+
         self.fsm = gameFSM(self)
         ###Shooting scenario testing
         if 0:
@@ -1971,7 +1987,8 @@ class MyApp(ShowBase):
             cyn.onMouseClick()
         else:
             await cyn.ma
-        self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
         print("event recieced")
         cynchoice = cyn.choice
         
@@ -1984,7 +2001,7 @@ class MyApp(ShowBase):
         self.ignore('mouse1')
         print("Waiting for choice...")
         await choice.ma
-        self.accept('mouse1', self.setActiveUnit,[self.taskStartCombat, "taskStartCombat"])
+        self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
         print("event recieced")
         selected_choice = choice.choice
         print('Event delivered with args:', choice.choice)
@@ -2778,7 +2795,7 @@ class MyApp(ShowBase):
             print("Combat is a draw, no units flee.")
             messenger.send('unit-move-complete')
             return
-        elif player2_score+99 < player1_score:
+        elif player2_score < player1_score:
             #attacker loses
             #self.attackSequence.append(Func(self.fallBack, defender, attacker))
             for atu in self.attackers:
@@ -2829,10 +2846,10 @@ class MyApp(ShowBase):
             print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
             #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
             
-            if leadership_score > int(loserUnit.unit.model.characteristics['Ld'])+99:
+            if leadership_score+99 > int(loserUnit.unit.model.characteristics['Ld']):
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif 1*99+leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -3050,10 +3067,16 @@ class MyApp(ShowBase):
             print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
             
             print(f"{unit.unit.name} successfully pursues the fleeing unit!")
-            self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0))
+            if unit == loserUnit:
+                #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,flee=True))
+                #self.attackSequence2.append(self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=True))
+                await self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=True)
+            else:
+                #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,flee=False))
+                self.attackSequence2.append(self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=False))
             self.attackSequence2.append(Wait(0.7))
             #self.attackSequence2.append(Func(self.fallBack(unit.bodyNP,direction,length=persuit_score*1.0).start()))
-        self.attackSequence2.append(Wait(1.5*(len(persuingUnit)-1)))
+        self.attackSequence2.append(Wait(2.0*(len(persuingUnit)-1)))
         for dices in persuitDiceDices:
             for terning in dices:
                 terning.remove(self.world)
@@ -3064,7 +3087,7 @@ class MyApp(ShowBase):
             if persuing == loserUnit:
                 continue
             #taskMgr.add(self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
-            taskMgr.doMethodLater(0.7*(len(persuingUnit)-1), self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
+            taskMgr.doMethodLater(1.7*(len(persuingUnit)-1), self.checkFleeCaught, "checkFleeCaughtTask"+str(n), extraArgs=[loserUnit, persuing], appendTask=True)
         #self.attackSequence2.append(Func(self.fallBack, loserUnit.bodyNP,direction))
         if not self.attackSequence.isPlaying():
             await self.attackSequence2
@@ -3073,6 +3096,19 @@ class MyApp(ShowBase):
             if taskMgr.hasTaskNamed("checkFleeCaughtTask"+str(n)):
                 print("removing task","checkFleeCaughtTask"+str(n))
                 taskMgr.remove("checkFleeCaughtTask"+str(n))
+        
+        for i in range(0,len(persuingUnit)-1):
+            unit=persuingUnit[i]
+            if not unit.endedInUnit:
+                unit.endedInUnit=False
+                continue
+            unit.request("Idle")
+            opos=unit.bodyNP.getPos()-direction
+            orot=unit.bodyNP.getHpr()
+            self.autoCharge=True
+            self.autoHold=True
+            self.pathTowardsMouse(unit,loserUnit.bodyNP.getPos().x,loserUnit.bodyNP.getPos().y)
+            self.moveUnit(unit)
         
         
         
@@ -3314,7 +3350,8 @@ class MyApp(ShowBase):
         unit = self.getSelectedUnit(unitNP.node())
         print("fallBackContactTest called for unit:", unit.unit.name)
         unit.bodyNP.setCollideMask(BitMask32.bit(1))
-        unit.bodyNP.node().setTransformDirty()
+        for us in self.units:
+            us.bodyNP.node().setTransformDirty()
         for u in unit.isInCombatWith:
             u.bodyNP.node().setTransformDirty()
         ghost = unit.bodyNP.node()
@@ -3348,7 +3385,7 @@ class MyApp(ShowBase):
                 """ if selected_unit.state == 'InCombat':
                     print("Unit in combat, cannot be moved in bounds again now!")
                     return """
-                if selected_unit.state == 'IsFleeing':
+                """ if selected_unit.state == 'IsFleeing':
                     print("Unit is fleeing out of the battle field, it is destroyed!")
                     base.world.removeRigidBody(selected_unit.bodyNP.node())
                     self.game.units.remove(selected_unit)
@@ -3358,14 +3395,14 @@ class MyApp(ShowBase):
                         self.game.player2Units.remove(selected_unit)
                     selected_unit.bodyNP.removeNode()
                     selected_unit.model.removeNode()
-                    return
+                    return """
                 np=unit.bodyNP
                 #np.setHpr(Vec3(H,0,0))
                 cpos=Vec3(np.getPos())
                 np.setPos(cpos+moveVec)
                 return self.fallBackContactTest(unitNP,moveVec)
         
-    def fallBack(self, loser,direction,length=10.0,rally=False,GG=False):
+    def fallBack(self, loser,direction,length=10.0,rally=False,GG=False,flee=False):
         if loser.isEmpty():
             print("looser is destryed, no fallback")
             """ w=self.getSelectedUnit(winner.node())
@@ -3408,13 +3445,20 @@ class MyApp(ShowBase):
         )
 
         loser.setPos(newPos)
+        bpos=loser.getPos()
         loser.setHpr(newHpr)
-        if rally:
+        if rally or flee:
             self.fallBackContactTest(loser,direction*.1)
+        
         else:
             self.fallBackContactTest(loser,-direction*.1)
 
         newPos = loser.getPos()
+        if (newPos - bpos).length() > 1.1:
+            print("Adjusted fallback position due to collision:", bpos,newPos)
+            loserUnit = self.getSelectedUnit(loser.node())
+            loserUnit.endedInUnit=True
+
         loser.setPos(loserPos)
         loser.setHpr(oldHpr)
 
@@ -3445,30 +3489,33 @@ class MyApp(ShowBase):
         #    self.fallBackContactTest(loser,direction)
         #return sequence
 
-    def fallBack2(self, winner, loser):
+    def fallBack2(self, loser,direction,length=10.0,rally=False,GG=False,flee=False):
         if loser.isEmpty():
             print("looser is destryed, no fallback")
-            w=self.getSelectedUnit(winner.node())
+            """ w=self.getSelectedUnit(winner.node())
             w.isInCombat=False
             w.isInCombatWith=[]
-            w.isInCombatFlank=[]
+            w.isInCombatFlank=[] """
             #TODO: winner overruns
             return
-        if winner is None or loser is None or winner.isEmpty() or loser.isEmpty():
-            print("Error: winner or loser is None or empty.")
-            return
-        print(f"{winner.node().getName()} is victorious!")
+        
         print(f"{loser.node().getName()} falls back!")
-
-        winnerPos=winner.getPos()
+        
+        
         loserPos=loser.getPos()
-        direction = (loserPos - winnerPos).normalized()
-        fallback_distance = 15.0  # Adjust as needed
-        newPos = loserPos + direction * fallback_distance
+        newPos = loserPos + direction * length
         oldHpr=loser.getHpr()
-        loser.lookAt(winnerPos)
-        fleeHpr=loser.getHpr()-Vec3(180,0,0)
-        newHpr=loser.getHpr()
+        if not GG:
+            loser.lookAt(loserPos + direction)
+        #self.sweepTest(loser.node().getShape(0), loser.getPos(), loser.getHpr(), loser.getPos() + direction * length, loser.getHpr())
+        #self.sweepTest(loser, direction, length)
+        
+        fleeHpr=loser.getHpr()
+        if rally:
+            r=Vec3(180,0,0)
+        else:
+            r=Vec3(0,0,0)
+        newHpr=loser.getHpr() + r
         loser.setHpr(oldHpr)
         rotate_interval = LerpPosHprInterval(
             loser, 
@@ -3483,6 +3530,32 @@ class MyApp(ShowBase):
             pos=newPos,
             blendType='easeInOut'
         )
+
+        loser.setPos(newPos)
+        bpos=loser.getPos()
+        loser.setHpr(newHpr)
+        if rally or flee:
+            self.fallBackContactTest(loser,direction*.1)
+        
+        else:
+            self.fallBackContactTest(loser,-direction*.1)
+
+        newPos = loser.getPos()
+        if (newPos - bpos).length() > 1.1:
+            print("Adjusted fallback position due to collision:", bpos,newPos)
+            loserUnit = self.getSelectedUnit(loser.node())
+            loserUnit.endedInUnit=True
+
+        loser.setPos(loserPos)
+        loser.setHpr(oldHpr)
+
+        move_interval2 = LerpPosInterval(
+            loser, 
+            duration=1.0, 
+            pos=newPos,
+            blendType='easeInOut'
+        )
+
         rotate_interval2 = LerpPosHprInterval(
             loser, 
             duration=0.5, 
@@ -3493,10 +3566,17 @@ class MyApp(ShowBase):
         sequence = Sequence(
             rotate_interval,
             move_interval,
+            move_interval2,
+            #Func(self.fallBackContactTest, loser,direction),
             rotate_interval2,
-            Func(self.persuitMove, winner, loser)
+            #Func(self.persuitMove, winner, loser)
         )
-        sequence.start()
+        #sequence.start()
+        #if rally:
+        #    self.fallBackContactTest(loser,direction)
+        return sequence
+
+    
 
     def persuitMove(self, winner, loser):
         if loser.isEmpty():
