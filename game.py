@@ -185,6 +185,9 @@ class gameFSM(FSM):
         self.game.boundries.contactTest(self.game.boundries.southBoundry,0,Vec3(0,0.1,0))
         self.game.boundries.contactTest(self.game.boundries.westBoundry,270,Vec3(0.1,0,0))
         self.game.boundries.contactTest(self.game.boundries.eastBoundry,90,Vec3(-0.1,0,0))
+        for u in self.game.unitCopies:
+            u.removeNode()
+        self.game.unitCopies=[]
         
 
     def enterShootingPhase(self):
@@ -228,6 +231,9 @@ class gameFSM(FSM):
         self.game.ignore('mouse1')
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
+        for u in self.game.unitCopies:
+            u.removeNode()
+        self.game.unitCopies=[]
 
     def enterMakeChoice(self):
         print("Entering Make Choice Phase")
@@ -267,7 +273,9 @@ class MyApp(ShowBase):
         base.enableParticles()
         self.signal = False
         self.autoCharge=False
+        self.autoRoll=False
         self.autoHold=False
+        self.unitCopies = []
         
 
         # Create a flat plane using CardMaker
@@ -1967,9 +1975,19 @@ class MyApp(ShowBase):
         unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
         #self.checkUnitContact(unit)
         c = self.checkUnitContactSmall(unit)
+        
         if c:
             taskMgr.add(self.chargeAndChargeReaction, "chargeAndChargeReactionTask",extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
             #self.getFlankFromContact(unit, c)
+            unit.model.setColor(.7,0.7,0.7,1)
+            copiedUnit=unit.bodyNP.copyTo(render)
+            self.unitCopies.append(copiedUnit)
+            unit.model.setColor(unit.color)
+
+            #copyiedUnit.setColor(1,0,0,1)
+            copiedUnit.setColor(.7,0.7,0.7,1)
+            copiedUnit.setPos(oposUnit)
+            copiedUnit.setHpr(orotUnit)
         else:
             unit.request("Moved")
         self.bakeTextures(self.ground)
@@ -2038,6 +2056,7 @@ class MyApp(ShowBase):
                 unit.updateTextNode()
                 #unit.bodyNP.setCollideMask(BitMask32.bit(4))
                 taskMgr.add(self.chargeInterval,"chargeIntervalTask", extraArgs=[unit, defenderNP, angleToRotate,oposUnit, orotUnit], appendTask=False)
+                
             elif crchoice == "flee":
                 angleToRotate = self.getFlankFromContact(unit, c)
                 print("Defender flees!")
@@ -2328,14 +2347,15 @@ class MyApp(ShowBase):
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, chdice=None):
         
-        if not self.autoCharge:
+        if not self.autoRoll:
             self.terninger, chdice = await self.rullTerninger(2)
         else:
             #await Task.pause(1.0)
             while self.attackSequence2.isPlaying():
                 await Task.pause(0.5)
             await Task.pause(0.5)
-            chdice = [6,6]
+            if chdice is None:
+                chdice = [6,6]
             self.terninger = []
         self.autoCharge=False
         self.autoHold=False
@@ -3048,6 +3068,8 @@ class MyApp(ShowBase):
         persuingUnit.append(loserUnit)
 
         for i, unit in enumerate(persuingUnit):
+            if unit != loserUnit:
+                continue
             terningerPersuit=[]
             for j in range(2):
                 terning = Dice(self.world, position=unit.bodyNP.getPos() + Vec3(-20+j*4,0,10), size=1.0)
@@ -3064,22 +3086,25 @@ class MyApp(ShowBase):
             await task
         for i in range(len(persuingUnit) - 1, -1, -1):
             unit = persuingUnit[i]
-            persuitDices = persuitDiceDices[i]
-            persuit_results = [terning.currentValue for terning in persuitDices]
-            persuit_score = sum(persuit_results)
-            print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
             
-            print(f"{unit.unit.name} successfully pursues the fleeing unit!")
             if unit == loserUnit:
+                persuitDices = persuitDiceDices[0]
+                persuit_results = [terning.currentValue for terning in persuitDices]
+                persuit_score = sum(persuit_results)
+                print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
+                
+                print(f"{unit.unit.name} successfully pursues the fleeing unit!")
                 #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,flee=True))
                 #self.attackSequence2.append(self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=True))
                 await self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=True)
             else:
                 #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*1.0,flee=False))
-                self.attackSequence2.append(self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=False))
-            self.attackSequence2.append(Wait(0.7))
+                
+                #self.attackSequence2.append(self.fallBack2(unit.bodyNP,direction,length=persuit_score*1.0,flee=False))###
+                pass
+            #self.attackSequence2.append(Wait(0.7))
             #self.attackSequence2.append(Func(self.fallBack(unit.bodyNP,direction,length=persuit_score*1.0).start()))
-        self.attackSequence2.append(Wait(2.0*(len(persuingUnit)-1)))
+        #self.attackSequence2.append(Wait(1.0*(len(persuingUnit)-1)))
         for dices in persuitDiceDices:
             for terning in dices:
                 terning.remove(self.world)
@@ -3102,9 +3127,21 @@ class MyApp(ShowBase):
         
         for i in range(0,len(persuingUnit)-1):
             unit=persuingUnit[i]
-            if not unit.endedInUnit:
+            rFrom = unit.bodyNP.getHpr()
+            unit.bodyNP.lookAt(loserUnit.bodyNP)
+            rTo = unit.bodyNP.getHpr()
+            unit.bodyNP.setHpr(rFrom)
+            rotation_interval = LerpPosHprInterval(
+                unit.bodyNP, 
+                duration=0.5,
+                pos=unit.bodyNP.getPos(),
+                hpr=rTo,
+                blendType='easeInOut'
+            )
+            await rotation_interval
+            """ if not unit.endedInUnit:
                 unit.endedInUnit=False
-                continue
+                continue """
             unit.request("Idle")
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
