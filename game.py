@@ -2381,7 +2381,7 @@ class MyApp(ShowBase):
         rgt = rot.getRight()
         #dire = contactPos - oposUnit
         #dire = self.playerNP.getPos() - oposUnit
-        dire = contactPos+Vec3(math.cos(contactRot.x),math.sin(contactRot.x),0)*height - oposUnit+Vec3(math.cos(orotUnit.x),math.sin(orotUnit.x),0)*height
+        dire = (contactPos+Vec3(-math.sin(math.radians(contactRot.x)),math.cos(math.radians(contactRot.x)),0)*height) - (oposUnit+Vec3(-math.sin(math.radians(orotUnit.x)),math.cos(math.radians(orotUnit.x)),0)*height)
 
         angle_between = rgt.dot(dire.normalized())
         if angle_between >=0:
