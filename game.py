@@ -2359,7 +2359,10 @@ class MyApp(ShowBase):
         rot = LRotationf()
         rot.setHpr(unit.bodyNP.getHpr())
         rgt = rot.getRight()
-        dire = contactPos - oposUnit
+        #dire = contactPos - oposUnit
+        #dire = self.playerNP.getPos() - oposUnit
+        dire = contactPos+Vec3(math.cos(contactRot.x),math.sin(contactRot.x),0)*height - oposUnit+Vec3(math.cos(orotUnit.x),math.sin(orotUnit.x),0)*height
+
         angle_between = rgt.dot(dire.normalized())
         if angle_between >=0:
             sign = 1
