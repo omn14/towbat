@@ -2869,10 +2869,10 @@ class MyApp(ShowBase):
             print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
             #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
             
-            if leadership_score+99 > int(loserUnit.unit.model.characteristics['Ld']):
+            if leadership_score-99 > int(loserUnit.unit.model.characteristics['Ld']):
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif leadership_score+99 > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -2970,6 +2970,8 @@ class MyApp(ShowBase):
         persuingUnit.append(loserUnit)
 
         for i, unit in enumerate(persuingUnit):
+            if unit != loserUnit:
+                continue
             terningerPersuit=[]
             for j in range(2):
                 terning = Dice(self.world, position=unit.bodyNP.getPos() + Vec3(-20+j*4,0,10), size=1.0)
@@ -2988,20 +2990,22 @@ class MyApp(ShowBase):
         maxmove = max([terning.currentValue for terning in persuitDiceDices[-1]])
         for i in range(len(persuingUnit) - 1, -1, -1):
             unit = persuingUnit[i]
-            persuitDices = persuitDiceDices[i]
-            persuit_results = [terning.currentValue for terning in persuitDices]
+            
             if unit == loserUnit:
+                persuitDices = persuitDiceDices[0]
+                persuit_results = [terning.currentValue for terning in persuitDices]
                 persuit_score = max(persuit_results)
             else:
-                persuit_score = sum(persuit_results)
-                persuit_score = min(persuit_score, maxmove)
+                pass
+                #persuit_score = sum(persuit_results)
+                #persuit_score = min(persuit_score, maxmove)
             print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
             
             print(f"{unit.unit.name} successfully pursues the fleeing unit!")
             if unit != loserUnit:
-                distBetween = (loserUnit.bodyNP.getPos() - unit.bodyNP.getPos()).length()-loserUnit.unitHeight/2.0-unit.unitHeight/2.0
-                self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*0.95+distBetween))
-                
+                #distBetween = (loserUnit.bodyNP.getPos() - unit.bodyNP.getPos()).length()-loserUnit.unitHeight/2.0-unit.unitHeight/2.0
+                #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction,length=persuit_score*0.95+distBetween))
+                pass
                 
             else:
                 
@@ -3021,6 +3025,21 @@ class MyApp(ShowBase):
         
         for i in range(0,len(persuingUnit)-1):
             unit=persuingUnit[i]
+            rFrom = unit.bodyNP.getHpr()
+            unit.bodyNP.lookAt(loserUnit.bodyNP)
+            rTo = unit.bodyNP.getHpr()
+            unit.bodyNP.setHpr(rFrom)
+            rotation_interval = LerpPosHprInterval(
+                unit.bodyNP, 
+                duration=0.5,
+                pos=unit.bodyNP.getPos(),
+                hpr=rTo,
+                blendType='easeInOut'
+            )
+            await rotation_interval
+            """ if not unit.endedInUnit:
+                unit.endedInUnit=False
+                continue """
             unit.request("Idle")
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
@@ -3028,8 +3047,6 @@ class MyApp(ShowBase):
             self.autoHold=True
             self.pathTowardsMouse(unit,loserUnit.bodyNP.getPos().x,loserUnit.bodyNP.getPos().y)
             self.moveUnit(unit)
-            
-            #await taskMgr.add(self.chargeInterval,extraArgs=[unit,loserUnit.bodyNP,0,opos,orot,[6,6]],appendTask=False)
 
     async def fleeFromCombat(self, loserUnit):
         direction=self.fleeDirectionMultUnits(loserUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
