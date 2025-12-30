@@ -145,28 +145,36 @@ class unitGraphics(FSM):
             #self.model.flattenLight()
     
     def enterIdle(self):
-        print(f"{self.unitName} is idle!")
+        print(f"{self.unitName} is idle! state")
         self.hasMovedThisTurn=False
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterMoved(self):
+        print(f"{self.unitName} is in moved state!")
         self.hasMovedThisTurn=True
         messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterInCombat(self):
+        print(f"{self.unitName} is in combat state!")
         self.isInCombat=True
         messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
     
     def exitInCombat(self):
+        print(f"{self.unitName} is exiting combat state!")
         self.isInCombat=False
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
 
     def enterIsFleeing(self):
+        print(f"{self.unitName} is in fleeing state!")
         self.attemptedRallyThisTurn=False
-        print(f"{self.unitName} is fleeing!")
+        taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
+        pass
+
+    def enterIsPursuing(self):
+        print(f"{self.unitName} is in pursuing state!")
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
         pass

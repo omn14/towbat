@@ -335,6 +335,8 @@ class MyApp(ShowBase):
         self.moveArceDistance = 0
         self.debugTextInfo.setText("Debug Arch test")
 
+        self.diceInfoText = self.setup_text_node(text="Dice Info", pos=(-0.7, 0.55), scale=0.05, color=(1, 1, 0, 1))
+
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
 
@@ -421,7 +423,7 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 0:
+        if 1: #battle test
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
@@ -431,7 +433,7 @@ class MyApp(ShowBase):
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
 
-        if 1: #fall back through enemy allay tests
+        if 0: #fall back through enemy allay tests
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-3,0)
@@ -1949,8 +1951,13 @@ class MyApp(ShowBase):
             taskMgr.remove("taskLoopPathTowardsMouse")
             
         if unit.state != "Idle":
-            print("Unit is not idle, cannot move.")
-            return
+            print("Unit is not idle")
+            if unit.state != "IsPursuing":
+                print("Unit is not pursuing, cannot move.")
+                return
+        
+        
+        
         
         if unit.hasMovedThisTurn:
             print("Unit has already moved this turn.")
@@ -2346,10 +2353,26 @@ class MyApp(ShowBase):
         
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, chdice=None):
-        
+        maxmove = int(unit.unit.model.characteristics['M'])
+        for rule in unit.unit.model.special_rules:
+            if rule.get('mountUnit'):
+                maxmove= int(rule['mountUnit'].model.characteristics['M'])
+        if unit.state == "IsPursuing":
+            maxmove = 0
         if not self.autoRoll:
+            #if self.autoCharge:
+            #    maxmove = 6*2
+            
+            self.diceInfoText.setText(f"Roll needed: {(math.ceil(self.moveArceDistance)-int(maxmove)):.0f}")
+            
+            #for rule in unit.unit.model.special_rules:
+            #    if rule.get('mountUnit'):
+            #        self.diceInfoText.setText(f"Roll needed: {(math.ceil(self.moveArceDistance)-int(rule['mountUnit'].model.characteristics['M'])):.0f}")
             self.terninger, chdice = await self.rullTerninger(2)
+            #self.diceInfoText.setText(f"Roll needed: {unit.unit.model.characteristics['M']} + highest die")
+            
         else:
+            
             #await Task.pause(1.0)
             while self.attackSequence2.isPlaying():
                 await Task.pause(0.5)
@@ -2443,6 +2466,8 @@ class MyApp(ShowBase):
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
                 chdist= int(rule['mountUnit'].model.characteristics['M'])+ max(chdice)
+        if unit.state == "IsPursuing":
+            chdist = sum(chdice)
         print("Charge distance:", chdist)
         if chdist < wdistance:
             angle = math.degrees(chdist/(width*2))
@@ -2524,6 +2549,8 @@ class MyApp(ShowBase):
             hpr=finalHpr,
             blendType='easeInOut'
         )
+        
+        
         await rotation_interval
         unit.bodyNP.wrtReparentTo(parent)
         newnode.removeNode()
@@ -2534,13 +2561,27 @@ class MyApp(ShowBase):
             #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
         ) """
 
-
+        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        if defenderUnit.state == "IsFleeing":
+            print("Contact detected between fleeing unit and pursuer!")
+            self.world.removeRigidBody(defenderUnit.bodyNP.node())
+            defenderUnit.model.removeNode()
+            defenderUnit.bodyNP.removeNode()
+            self.units.remove(defenderUnit)
+            if defenderUnit in self.player1Units:
+                self.player1Units.remove(defenderUnit)
+            if defenderUnit in self.player2Units:
+                self.player2Units.remove(defenderUnit)
+            unit.request("Moved")
+            for terning in self.terninger:
+                terning.remove(self.world)
+            return
         
         unit.request("InCombat")
         unit.isInCombat=True
         #unit.bodyNP.setCollideMask(BitMask32.bit(4))
         
-        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        
         if defenderUnit.state != "InCombat": #something gets reset when requesting InCombat again
             defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
@@ -2869,10 +2910,10 @@ class MyApp(ShowBase):
             print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
             #print(f"Leadership score for fleeing unit: {leadership_score}, combat minus: {diff}")
             
-            if leadership_score-99 > int(loserUnit.unit.model.characteristics['Ld']):
+            if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
                 print("losing unit flees from combat!")
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
-            elif leadership_score+99 > int(loserUnit.unit.model.characteristics['Ld'])-diff:
+            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld'])-diff:
                 print("losing unit FBIG!")
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
             else:
@@ -2947,6 +2988,7 @@ class MyApp(ShowBase):
             print(f"Selected choice: {selected_choice}")
             if selected_choice == persuitOrNot[0]:
                 print(f"{unit.unit.name} chooses to pursue!")
+                unit.request("IsPursuing")
                 #pursuit
                 #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction))
                 persuingUnit.append(unit)
@@ -3022,7 +3064,7 @@ class MyApp(ShowBase):
         #    self.attackSequence2.start()
         self.attackSequence2.append(Wait(2*(len(persuingUnit)-1)))
         await self.attackSequence2
-        
+        loserUnit.request("Moved")
         for i in range(0,len(persuingUnit)-1):
             unit=persuingUnit[i]
             rFrom = unit.bodyNP.getHpr()
@@ -3040,7 +3082,8 @@ class MyApp(ShowBase):
             """ if not unit.endedInUnit:
                 unit.endedInUnit=False
                 continue """
-            unit.request("Idle")
+            #unit.request("Idle")
+            unit.request("IsPursuing")
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
             self.autoCharge=True
@@ -3066,6 +3109,7 @@ class MyApp(ShowBase):
             unit.request("Idle")
             if selected_choice == persuitOrNot[0]:
                 print(f"{unit.unit.name} chooses to pursue!")
+                unit.request("IsPursuing")
                 #pursuit
                 #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction))
                 persuingUnit.append(unit)
@@ -3159,7 +3203,8 @@ class MyApp(ShowBase):
             """ if not unit.endedInUnit:
                 unit.endedInUnit=False
                 continue """
-            unit.request("Idle")
+            #unit.request("Idle")
+            unit.request("IsPursuing")
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
             self.autoCharge=True

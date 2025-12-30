@@ -12,7 +12,7 @@ class Choice:
         self.choice = None
         self.boxes = []
         for i, c in enumerate(self.choices):
-            loc=pos+Vec3(i*16,0,0)
+            loc=pos+Vec3(i*16,0,20)
             box=self.create_bullet_rigidbody_cube(None, location=loc, size=8.0, name=c)
             self.boxes.append(box)
         #self.ma = taskMgr.add(self.mouseActivate, "mouseActivateTask")
