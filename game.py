@@ -1763,6 +1763,8 @@ class MyApp(ShowBase):
                 print(f"Warning: M value '{M}' is not a number, defaulting to 1")
                 M = 0
             move = M*2
+            if unit.state == "IsPursuing":
+                move = 21
 
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
