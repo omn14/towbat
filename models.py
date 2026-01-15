@@ -298,7 +298,9 @@ class SkeletalSteed(model):
         
         self.special_rules.append({'name': 'Skeletal Steed',
                                    'description': 'This model has special rules for Skeletal Steeds.',
-                                   'tag': 'special'})
+                                   'tag': 'special',
+                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   })
         self.AP = 0  # Example Armor Penetration value for Skeletal Steeds
 
 class BlackKnight(model):
@@ -315,7 +317,8 @@ class BlackKnight(model):
         self.special_rules.append({'name': 'regeneration',
                                    'description': 'This model has the regeneration special rule, allowing it to recover wounds.',
                                    'tag': 'special',
-                                   'regen': 6
+                                   'regen': 6,
+                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
                                    })
 
         self.AP = 0  # Example Armor Penetration value for Black Knights
@@ -329,6 +332,30 @@ class BlackKnight(model):
                       'charge': lambda model_instance: plusSTAT(model_instance, 'S', 2, -99) },
             'sword': {'name': 'sword'}
         })
+
+class Zombie(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Zombie specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Zombie',
+                                   'description': 'This model has special rules for Zombies.',
+                                   'tag': 'special',
+                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   })
+        self.AP = 0  # Example Armor Penetration value for Zombies
+
+class DireWolf(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Dire Wolf specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Dire Wolf',
+                                   'description': 'This model has special rules for Dire Wolves.',
+                                   'tag': 'special',
+                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   })
+        self.AP = 0  # Example Armor Penetration value for Dire Wolves
 
 class JadeWarrior(model):
     def __init__(self, name: str, url: str):

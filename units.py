@@ -40,6 +40,11 @@ class unitGraphics(FSM):
             for i in range(diffnmodel):
                 clone=children[0].copyTo(self.model)
                 children.append(clone)
+        
+        while len(children)>self.unit.nmodels:
+            children[-1].removeNode()
+            children = self.model.getChildren()
+
         self.modelWidth=abs(children[0].getTightBounds()[1][0]-children[0].getTightBounds()[0][0])
         self.modelHeight=abs(children[0].getTightBounds()[1][1]-children[0].getTightBounds()[0][1])
         print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")

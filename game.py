@@ -344,7 +344,9 @@ class MyApp(ShowBase):
         self.units = []
         self.player1Units = []
         self.player2Units = []
-        url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+        
+        
+        """ url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
         man_at_arm = model("Man_at_Arm", url_man_at_arm)
         man_at_arm.armor_save = 7
         man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
@@ -356,29 +358,7 @@ class MyApp(ShowBase):
 
         
 
-        url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
-        night_goblin = NightGoblin("Night Goblin", url_night_goblin)
-        night_goblin.armor_save = 7 
-        night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
-        self.goblins = unitGraphics(self,'Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
-        self.goblins.bodyNP.setPos(0,-20,0)
-        self.goblins.unit.model.equip_weapon('short bow')
-        self.units.append(self.goblins)
-        self.player1Units.append(self.goblins)
-        self.unitToMove=self.bretBowmen
         
-        url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
-        url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
-        giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
-        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 15,5,3)
-        goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
-        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 15,5,3)
-        self.goblinWolfRiders = unitGraphics(self,'GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
-        self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
-        #self.goblinWolfRiders.bodyNP.setH(90)
-        self.units.append(self.goblinWolfRiders)
-        self.player1Units.append(self.goblinWolfRiders)
-        print("Goblin wolf riders loaded")
         
         url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
         url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
@@ -394,8 +374,78 @@ class MyApp(ShowBase):
         self.mountedKnightOfTheRealm = unitGraphics(self,'MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
         self.mountedKnightOfTheRealm.bodyNP.setPos(20,20,0)
         self.units.append(self.mountedKnightOfTheRealm)
-        self.player2Units.append(self.mountedKnightOfTheRealm)
+        self.player2Units.append(self.mountedKnightOfTheRealm) """
+
+
+        cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
+        cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 6,6,1)
+        jade_lancer = JadeLancer("Jade Lancer", "-", mountUnit=cathayan_warhorse_unit)
+        jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 6,6,1)
+        self.jadeLancers = unitGraphics(self,'JadeLancers','models/jade_lancer.bam',jade_lancer_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
+        self.jadeLancers.bodyNP.setPos(30,25,0)
+        self.jadeLancers.bodyNP.setH(180)
+        self.units.append(self.jadeLancers)
+        self.player2Units.append(self.jadeLancers)
+
+        jade_warrior = JadeWarrior("Jade Warrior", "-")
+        jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 12,6,2)
+        self.jadeWarriors = unitGraphics(self,'JadeWarriors','models/jade_warrior.bam',jade_warrior_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
+        self.jadeWarriors.bodyNP.setPos(0,30,0)
+        self.jadeWarriors.bodyNP.setH(180)
+        self.units.append(self.jadeWarriors)
+        self.player2Units.append(self.jadeWarriors)
+
+
+
         
+        """ url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
+        night_goblin = NightGoblin("Night Goblin", url_night_goblin)
+        night_goblin.armor_save = 7 
+        night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
+        self.goblins = unitGraphics(self,'Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblins.bodyNP.setPos(0,-20,0)
+        self.goblins.unit.model.equip_weapon('short bow')
+        self.units.append(self.goblins)
+        self.player1Units.append(self.goblins)
+        
+        url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
+        url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
+        giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
+        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 15,5,3)
+        goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
+        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 15,5,3)
+        self.goblinWolfRiders = unitGraphics(self,'GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
+        #self.goblinWolfRiders.bodyNP.setH(90)
+        self.units.append(self.goblinWolfRiders)
+        self.player1Units.append(self.goblinWolfRiders)
+        print("Goblin wolf riders loaded") """
+
+        skeletal_steed = SkeletalSteed("Skeletal Steed", "url_skeletal_steed")
+        skeletal_steed_unit = unit("Skeletal Steed Unit", skeletal_steed, 6,6,1)
+        black_knight = BlackKnight("Black Knight", "url_black_knight", mountUnit=skeletal_steed_unit)
+        black_knight_unit = unit("Black Knight Unit", black_knight, 6,6,1)
+        self.blackKnights = unitGraphics(self,'BlackKnights','models/black_knights.bam',black_knight_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.blackKnights)
+        self.units.append(self.blackKnights)
+
+        zombie = Zombie("Zombie", "url_zombie")
+        zombie_unit = unit("Zombie Unit", zombie, 20,5,4)
+        self.zombies = unitGraphics(self,'Zombies','models/zombies.bam',zombie_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.zombies)
+        self.units.append(self.zombies)
+        self.zombies.bodyNP.setPos(-25,-25,0)
+
+        direWolf = DireWolf("Dire Wolf", "url_dire_wolf")
+        direWolf_unit = unit("Dire Wolf Unit", direWolf, 5,5,1)
+        self.direWolves = unitGraphics(self,'DireWolves','models/dire_wolves.bam',direWolf_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.direWolves)
+        self.units.append(self.direWolves)
+        self.direWolves.bodyNP.setPos(-30,-20,0)
+
+
+
+        self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
         #self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,6)
@@ -408,7 +458,8 @@ class MyApp(ShowBase):
         self.setActiveUnitTaskName="taskLoopStrategy"
 
         self.fsm = gameFSM(self)
-        ###Shooting scenario testing
+        
+
         if 0:
             self.fsm.currentPhaseIndex=2
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
@@ -423,7 +474,7 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
             #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
             self.unitToMove=self.goblins
-        if 1: #battle test
+        if 0: #battle test
             self.fsm.currentPhaseIndex=1
             self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
             self.goblins.bodyNP.setPos(0,-13,0)
@@ -483,11 +534,22 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.isInCombatWith.append(self.bretBowmen)
             self.goblinWolfRiders.isInCombat=True
             self.goblinWolfRiders.isInCombatFlank.append('left')
+        if 1: #battle march
+            self.blackKnights.bodyNP.setPos(0,-9,0)
+            self.zombies.bodyNP.setPos(11,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+
+        if 0:
+            self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
+            self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+        else:
+            self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=44, height=30, color=Vec4(1, 1, 0, 1))
+            self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=44, height=15, color=Vec4(1, 1, 1, 1))
 
 
-        self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
-        
-        self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
 
         
         self.z2= loader.loadModel("models/zup-axis")
@@ -1756,7 +1818,19 @@ class MyApp(ShowBase):
             #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
 
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
-            M=self.unitToMove.unit.model.characteristics['M']
+
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('move'):
+                    #print("Unit is flatfooted, cannot move.")
+                    rule['move'](self.unitToMove.unit.model)
+            
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    for ruleM in rule['mountUnit'].model.special_rules:
+                        if ruleM.get('move'):
+                            ruleM['move'](rule['mountUnit'].model)
+
+            M=str(self.unitToMove.unit.model.characteristics['M'])
             if M.isdigit():
                 M = int(M)
             else:
@@ -1772,6 +1846,11 @@ class MyApp(ShowBase):
                     move = max(move, mountmove)
             print("Unit move:", move)
             
+            self.unitToMove.unit.model.reset_characteristics()
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    rule['mountUnit'].model.reset_characteristics()
+
 
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),

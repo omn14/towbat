@@ -86,9 +86,9 @@ if __name__ == "__main__":
     #jade_warrior_unit.model.equip_weapon('halberd')
 
     cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
-    cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 7,7,1)
+    cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 6,6,1)
     jade_lancer = JadeLancer("Jade Lancer", "-", mountUnit=cathayan_warhorse_unit)
-    jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 7,7,1)
+    jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 6,6,1)
 
 
     results_attacker = []
@@ -102,9 +102,9 @@ if __name__ == "__main__":
     #night_goblin_unit.model.equip_weapon('short bow')
     #goblin_wolf_rider_unit.model.equip_weapon('cavalry spear')
     black_knight_unit.model.equip_weapon('lance')
-    attacker = black_knight_unit
+    attacker = jade_lancer_unit
     #defender = pegasus_knight_unit
-    defender=jade_lancer_unit
+    defender= black_knight_unit
     defender_nmodels = defender.nmodels
     for i in range(1000):
         print(f"--- BATTLE SIMULATION {i+1} ---")
