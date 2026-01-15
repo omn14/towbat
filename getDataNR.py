@@ -31,6 +31,9 @@ if __name__ == "__main__":
     url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
     url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
 
+    url_black_knight = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/vampire-counts/c40af53f-c6f2374d/black-knight"
+    url_skeletal_steed = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/vampire-counts/328cb273-84f94021/skeletal-steed"
+
     black_orc = BlackOrc("Black Orc", url_black_orc)
     black_orc.armor_save = 3
     man_at_arm = model("Man_at_Arm", url_man_at_arm)
@@ -73,20 +76,35 @@ if __name__ == "__main__":
     orc_boy_unit = unit("Orc Boy Unit", orc_boy, 20,5,4)
     mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
 
+    skeletal_steed = SkeletalSteed("Skeletal Steed", url_skeletal_steed)
+    skeletal_steed_unit = unit("Skeletal Steed Unit", skeletal_steed, 6,6,1)
+    black_knight = BlackKnight("Black Knight", url_black_knight, mountUnit=skeletal_steed_unit)
+    black_knight_unit = unit("Black Knight Unit", black_knight, 6,6,1)
+    
+    jade_warrior = JadeWarrior("Jade Warrior", "-")
+    jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 12,6,2)
+    #jade_warrior_unit.model.equip_weapon('halberd')
+
+    cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
+    cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 7,7,1)
+    jade_lancer = JadeLancer("Jade Lancer", "-", mountUnit=cathayan_warhorse_unit)
+    jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 7,7,1)
+
 
     results_attacker = []
     results_defender = []
 
 
-    attacker = mounted_knight_of_the_realm_unit
-    defender = orc_boy_unit
+    #attacker = mounted_knight_of_the_realm_unit
+    #defender = orc_boy_unit
 
-    attacker = night_goblin_unit
+    #attacker = night_goblin_unit
     #night_goblin_unit.model.equip_weapon('short bow')
-    goblin_wolf_rider_unit.model.equip_weapon('cavalry spear')
-    attacker = goblin_wolf_rider_unit
-    defender = pegasus_knight_unit
-    defender=night_goblin_unit
+    #goblin_wolf_rider_unit.model.equip_weapon('cavalry spear')
+    black_knight_unit.model.equip_weapon('lance')
+    attacker = black_knight_unit
+    #defender = pegasus_knight_unit
+    defender=jade_lancer_unit
     defender_nmodels = defender.nmodels
     for i in range(1000):
         print(f"--- BATTLE SIMULATION {i+1} ---")

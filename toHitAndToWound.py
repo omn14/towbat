@@ -24,6 +24,7 @@ def to_hit(model1,model2):
 
 def to_wound(model1,model2):
     str1 = model1.characteristics.get('S')
+    print(f"Model 1 Strength: {str1}")
     toughness2 = model2.characteristics.get('T')
 
     if str1 is None or toughness2 is None:

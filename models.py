@@ -290,3 +290,91 @@ class GoblinWolfRider(model):
                       'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
             'sword': {'name': 'sword'}
         })
+
+class SkeletalSteed(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Skeletal Steed specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Skeletal Steed',
+                                   'description': 'This model has special rules for Skeletal Steeds.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Skeletal Steeds
+
+class BlackKnight(model):
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        # Additional Black Knight specific attributes can be added here
+        self.special_rules.append({'name': 'Black Knight',
+                                   'description': 'This model has special rules for Black Knights.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on Skeletal Steed',
+                                   'description': 'This model is mounted on a Skeletal Steed, granting it additional movement and combat abilities.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+
+        self.AP = 0  # Example Armor Penetration value for Black Knights
+        self.armor_save = 4  # Example improved armor save for Black Knights
+
+        self.weapons.update({
+            'lance': {'name': 'lance',
+                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
+                      'tag': 'combat',
+                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1),
+                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 2, -99) },
+            'sword': {'name': 'sword'}
+        })
+
+class JadeWarrior(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Jade Warrior specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Jade Warrior',
+                                   'description': 'This model has special rules for Jade Warriors.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Jade Warriors
+        self.armor_save = 3  # Example improved armor save for Jade Warriors
+
+        self.weapons.update({
+            'halberd': {'name': 'halberd',
+                        'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
+                        'tag': 'combat',
+                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
+                        'to_modify_stat': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99),
+                        'to_modify_stat': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1) }
+        })
+
+class CathayanWarhorse(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Cathayan Warhorse specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Cathayan Warhorse',
+                                   'description': 'This model has special rules for Cathayan Warhorses.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Cathayan Warhorses
+
+class JadeLancer(model):
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        # Additional Jade Lancer specific attributes can be added here
+        self.special_rules.append({'name': 'Jade Lancer',
+                                   'description': 'This model has special rules for Jade Lancers.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on Cathayan Warhorse',
+                                   'description': 'This model is mounted on a Cathayan Warhorse, granting it additional movement and combat abilities.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+
+        self.AP = 0  # Example Armor Penetration value for Jade Lancers
+        self.armor_save = 3  # Example improved armor save for Jade Lancers
+
+        self.weapons.update({
+            'lance': {'name': 'cathayan lance',
+                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
+                      'tag': 'combat',
+                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
+                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
+            'sword': {'name': 'sword'}
+        })

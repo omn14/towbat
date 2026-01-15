@@ -87,6 +87,15 @@ def simulate_battle(unit1, unit2,charge: bool):
                     attacks += int((unit1.files + 1) / 2)  # half attacks from second rank
                     print("Volly fire rule applied",unit1.files,attacks)
 
+    for rule in unit1.model.special_rules:
+        if rule.get('to_modify_stat'):
+            rule['to_modify_stat'](unit1.model)
+
+    for rule in unit2.model.special_rules:
+        if rule.get('to_modify_stat'):
+            rule['to_modify_stat'](unit2.model)
+
+
     attacks1 = attacks
     print(f"Total attacks by {unit1.name} on {unit2.name}: {attacks1}")
     total_hits = 0
