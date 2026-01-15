@@ -114,6 +114,12 @@ def simulate_battle(unit1, unit2,charge: bool):
             if check_armor_save(unit2.model,unit2.model.armor_save, unit1.model.AP):
                 saves_made += 1
                 total_wounds -= 1
+            else:
+                for rule in unit2.model.special_rules:
+                    if rule.get('regen'):
+                        if check_armor_save(unit2.model,rule['regen'], 0):
+                            saves_made += 1
+                            total_wounds -= 1
             #if total_wounds >= unit2.nmodels:
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have

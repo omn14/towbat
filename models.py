@@ -312,6 +312,11 @@ class BlackKnight(model):
                                    'description': 'This model is mounted on a Skeletal Steed, granting it additional movement and combat abilities.',
                                    'tag': 'mount',
                                    'mountUnit': mountUnit})
+        self.special_rules.append({'name': 'regeneration',
+                                   'description': 'This model has the regeneration special rule, allowing it to recover wounds.',
+                                   'tag': 'special',
+                                   'regen': 6
+                                   })
 
         self.AP = 0  # Example Armor Penetration value for Black Knights
         self.armor_save = 4  # Example improved armor save for Black Knights
