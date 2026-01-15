@@ -2927,11 +2927,26 @@ class MyApp(ShowBase):
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
             attackerUnit.unit.nmodels-=total_wounds
             #self.removeModelsFromUnit(attackerUnit,total_wounds)
-            self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, total_wounds))
+            
             if defenderUnit in self.player1Units:
                 player1_score += total_wounds
             else:
                 player2_score += total_wounds
+            combWounds=0
+            combWounds+=total_wounds
+            for rule in defenderUnit.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(rule['mountUnit'], attackerUnit.unit,charge=False)
+                    self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits, suffered_wounds,  saves_made, total_wounds)
+                    attackerUnit.unit.nmodels-=total_wounds
+                    #self.removeModelsFromUnit(attackerUnit,total_wounds)
+                    
+                    if defenderUnit in self.player1Units:
+                        player1_score += total_wounds
+                    else:
+                        player2_score += total_wounds
+            combWounds+=total_wounds
+            self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, combWounds))
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
         await self.attackSequence
