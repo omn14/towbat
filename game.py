@@ -2990,6 +2990,12 @@ class MyApp(ShowBase):
                 w.isInCombatFlank=[]
                 #TODO: winner overruns """
                 return
+            
+            if any(rule.get('Unbreakable', False) for rule in loserUnit.unit.model.special_rules):
+                print(f"{loserUnit.unit.name} is Unbreakable and does not flee!, only gives ground.")
+                await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
+                continue
+
             print("losing unit original LD:", loserUnit.unit.model.characteristics['Ld'], "modified by combat diff:", diff, "final LD to beat:", int(loserUnit.unit.model.characteristics['Ld']) - diff)
             terningerLd=[]
             for i in range(2):

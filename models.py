@@ -320,6 +320,11 @@ class BlackKnight(model):
                                    'regen': 6,
                                    'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
                                    })
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'This model has the Fearless special rule.',
+                                   'tag': 'special',
+                                   'Unbreakable': True
+                                   })
 
         self.AP = 0  # Example Armor Penetration value for Black Knights
         self.armor_save = 4  # Example improved armor save for Black Knights
@@ -343,6 +348,11 @@ class Zombie(model):
                                    'tag': 'special',
                                    'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
                                    })
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'This model has the Fearless special rule.',
+                                   'tag': 'special',
+                                   'Unbreakable': True
+                                   })
         self.AP = 0  # Example Armor Penetration value for Zombies
 
 class DireWolf(model):
@@ -354,6 +364,11 @@ class DireWolf(model):
                                    'description': 'This model has special rules for Dire Wolves.',
                                    'tag': 'special',
                                    'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   })
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'This model has the Fearless special rule.',
+                                   'tag': 'special',
+                                   'Unbreakable': True
                                    })
         self.AP = 0  # Example Armor Penetration value for Dire Wolves
 
