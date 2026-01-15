@@ -169,7 +169,7 @@ class gameFSM(FSM):
         self.game.setActiveUnitTask=self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName="taskLoopPathTowardsMouse"
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
-        if self.game.roundCounter.current_player == 2:
+        if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
             taskMgr.add(self.game.AIplayer2.takeMoveTurn())
         
@@ -222,7 +222,7 @@ class gameFSM(FSM):
         for unit in self.game.units:
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn=False
-        if self.game.roundCounter.current_player == 2:
+        if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
             taskMgr.add(self.game.AIplayer2.takeCombatTurn())
 
 
@@ -454,6 +454,7 @@ class MyApp(ShowBase):
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
+        self.AIplayer2.active = False
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
 
@@ -2085,7 +2086,7 @@ class MyApp(ShowBase):
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.ignore('mouse1')
         print("Waiting for choice...")
-        if self.roundCounter.current_player == 2:
+        if self.roundCounter.current_player == 2 and self.AIplayer2.active:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
             cyn.hitbox = cyn.boxes[0].node()

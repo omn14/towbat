@@ -12,6 +12,7 @@ class ClassAI:
         self._move_complete = False
         self.helper1 = DirectObject()
         self.helper1.accept('unit-move-complete', self.endLoopWaitForMoveComplete)
+        self.active=True
 
 
     async def takeMoveTurn(self):
