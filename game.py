@@ -1820,6 +1820,103 @@ class MyApp(ShowBase):
 
             print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
+            """ for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('move'):
+                    #print("Unit is flatfooted, cannot move.")
+                    rule['move'](self.unitToMove.unit.model)
+            
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    for ruleM in rule['mountUnit'].model.special_rules:
+                        if ruleM.get('move'):
+                            ruleM['move'](rule['mountUnit'].model)
+
+            M=str(self.unitToMove.unit.model.characteristics['M'])
+            if M.isdigit():
+                M = int(M)
+            else:
+                print(f"Warning: M value '{M}' is not a number, defaulting to 1")
+                M = 0
+            move = M*2
+            if unit.state == "IsPursuing":
+                move = 21
+
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    mountmove= int(rule['mountUnit'].model.characteristics['M'])*2
+                    move = max(move, mountmove)
+            print("Unit move:", move)
+            
+            self.unitToMove.unit.model.reset_characteristics()
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    rule['mountUnit'].model.reset_characteristics() """
+
+            M=str(self.unitToMove.unit.model.characteristics['M'])
+            if M.isdigit():
+                M = int(M)
+            else:
+                print(f"Warning: M value '{M}' is not a number, defaulting to 1")
+                M = 0
+            move = M+6
+            if unit.state == "IsPursuing":
+                move = 21
+
+            for rule in self.unitToMove.unit.model.special_rules:
+                if rule.get('mountUnit'):
+                    mountmove= int(rule['mountUnit'].model.characteristics['M'])+6
+                    move = max(move, mountmove)
+            print("Unit move:", move)
+            self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
+                                               width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
+                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
+            #self.polygonpoints = self.mirrorPointArc(self.polygonpoints)
+
+            
+            #self.playerNP.setPos(result.getHitPos()+Vec3(10,10,0))
+            #self.playerNP.node().setLinearMovement(Vec3(10,10,0), True)
+            p1 = (self.polygonpoints[self.numsPoints-3]*2-1)*50
+            p2 = (self.polygonpoints[self.numsPoints-2]*2-1)*50
+            p3 = (self.polygonpoints[0]*2-1)*50
+            p4 = (self.polygonpoints[self.numsPoints-1]*2-1)*50
+            #self.world.doPhysics(0.016)
+            closest_dist = float('inf')
+            closest_pos = None
+            
+            frac,closest_pos_frac,tsTo = self.sweepTestRot(unit,p3,self.arcPointRotation)
+            if frac < 1.0:
+                self.arcPointRotation *= frac
+                closest_dist = 0
+                closest_pos = closest_pos_frac
+
+            else:
+                dire=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).normalized()
+                le=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).length()
+                #le=move/(2*abs(groundSizeboundingbox[0][1]))
+                #le-=math.radians(abs(self.arcPointRotation))*unit.unitWidth
+                frac,closest_pos_frac = self.sweepTestDir(unit,tsTo,dire,le)
+                if frac < 1.0:
+                    closest_dist = le*frac
+                    closest_pos = closest_pos_frac
+
+            
+
+
+            if closest_pos:
+                self.unitHitPos = closest_pos
+                self.playerNP.setPos(closest_pos)
+                #self.z2.setPos(closest_pos + Vec3(0,0,0.5))
+
+                newmove = closest_dist+math.radians(abs(self.arcPointRotation))*unit.unitWidth
+                print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.arcPointRotation)
+                self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
+                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
+                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
+
+                self.ground.setShaderInput("polygonpoints", self.polygonpoints)
+                self.ground.setShaderInput("isActive", True)
+                return
+
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('move'):
                     #print("Unit is flatfooted, cannot move.")
@@ -1851,8 +1948,6 @@ class MyApp(ShowBase):
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
                     rule['mountUnit'].model.reset_characteristics()
-
-
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
