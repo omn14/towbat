@@ -1868,77 +1868,7 @@ class MyApp(ShowBase):
             #self.world.doPhysics(0.016)
             closest_dist = float('inf')
             closest_pos = None
-            """ cont=self.world.rayTestClosest(Point3(p1.x, p1.y, 0.25), Point3(p2.x, p2.y, 0.25),BitMask32.allOn())
             
-            #self.debug_ray(Point3(p1.x, p1.y, .9), Point3(p2.x, p2.y, .9))
-            cont2=self.world.rayTestClosest(Point3(p3.x, p3.y, 0.25), Point3(p4.x, p4.y, 0.25),BitMask32.allOn())
-            ve2 = ((Vec2(p2.x - p1.x, p2.y - p1.y)/50+1)*.5).normalized()
-            ve4 = Vec2(p4.x - p3.x, p4.y - p3.y).normalized()
-            print("Cont2:", cont2.hasHit(), cont2.getHitPos())
-            print("Cont:", cont.hasHit(), cont.getHitPos())
-            
-            #closest_dist=0
-            closest_dist = float('inf')
-            closest_pos = None
-            if cont.hasHit():
-                # Check which contact point is closest to smiley
-                
-                
-                hit_pos = cont.getHitPos()
-                #dist = (hit_pos - self.smiley.getPos()).length()
-                dist = (hit_pos - Point3(p1.x, p1.y, 0.1)).length()
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest_pos = hit_pos
-            if cont2.hasHit():
-                # Check which contact point is closest to smiley
-                hit_pos = cont2.getHitPos()
-                dist = (hit_pos - Point3(p3.x, p3.y, 0.1)).length()
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest_pos = hit_pos
-
-            
-            p1_5 = (p1 + p3) * 0.5
-            p2_5 = (p2 + p4) * 0.5
-            cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.25), Point3(p2_5.x, p2_5.y, 0.25),BitMask32.allOn())
-            print("Cont3:", cont3.hasHit(), cont3.getHitPos())
-            if cont3.hasHit():
-                # Check which contact point is closest to smiley
-                hit_pos = cont3.getHitPos()
-                dist = (hit_pos - Point3(p1_5.x, p1_5.y, 0.1)).length()
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest_pos = hit_pos
-
-            for n in range(1,100):
-                p1_5 = p1+ (p3 - p1) * 1/n
-                p2_5 = p2 + (p4 - p2) * 1/n
-                cont3=self.world.rayTestClosest(Point3(p1_5.x, p1_5.y, 0.25), Point3(p2_5.x, p2_5.y, 0.25),BitMask32.allOn())
-                print("Cont3:", cont3.hasHit(), cont3.getHitPos())
-                if cont3.hasHit():
-                    # Check which contact point is closest to smiley
-                    hit_pos = cont3.getHitPos()
-                    dist = (hit_pos - Point3(p1_5.x, p1_5.y, 0.1)).length()
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest_pos = hit_pos """
-
-
-            """ cda=1e3
-            for n in range(1,self.numsPoints-3):
-                p1_a = (self.polygonpoints[0]*2-1)*50
-                p2_a = (self.polygonpoints[self.numsPoints-3-n]*2-1)*50
-                cont3=self.world.rayTestClosest(Point3(p1_a.x, p1_a.y, 0.25), Point3(p2_a.x, p2_a.y, 0.25),BitMask32.allOn())
-                print("Cont3:", cont3.hasHit(), cont3.getHitPos())
-                if cont3.hasHit():
-                    # Check which contact point is closest to smiley
-                    hit_pos = cont3.getHitPos()
-                    dist = (hit_pos - Point3(p1_a.x, p1_a.y, 0.1)).length()
-                    closest_pos = hit_pos
-                    closest_dist = 0
-                    self.arcPointRotation=abs(self.arcPointRotation)-abs(self.arcPointRotation)/(self.numsPoints-3)
-                     """
             frac,closest_pos_frac,tsTo = self.sweepTestRot(unit,p3,self.arcPointRotation)
             if frac < 1.0:
                 self.arcPointRotation *= frac
@@ -2066,7 +1996,30 @@ class MyApp(ShowBase):
         c = self.checkUnitContactSmall(unit)
         
         if c:
-            taskMgr.add(self.chargeAndChargeReaction, "chargeAndChargeReactionTask",extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
+            defenderNP = render.find(f"**/{c.getNode1().getName()}")
+            defenderUnit=self.getSelectedUnit(defenderNP.node())
+
+            if unit.state == "IsPursuing":
+                pass
+            else:
+                if defenderUnit in self.player1Units:
+                    if unit in self.player1Units:
+                        print("Both units belong to Player 1, cannot enter combat.")
+                        direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                        direction.normalize()
+                        self.fallBackContactTest(unit.bodyNP, direction*.3)
+                        unit.request("Moved")
+                        return
+                if defenderUnit in self.player2Units:
+                    if unit in self.player2Units:
+                        print("Both units belong to Player 2, cannot enter combat.")
+                        direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                        direction.normalize()
+                        self.fallBackContactTest(unit.bodyNP, direction*.3)
+                        unit.request("Moved")
+                        return
+
+            taskMgr.add(self.chargeAndChargeReaction, extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
             #self.getFlankFromContact(unit, c)
             unit.model.setColor(.7,0.7,0.7,1)
             copiedUnit=unit.bodyNP.copyTo(render)
@@ -2450,7 +2403,7 @@ class MyApp(ShowBase):
             #for rule in unit.unit.model.special_rules:
             #    if rule.get('mountUnit'):
             #        self.diceInfoText.setText(f"Roll needed: {(math.ceil(self.moveArceDistance)-int(rule['mountUnit'].model.characteristics['M'])):.0f}")
-            self.terninger, chdice = await self.rullTerninger(2)
+            terninger, chdice = await self.rullTerninger(2)
             #self.diceInfoText.setText(f"Roll needed: {unit.unit.model.characteristics['M']} + highest die")
             
         else:
@@ -2461,7 +2414,7 @@ class MyApp(ShowBase):
             await Task.pause(0.5)
             if chdice is None:
                 chdice = [6,6]
-            self.terninger = []
+            terninger = []
         self.autoCharge=False
         self.autoHold=False
         print("Charge dice results:", chdice)
@@ -2570,8 +2523,8 @@ class MyApp(ShowBase):
         await rotation_interval
         if chdist < wdistance:
             unit.bodyNP.wrtReparentTo(parent)
-            if self.terninger:
-                for terning in self.terninger:
+            if terninger:
+                for terning in terninger:
                     terning.remove(self.world)
             print("Charge distance less than wheel distance, returning.")
             unit.request("Moved")
@@ -2606,7 +2559,7 @@ class MyApp(ShowBase):
         unit.bodyNP.wrtReparentTo(parent)
         if chdist < self.moveArceDistance:
             #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
-            for terning in self.terninger:
+            for terning in terninger:
                 terning.remove(self.world)
             print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance, self.moveArceDistance)
             unit.request("Moved")
@@ -2644,6 +2597,30 @@ class MyApp(ShowBase):
         ) """
 
         defenderUnit=self.getSelectedUnit(defenderNP.node())
+
+        if defenderUnit in self.player1Units:
+            if unit in self.player1Units:
+                print("Both units belong to Player 1, cannot enter combat.")
+                direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                direction.normalize()
+                self.fallBackContactTest(unit.bodyNP, direction*.3)
+                for terning in terninger:
+                    terning.remove(self.world)
+                del terninger
+                unit.request("Moved")
+                return
+        if defenderUnit in self.player2Units:
+            if unit in self.player2Units:
+                print("Both units belong to Player 2, cannot enter combat.")
+                direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                direction.normalize()
+                self.fallBackContactTest(unit.bodyNP, direction*.3)
+                for terning in terninger:
+                    terning.remove(self.world)
+                del terninger
+                unit.request("Moved")
+                return
+
         if defenderUnit.state == "IsFleeing":
             print("Contact detected between fleeing unit and pursuer!")
             self.world.removeRigidBody(defenderUnit.bodyNP.node())
@@ -2655,7 +2632,7 @@ class MyApp(ShowBase):
             if defenderUnit in self.player2Units:
                 self.player2Units.remove(defenderUnit)
             unit.request("Moved")
-            for terning in self.terninger:
+            for terning in terninger:
                 terning.remove(self.world)
             return
         
@@ -2675,10 +2652,10 @@ class MyApp(ShowBase):
         #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
-        if self.terninger:
-            for terning in self.terninger:
+        if terninger:
+            for terning in terninger:
                 terning.remove(self.world)
-            del self.terninger
+            del terninger
         return 
 
     def getFlankFromContact(self, unit, contact):
@@ -3195,6 +3172,8 @@ class MyApp(ShowBase):
             self.autoHold=True
             self.pathTowardsMouse(unit,loserUnit.bodyNP.getPos().x,loserUnit.bodyNP.getPos().y)
             self.moveUnit(unit)
+            #await taskMgr.add(self.AIplayer2.loopWaitForMoveComplete,extraArgs=[unit], appendTask=True)
+            await Wait(5.0)
 
     async def fleeFromCombat(self, loserUnit):
         direction=self.fleeDirectionMultUnits(loserUnit,[self.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
@@ -3294,10 +3273,15 @@ class MyApp(ShowBase):
                 print("removing task","checkFleeCaughtTask"+str(n))
                 taskMgr.remove("checkFleeCaughtTask"+str(n))
         
+
+        loserPos=loserUnit.bodyNP.getPos()
         for i in range(0,len(persuingUnit)-1):
+            """ if loserUnit.bodyNP.isEmpty():
+                persuingUnit[i].request("Idle")
+                break """
             unit=persuingUnit[i]
             rFrom = unit.bodyNP.getHpr()
-            unit.bodyNP.lookAt(loserUnit.bodyNP)
+            unit.bodyNP.lookAt(loserPos)
             rTo = unit.bodyNP.getHpr()
             unit.bodyNP.setHpr(rFrom)
             rotation_interval = LerpPosHprInterval(
@@ -3318,8 +3302,10 @@ class MyApp(ShowBase):
             orot=unit.bodyNP.getHpr()
             self.autoCharge=True
             self.autoHold=True
-            self.pathTowardsMouse(unit,loserUnit.bodyNP.getPos().x,loserUnit.bodyNP.getPos().y)
+            self.pathTowardsMouse(unit,loserPos.x,loserPos.y)
             self.moveUnit(unit)
+            #await taskMgr.add(self.AIplayer2.loopWaitForMoveComplete,extraArgs=[unit], appendTask=True)
+            await Wait(5.0)
         
         
         
