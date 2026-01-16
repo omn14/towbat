@@ -388,7 +388,7 @@ class MyApp(ShowBase):
         self.player2Units.append(self.jadeLancers)
 
         jade_warrior = JadeWarrior("Jade Warrior", "-")
-        jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 12,6,2)
+        jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 15,5,3)
         self.jadeWarriors = unitGraphics(self,'JadeWarriors','models/jade_warrior.bam',jade_warrior_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
         self.jadeWarriors.bodyNP.setPos(0,30,0)
         self.jadeWarriors.bodyNP.setH(180)
@@ -2945,7 +2945,7 @@ class MyApp(ShowBase):
                         player1_score += total_wounds
                     else:
                         player2_score += total_wounds
-            combWounds+=total_wounds
+                    combWounds+=total_wounds
             self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, combWounds))
         #defenderUnit.unit.nmodels=defender_nmodels
         print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
@@ -3023,6 +3023,11 @@ class MyApp(ShowBase):
                 print("losing unit gives ground!")
                 await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask", extraArgs=[loserUnit], appendTask=False)
         
+        for loserUnit in loserUnits:
+            loserUnit.madePursuitChoice=False
+            for unit in loserUnit.isInCombatWith:
+                unit.madePursuitChoice=False
+
         messenger.send('unit-move-complete')
         return task.done
         
@@ -3034,6 +3039,9 @@ class MyApp(ShowBase):
         persuingUnit.append(loserUnit)
         self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
+            if unit.madePursuitChoice:
+                continue
+            unit.madePursuitChoice=True
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
             choice = Choice(persuitOrNot, Vec3(0,0,10))
             battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
@@ -3046,14 +3054,7 @@ class MyApp(ShowBase):
                 #pursuit
                 #self.attackSequence2.append(Func(self.fallBack, unit.bodyNP,direction))
                 persuingUnit.append(unit)
-                """ 
-                terningerPersuit=[]
-                for i in range(2):
-                    terning = Dice(self.world, position=unit.bodyNP.getPos() + Vec3(-20+i*4,0,10), size=1.0)
-                    terningerPersuit.append(terning)
                 
-                persuitDiceDices.append(terningerPersuit)
-                """
         crashFractionMin = 1.0
         for i, unit in enumerate(persuingUnit):
             
@@ -3187,6 +3188,7 @@ class MyApp(ShowBase):
                 continue """
             #unit.request("Idle")
             unit.request("IsPursuing")
+            unit.hasMovedThisTurn=False
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
             self.autoCharge=True
@@ -3202,6 +3204,9 @@ class MyApp(ShowBase):
         
         self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
+            if unit.madePursuitChoice: #needed to avoid multiple prompts if multiple units involved
+                continue
+            unit.madePursuitChoice=True
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
             choice = Choice(persuitOrNot, Vec3(0,0,10))
             battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
@@ -3308,6 +3313,7 @@ class MyApp(ShowBase):
                 continue """
             #unit.request("Idle")
             unit.request("IsPursuing")
+            unit.hasMovedThisTurn=False
             opos=unit.bodyNP.getPos()-direction
             orot=unit.bodyNP.getHpr()
             self.autoCharge=True
