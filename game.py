@@ -430,7 +430,7 @@ class MyApp(ShowBase):
         self.units.append(self.blackKnights)
 
         zombie = Zombie("Zombie", "url_zombie")
-        zombie_unit = unit("Zombie Unit", zombie, 20,5,4)
+        zombie_unit = unit("Zombie Unit", zombie, 30,6,5)
         self.zombies = unitGraphics(self,'Zombies','models/zombies.bam',zombie_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.zombies)
         self.units.append(self.zombies)
@@ -535,13 +535,21 @@ class MyApp(ShowBase):
             self.goblinWolfRiders.isInCombatWith.append(self.bretBowmen)
             self.goblinWolfRiders.isInCombat=True
             self.goblinWolfRiders.isInCombatFlank.append('left')
-        if 1: #battle march
+        if 0: #battle march
             self.blackKnights.bodyNP.setPos(0,-9,0)
             self.zombies.bodyNP.setPos(11,-9,0)
             self.direWolves.bodyNP.setPos(-11,-9,0)
             
             self.jadeLancers.bodyNP.setPos(10, 9, 0)
             self.jadeWarriors.bodyNP.setPos(0,9,0)
+        if 1: #battle march zombies center
+            self.blackKnights.bodyNP.setPos(11,-9,0)
+            self.zombies.bodyNP.setPos(0,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+        
 
         if 0:
             self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
@@ -2659,6 +2667,32 @@ class MyApp(ShowBase):
             print("Charge distance less than total distance, returning.", chdist, wdistance,ocdistance, self.moveArceDistance)
             unit.request("Moved")
             return
+        
+        defenderUnit=self.getSelectedUnit(defenderNP.node())
+
+        if defenderUnit in self.player1Units:
+            if unit in self.player1Units:
+                print("Both units belong to Player 1, cannot enter combat.")
+                direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                direction.normalize()
+                self.fallBackContactTest(unit.bodyNP, direction*.3)
+                for terning in terninger:
+                    terning.remove(self.world)
+                del terninger
+                unit.request("Moved")
+                return
+        if defenderUnit in self.player2Units:
+            if unit in self.player2Units:
+                print("Both units belong to Player 2, cannot enter combat.")
+                direction = unit.bodyNP.getPos() - defenderNP.getPos()
+                direction.normalize()
+                self.fallBackContactTest(unit.bodyNP, direction*.3)
+                for terning in terninger:
+                    terning.remove(self.world)
+                del terninger
+                unit.request("Moved")
+                return
+
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         newnode.setPos(self.playerNP.getPos())
@@ -2691,30 +2725,11 @@ class MyApp(ShowBase):
             #Func(self.verySimpleBattle, unit.bodyNP, defenderNP, "front")
         ) """
 
-        defenderUnit=self.getSelectedUnit(defenderNP.node())
+        
+        
+        
+        
 
-        if defenderUnit in self.player1Units:
-            if unit in self.player1Units:
-                print("Both units belong to Player 1, cannot enter combat.")
-                direction = unit.bodyNP.getPos() - defenderNP.getPos()
-                direction.normalize()
-                self.fallBackContactTest(unit.bodyNP, direction*.3)
-                for terning in terninger:
-                    terning.remove(self.world)
-                del terninger
-                unit.request("Moved")
-                return
-        if defenderUnit in self.player2Units:
-            if unit in self.player2Units:
-                print("Both units belong to Player 2, cannot enter combat.")
-                direction = unit.bodyNP.getPos() - defenderNP.getPos()
-                direction.normalize()
-                self.fallBackContactTest(unit.bodyNP, direction*.3)
-                for terning in terninger:
-                    terning.remove(self.world)
-                del terninger
-                unit.request("Moved")
-                return
 
         if defenderUnit.state == "IsFleeing":
             print("Contact detected between fleeing unit and pursuer!")
@@ -3110,8 +3125,11 @@ class MyApp(ShowBase):
         persuingUnit=[]
         persuingUnit.append(loserUnit)
         self.attackSequence2 = Sequence()
-        for unit in loserUnit.isInCombatWith:
+        for i,unit in enumerate(loserUnit.isInCombatWith):
             if unit.madePursuitChoice:
+                loserUnit.isInCombatWith.remove(unit)
+                loserUnit.isInCombatFlank.remove(loserUnit.isInCombatFlank[i])
+                loserUnit.request("Idle")
                 continue
             unit.madePursuitChoice=True
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']

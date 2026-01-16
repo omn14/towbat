@@ -355,6 +355,16 @@ class Zombie(model):
                                    })
         self.AP = 0  # Example Armor Penetration value for Zombies
 
+class Necromancer(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Necromancer specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Necromancer',
+                                   'description': 'This model has special rules for Necromancers.',
+                                   'tag': 'special'})
+        self.AP = 0  # Example Armor Penetration value for Necromancers
+
 class DireWolf(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)
@@ -371,6 +381,7 @@ class DireWolf(model):
                                    'Unbreakable': True
                                    })
         self.AP = 0  # Example Armor Penetration value for Dire Wolves
+
 
 class JadeWarrior(model):
     def __init__(self, name: str, url: str):
