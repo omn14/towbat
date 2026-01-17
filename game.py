@@ -244,6 +244,24 @@ class gameFSM(FSM):
         print("Exiting Make Choice Phase")
         self.game.ignore('mouse1')
 
+    def enterSpellPhase(self):
+        print("Entering Spell Phase")
+        self.game.debugText.setText(f"Casting a spell")
+
+        taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
+        self.game.setActiveUnitTask=self.game.taskMagicArcUpdate
+        self.game.setActiveUnitTaskName="taskMagicArcUpdate"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+
+    def exitSpellPhase(self):
+        print("Exiting Spell Phase")
+        self.game.ignore('mouse1')
+        self.cleanup()
+        self.game.ground.setShaderInput("isActive", False)
+        taskMgr.remove("taskMagicArcUpdate")
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
+        self.game.trajectoryLine.removeNode()
+
     def cleanup(self):
         
         for unit in self.game.units:
@@ -436,6 +454,13 @@ class MyApp(ShowBase):
         self.units.append(self.zombies)
         self.zombies.bodyNP.setPos(-25,-25,0)
 
+        necromancer = Necromancer("Necromancer", "url_necromancer")
+        necromancer_unit = unit("Necromancer Unit", necromancer, 1,1,1)
+        self.necromancer = unitGraphics(self,'Necromancer','models/zombies.bam',necromancer_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.necromancer)
+        self.units.append(self.necromancer)
+        self.necromancer.bodyNP.setPos(-20,-20,0)
+
         direWolf = DireWolf("Dire Wolf", "url_dire_wolf")
         direWolf_unit = unit("Dire Wolf Unit", direWolf, 5,5,1)
         self.direWolves = unitGraphics(self,'DireWolves','models/dire_wolves.bam',direWolf_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
@@ -546,9 +571,12 @@ class MyApp(ShowBase):
             self.blackKnights.bodyNP.setPos(11,-9,0)
             self.zombies.bodyNP.setPos(0,-9,0)
             self.direWolves.bodyNP.setPos(-11,-9,0)
+            self.necromancer.bodyNP.setPos(0,-14,0)
             
             self.jadeLancers.bodyNP.setPos(10, 9, 0)
             self.jadeWarriors.bodyNP.setPos(0,9,0)
+
+
         
 
         if 0:
@@ -835,6 +863,11 @@ class MyApp(ShowBase):
                 print("Attempt to rally fleeing unit.")
                 taskMgr.add(self.rallyUnit(self.unitToMove), "rallyUnitTask")
             #return task.done
+
+        if any(rule.get('wizard',False) for rule in self.unitToMove.unit.model.special_rules):
+            print("Wizard phase logic here.")
+            self.fsm.request("SpellPhase")
+
         return task.done
 
     def taskLoopPathTowardsMouse(self, task):
@@ -881,6 +914,43 @@ class MyApp(ShowBase):
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
         self.checkArrows()
+        return task.done
+    
+    def taskMagicArcUpdate(self, task):
+        for unit in self.units:
+            unit.model.setColor(unit.color)
+            unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+        if self.unitToMove.isInCombat:
+            print("Unit is in combat, cant shoot.")
+            return task.done
+        if not any(rule.get('wizard', False) for rule in self.unitToMove.unit.model.special_rules):
+            print("Unit is not a wizard, cant cast.")
+            return task.done
+        """ print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
+        if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
+            print("Unit has no equiped weapon equipped, cant shoot.")
+            return task.done """
+        r=False
+        print(self.unitToMove.unit.model.spells)
+        for spell in self.unitToMove.unit.model.spells:
+            print("checking spells: ",self.unitToMove.unit.model.spells.get(spell))
+            if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
+                r=True
+                #self.unitToMove.unit.model.equip_weapon(spell)
+                #print("Equipping weapon: ",spell)
+        if not r:
+            print("Unit has no strategy phase spells, cant cast.")
+            return task.done
+            if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
+                print("Unit has no ranged weapon equipped, cant shoot.")
+                return task.done
+        self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
+                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
+        self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
+        self.ground.setShaderInput("isActive", True)
+        if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
+            taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
+        self.checkArrows(BitMask32.bit(5))
         return task.done
     
     def taskStartCombat(self, task):
@@ -933,7 +1003,7 @@ class MyApp(ShowBase):
             worldPoints.append(Point3(point.x, point.y, 0))
         return worldPoints
 
-    def checkArrows(self):
+    def checkArrows(self,mask=BitMask32.bit(3)):
         for point in self.shootingArcPoints:
             point = point * 2
             point -= Vec2(1,1)
@@ -954,7 +1024,7 @@ class MyApp(ShowBase):
                     if "Model" in c.getName():
                         np = NodePath.anyPath(c)
                         np.setColor(1,0,1,1)
-                        NodePath.anyPath(result.getNode()).setCollideMask(BitMask32.bit(3))
+                        NodePath.anyPath(result.getNode()).setCollideMask(mask)
                         #self.toCleanup.append(np)
 
     def cameraShake(self, intensity=1.0, duration=0.5):
@@ -1017,7 +1087,7 @@ class MyApp(ShowBase):
         return task.cont
                         
 
-    def setActiveUnit(self,taskfunction,taskname):
+    async def setActiveUnit(self,taskfunction,taskname):
         if base.mouseWatcherNode.hasMouse():
             # Get mouse position in normalized device coordinates
             pMouse = base.mouseWatcherNode.getMouse()
@@ -1087,6 +1157,103 @@ class MyApp(ShowBase):
                         np = NodePath.anyPath(c)
                         np.setColor(0,1,0,1)
                         NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
+            
+            result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))    
+            if result3.hasHit():
+                selected_unit = self.getSelectedUnit(result3.getNode())
+                print("Selected magic target:",selected_unit.unit.name)
+                # Implement spell casting logic here
+                await taskMgr.add(self.raiseDead(selected_unit))
+                #selected_unit.bodyNP.setCollideMask(BitMask32.bit(1))
+                #self.checkArrows(BitMask32.bit(1))
+                if self.roundCounter.current_player == 1:
+                    self.roundCounter.request('PlayerOne')
+                else:
+                    self.roundCounter.request('PlayerTwo')
+                self.fsm.request("StrategyPhase")
+
+    async def raiseDead(self, unit):
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
+        terningerLd=[]
+        for i in range(2):
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+            terningerLd.append(terning)
+        for terning in terningerLd:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+        ldDice = []
+        for terning in terningerLd:
+            ldDice.append(terning.currentValue)
+        ld_score = sum(ldDice)
+        for terning in terningerLd:
+            terning.remove(self.world)
+
+        if ld_score > 7:
+            print(f"Raising dead failed for unit: {unit.unit.name} with LD score: {ld_score}")
+            return
+        print(f"Raising dead succeeded for unit: {unit.unit.name} with LD score: {ld_score}")
+        
+        oldranks=(unit.unit.nmodels-1)//unit.unit.files
+
+        terningerLd=[]
+        for i in range(1):
+            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+            terningerLd.append(terning)
+        for terning in terningerLd:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+        ldDice = []
+        for terning in terningerLd:
+            ldDice.append(terning.currentValue)
+        d3_score = sum(ldDice)/2
+        for terning in terningerLd:
+            terning.remove(self.world)
+
+        print (f"Dead models to raise for unit: {unit.unit.name} is: {d3_score}")
+        unit.unit.nmodels += int(math.ceil(d3_score))+2
+        children = unit.model.getChildren()
+        #ranks=unit.unit.ranks
+        files=unit.unit.files
+        newranks=(unit.unit.nmodels-1)//files
+        unit.unit.ranks=newranks
+        rankdiff=newranks-oldranks
+        print("Raising dead for unit:", unit.unit.name, "Old ranks:", oldranks, "New ranks:", newranks, "Rank difference:", rankdiff)
+        if unit.unit.nmodels != len(children):
+            diffnmodel=unit.unit.nmodels-len(children)
+            for i in range(diffnmodel):
+                clone=children[0].copyTo(unit.model)
+                children.append(clone)
+        
+        while len(children)>unit.unit.nmodels:
+            children[-1].removeNode()
+            children = unit.model.getChildren()
+
+        for i, child in enumerate(children):
+            row = i // files
+            col = i % files
+            #print(f"Positioning child {child.getName()} at row {row}, col {col}")
+            p=Point3(col * (unit.modelWidth ),-row * (unit.modelHeight ), 0)
+            pp=p-Point3(unit.unitWidth*2, -unit.modelHeight/2,0)
+            child.setPos(p)
+
+        self.world.removeRigidBody(unit.bodyNP.node())
+        for shape in unit.bodyNP.node().shapes:
+            unit.bodyNP.node().removeShape(shape)
+        bounds = unit.model.getTightBounds()
+        box_size = bounds[1] - bounds[0]
+        shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
+        #body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
+        unit.bodyNP.node().addShape(shape)
+        unit.bodyNP.node().setMass(0)  # Static object
+        self.world.attachRigidBody(unit.bodyNP.node())
+        unit.model.setPos(0,0,0)
+        unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
+        rot=LRotationf()
+        rot.setHpr(unit.bodyNP.getHpr())
+        fwd=rot.getForward()
+        #unit.bodyNP.setPos(unit.bodyNP.getPos()-Vec3(0,unit.modelHeight/2,0)*rankdiff)
+        unit.bodyNP.setPos(unit.bodyNP.getPos()-fwd*unit.modelHeight/2*rankdiff)
+
 
     def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
         

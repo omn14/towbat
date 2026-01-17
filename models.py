@@ -355,15 +355,7 @@ class Zombie(model):
                                    })
         self.AP = 0  # Example Armor Penetration value for Zombies
 
-class Necromancer(model):
-    def __init__(self, name: str, url: str):
-        super().__init__(name, url)
-        # Additional Necromancer specific attributes can be added here
-        
-        self.special_rules.append({'name': 'Necromancer',
-                                   'description': 'This model has special rules for Necromancers.',
-                                   'tag': 'special'})
-        self.AP = 0  # Example Armor Penetration value for Necromancers
+
 
 class DireWolf(model):
     def __init__(self, name: str, url: str):
@@ -436,3 +428,38 @@ class JadeLancer(model):
                       'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
             'sword': {'name': 'sword'}
         })
+
+class Necromancer(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        # Additional Necromancer specific attributes can be added here
+        
+        self.special_rules.append({'name': 'Necromancer',
+                                   'description': 'This model has special rules for Necromancers.',
+                                   'tag': 'wizard',
+                                   'wizard_level': 2,
+                                   'wizard': True
+                                   })
+        
+        self.spells ={
+            'Raise Dead': {
+                'description': 'Allows the Necromancer to raise fallen units as Zombies.',
+                'casting_value': 7,
+                'range': 12,
+                'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
+                'function': self.raise_dead,
+                'phase': 'strategy'
+            },
+            'Deathly Chill': {
+                'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
+                'casting_value': 6,
+                'range': 18,
+                'effect': 'Reduces the movement characteristic of enemy units within range by 2 for one turn.',
+                'phase': 'shooting'
+            }
+        }
+
+        self.AP = 0  # Example Armor Penetration value for Necromancers
+
+    def raise_dead(self):
+        print(f"{self.name} casts Raise Dead!")
