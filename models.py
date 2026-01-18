@@ -430,7 +430,7 @@ class JadeLancer(model):
         })
 
 class Necromancer(model):
-    def __init__(self, name: str, url: str):
+    def __init__(self, name: str, url: str, spells: dict = None):
         super().__init__(name, url)
         # Additional Necromancer specific attributes can be added here
         
@@ -441,25 +441,8 @@ class Necromancer(model):
                                    'wizard': True
                                    })
         
-        self.spells ={
-            'Raise Dead': {
-                'description': 'Allows the Necromancer to raise fallen units as Zombies.',
-                'casting_value': 7,
-                'range': 12,
-                'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
-                'function': self.raise_dead,
-                'phase': 'strategy'
-            },
-            'Deathly Chill': {
-                'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
-                'casting_value': 6,
-                'range': 18,
-                'effect': 'Reduces the movement characteristic of enemy units within range by 2 for one turn.',
-                'phase': 'shooting'
-            }
-        }
+        self.spells =spells
 
         self.AP = 0  # Example Armor Penetration value for Necromancers
 
-    def raise_dead(self):
-        print(f"{self.name} casts Raise Dead!")
+    

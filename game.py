@@ -247,7 +247,7 @@ class gameFSM(FSM):
     def enterSpellPhase(self):
         print("Entering Spell Phase")
         self.game.debugText.setText(f"Casting a spell")
-
+        self.spellFunctionToCast=None
         taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
         self.game.setActiveUnitTask=self.game.taskMagicArcUpdate
         self.game.setActiveUnitTaskName="taskMagicArcUpdate"
@@ -255,6 +255,7 @@ class gameFSM(FSM):
 
     def exitSpellPhase(self):
         print("Exiting Spell Phase")
+        self.spellFunctionToCast=None
         self.game.ignore('mouse1')
         self.cleanup()
         self.game.ground.setShaderInput("isActive", False)
@@ -454,7 +455,25 @@ class MyApp(ShowBase):
         self.units.append(self.zombies)
         self.zombies.bodyNP.setPos(-25,-25,0)
 
-        necromancer = Necromancer("Necromancer", "url_necromancer")
+        spells ={
+            'Raise Dead': {
+                'description': 'Allows the Necromancer to raise fallen units as Zombies.',
+                'casting_value': 7,
+                'range': 12,
+                'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
+                'function': self.raiseDead,
+                'phase': 'strategy'
+            },
+            'Deathly Chill': {
+                'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
+                'casting_value': 6,
+                'range': 18,
+                'effect': 'Reduces the movement characteristic of enemy units within range by 2 for one turn.',
+                'phase': 'shooting'
+            }
+        }
+
+        necromancer = Necromancer("Necromancer", "url_necromancer", spells=spells)
         necromancer_unit = unit("Necromancer Unit", necromancer, 1,1,1)
         self.necromancer = unitGraphics(self,'Necromancer','models/zombies.bam',necromancer_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.necromancer)
@@ -916,7 +935,7 @@ class MyApp(ShowBase):
         self.checkArrows()
         return task.done
     
-    def taskMagicArcUpdate(self, task):
+    async def taskMagicArcUpdate(self, task):
         for unit in self.units:
             unit.model.setColor(unit.color)
             unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
@@ -932,18 +951,27 @@ class MyApp(ShowBase):
             return task.done """
         r=False
         print(self.unitToMove.unit.model.spells)
+        spellChoices = []
+        spellFunctions = []
         for spell in self.unitToMove.unit.model.spells:
             print("checking spells: ",self.unitToMove.unit.model.spells.get(spell))
             if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
+                spellChoices.append(spell)
+                spellFunctions.append(self.unitToMove.unit.model.spells.get(spell).get('function'))
                 r=True
                 #self.unitToMove.unit.model.equip_weapon(spell)
                 #print("Equipping weapon: ",spell)
         if not r:
             print("Unit has no strategy phase spells, cant cast.")
             return task.done
-            if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
-                print("Unit has no ranged weapon equipped, cant shoot.")
-                return task.done
+        
+        
+        spellchoice = await taskMgr.add(self.makeChoiceNew(spellChoices, Vec3(-20,0,10)))
+
+        print("Chosen spell: ", spellchoice)
+        index = spellChoices.index(spellchoice)
+        self.fsm.spellFunctionToCast = spellFunctions[index]
+
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
@@ -1163,7 +1191,8 @@ class MyApp(ShowBase):
                 selected_unit = self.getSelectedUnit(result3.getNode())
                 print("Selected magic target:",selected_unit.unit.name)
                 # Implement spell casting logic here
-                await taskMgr.add(self.raiseDead(selected_unit))
+                #await taskMgr.add(self.raiseDead(selected_unit))
+                await taskMgr.add(self.fsm.spellFunctionToCast(selected_unit))
                 #selected_unit.bodyNP.setCollideMask(BitMask32.bit(1))
                 #self.checkArrows(BitMask32.bit(1))
                 if self.roundCounter.current_player == 1:
