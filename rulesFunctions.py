@@ -27,4 +27,5 @@ def plusAP(model_instance, AP_increase, roll):
 def plusSTAT(model_instance, STAT, STAT_increase, roll):
     base_STAT = int(model_instance.characteristics.get(STAT, 0))
     model_instance.characteristics[STAT] = base_STAT + STAT_increase
+    print(f"{STAT} increased to {model_instance.characteristics[STAT]} for model {model_instance.name}")
     return roll

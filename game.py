@@ -45,6 +45,7 @@ from choiceFunctions import *
 from ClassOutOfBounds import *
 from ClassRoundCounter import *
 from ClassAI import *
+from rulesFunctions import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -62,6 +63,8 @@ class gameFSM(FSM):
     def __init__(self, Game):
         FSM.__init__(self, 'GameFSM')
         self.game = Game
+
+        self.endOfTurnSpells = []
         
         self.endPhaseCube = self.createMenuCollisionCube("endPhase",Point3(5,20,3))
         
@@ -231,6 +234,8 @@ class gameFSM(FSM):
         self.game.ignore('mouse1')
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
+        for spell in self.endOfTurnSpells:
+            spell.endSpell()
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies=[]
@@ -247,6 +252,7 @@ class gameFSM(FSM):
     def enterSpellPhase(self):
         print("Entering Spell Phase")
         self.game.debugText.setText(f"Casting a spell")
+        self.activeSpell=None
         self.spellFunctionToCast=None
         taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
         self.game.setActiveUnitTask=self.game.taskMagicArcUpdate
@@ -255,6 +261,7 @@ class gameFSM(FSM):
 
     def exitSpellPhase(self):
         print("Exiting Spell Phase")
+        self.activeSpell=None
         self.spellFunctionToCast=None
         self.game.ignore('mouse1')
         self.cleanup()
@@ -470,6 +477,15 @@ class MyApp(ShowBase):
                 'range': 18,
                 'effect': 'Reduces the movement characteristic of enemy units within range by 2 for one turn.',
                 'phase': 'shooting'
+            },
+            'Devils visit': {
+                'description': 'Ingrease ally movement',
+                'casting_value': 6,
+                'range': 18,
+                'effect': 'increases the movement characteristic of ally',
+                'function': self.devilsVisit,
+                'phase': 'strategy',
+                'class': self.spellDevilsVisit
             }
         }
 
@@ -953,11 +969,13 @@ class MyApp(ShowBase):
         print(self.unitToMove.unit.model.spells)
         spellChoices = []
         spellFunctions = []
+        spellClasses = []
         for spell in self.unitToMove.unit.model.spells:
             print("checking spells: ",self.unitToMove.unit.model.spells.get(spell))
             if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
                 spellChoices.append(spell)
                 spellFunctions.append(self.unitToMove.unit.model.spells.get(spell).get('function'))
+                spellClasses.append(self.unitToMove.unit.model.spells.get(spell).get('class'))
                 r=True
                 #self.unitToMove.unit.model.equip_weapon(spell)
                 #print("Equipping weapon: ",spell)
@@ -970,7 +988,12 @@ class MyApp(ShowBase):
 
         print("Chosen spell: ", spellchoice)
         index = spellChoices.index(spellchoice)
+        self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
+        print(self.fsm.activeSpell.get('function'))
         self.fsm.spellFunctionToCast = spellFunctions[index]
+        self.fsm.spellClassToCast = spellClasses[index]
+        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12))
+        self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
@@ -1192,7 +1215,9 @@ class MyApp(ShowBase):
                 print("Selected magic target:",selected_unit.unit.name)
                 # Implement spell casting logic here
                 #await taskMgr.add(self.raiseDead(selected_unit))
-                await taskMgr.add(self.fsm.spellFunctionToCast(selected_unit))
+                #await taskMgr.add(self.fsm.spellFunctionToCast(selected_unit))
+                await self.fsm.spellInstanceToCast.spellFunction(selected_unit)
+
                 #selected_unit.bodyNP.setCollideMask(BitMask32.bit(1))
                 #self.checkArrows(BitMask32.bit(1))
                 if self.roundCounter.current_player == 1:
@@ -1200,6 +1225,48 @@ class MyApp(ShowBase):
                 else:
                     self.roundCounter.request('PlayerTwo')
                 self.fsm.request("StrategyPhase")
+
+    
+    def devilsVisit(self, unit):
+        return
+
+    class spell():
+        def __init__(self, name, casting_value):
+            self.name = name
+            self.casting_value = casting_value
+
+    class spellDevilsVisit(spell):
+        def __init__(self,name,casting_value):
+            super().__init__(name,casting_value)
+            self.affectedUnit = None
+
+        async def spellFunction(self, unit):
+            self.affectedUnit = unit
+            terningerLd=[]
+            for i in range(2):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            ld_score = sum(ldDice)
+            for terning in terningerLd:
+                terning.remove(base.world)
+
+            #if ld_score < self.fsm.activeSpell.get('casting_value',12):
+            if ld_score < self.casting_value:
+                print(f"Devil's Visit failed for unit: {unit.unit.name} with score: {ld_score}")
+                return
+            print(f"Devil's Visit succeeded for unit: {unit.unit.name} with score: {ld_score}")
+            
+            plusSTAT(unit.unit.model, 'M', 11, -99)
+
+        def endSpell(self):
+            plusSTAT(self.affectedUnit.unit.model, 'M', -11, -99)
+        
 
     async def raiseDead(self, unit):
         taskMgr.remove("taskShootingTrajectoryDrawLine")
@@ -2121,37 +2188,48 @@ class MyApp(ShowBase):
                 self.ground.setShaderInput("isActive", True)
                 return
 
+            M=str(self.unitToMove.unit.model.characteristics['M'])
+            modifyer=1
+            modifyerM=1
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('move'):
                     #print("Unit is flatfooted, cannot move.")
-                    rule['move'](self.unitToMove.unit.model)
+                    modifyer=rule['move']
+                    #M = str(int(int(M) * modifyer))
             
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
                     for ruleM in rule['mountUnit'].model.special_rules:
                         if ruleM.get('move'):
-                            ruleM['move'](rule['mountUnit'].model)
+                            #ruleM['move'](rule['mountUnit'].model)
+                            modifyerM=ruleM['move']
 
-            M=str(self.unitToMove.unit.model.characteristics['M'])
+
+            
             if M.isdigit():
                 M = int(M)
             else:
                 print(f"Warning: M value '{M}' is not a number, defaulting to 1")
                 M = 0
             move = M*2
-            if unit.state == "IsPursuing":
-                move = 21
+            print("Unit move:", move)
+            move = move * modifyer
+            
 
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
-                    mountmove= int(rule['mountUnit'].model.characteristics['M'])*2
+                    mountmove= modifyerM*int(rule['mountUnit'].model.characteristics['M'])*2
                     move = max(move, mountmove)
-            print("Unit move:", move)
+            if unit.state == "IsPursuing":
+                move = 21
             
-            self.unitToMove.unit.model.reset_characteristics()
+            
+            print("Modified unit move:", move)
+            
+            """ self.unitToMove.unit.model.reset_characteristics()
             for rule in self.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
-                    rule['mountUnit'].model.reset_characteristics()
+                    rule['mountUnit'].model.reset_characteristics() """
             self.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])))

@@ -299,7 +299,7 @@ class SkeletalSteed(model):
         self.special_rules.append({'name': 'Skeletal Steed',
                                    'description': 'This model has special rules for Skeletal Steeds.',
                                    'tag': 'special',
-                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   'move': 0.5
                                    })
         self.AP = 0  # Example Armor Penetration value for Skeletal Steeds
 
@@ -318,7 +318,7 @@ class BlackKnight(model):
                                    'description': 'This model has the regeneration special rule, allowing it to recover wounds.',
                                    'tag': 'special',
                                    'regen': 6,
-                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   'move': 0.5
                                    })
         self.special_rules.append({'name': 'Fearless',
                                    'description': 'This model has the Fearless special rule.',
@@ -346,7 +346,7 @@ class Zombie(model):
         self.special_rules.append({'name': 'Zombie',
                                    'description': 'This model has special rules for Zombies.',
                                    'tag': 'special',
-                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   'move': 0.5
                                    })
         self.special_rules.append({'name': 'Fearless',
                                    'description': 'This model has the Fearless special rule.',
@@ -365,7 +365,8 @@ class DireWolf(model):
         self.special_rules.append({'name': 'Dire Wolf',
                                    'description': 'This model has special rules for Dire Wolves.',
                                    'tag': 'special',
-                                   'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), -99)
+                                   #'move': lambda model_instance: plusSTAT(model_instance, 'M', int(int(model_instance.characteristics['M'])/-2), .5)
+                                   'move': 0.5
                                    })
         self.special_rules.append({'name': 'Fearless',
                                    'description': 'This model has the Fearless special rule.',
