@@ -468,8 +468,8 @@ class MyApp(ShowBase):
                 'casting_value': 7,
                 'range': 12,
                 'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
-                'function': self.raiseDead,
-                'phase': 'strategy'
+                'phase': 'strategy',
+                'class': self.spellRaiseDead
             },
             'Deathly Chill': {
                 'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
@@ -483,7 +483,6 @@ class MyApp(ShowBase):
                 'casting_value': 6,
                 'range': 18,
                 'effect': 'increases the movement characteristic of ally',
-                'function': self.devilsVisit,
                 'phase': 'strategy',
                 'class': self.spellDevilsVisit
             }
@@ -968,17 +967,13 @@ class MyApp(ShowBase):
         r=False
         print(self.unitToMove.unit.model.spells)
         spellChoices = []
-        spellFunctions = []
         spellClasses = []
         for spell in self.unitToMove.unit.model.spells:
             print("checking spells: ",self.unitToMove.unit.model.spells.get(spell))
             if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
                 spellChoices.append(spell)
-                spellFunctions.append(self.unitToMove.unit.model.spells.get(spell).get('function'))
                 spellClasses.append(self.unitToMove.unit.model.spells.get(spell).get('class'))
                 r=True
-                #self.unitToMove.unit.model.equip_weapon(spell)
-                #print("Equipping weapon: ",spell)
         if not r:
             print("Unit has no strategy phase spells, cant cast.")
             return task.done
@@ -989,8 +984,6 @@ class MyApp(ShowBase):
         print("Chosen spell: ", spellchoice)
         index = spellChoices.index(spellchoice)
         self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
-        print(self.fsm.activeSpell.get('function'))
-        self.fsm.spellFunctionToCast = spellFunctions[index]
         self.fsm.spellClassToCast = spellClasses[index]
         self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12))
         self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
@@ -1227,8 +1220,7 @@ class MyApp(ShowBase):
                 self.fsm.request("StrategyPhase")
 
     
-    def devilsVisit(self, unit):
-        return
+    
 
     class spell():
         def __init__(self, name, casting_value):
@@ -1266,89 +1258,95 @@ class MyApp(ShowBase):
 
         def endSpell(self):
             plusSTAT(self.affectedUnit.unit.model, 'M', -11, -99)
-        
+    
+    class spellRaiseDead(spell):
+        def __init__(self,name,casting_value):
+            super().__init__(name,casting_value)
 
-    async def raiseDead(self, unit):
-        taskMgr.remove("taskShootingTrajectoryDrawLine")
-        terningerLd=[]
-        for i in range(2):
-            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
-            terningerLd.append(terning)
-        for terning in terningerLd:
-            terning.roll()
-        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
-        ldDice = []
-        for terning in terningerLd:
-            ldDice.append(terning.currentValue)
-        ld_score = sum(ldDice)
-        for terning in terningerLd:
-            terning.remove(self.world)
+        def endSpell(self):
+            pass
 
-        if ld_score > 7:
-            print(f"Raising dead failed for unit: {unit.unit.name} with LD score: {ld_score}")
-            return
-        print(f"Raising dead succeeded for unit: {unit.unit.name} with LD score: {ld_score}")
-        
-        oldranks=(unit.unit.nmodels-1)//unit.unit.files
+        async def spellFunction(self, unit):
+            taskMgr.remove("taskShootingTrajectoryDrawLine")
+            terningerLd=[]
+            for i in range(2):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            ld_score = sum(ldDice)
+            for terning in terningerLd:
+                terning.remove(base.world)
 
-        terningerLd=[]
-        for i in range(1):
-            terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
-            terningerLd.append(terning)
-        for terning in terningerLd:
-            terning.roll()
-        await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
-        ldDice = []
-        for terning in terningerLd:
-            ldDice.append(terning.currentValue)
-        d3_score = sum(ldDice)/2
-        for terning in terningerLd:
-            terning.remove(self.world)
+            if ld_score > 7:
+                print(f"Raising dead failed for unit: {unit.unit.name} with LD score: {ld_score}")
+                return
+            print(f"Raising dead succeeded for unit: {unit.unit.name} with LD score: {ld_score}")
+            
+            oldranks=(unit.unit.nmodels-1)//unit.unit.files
 
-        print (f"Dead models to raise for unit: {unit.unit.name} is: {d3_score}")
-        unit.unit.nmodels += int(math.ceil(d3_score))+2
-        children = unit.model.getChildren()
-        #ranks=unit.unit.ranks
-        files=unit.unit.files
-        newranks=(unit.unit.nmodels-1)//files
-        unit.unit.ranks=newranks
-        rankdiff=newranks-oldranks
-        print("Raising dead for unit:", unit.unit.name, "Old ranks:", oldranks, "New ranks:", newranks, "Rank difference:", rankdiff)
-        if unit.unit.nmodels != len(children):
-            diffnmodel=unit.unit.nmodels-len(children)
-            for i in range(diffnmodel):
-                clone=children[0].copyTo(unit.model)
-                children.append(clone)
-        
-        while len(children)>unit.unit.nmodels:
-            children[-1].removeNode()
+            terningerLd=[]
+            for i in range(1):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            d3_score = sum(ldDice)/2
+            for terning in terningerLd:
+                terning.remove(base.world)
+
+            print (f"Dead models to raise for unit: {unit.unit.name} is: {d3_score}")
+            unit.unit.nmodels += int(math.ceil(d3_score))+2
             children = unit.model.getChildren()
+            #ranks=unit.unit.ranks
+            files=unit.unit.files
+            newranks=(unit.unit.nmodels-1)//files
+            unit.unit.ranks=newranks
+            rankdiff=newranks-oldranks
+            print("Raising dead for unit:", unit.unit.name, "Old ranks:", oldranks, "New ranks:", newranks, "Rank difference:", rankdiff)
+            if unit.unit.nmodels != len(children):
+                diffnmodel=unit.unit.nmodels-len(children)
+                for i in range(diffnmodel):
+                    clone=children[0].copyTo(unit.model)
+                    children.append(clone)
+            
+            while len(children)>unit.unit.nmodels:
+                children[-1].removeNode()
+                children = unit.model.getChildren()
 
-        for i, child in enumerate(children):
-            row = i // files
-            col = i % files
-            #print(f"Positioning child {child.getName()} at row {row}, col {col}")
-            p=Point3(col * (unit.modelWidth ),-row * (unit.modelHeight ), 0)
-            pp=p-Point3(unit.unitWidth*2, -unit.modelHeight/2,0)
-            child.setPos(p)
+            for i, child in enumerate(children):
+                row = i // files
+                col = i % files
+                #print(f"Positioning child {child.getName()} at row {row}, col {col}")
+                p=Point3(col * (unit.modelWidth ),-row * (unit.modelHeight ), 0)
+                pp=p-Point3(unit.unitWidth*2, -unit.modelHeight/2,0)
+                child.setPos(p)
 
-        self.world.removeRigidBody(unit.bodyNP.node())
-        for shape in unit.bodyNP.node().shapes:
-            unit.bodyNP.node().removeShape(shape)
-        bounds = unit.model.getTightBounds()
-        box_size = bounds[1] - bounds[0]
-        shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
-        #body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
-        unit.bodyNP.node().addShape(shape)
-        unit.bodyNP.node().setMass(0)  # Static object
-        self.world.attachRigidBody(unit.bodyNP.node())
-        unit.model.setPos(0,0,0)
-        unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
-        rot=LRotationf()
-        rot.setHpr(unit.bodyNP.getHpr())
-        fwd=rot.getForward()
-        #unit.bodyNP.setPos(unit.bodyNP.getPos()-Vec3(0,unit.modelHeight/2,0)*rankdiff)
-        unit.bodyNP.setPos(unit.bodyNP.getPos()-fwd*unit.modelHeight/2*rankdiff)
+            base.world.removeRigidBody(unit.bodyNP.node())
+            for shape in unit.bodyNP.node().shapes:
+                unit.bodyNP.node().removeShape(shape)
+            bounds = unit.model.getTightBounds()
+            box_size = bounds[1] - bounds[0]
+            shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
+            #body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
+            unit.bodyNP.node().addShape(shape)
+            unit.bodyNP.node().setMass(0)  # Static object
+            base.world.attachRigidBody(unit.bodyNP.node())
+            unit.model.setPos(0,0,0)
+            unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
+            rot=LRotationf()
+            rot.setHpr(unit.bodyNP.getHpr())
+            fwd=rot.getForward()
+            #unit.bodyNP.setPos(unit.bodyNP.getPos()-Vec3(0,unit.modelHeight/2,0)*rankdiff)
+            unit.bodyNP.setPos(unit.bodyNP.getPos()-fwd*unit.modelHeight/2*rankdiff)
 
 
     def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
