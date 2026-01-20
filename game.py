@@ -236,6 +236,7 @@ class gameFSM(FSM):
         self.game.roundCounter.update_round_display()
         for spell in self.endOfTurnSpells:
             spell.endSpell()
+        self.endOfTurnSpells=[]
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies=[]
@@ -985,8 +986,8 @@ class MyApp(ShowBase):
         index = spellChoices.index(spellchoice)
         self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
         self.fsm.spellClassToCast = spellClasses[index]
-        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12))
-        self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
+        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12),self.fsm.endOfTurnSpells)
+        #self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
@@ -1223,13 +1224,14 @@ class MyApp(ShowBase):
     
 
     class spell():
-        def __init__(self, name, casting_value):
+        def __init__(self, name, casting_value,durationList=None):
             self.name = name
             self.casting_value = casting_value
+            self.durationList = durationList
 
     class spellDevilsVisit(spell):
-        def __init__(self,name,casting_value):
-            super().__init__(name,casting_value)
+        def __init__(self,name,casting_value,durationList):
+            super().__init__(name,casting_value,durationList)
             self.affectedUnit = None
 
         async def spellFunction(self, unit):
@@ -1253,6 +1255,7 @@ class MyApp(ShowBase):
                 print(f"Devil's Visit failed for unit: {unit.unit.name} with score: {ld_score}")
                 return
             print(f"Devil's Visit succeeded for unit: {unit.unit.name} with score: {ld_score}")
+            self.durationList.append(self)
             
             plusSTAT(unit.unit.model, 'M', 11, -99)
 
@@ -1260,8 +1263,8 @@ class MyApp(ShowBase):
             plusSTAT(self.affectedUnit.unit.model, 'M', -11, -99)
     
     class spellRaiseDead(spell):
-        def __init__(self,name,casting_value):
-            super().__init__(name,casting_value)
+        def __init__(self,name,casting_value,durationList):
+            super().__init__(name,casting_value,durationList)
 
         def endSpell(self):
             pass
@@ -1286,7 +1289,6 @@ class MyApp(ShowBase):
                 print(f"Raising dead failed for unit: {unit.unit.name} with LD score: {ld_score}")
                 return
             print(f"Raising dead succeeded for unit: {unit.unit.name} with LD score: {ld_score}")
-            
             oldranks=(unit.unit.nmodels-1)//unit.unit.files
 
             terningerLd=[]
