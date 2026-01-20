@@ -989,8 +989,13 @@ class MyApp(ShowBase):
         self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12),self.fsm.endOfTurnSpells)
         #self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
 
+        radius = self.fsm.activeSpell.get('range',18)
+        #radius = self.coordsToLocal([Vec2(radius,0)])[0].x
+        radius = radius/(2*50)
+
+
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
-                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
+                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.ground.setShaderInput("isActive", True)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
@@ -1047,6 +1052,15 @@ class MyApp(ShowBase):
             point = point * 50
             worldPoints.append(Point3(point.x, point.y, 0))
         return worldPoints
+    
+    def coordsToLocal(self, points):
+        localPoints = []
+        for point in points:
+            point = point / 50
+            point += Vec2(1,1)
+            point = point / 2
+            localPoints.append(Point3(point.x, point.y, 0))
+        return localPoints
 
     def checkArrows(self,mask=BitMask32.bit(3)):
         for point in self.shootingArcPoints:
@@ -1759,7 +1773,7 @@ class MyApp(ShowBase):
             """
             return
     
-    def shootingArc(self, origo, num_points=40, rotationangle=30):
+    def shootingArc(self, origo, num_points=40, rotationangle=30,radius=0.15):
         points =[]
         origo=(origo/50 +1)*0.5
         origo   = Vec2(origo.x,origo.y)
@@ -1769,8 +1783,8 @@ class MyApp(ShowBase):
 
         for i in range(0,num_points):
             angle = arcmax * i / (num_points - 1)
-            x = 0.5 * math.cos(angle) 
-            y = 0.5 * math.sin(angle)
+            x = radius * math.cos(angle) 
+            y = radius * math.sin(angle)
             points.append(origo+Vec2(x,y))
             points[-1] = self.rotatePoint(points[-1], rotationangle, origo=origo)
 
