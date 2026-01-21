@@ -2481,17 +2481,17 @@ class MyApp(ShowBase):
 
                 print("Defender holds position.")
                 
-                angleToRotate = self.getFlankFromContact(unit, c)
+                flank, angleToRotate = self.getFlankFromContact(unit, c)
 
                 
                 unit.hasMovedThisTurn=True
 
                 unit.updateTextNode()
                 #unit.bodyNP.setCollideMask(BitMask32.bit(4))
-                taskMgr.add(self.chargeInterval,"chargeIntervalTask", extraArgs=[unit, defenderNP, angleToRotate,oposUnit, orotUnit], appendTask=False)
+                taskMgr.add(self.chargeInterval,"chargeIntervalTask", extraArgs=[unit, defenderNP, angleToRotate,oposUnit, orotUnit,flank], appendTask=False)
                 
             elif crchoice == "flee":
-                angleToRotate = self.getFlankFromContact(unit, c)
+                flank, angleToRotate = self.getFlankFromContact(unit, c)
                 print("Defender flees!")
                 loserUnit = self.getSelectedUnit(defenderNP)
                 loserUnit.request("IsFleeing")
@@ -2778,7 +2778,7 @@ class MyApp(ShowBase):
         return terninger, chdice
         
 
-    async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, chdice=None):
+    async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, flank, chdice=None):
         maxmove = int(unit.unit.model.characteristics['M'])
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
@@ -3046,7 +3046,7 @@ class MyApp(ShowBase):
         defenderUnit.isInCombatWith.append(unit)
         defenderUnit.isInCombat=True
         
-        defenderUnit.isInCombatFlank.append("front")
+        defenderUnit.isInCombatFlank.append(flank)
         #defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         unit.updateTextNode()
         defenderUnit.updateTextNode()
@@ -3057,6 +3057,7 @@ class MyApp(ShowBase):
         return 
 
     def getFlankFromContact(self, unit, contact):
+        flank = "front"
         print("Unit collision detected!")
         # Handle unit collision (e.g., stop movement, apply damage, etc.)
         angleAttacker = unit.bodyNP.getH()
@@ -3090,6 +3091,7 @@ class MyApp(ShowBase):
         #if abs(hitloc.x*unit.bodyNP.getScale().x - width) < .03:
         if angle_between > frontArcAngle+90:
             print("Hit rear side of defender")
+            flank = "rear"
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 90
             
@@ -3104,6 +3106,7 @@ class MyApp(ShowBase):
         #elif abs(hitloc.x*unit.bodyNP.getScale().x + width) < .03:
         elif angle_between > frontArcAngle and hitloc.x < 0:
             print("Hit on left side of defender")
+            flank = "flank"
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate - 90) % 360 - 180
             if angleToRotate > 90:
@@ -3115,6 +3118,7 @@ class MyApp(ShowBase):
         #elif abs(hitloc.y*unit.bodyNP.getScale().y - height) < .03:
         elif angle_between < frontArcAngle:
             print("Hit front side of defender")
+            flank = "front"
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 180) % 180
             if angleToRotate > 90:
@@ -3124,6 +3128,7 @@ class MyApp(ShowBase):
         #elif abs(hitloc.y*unit.bodyNP.getScale().y + height) < .03:
         elif angle_between > frontArcAngle and hitloc.x > 0:
             print("Hit on right side of defender")
+            flank = "flank"
             print(f"Initial angle to rotate: {angleToRotate}")
             #angleToRotate = (angleToRotate + 90) % 360 - 180
             if angleToRotate < 0:
@@ -3136,7 +3141,7 @@ class MyApp(ShowBase):
             
         else:
             print("Hit i dont know where")
-        return angleToRotate
+        return flank,angleToRotate
     
     
 
@@ -3252,7 +3257,11 @@ class MyApp(ShowBase):
             self.attackers.append(self.getSelectedUnit(unit.bodyNP.node()))
             self.defenders.append(defenderUnit)
         player1_score = 0
+        player1_flank_bonus = 0
+        player1_rank_bonus = 0
         player2_score = 0
+        player2_flank_bonus = 0
+        player2_rank_bonus = 0
         #for unit in self.unitToMove.isInCombatWith:
         for i in range(len(self.attackers)):
             unit = self.attackers[i]
@@ -3296,8 +3305,33 @@ class MyApp(ShowBase):
             
             if defenderUnit in self.player1Units:
                 player1_score += total_wounds
+                for faceing in defenderUnit.isInCombatFlank:
+                    if faceing == 'flank':
+                        player2_flank_bonus +=1
+                    elif faceing == 'rear':
+                        player2_flank_bonus +=2
+                    else:
+                        player2_flank_bonus +=0
+                player1_rank_bonus += defenderUnit.unit.ranks -1
+                if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
+                    player1_rank_bonus -=1
+                player1_rank_bonus = max(player1_rank_bonus,0)
+                player1_rank_bonus = min(player1_rank_bonus,2)
             else:
                 player2_score += total_wounds
+                for faceing in defenderUnit.isInCombatFlank:
+                    if faceing == 'flank':
+                        player1_flank_bonus +=1
+                    elif faceing == 'rear':
+                        player1_flank_bonus +=2
+                    else:
+                        player1_flank_bonus +=0
+                player2_rank_bonus += defenderUnit.unit.ranks -1
+                if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
+                    player2_rank_bonus -=1
+                player2_rank_bonus = max(player2_rank_bonus,0)
+                player2_rank_bonus = min(player2_rank_bonus,2)
+                
             combWounds=0
             combWounds+=total_wounds
             for rule in defenderUnit.unit.model.special_rules:
@@ -3309,13 +3343,17 @@ class MyApp(ShowBase):
                     
                     if defenderUnit in self.player1Units:
                         player1_score += total_wounds
-                        
                     else:
                         player2_score += total_wounds
                     combWounds+=total_wounds
             self.attackSequence.append(Func(self.removeModelsFromUnit, attackerUnit, combWounds))
         #defenderUnit.unit.nmodels=defender_nmodels
+        
+        player1_score += player1_flank_bonus + player1_rank_bonus
+        player2_score += player2_flank_bonus + player2_rank_bonus
         print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
+        print(f"Player 2 flank bonus: {player2_flank_bonus}, Player 1 flank bonus: {player1_flank_bonus}")
+        print(f"Player 2 rank bonus: {player2_rank_bonus}, Player 1 rank bonus: {player1_rank_bonus}")
         await self.attackSequence
         self.attackSequence2 = Sequence()
         loserUnits = []
