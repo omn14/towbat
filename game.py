@@ -293,7 +293,7 @@ class MyApp(ShowBase):
         super().__init__()
 
         # Enable PStats profiling
-        PStatClient.connect()
+        #PStatClient.connect()
         
         # Disable default camera controls
         #self.disableMouse()
@@ -3078,19 +3078,10 @@ class MyApp(ShowBase):
         angleToRotate = (angleToRotate ) % 360   # Normalize to [-180, 180]
         print(f"normalized {angleToRotate} degrees to face defender.")
         print(f"Hit location in defender coords: {hitloc}")
-        """ rot = LRotationf()
-        rot.setHpr(defenderNP.getHpr())
-        fwd=rot.getForward()
-        fwd2 = Vec2(fwd.x, fwd.y)
-        print("Defender forward vector:", fwd)
-        vec = hitloc - defenderNP.getPos()
-        vec2 = Vec2(vec.x, vec.y)
-        print("Vector from defender to hit location:", vec) """
-        #angle_between = math.acos(fwd2.normalized().dot(vec2.normalized())) * (180.0 / math.pi)
-        """ defRot = LRotationf()
-        defRot.setHpr(defenderNP.getHpr())
-        fwd = defRot.getForward()
-        print("Defender forward vector:", fwd) """
+        unitloc = unit.bodyNP.getPos(defenderNP)
+        print(f"Attacker unit center location in defender coords: {unitloc}")
+        hitloc = unitloc
+
         angle_between = math.acos(Vec3(0,1,0).dot(hitloc.normalized())) * (180.0 / math.pi)
         print("Angle between forward and hit location vector:", angle_between)
         frontArcAngle = 90 - math.atan2(height, width) * (180.0 / math.pi)
@@ -3318,6 +3309,7 @@ class MyApp(ShowBase):
                     
                     if defenderUnit in self.player1Units:
                         player1_score += total_wounds
+                        
                     else:
                         player2_score += total_wounds
                     combWounds+=total_wounds
