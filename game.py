@@ -143,12 +143,33 @@ class gameFSM(FSM):
 
     def enterDeployPhase(self):
         print("Entering Deploy Phase")
+        # Create a ghost node for the boundary area
+        self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
+        depW=44
+        depH=7.5
+        boxW=20
+        boxH=50
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(boxW, 100, 10)),TransformState.makePos(Point3(depW/2+boxW, 0, 0)))
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(boxW, 100, 10)),TransformState.makePos(Point3(-depW/2-boxW, 0, 0)))  # Your boundary
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(depW/2, boxH, 10)),TransformState.makePos(Point3(0, depH/2+boxH, 0)))
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(depW/2, boxH, 10)),TransformState.makePos(Point3(0, -depH/2-boxH, 0)))
+        # Attach to scene
+        self.game.boundary_np = render.attachNewNode(self.game.boundary_ghost)
+        self.game.boundary_np.setCollideMask(BitMask32.bit(11))  # Set collide mask to match unit bodies
+        self.game.boundary_np.setPos(0, -7.5-7.5/2, 0)
+        base.world.attachRigidBody(self.game.boundary_ghost)
+
         self.game.debugText.setText(f"Current phase: Deploy Phase")
         self.game.setActiveUnitTask=self.game.taskLoopDeploy
         self.game.setActiveUnitTaskName="taskLoopDeploy"
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
 
+    def exitDeployPhase(self):
+        base.world.removeRigidBody(self.game.boundary_ghost)
+        self.game.boundary_np.removeNode()
+
     def enterStrategyPhase(self):
+        self.currentPhaseIndex = 0
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
         self.game.setActiveUnitTask=self.game.taskLoopStrategy
         self.game.setActiveUnitTaskName="taskLoopStrategy"
@@ -522,7 +543,7 @@ class MyApp(ShowBase):
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
-        self.AIplayer2.active = False
+        self.AIplayer2.active = True
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
 
@@ -911,6 +932,13 @@ class MyApp(ShowBase):
 
     def taskLoopDeploy(self, task):
         #base.messenger.toggleVerbose()
+        if allUnitsDeployed(self.units):
+            print("All units deployed, moving to next phase.")
+            self.fsm.request("StrategyPhase")
+            return task.done
+        if self.unitToMove.isDeployed:
+            print("Unit is already deployed, cannot move.")
+            return task.done
         self.ignore('mouse1')
         movetask = taskMgr.add(taskMoveUnit, "taskMoveUnit", extraArgs=[self,self.unitToMove], appendTask=True)
         self.accept('mouse1', endMoveUnit, [self,movetask])

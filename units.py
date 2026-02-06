@@ -79,6 +79,7 @@ class unitGraphics(FSM):
         self.attemptedRallyThisTurn=False
         self.endedInUnit=False
         self.madePursuitChoice=False
+        self.isDeployed=False
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
         
         """ self.text_node = OnscreenText(

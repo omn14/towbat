@@ -75,5 +75,12 @@ class ClassAI:
 
             print(f"{unit.unit.name} moved towards {closest_enemy.unit.name}")
         return
+    
+    def deployUnits(self):
+        for unit in self.playerUnits:
+            if not unit.isDeployed:
+                self.game.unitToMove=unit
+                taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
+                break
 
     
