@@ -46,6 +46,7 @@ from ClassOutOfBounds import *
 from ClassRoundCounter import *
 from ClassAI import *
 from rulesFunctions import *
+from deployPhase import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -139,6 +140,13 @@ class gameFSM(FSM):
                 self.currentPhaseIndex = (self.currentPhaseIndex + 1) % len(self.phases)
                 #self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
                 self.request(self.phases[self.currentPhaseIndex])
+
+    def enterDeployPhase(self):
+        print("Entering Deploy Phase")
+        self.game.debugText.setText(f"Current phase: Deploy Phase")
+        self.game.setActiveUnitTask=self.game.taskLoopDeploy
+        self.game.setActiveUnitTaskName="taskLoopDeploy"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
 
     def enterStrategyPhase(self):
         self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
@@ -602,7 +610,17 @@ class MyApp(ShowBase):
             
             self.jadeLancers.bodyNP.setPos(10, 9, 0)
             self.jadeWarriors.bodyNP.setPos(0,9,0)
-        if 1: #battle march zombies center
+        if 0: #battle march zombies center
+            self.blackKnights.bodyNP.setPos(11,-9,0)
+            self.zombies.bodyNP.setPos(0,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            self.necromancer.bodyNP.setPos(0,-14,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+        
+        if 1: #test Deployment
+            self.fsm.request("DeployPhase")
             self.blackKnights.bodyNP.setPos(11,-9,0)
             self.zombies.bodyNP.setPos(0,-9,0)
             self.direWolves.bodyNP.setPos(-11,-9,0)
@@ -890,6 +908,14 @@ class MyApp(ShowBase):
             unit.request("Idle")
         unit.attemptedRallyThisTurn=True
         return
+
+    def taskLoopDeploy(self, task):
+        #base.messenger.toggleVerbose()
+        self.ignore('mouse1')
+        movetask = taskMgr.add(taskMoveUnit, "taskMoveUnit", extraArgs=[self,self.unitToMove], appendTask=True)
+        self.accept('mouse1', endMoveUnit, [self,movetask])
+        return task.done
+
 
     def taskLoopStrategy(self, task):
         # Placeholder for strategy phase logic
@@ -2518,17 +2544,17 @@ class MyApp(ShowBase):
         #contacts = self.world.contactTest(unit.bodyNP.node(), BitMask32.allOn())
         contacts = self.world.contactTest(unit.bodyNP.node())
         for contact in contacts.getContacts():
-            print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
+            #print("Contact with:", contact.getNode0().getName(), contact.getNode1().getName())
             
             mpoint = contact.getManifoldPoint()
-            print(mpoint.getDistance())
+            """ print(mpoint.getDistance())
             print(mpoint.getAppliedImpulse())
             print(mpoint.getPositionWorldOnA())
             print(mpoint.getPositionWorldOnB())
             print(mpoint.getLocalPointA())
-            print(mpoint.getLocalPointB())
+            print(mpoint.getLocalPointB()) """
             if 'UnitCollision-' in contact.getNode1().getName():
-                print("Unit collision detected!")
+                #print("Unit collision detected!")
                 return contact
         return None
     
