@@ -1,0 +1,279 @@
+{
+  "current_phase": "ShootingPhase",
+  "current_phase_index": 2,
+  "current_round": [
+    1,
+    0
+  ],
+  "current_player": 2,
+  "max_rounds": 6,
+  "ai_player2_active": true,
+  "units": [
+    {
+      "name": "JadeLancers",
+      "position": [
+        10.000001907348633,
+        -5.111636638641357,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Moved",
+      "color": [
+        1,
+        1,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": true,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 6,
+      "files": 6,
+      "ranks": 1,
+      "characteristics": {
+        "Model": "Jade Lancer",
+        "M": "0",
+        "WS": "4",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8"
+      },
+      "armor_save": 3,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "JadeWarriors",
+      "position": [
+        -2.3135149478912354,
+        2.7207322120666504,
+        0.0
+      ],
+      "heading": 153.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Moved",
+      "color": [
+        1,
+        1,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": true,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
+      "characteristics": {
+        "Model": "Jade Warrior",
+        "M": "4",
+        "WS": "4",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8"
+      },
+      "armor_save": 3,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "BlackKnights",
+      "position": [
+        11.0,
+        -9.0,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 6,
+      "files": 6,
+      "ranks": 1,
+      "characteristics": {
+        "Model": "Black Knight",
+        "M": "0",
+        "WS": "3",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "6"
+      },
+      "armor_save": 4,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "Zombies",
+      "position": [
+        0.0,
+        -9.0,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 30,
+      "files": 6,
+      "ranks": 5,
+      "characteristics": {
+        "Model": "Zombie",
+        "M": "4",
+        "WS": "2",
+        "BS": "0",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "1",
+        "A": "1",
+        "Ld": "2",
+        "Type": "Undead"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "Necromancer",
+      "position": [
+        -5.983673095703125,
+        -9.429482460021973,
+        0.0
+      ],
+      "heading": 56.25,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 1,
+      "files": 1,
+      "ranks": 1,
+      "characteristics": {
+        "Model": "Night Goblin",
+        "M": "4",
+        "WS": "2",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "4"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "DireWolves",
+      "position": [
+        -7.107972145080566,
+        -3.0745973587036133,
+        0.0
+      ],
+      "heading": -41.625,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": false,
+      "nmodels": 5,
+      "files": 5,
+      "ranks": 1,
+      "characteristics": {
+        "Model": "Dire Wolf",
+        "M": "9",
+        "WS": "3",
+        "BS": "0",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "3",
+        "Type": "War Beast"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    }
+  ]
+}

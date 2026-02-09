@@ -57,6 +57,9 @@ from panda3d.core import CardMaker, TransparencyAttrib
 from panda3d.core import RenderState, TextureStage
 from panda3d.core import loadPrcFileData
 
+import json
+from datetime import datetime
+
 loadPrcFileData('', 'show-frame-rate-meter true')
 loadPrcFileData('', 'want-pstats 1')
 
@@ -384,6 +387,9 @@ class MyApp(ShowBase):
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
+        self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
+        self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
+
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugTextUnit.setText("Debug Info test")
 
@@ -2834,6 +2840,7 @@ class MyApp(ShowBase):
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate,oposUnit, orotUnit, flank, chdice=None):
         maxmove = int(unit.unit.model.characteristics['M'])
+        durIntConst=1.0
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
                 maxmove= int(rule['mountUnit'].model.characteristics['M'])
@@ -2960,7 +2967,7 @@ class MyApp(ShowBase):
 
         rotation_interval = LerpPosHprInterval(
             newnode, 
-            duration=0.5, 
+            duration=0.5*durIntConst, 
             pos=newnode.getPos(),
             hpr=contactRot,
             blendType='easeInOut'
@@ -2987,7 +2994,7 @@ class MyApp(ShowBase):
         pos_interval = LerpPosHprInterval(
             #unit.bodyNP, 
             newnode,
-            duration=0.5, 
+            duration=0.5*durIntConst, 
             #pos=contactPos,
             #pos=contactPos-direction.normalized()*3,
             #pos=wheel1Pos + direction.normalized()*(cdistance+wdistance),
@@ -3049,7 +3056,7 @@ class MyApp(ShowBase):
         print("Current HPR before final rotation:", newnode.getHpr())
         rotation_interval = LerpPosHprInterval(
             newnode, 
-            duration=0.5, 
+            duration=0.5*durIntConst, 
             pos=newnode.getPos(),
             #hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
             hpr=finalHpr,
@@ -4296,6 +4303,174 @@ class MyApp(ShowBase):
             move_interval
         )
         sequence.start()
+
+    
+
+    def save_game_state(self, filename=None):
+        """
+        Save the current game state to a file.
+        
+        Args:
+            filename (str): Optional filename. If None, generates timestamped filename.
+        """
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"savegame_{timestamp}.json"
+        
+        game_state = {
+            # FSM State
+            'current_phase': self.fsm.phases[self.fsm.currentPhaseIndex],
+            'current_phase_index': self.fsm.currentPhaseIndex,
+            
+            # Round Counter
+            'current_round': self.roundCounter.currentRoundPlayer,
+            'current_player': self.roundCounter.current_player,
+            'max_rounds': self.roundCounter.max_rounds,
+            
+            # AI Settings
+            'ai_player2_active': self.AIplayer2.active,
+            
+            # Units data
+            'units': []
+        }
+        
+        # Save each unit's state
+        for unit in self.units:
+            unit_data = {
+                'name': unit.unitName,
+                'position': list(unit.bodyNP.getPos()),
+                'heading': unit.bodyNP.getH(),
+                'pitch': unit.bodyNP.getP(),
+                'roll': unit.bodyNP.getR(),
+                'state': unit.state,
+                'color': list(unit.color),
+                
+                # Combat/turn state
+                'isInCombat': unit.isInCombat,
+                'hasMovedThisTurn': unit.hasMovedThisTurn,
+                'hasAttackedThisTurn': unit.hasAttackedThisTurn,
+                'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
+                'isDeployed': unit.isDeployed,
+                
+                # Unit composition
+                'nmodels': unit.unit.nmodels,
+                'files': unit.unit.files,
+                'ranks': unit.unit.ranks,
+                
+                # Model characteristics
+                'characteristics': unit.unit.model.characteristics,
+                'armor_save': unit.unit.model.armor_save,
+                'charging': unit.unit.model.charging,
+                
+                # Which player
+                'player': 1 if unit in self.player1Units else 2,
+                
+                # Combat relationships (store unit names)
+                'isInCombatWith': [u.unitName for u in unit.isInCombatWith],
+                'isInCombatFlank': unit.isInCombatFlank
+            }
+            
+            # Save equipped weapon
+            if unit.unit.model.equipedWeapon:
+                unit_data['equipped_weapon'] = unit.unit.model.equipedWeapon['name']
+            else:
+                unit_data['equipped_weapon'] = None
+                
+            game_state['units'].append(unit_data)
+        
+        # Write to file
+        with open(filename, 'w') as f:
+            json.dump(game_state, f, indent=2)
+        
+        print(f"Game saved to {filename}")
+        return filename
+
+
+    def load_game_state(self, filename):
+        """
+        Load a saved game state from a file.
+        
+        Args:
+            filename (str): The filename to load from.
+        """
+        with open(filename, 'r') as f:
+            game_state = json.load(f)
+        
+        # Restore FSM state
+        self.fsm.currentPhaseIndex = game_state['current_phase_index']
+        self.fsm.request(game_state['current_phase'])
+        
+        # Restore round counter
+        self.roundCounter.currentRoundPlayer = game_state['current_round']
+        self.roundCounter.current_player = game_state['current_player']
+        self.roundCounter.max_rounds = game_state['max_rounds']
+        self.roundCounter.update_round_display()
+        
+        # Restore AI settings
+        self.AIplayer2.active = game_state['ai_player2_active']
+        
+        # Create a mapping of unit names to unit objects
+        unit_map = {unit.unitName: unit for unit in self.units}
+        
+        # Restore unit states
+        for unit_data in game_state['units']:
+            unit_name = unit_data['name']
+            
+            if unit_name in unit_map:
+                unit = unit_map[unit_name]
+                
+                # Restore position and rotation
+                unit.bodyNP.setPos(*unit_data['position'])
+                unit.bodyNP.setH(unit_data['heading'])
+                unit.bodyNP.setP(unit_data['pitch'])
+                unit.bodyNP.setR(unit_data['roll'])
+                
+                # Restore state
+                unit.request(unit_data['state'])
+                
+                # Restore combat/turn state
+                unit.isInCombat = unit_data['isInCombat']
+                unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
+                unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
+                unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
+                unit.isDeployed = unit_data['isDeployed']
+                
+                # Restore unit composition
+                unit.unit.nmodels = unit_data['nmodels']
+                unit.unit.files = unit_data['files']
+                unit.unit.ranks = unit_data['ranks']
+                
+                # Restore model characteristics
+                unit.unit.model.characteristics = unit_data['characteristics']
+                unit.unit.model.armor_save = unit_data['armor_save']
+                unit.unit.model.charging = unit_data['charging']
+                
+                # Restore equipped weapon
+                if unit_data['equipped_weapon']:
+                    unit.unit.model.equip_weapon(unit_data['equipped_weapon'])
+                
+                # Clear combat relationships (will be restored in second pass)
+                unit.isInCombatWith = []
+                unit.isInCombatFlank = []
+        
+        # Second pass: restore combat relationships
+        for unit_data in game_state['units']:
+            unit_name = unit_data['name']
+            if unit_name in unit_map:
+                unit = unit_map[unit_name]
+                
+                # Restore combat relationships
+                for combat_unit_name in unit_data['isInCombatWith']:
+                    if combat_unit_name in unit_map:
+                        unit.isInCombatWith.append(unit_map[combat_unit_name])
+                
+                unit.isInCombatFlank = unit_data['isInCombatFlank']
+                
+                # Update text display
+                unit.updateTextNode()
+        
+        print(f"Game loaded from {filename}")
+        self.debugText.setText(f"Loaded: {filename}")
 
 app = MyApp()
 app.run()
