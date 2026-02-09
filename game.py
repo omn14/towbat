@@ -47,6 +47,7 @@ from ClassRoundCounter import *
 from ClassAI import *
 from rulesFunctions import *
 from deployPhase import *
+from gameStateAnalyzer import *
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -389,6 +390,7 @@ class MyApp(ShowBase):
         
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
+        self.analyzer = GameStateAnalyzer(self)
 
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugTextUnit.setText("Debug Info test")
@@ -4471,6 +4473,20 @@ class MyApp(ShowBase):
         
         print(f"Game loaded from {filename}")
         self.debugText.setText(f"Loaded: {filename}")
+
+        evaluation = self.analyzer.evaluate_overall_state(player_num=1)
+        print(f"Player 1 Assessment: {evaluation['assessment']}")
+        print(f"Total Score: {evaluation['total_score']:.1f}")
+        strategy = self.analyzer.suggest_strategy(player_num=1)
+        print(f"Suggested Strategy: {strategy}")
+
+        evaluation = self.analyzer.evaluate_overall_state(player_num=2)
+        print(f"Player 2 Assessment: {evaluation['assessment']}")
+        print(f"Total Score: {evaluation['total_score']:.1f}")
+        strategy = self.analyzer.suggest_strategy(player_num=2)
+        print(f"Suggested Strategy: {strategy}")
+
+
 
 app = MyApp()
 app.run()
