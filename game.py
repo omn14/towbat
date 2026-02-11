@@ -207,7 +207,8 @@ class gameFSM(FSM):
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
         if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
-            taskMgr.add(self.game.AIplayer2.takeMoveTurn())
+            pass
+            #taskMgr.add(self.game.AIplayer2.takeMoveTurn())
         
         
 
@@ -259,7 +260,8 @@ class gameFSM(FSM):
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn=False
         if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
-            taskMgr.add(self.game.AIplayer2.takeCombatTurn())
+            pass
+            #taskMgr.add(self.game.AIplayer2.takeCombatTurn())
 
 
     def exitCombatPhase(self):
@@ -550,8 +552,18 @@ class MyApp(ShowBase):
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
-        self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
-        self.AIplayer2.active = True
+        """ self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
+        self.AIplayer2.active = True """
+        
+        from aiMinimaxIntegration import EnhancedAI
+
+        # Replace: self.AIplayer2 = ClassAI(...)
+        self.AIplayer2 = EnhancedAI(
+            self, self.player2Units, self.player1Units,
+            player_num=2, use_minimax=True, minimax_depth=5
+        )
+        self.accept('a', self.AIplayer2.take_turn)
+
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
 

@@ -1,9 +1,9 @@
 {
-  "current_phase": "CombatPhase",
-  "current_phase_index": 3,
+  "current_phase": "StrategyPhase",
+  "current_phase_index": 0,
   "current_round": [
-    1,
-    1
+    0,
+    0
   ],
   "current_player": 1,
   "max_rounds": 6,
@@ -12,8 +12,8 @@
     {
       "name": "JadeLancers",
       "position": [
-        10.000001907348633,
-        -5.111636638641357,
+        -13.979574203491211,
+        11.59698486328125,
         0.0
       ],
       "heading": 180.0,
@@ -30,7 +30,7 @@
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
+      "isDeployed": true,
       "nmodels": 6,
       "files": 6,
       "ranks": 1,
@@ -56,26 +56,26 @@
     {
       "name": "JadeWarriors",
       "position": [
-        -3.2180633544921875,
-        1.0498664379119873,
+        -3.3241817951202393,
+        10.338593482971191,
         0.0
       ],
-      "heading": 153.0,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "InCombat",
+      "state": "Idle",
       "color": [
         1,
         1,
         0,
         1
       ],
-      "isInCombat": true,
+      "isInCombat": false,
       "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": true,
+      "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
-      "nmodels": 14,
+      "isDeployed": true,
+      "nmodels": 15,
       "files": 5,
       "ranks": 3,
       "characteristics": {
@@ -93,19 +93,15 @@
       "armor_save": 3,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [
-        "DireWolves"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "BlackKnights",
       "position": [
-        11.0,
-        -9.0,
+        9.819151878356934,
+        -10.060050964355469,
         0.0
       ],
       "heading": 0.0,
@@ -122,7 +118,7 @@
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
+      "isDeployed": true,
       "nmodels": 6,
       "files": 6,
       "ranks": 1,
@@ -148,8 +144,8 @@
     {
       "name": "Zombies",
       "position": [
-        0.0,
-        -9.0,
+        -0.8710561990737915,
+        -9.710693359375,
         0.0
       ],
       "heading": 0.0,
@@ -166,7 +162,7 @@
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
+      "isDeployed": true,
       "nmodels": 30,
       "files": 6,
       "ranks": 5,
@@ -193,11 +189,11 @@
     {
       "name": "Necromancer",
       "position": [
-        -5.983673095703125,
-        -9.429482460021973,
+        0.8628832697868347,
+        -13.539054870605469,
         0.0
       ],
-      "heading": 56.25,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -211,7 +207,7 @@
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
+      "isDeployed": true,
       "nmodels": 1,
       "files": 1,
       "ranks": 1,
@@ -237,26 +233,26 @@
     {
       "name": "DireWolves",
       "position": [
-        -4.214846134185791,
-        -0.7913722991943359,
+        -11.339792251586914,
+        -9.878211975097656,
         0.0
       ],
-      "heading": -26.99999237060547,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "InCombat",
+      "state": "Idle",
       "color": [
         0,
         0,
         1,
         1
       ],
-      "isInCombat": true,
-      "hasMovedThisTurn": true,
-      "hasAttackedThisTurn": true,
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
-      "isDeployed": false,
-      "nmodels": 2,
+      "isDeployed": true,
+      "nmodels": 5,
       "files": 5,
       "ranks": 1,
       "characteristics": {
@@ -275,12 +271,8 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [
-        "JadeWarriors"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     }
   ]
