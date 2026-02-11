@@ -135,6 +135,10 @@ class OptimizedMinimaxTree(MinimaxTree):
         self.start_time = time.time()
         self.search_cancelled = False
         
+        # Reset statistics for this search
+        self.nodes_evaluated = 0
+        self.nodes_pruned = 0
+        
         best_action = None
         best_value = float('-inf') if initial_state.current_player == 1 else float('inf')
         
@@ -152,6 +156,8 @@ class OptimizedMinimaxTree(MinimaxTree):
                     best_action = action
                     best_value = value
                     print(f"[Minimax] Depth {depth} complete: value={value:.2f}")
+                    print(f"  Nodes evaluated: {self.nodes_evaluated}, pruned: {self.nodes_pruned}")
+                    print(f" best action: {best_action}")
         else:
             # Single depth search
             best_action, best_value = self._search_depth(initial_state, self.max_depth)
@@ -207,7 +213,7 @@ class OptimizedMinimaxTree(MinimaxTree):
         
         # Move ordering: try best moves first for better pruning
         if self.use_move_ordering and len(node.children) > 1:
-            node.children = self._order_moves(node.children)
+            node.children = self._order_moves(node.children, maximizing)
         
         if maximizing:
             return self._maximize(node, depth, alpha, beta)
@@ -358,10 +364,14 @@ class OptimizedMinimaxTree(MinimaxTree):
         
         return actions
     
-    def _order_moves(self, children: List[GameStateNode]) -> List[GameStateNode]:
+    def _order_moves(self, children: List[GameStateNode], maximizing: bool) -> List[GameStateNode]:
         """
         Order moves to search better moves first.
         Improves alpha-beta pruning efficiency.
+        
+        Args:
+            children: List of child nodes to order
+            maximizing: True if ordering for maximizing player, False for minimizing
         """
         # Score each move with quick heuristic
         scored_children = []
@@ -377,12 +387,17 @@ class OptimizedMinimaxTree(MinimaxTree):
                 score += 100
             
             # Prioritize moves that improve position
+            # For maximizer: higher state score = better (want high scores first)
+            # For minimizer: lower state score = better (want low scores first)
             if child.state.score is not None:
-                score += child.state.score
+                if maximizing:
+                    score += child.state.score
+                else:
+                    score -= child.state.score  # Negate for minimizer
             
             scored_children.append((score, child))
         
-        # Sort by score descending
+        # Sort by score descending (higher heuristic score = try first)
         scored_children.sort(reverse=True, key=lambda x: x[0])
         
         return [child for _, child in scored_children]

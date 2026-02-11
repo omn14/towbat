@@ -375,6 +375,7 @@ class MinimaxTree:
         actions = other_actions + end_phase_actions
         
         # Limit action space for performance
+        #print(len(actions), "possible actions generated")
         if len(actions) > 20:
             # Prune to most promising actions using heuristics
             actions = self._prune_actions(state, actions)[:20]
