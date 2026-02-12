@@ -155,9 +155,9 @@ class OptimizedMinimaxTree(MinimaxTree):
                 if not self.search_cancelled:
                     best_action = action
                     best_value = value
-                    print(f"[Minimax] Depth {depth} complete: value={value:.2f}")
-                    print(f"  Nodes evaluated: {self.nodes_evaluated}, pruned: {self.nodes_pruned}")
-                    print(f" best action: {best_action}")
+                    print(f"[Minimax] Depth {depth} complete: value={value:.2f}"+f" best action: {best_action}")
+                    #print(f"  Nodes evaluated: {self.nodes_evaluated}, pruned: {self.nodes_pruned}")
+                    
         else:
             # Single depth search
             best_action, best_value = self._search_depth(initial_state, self.max_depth)

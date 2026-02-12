@@ -1,9 +1,9 @@
 {
-  "current_phase": "StrategyPhase",
-  "current_phase_index": 0,
+  "current_phase": "CombatPhase",
+  "current_phase_index": 3,
   "current_round": [
-    0,
-    0
+    1,
+    1
   ],
   "current_player": 1,
   "max_rounds": 6,
@@ -12,21 +12,21 @@
     {
       "name": "JadeLancers",
       "position": [
-        -13.979574203491211,
-        11.59698486328125,
+        -13.979572296142578,
+        5.16657018661499,
         0.0
       ],
       "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         1,
         1,
         0,
         1
       ],
-      "isInCombat": false,
+      "isInCombat": true,
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
@@ -49,18 +49,22 @@
       "armor_save": 3,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "DireWolves"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "JadeWarriors",
       "position": [
-        -3.3241817951202393,
-        10.338593482971191,
+        -0.9594318866729736,
+        4.147045135498047,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 208.125,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -100,14 +104,14 @@
     {
       "name": "BlackKnights",
       "position": [
-        9.819151878356934,
-        -10.060050964355469,
+        7.538416862487793,
+        -2.702129364013672,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 22.5,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         0,
         0,
@@ -115,7 +119,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -144,8 +148,8 @@
     {
       "name": "Zombies",
       "position": [
-        -0.8710561990737915,
-        -9.710693359375,
+        -0.871056318283081,
+        -5.505822658538818,
         0.0
       ],
       "heading": 0.0,
@@ -233,22 +237,22 @@
     {
       "name": "DireWolves",
       "position": [
-        -11.339792251586914,
-        -9.878211975097656,
+        -12.196585655212402,
+        3.034524440765381,
         0.0
       ],
-      "heading": 0.0,
+      "heading": -7.538729960288038e-07,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0,
         0,
         1,
         1
       ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "isInCombat": true,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -271,8 +275,12 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "JadeLancers"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     }
   ]

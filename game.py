@@ -560,7 +560,7 @@ class MyApp(ShowBase):
         # Replace: self.AIplayer2 = ClassAI(...)
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=10
+            player_num=2, use_minimax=True, minimax_depth=20
         )
         self.accept('a', self.AIplayer2.take_turn)
 

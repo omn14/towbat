@@ -4,6 +4,7 @@ For Warhammer-style turn-based strategy game
 """
 
 import copy
+import math
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
 import json
@@ -391,18 +392,40 @@ class MinimaxTree:
         
         if action.action_type == 'move':
             unit = new_state.get_unit_by_name(action.unit_name)
-            if unit:
+            
+            if unit and not unit['isInCombat'] and not unit['hasMovedThisTurn']:
+                dx = action.parameters['target_x'] - unit['position'][0]
+                dy = action.parameters['target_y'] - unit['position'][1]
                 unit['position'] = (
                     action.parameters['target_x'],
                     action.parameters['target_y'],
                     unit['position'][2]
                 )
+                # Calculate new heading based on movement direction
+                
+                new_heading = math.degrees(math.atan2(dy, dx))
+                unit['heading'] = new_heading
                 unit['hasMovedThisTurn'] = True
+
+                # Check if unit is within 5 units of an enemy unit
+                enemy_units = new_state.get_player_units(3 - unit['player'])
+                for enemy in enemy_units:
+                    dx = enemy['position'][0] - unit['position'][0]
+                    dy = enemy['position'][1] - unit['position'][1]
+                    distance = math.sqrt(dx*dx + dy*dy)
+                    if distance < 5:
+                        unit['isInCombat'] = True
+                        unit['state'] = 'InCombat'
+                        unit['isInCombatWith'].append(enemy['name'])
+                        enemy['isInCombat'] = True
+                        enemy['state'] = 'InCombat'
+                        enemy['isInCombatWith'].append(unit['name'])
+                        break
         
         elif action.action_type == 'shoot':
             unit = new_state.get_unit_by_name(action.unit_name)
             target = new_state.get_unit_by_name(action.parameters['target'])
-            if unit and target:
+            if unit and target and not unit['isInCombat'] and not unit['hasAttackedThisTurn']:
                 # Simulate combat (simplified)
                 unit['hasAttackedThisTurn'] = True
                 # Rough damage calculation
@@ -415,7 +438,7 @@ class MinimaxTree:
             if unit and target:
                 unit['hasAttackedThisTurn'] = True
                 # Simulate melee combat
-                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.15))
+                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.5))
                 target['nmodels'] = max(0, target['nmodels'] - damage)
         
         elif action.action_type == 'end_phase':
@@ -446,7 +469,7 @@ class MinimaxTree:
         player2_units = state.get_player_units(2)
         
         # Quick evaluation based on army strength
-        p1_strength = sum(u['nmodels'] * u['A'] * u['S'] * (7 - u['armor_save']) 
+        p1_strength = sum(u['nmodels'] * u['A'] * u['S'] * (7 - u['armor_save'])
                          for u in player1_units)
         p2_strength = sum(u['nmodels'] * u['A'] * u['S'] * (7 - u['armor_save']) 
                          for u in player2_units)
@@ -460,6 +483,7 @@ class MinimaxTree:
         p2_pos_bonus = 0
         for unit in player1_units:
             p1_pos_bonus += unit['position'][1] * 5  # Higher Y = better for P1 (maximizing)
+            
         
         for unit in player2_units:
             p2_pos_bonus += unit['position'][1] * 5  # Track P2's Y position
@@ -467,6 +491,79 @@ class MinimaxTree:
         # P2 minimizes score, so higher Y values should increase score (making it less desirable for P2)
         # Lower Y values decrease score (making it more desirable for P2)
         score += p1_pos_bonus + p2_pos_bonus
+
+        # Flanking bonus - reward units positioned to attack enemy flanks/rear
+        import math
+        p1_flank_bonus = 0
+        p2_flank_bonus = 0
+        
+        for unit in player1_units:
+            if unit['nmodels'] == 0:
+                continue
+            unit_pos = unit['position']
+            
+            for enemy in player2_units:
+                if enemy['nmodels'] == 0:
+                    continue
+                enemy_pos = enemy['position']
+                
+                # Calculate distance
+                dx = enemy_pos[0] - unit_pos[0]
+                dy = enemy_pos[1] - unit_pos[1]
+                distance = math.sqrt(dx*dx + dy*dy)
+                
+                if distance < 20:  # Within threatening range (charge distance)
+                    # Calculate angle from enemy facing to our unit
+                    direction_x = unit_pos[0] - enemy_pos[0]
+                    direction_y = unit_pos[1] - enemy_pos[1]
+                    angle_to_unit = math.degrees(math.atan2(direction_y, direction_x))
+                    relative_angle = angle_to_unit - enemy['heading']
+                    
+                    # Normalize to -180 to 180
+                    while relative_angle > 180:
+                        relative_angle -= 360
+                    while relative_angle < -180:
+                        relative_angle += 360
+                    
+                    if 45 < abs(relative_angle) < 135:  # Flank position
+                        p1_flank_bonus += 15
+                    elif abs(relative_angle) > 135:  # Rear position
+                        p1_flank_bonus += 30
+        
+        for unit in player2_units:
+            if unit['nmodels'] == 0:
+                continue
+            unit_pos = unit['position']
+            
+            for enemy in player1_units:
+                if enemy['nmodels'] == 0:
+                    continue
+                enemy_pos = enemy['position']
+                
+                # Calculate distance
+                dx = enemy_pos[0] - unit_pos[0]
+                dy = enemy_pos[1] - unit_pos[1]
+                distance = math.sqrt(dx*dx + dy*dy)
+                
+                if distance < 20:  # Within threatening range
+                    # Calculate angle from enemy facing to our unit
+                    direction_x = unit_pos[0] - enemy_pos[0]
+                    direction_y = unit_pos[1] - enemy_pos[1]
+                    angle_to_unit = math.degrees(math.atan2(direction_y, direction_x))
+                    relative_angle = angle_to_unit - enemy['heading']
+                    
+                    # Normalize to -180 to 180
+                    while relative_angle > 180:
+                        relative_angle -= 360
+                    while relative_angle < -180:
+                        relative_angle += 360
+                    
+                    if 45 < abs(relative_angle) < 135:  # Flank position
+                        p2_flank_bonus += 15
+                    elif abs(relative_angle) > 135:  # Rear position
+                        p2_flank_bonus += 30
+        
+        score += p1_flank_bonus - p2_flank_bonus
 
         # CRITICAL: Penalize unused action potential
         # If units haven't moved/attacked yet, that's wasted opportunity
@@ -497,8 +594,9 @@ class MinimaxTree:
         if False:  # Set to True to enable debug
             print(f"[Eval] P{state.current_player} | Score: {score:.1f} | "
                   f"Strength: {p1_strength-p2_strength:.0f} | "
+                  f"Flank: P1={p1_flank_bonus} P2={p2_flank_bonus} | "
                   f"Unused P1/P2: {unused_p1_actions}/{unused_p2_actions} | "
-                  f"PosBonus: {p1_pos_bonus}+{p2_pos_bonus}")
+                  f"PosBonus: {p1_pos_bonus:.0f}+{p2_pos_bonus:.0f}")
         
         return score
     
