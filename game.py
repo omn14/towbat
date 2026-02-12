@@ -4484,7 +4484,8 @@ class MyApp(ShowBase):
                 unit.updateTextNode()
         
         print(f"Game loaded from {filename}")
-        self.debugText.setText(f"Loaded: {filename}")
+        #self.debugText.setText(f"Loaded: {filename}")
+        self.debugTextUnit.setText(f"Loaded: {filename}")
 
         evaluation = self.analyzer.evaluate_overall_state(player_num=1)
         print(f"Player 1 Assessment: {evaluation['assessment']}")

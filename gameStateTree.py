@@ -438,8 +438,10 @@ class MinimaxTree:
             if unit and target:
                 unit['hasAttackedThisTurn'] = True
                 # Simulate melee combat
-                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.5))
+                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.15))
                 target['nmodels'] = max(0, target['nmodels'] - damage)
+                if target['nmodels'] == 0:
+                    print(f"{target['name']} has been destroyed in combat!")
         
         elif action.action_type == 'end_phase':
             # Advance to next phase

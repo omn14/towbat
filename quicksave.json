@@ -2,8 +2,8 @@
   "current_phase": "CombatPhase",
   "current_phase_index": 3,
   "current_round": [
-    1,
-    1
+    2,
+    2
   ],
   "current_player": 1,
   "max_rounds": 6,
@@ -28,10 +28,10 @@
       ],
       "isInCombat": true,
       "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
+      "hasAttackedThisTurn": true,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 6,
+      "nmodels": 5,
       "files": 6,
       "ranks": 1,
       "characteristics": {
@@ -67,14 +67,14 @@
       "heading": 208.125,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         1,
         1,
         0,
         1
       ],
-      "isInCombat": false,
+      "isInCombat": true,
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
@@ -97,8 +97,12 @@
       "armor_save": 3,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "Zombies"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
@@ -111,7 +115,7 @@
       "heading": 22.5,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -119,7 +123,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -148,22 +152,22 @@
     {
       "name": "Zombies",
       "position": [
-        -0.871056318283081,
-        -5.505822658538818,
+        -0.512214183807373,
+        0.8449382781982422,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 28.125,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0,
         0,
         1,
         1
       ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "isInCombat": true,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -186,8 +190,12 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "JadeWarriors"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
@@ -253,10 +261,10 @@
       ],
       "isInCombat": true,
       "hasMovedThisTurn": true,
-      "hasAttackedThisTurn": false,
+      "hasAttackedThisTurn": true,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 5,
+      "nmodels": 4,
       "files": 5,
       "ranks": 1,
       "characteristics": {
