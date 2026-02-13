@@ -294,6 +294,8 @@ class EnhancedAI:
         visualizer = TreeVisualizer(self.tree)
         visualizer.print_best_path()
 
+        #visualizer.print_tree_ascii(max_depth=19)
+
         """ explainer = DecisionExplainer(self.tree)
         explainer.explain_decision()
 

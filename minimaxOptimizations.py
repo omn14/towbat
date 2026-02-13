@@ -378,9 +378,9 @@ class OptimizedMinimaxTree(MinimaxTree):
         for child in children:
             score = 0
             
-            # Prioritize previously found best moves
+            """ # Prioritize previously found best moves
             if child.action and str(child.action) in self.best_moves:
-                score += 1000
+                score += 1000 """
             
             # Prioritize captures/attacks
             if child.action and child.action.action_type in ['attack', 'shoot']:

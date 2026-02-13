@@ -435,13 +435,13 @@ class MinimaxTree:
         elif action.action_type == 'attack':
             unit = new_state.get_unit_by_name(action.unit_name)
             target = new_state.get_unit_by_name(action.parameters['target'])
-            if unit and target:
+            if unit and target and unit['isInCombat'] and not unit['hasAttackedThisTurn']:
                 unit['hasAttackedThisTurn'] = True
                 # Simulate melee combat
-                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.15))
+                damage = max(0, int(unit['nmodels'] * unit['A'] * 0.15))+1
                 target['nmodels'] = max(0, target['nmodels'] - damage)
-                if target['nmodels'] == 0:
-                    print(f"{target['name']} has been destroyed in combat!")
+                """ if target['nmodels'] == 0:
+                    print(f"{target['name']} has been destroyed in combat!") """
         
         elif action.action_type == 'end_phase':
             # Advance to next phase
@@ -471,9 +471,9 @@ class MinimaxTree:
         player2_units = state.get_player_units(2)
         
         # Quick evaluation based on army strength
-        p1_strength = sum(u['nmodels'] * u['A'] * u['S'] * (7 - u['armor_save'])
+        p1_strength = sum(u['nmodels'] * u['A'] * u['S'] 
                          for u in player1_units)
-        p2_strength = sum(u['nmodels'] * u['A'] * u['S'] * (7 - u['armor_save']) 
+        p2_strength = sum(u['nmodels'] * u['A'] * u['S'] 
                          for u in player2_units)
         
         score = p1_strength - p2_strength
@@ -495,17 +495,17 @@ class MinimaxTree:
         score += p1_pos_bonus + p2_pos_bonus
 
         # Flanking bonus - reward units positioned to attack enemy flanks/rear
-        import math
+        
         p1_flank_bonus = 0
         p2_flank_bonus = 0
         
         for unit in player1_units:
-            if unit['nmodels'] == 0:
+            if unit['nmodels'] == 0 or unit['isInCombat']:
                 continue
             unit_pos = unit['position']
             
             for enemy in player2_units:
-                if enemy['nmodels'] == 0:
+                if enemy['nmodels'] == 0 :
                     continue
                 enemy_pos = enemy['position']
                 
@@ -533,12 +533,12 @@ class MinimaxTree:
                         p1_flank_bonus += 30
         
         for unit in player2_units:
-            if unit['nmodels'] == 0:
+            if unit['nmodels'] == 0 or unit['isInCombat']:
                 continue
             unit_pos = unit['position']
             
             for enemy in player1_units:
-                if enemy['nmodels'] == 0:
+                if enemy['nmodels'] == 0 :
                     continue
                 enemy_pos = enemy['position']
                 
@@ -565,7 +565,7 @@ class MinimaxTree:
                     elif abs(relative_angle) > 135:  # Rear position
                         p2_flank_bonus += 30
         
-        score += p1_flank_bonus - p2_flank_bonus
+        #score += p1_flank_bonus - p2_flank_bonus
 
         # CRITICAL: Penalize unused action potential
         # If units haven't moved/attacked yet, that's wasted opportunity
