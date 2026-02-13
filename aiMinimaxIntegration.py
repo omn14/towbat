@@ -21,7 +21,7 @@ class EnhancedAI:
         self.player_units = player_units
         self.enemy_units = enemy_units
         self.player_num = player_num
-        self.active = False
+        self.active = True
         
         # Initialize analyzer and tree
         self.analyzer = GameStateAnalyzer(game)
@@ -37,6 +37,7 @@ class EnhancedAI:
                 use_move_ordering=True,
                 use_iterative_deepening=True
             )
+            
         
         # Statistics
         self.decisions_made = 0
@@ -90,7 +91,7 @@ class EnhancedAI:
         
         # Find best move with time limit (iterative deepening)
         # Set time_limit based on game urgency (in seconds)
-        time_limit = 30.0  # Adjust as needed
+        time_limit = 60.0  # Adjust as needed
         best_action, expected_value = self.tree.find_best_move_timed(state, time_limit)
         
         #self.tree.print_tree(self.tree.root.best_child)  # Optional: Print the tree for debugging
@@ -247,6 +248,7 @@ class EnhancedAI:
                 # Use existing game movement system
                 # This depends on your actual game implementation
                 # Example: self.game.moveUnit(unit, target_pos)
+                self.game.ball.setPos(target_pos)  # Placeholder for movement command
                 pass
         
         elif action.action_type == 'shoot':
@@ -312,7 +314,12 @@ class EnhancedAI:
         print(f"Heuristic decisions: {self.heuristic_decisions} "
               f"({self.heuristic_decisions/max(1, self.decisions_made)*100:.1f}%)")
 
-
+    def deployUnits(self):
+        for unit in self.player_units:
+            if not unit.isDeployed:
+                self.game.unitToMove=unit
+                taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
+                break
 # Example: Replacing existing AI in game.py
 """
 In game.py, replace:

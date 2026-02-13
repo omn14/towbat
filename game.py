@@ -412,7 +412,7 @@ class MyApp(ShowBase):
         self.player2Units = []
         
         
-        """ url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+        url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
         man_at_arm = model("Man_at_Arm", url_man_at_arm)
         man_at_arm.armor_save = 7
         man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
@@ -421,11 +421,21 @@ class MyApp(ShowBase):
         self.bretBowmen.bodyNP.setH(180)
         self.units.append(self.bretBowmen)
         self.player2Units.append(self.bretBowmen)
+        self.bretBowmen.unit.model.weapons.update({
+            'short bow': {'name': 'short bow',
+                          'description': 'weaker ranged weapon',
+                          'tag': 'ranged',
+                          'ranged_range': 12,
+                          'ranged_shots': 1,
+                          'ranged_strength': 3,
+                          'ranged_AP': 0,
+                          'volley_fire': True}
+        })
 
         
 
         
-        
+        """
         url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
         url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
         bretonnian_warhorse = BretonnianWarhorse("Bretonnian Warhorse", url_bretonnian_warhorse)
@@ -560,8 +570,9 @@ class MyApp(ShowBase):
         # Replace: self.AIplayer2 = ClassAI(...)
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=10
+            player_num=2, use_minimax=True, minimax_depth=30
         )
+        self.AIplayer2.tree.stop_after_n_returns = 1
         self.accept('a', self.AIplayer2.take_turn)
 
         self.setActiveUnitTask=self.taskLoopStrategy
@@ -1972,7 +1983,7 @@ class MyApp(ShowBase):
                 vectormouse=mouse_pos - pointmid if mouse_pos else Vec2(1,1)
                 #print(f"vectormouse: {vectormouse}, vector: {vector}, dot: {vectormouse.dot(vector)}")
                 nums=i
-                if abs(vectormouse.dot(vector)) < .001:
+                if abs(vectormouse.normalized().dot(vector)) < .001:
                     
                     break
                 if width * angle >= movedistance:

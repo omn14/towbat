@@ -124,6 +124,11 @@ class OptimizedMinimaxTree(MinimaxTree):
         self.time_limit = None  # seconds
         self.start_time = None
         self.search_cancelled = False
+        
+        # Stop search when player switches back to initial player N times
+        # 0 = disabled (search to max_depth), 1 = stop on first return, 2 = stop on second return, etc.
+        self.initial_player: Optional[int] = None
+        self.stop_after_n_returns: int = 1
     
     def find_best_move_timed(self, initial_state: GameState, 
                             time_limit: float = 5.0) -> Tuple[Optional[GameAction], float]:
@@ -167,12 +172,14 @@ class OptimizedMinimaxTree(MinimaxTree):
     def _search_depth(self, initial_state: GameState, depth: int) -> Tuple[Optional[GameAction], float]:
         """Search to a specific depth"""
         self.root = GameStateNode(initial_state)
+        self.initial_player = initial_state.current_player  # Track initial player
         is_maximizing = initial_state.current_player == 1
         
         best_value = self.minimax_optimized(
             self.root, depth, 
             float('-inf'), float('inf'), 
-            is_maximizing
+            is_maximizing,
+            is_initial_turn=True  # Root node is initial player's turn
         )
         
         if self.root.best_child:
@@ -180,9 +187,15 @@ class OptimizedMinimaxTree(MinimaxTree):
         return (None, best_value)
     
     def minimax_optimized(self, node: GameStateNode, depth: int, 
-                         alpha: float, beta: float, maximizing: bool) -> float:
+                         alpha: float, beta: float, maximizing: bool,
+                         is_initial_turn: bool = False,
+                         return_count: int = 0) -> float:
         """
         Optimized minimax with transposition table and move ordering.
+        
+        Args:
+            is_initial_turn: True if this is still the initial player's first turn
+            return_count: How many times the turn has returned to initial player
         """
         # Check time limit
         if self._time_exceeded():
@@ -190,6 +203,14 @@ class OptimizedMinimaxTree(MinimaxTree):
             return self._evaluate_state(node.state)
         
         self.nodes_evaluated += 1
+        
+        # Check if player has switched back to initial player (stop condition)
+        # This stops the search after opponent completes their turn N times
+        if (self.stop_after_n_returns > 0 and return_count >= self.stop_after_n_returns):
+            score = self._evaluate_state(node.state)
+            node.value = score
+            node.is_terminal = True
+            return score
         
         # Check transposition table
         if self.tt:
@@ -215,12 +236,17 @@ class OptimizedMinimaxTree(MinimaxTree):
         if self.use_move_ordering and len(node.children) > 1:
             node.children = self._order_moves(node.children, maximizing)
         
+        # Track if we're still in initial player's first turn
+        # Once player changes, is_initial_turn becomes False for all subsequent nodes
+        child_is_initial_turn = is_initial_turn and (node.state.current_player == self.initial_player)
+        
         if maximizing:
-            return self._maximize(node, depth, alpha, beta)
+            return self._maximize(node, depth, alpha, beta, child_is_initial_turn, return_count)
         else:
-            return self._minimize(node, depth, alpha, beta)
+            return self._minimize(node, depth, alpha, beta, child_is_initial_turn, return_count)
     
-    def _maximize(self, node: GameStateNode, depth: int, alpha: float, beta: float) -> float:
+    def _maximize(self, node: GameStateNode, depth: int, alpha: float, beta: float,
+                   is_initial_turn: bool = False, return_count: int = 0) -> float:
         """Maximizing player logic"""
         max_eval = float('-inf')
         best_child = None
@@ -230,9 +256,16 @@ class OptimizedMinimaxTree(MinimaxTree):
             if self.search_cancelled:
                 break
             
+            # Track when turn returns to initial player
+            child_return_count = return_count
+            if not is_initial_turn and child.state.current_player == self.initial_player:
+                # Player changed to opponent and now back to initial player
+                if node.state.current_player != self.initial_player:
+                    child_return_count += 1
+            
             # Determine if child should be maximizing based on current_player
             child_maximizing = (child.state.current_player == 1)
-            eval_score = self.minimax_optimized(child, depth - 1, alpha, beta, child_maximizing)
+            eval_score = self.minimax_optimized(child, depth - 1, alpha, beta, child_maximizing, is_initial_turn, child_return_count)
             
             if eval_score > max_eval:
                 max_eval = eval_score
@@ -258,7 +291,8 @@ class OptimizedMinimaxTree(MinimaxTree):
         
         return max_eval
     
-    def _minimize(self, node: GameStateNode, depth: int, alpha: float, beta: float) -> float:
+    def _minimize(self, node: GameStateNode, depth: int, alpha: float, beta: float,
+                   is_initial_turn: bool = False, return_count: int = 0) -> float:
         """Minimizing player logic"""
         min_eval = float('inf')
         best_child = None
@@ -268,9 +302,16 @@ class OptimizedMinimaxTree(MinimaxTree):
             if self.search_cancelled:
                 break
             
+            # Track when turn returns to initial player
+            child_return_count = return_count
+            if not is_initial_turn and child.state.current_player == self.initial_player:
+                # Player changed to opponent and now back to initial player
+                if node.state.current_player != self.initial_player:
+                    child_return_count += 1
+            
             # Determine if child should be maximizing based on current_player
             child_maximizing = (child.state.current_player == 1)
-            eval_score = self.minimax_optimized(child, depth - 1, alpha, beta, child_maximizing)
+            eval_score = self.minimax_optimized(child, depth - 1, alpha, beta, child_maximizing, is_initial_turn, child_return_count)
             
             if eval_score < min_eval:
                 min_eval = eval_score
