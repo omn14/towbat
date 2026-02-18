@@ -392,6 +392,8 @@ class MyApp(ShowBase):
         
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
+        self.accept('wheel_up', self.zoomIn)  # Mouse wheel forward zooms in
+        self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)
 
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
@@ -570,7 +572,7 @@ class MyApp(ShowBase):
         # Replace: self.AIplayer2 = ClassAI(...)
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=30
+            player_num=2, use_minimax=True, minimax_depth=18
         )
         self.AIplayer2.tree.stop_after_n_returns = 1
         self.accept('a', self.AIplayer2.take_turn)
@@ -4428,6 +4430,10 @@ class MyApp(ShowBase):
         # Restore round counter
         self.roundCounter.currentRoundPlayer = game_state['current_round']
         self.roundCounter.current_player = game_state['current_player']
+        if self.roundCounter.current_player == 1:
+            self.roundCounter.enterPlayerOne()
+        else:
+            self.roundCounter.enterPlayerTwo()
         self.roundCounter.max_rounds = game_state['max_rounds']
         self.roundCounter.update_round_display()
         
@@ -4510,7 +4516,21 @@ class MyApp(ShowBase):
         strategy = self.analyzer.suggest_strategy(player_num=2)
         print(f"Suggested Strategy: {strategy}")
 
-
+    def zoomIn(self):
+        # Move camera closer (towards Y=0 from Y=-75)
+        rot = LRotationf()
+        rot.setHpr(self.camera.getHpr())
+        fwd = rot.getForward()
+        
+        self.camera.setPos(self.camera.getPos() + fwd * 5)
+    
+    def zoomOut(self):
+        # Move camera farther away (towards Y=-200 from Y=-75)
+        rot = LRotationf()
+        rot.setHpr(self.camera.getHpr())
+        fwd = rot.getForward()
+        
+        self.camera.setPos(self.camera.getPos() - fwd * 5)
 
 app = MyApp()
 app.run()
