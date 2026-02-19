@@ -310,6 +310,7 @@ class CampaignMap:
 # Example usage (for testing)
 if __name__ == "__main__":
     from direct.showbase.ShowBase import ShowBase
+    from panda3d.core import AmbientLight, DirectionalLight, Vec4
     
     class TerrainDemo(ShowBase):
         def __init__(self):
@@ -319,7 +320,7 @@ if __name__ == "__main__":
             self.campaign_map = CampaignMap(self)
             
             # Load heightmap (replace with your heightmap path)
-            self.campaign_map.load_heightmap("assets/textures/wals_dem.png",height_scale=50)
+            self.campaign_map.load_heightmap("assets/textures/wals_dem.png",height_scale=25)
             
             # Apply texture (replace with your texture path)
             self.campaign_map.set_texture("assets/textures/wals_tex.png")
@@ -329,13 +330,35 @@ if __name__ == "__main__":
             self.camera.setPos(1000, -1000, 1500)
             self.camera.lookAt(500, 750, 0)
             #self.camera.lookAt(self.campaign_map.terrain_root)
+            self.accept("m", self.enMo)  # Press 'm' to enable mouse control
+            # Move terrain so center is at origin (0,0,0)
+            terrain_size = self.campaign_map.get_terrain_size()
+            self.campaign_map.set_position(-terrain_size[0] / 2, -terrain_size[1] / 2, 0)
             
+            # Set up lighting
+            
+            # Ambient light for overall scene illumination
+            ambient_light = AmbientLight('ambient')
+            ambient_light.setColor(Vec4(0.3, 0.3, 0.3, 1))
+            ambient_np = self.render.attachNewNode(ambient_light)
+            self.render.setLight(ambient_np)
+            
+            # Directional light (sun)
+            directional_light = DirectionalLight('sun')
+            directional_light.setColor(Vec4(0.8, 0.8, 0.7, 1))
+            directional_np = self.render.attachNewNode(directional_light)
+            directional_np.setHpr(45, -45, 0)
+            self.render.setLight(directional_np)
+
             # Update task for dynamic LOD
             self.taskMgr.add(self.update_terrain, "update_terrain")
         
         def update_terrain(self, task):
             self.campaign_map.update()
             return task.cont
+        
+        def enMo(self):
+            self.enableMouse()
     
     # Run demo
     demo = TerrainDemo()
