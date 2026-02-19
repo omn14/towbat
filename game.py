@@ -48,6 +48,7 @@ from ClassAI import *
 from rulesFunctions import *
 from deployPhase import *
 from gameStateAnalyzer import *
+from listBuilderGUI import ArmyListBuilderGUI
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -576,6 +577,11 @@ class MyApp(ShowBase):
         )
         self.AIplayer2.tree.stop_after_n_returns = 1
         self.accept('a', self.AIplayer2.take_turn)
+
+        # In your game class __init__:
+        self.list_builder = None
+        self.list_builder_active = False
+        self.accept('l', self.toggle_list_builder)
 
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
@@ -4531,6 +4537,21 @@ class MyApp(ShowBase):
         fwd = rot.getForward()
         
         self.camera.setPos(self.camera.getPos() - fwd * 5)
+
+
+    
+
+    # Add this method:
+    def toggle_list_builder(self):
+        if not self.list_builder_active:
+            if self.list_builder is None:
+                self.list_builder = ArmyListBuilderGUI(self)
+            else:
+                self.list_builder.show()
+            self.list_builder_active = True
+        else:
+            self.list_builder.hide()
+            self.list_builder_active = False
 
 app = MyApp()
 app.run()
