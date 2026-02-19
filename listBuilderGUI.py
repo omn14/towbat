@@ -54,48 +54,79 @@ class ArmyListBuilderGUI:
         self.clear_screen()
         self.current_screen = "main_menu"
         
-        # Title
+        # Decorative background panel
+        bg_frame = DirectFrame(
+            frameSize=(-1.2, 1.2, -0.95, 0.95),
+            frameColor=(0.05, 0.05, 0.1, 0.9),
+            pos=(0, 0, 0),
+            relief=DGG.SUNKEN,
+            borderWidth=(0.01, 0.01)
+        )
+        self.gui_elements.append(bg_frame)
+        
+        # Title with shadow effect
+        title_shadow = OnscreenText(
+            text="ARMY LIST BUILDER",
+            pos=(0.01, 0.84),
+            scale=0.13,
+            fg=(0, 0, 0, 0.5),
+            align=TextNode.ACenter,
+            mayChange=False
+        )
+        self.gui_elements.append(title_shadow)
+        
         title = OnscreenText(
             text="ARMY LIST BUILDER",
             pos=(0, 0.85),
-            scale=0.12,
-            fg=(1, 1, 0, 1),
+            scale=0.13,
+            fg=(1, 0.85, 0.2, 1),
             align=TextNode.ACenter,
             mayChange=False
         )
         self.gui_elements.append(title)
         
+        # Decorative line
+        line_frame = DirectFrame(
+            frameSize=(-0.8, 0.8, -0.005, 0.005),
+            frameColor=(0.8, 0.6, 0.1, 1),
+            pos=(0, 0, 0.65)
+        )
+        self.gui_elements.append(line_frame)
+        
         # Subtitle
         subtitle = OnscreenText(
             text="Build Your Warhammer Army",
-            pos=(0, 0.70),
+            pos=(0, 0.55),
             scale=0.06,
-            fg=(0.8, 0.8, 0.8, 1),
+            fg=(0.7, 0.7, 0.8, 1),
             align=TextNode.ACenter,
             mayChange=False
         )
         self.gui_elements.append(subtitle)
         
-        # Menu buttons
+        # Menu buttons with varying colors
         button_data = [
-            ("View Available Units", self.show_unit_browser, 0.4),
-            ("Add Unit to Army", self.show_add_unit_screen, 0.2),
-            ("View Current Army", self.show_army_list_screen, 0.0),
-            ("Save Army List", self.show_save_screen, -0.2),
-            ("Load Army List", self.show_load_screen, -0.4),
-            ("Exit List Builder", self.exit_builder, -0.7)
+            ("View Available Units", self.show_unit_browser, 0.3, (0.2, 0.3, 0.5, 1)),
+            ("Add Unit to Army", self.show_add_unit_screen, 0.1, (0.2, 0.5, 0.3, 1)),
+            ("View Current Army", self.show_army_list_screen, -0.1, (0.4, 0.3, 0.5, 1)),
+            ("Save Army List", self.show_save_screen, -0.3, (0.3, 0.4, 0.5, 1)),
+            ("Load Army List", self.show_load_screen, -0.5, (0.5, 0.4, 0.2, 1)),
+            ("Exit List Builder", self.exit_builder, -0.75, (0.5, 0.2, 0.2, 1))
         ]
         
-        for text, command, y_pos in button_data:
+        for text, command, y_pos, color in button_data:
             btn = DirectButton(
                 text=text,
-                scale=0.08,
+                text_font=None,
+                text_scale=0.9,
+                scale=0.075,
                 pos=(0, 0, y_pos),
                 command=command,
-                frameSize=(-4, 4, -0.5, 1),
+                frameSize=(-4.2, 4.2, -0.6, 1.1),
                 text_fg=(1, 1, 1, 1),
+                frameColor=color,
                 relief=DGG.RAISED,
-                borderWidth=(0.02, 0.02)
+                borderWidth=(0.015, 0.015)
             )
             self.gui_elements.append(btn)
     
@@ -104,23 +135,41 @@ class ArmyListBuilderGUI:
         self.clear_screen()
         self.current_screen = "unit_browser"
         
-        # Title
+        # Background
+        bg_frame = DirectFrame(
+            frameSize=(-1.2, 1.2, -0.95, 0.95),
+            frameColor=(0.05, 0.05, 0.1, 0.9),
+            pos=(0, 0, 0)
+        )
+        self.gui_elements.append(bg_frame)
+        
+        # Title with decoration
         title = OnscreenText(
-            text="AVAILABLE UNITS",
+            text="*** AVAILABLE UNITS ***",
             pos=(0, 0.9),
             scale=0.1,
-            fg=(1, 1, 0, 1),
+            fg=(1, 0.85, 0.2, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
         
+        # Decorative line
+        line_frame = DirectFrame(
+            frameSize=(-0.9, 0.9, -0.003, 0.003),
+            frameColor=(0.8, 0.6, 0.1, 1),
+            pos=(0, 0, 0.82)
+        )
+        self.gui_elements.append(line_frame)
+        
         # Create scrolled frame for units
         frame = DirectScrolledFrame(
             canvasSize=(-1, 1, -len(self.available_units) * 0.15, 0.1),
-            frameSize=(-1, 1, -0.7, 0.7),
-            pos=(0, 0, 0),
+            frameSize=(-1.05, 1.05, -0.65, 0.75),
+            pos=(0, 0, -0.02),
             scrollBarWidth=0.04,
-            frameColor=(0.2, 0.2, 0.2, 0.8)
+            frameColor=(0.15, 0.15, 0.2, 0.9),
+            relief=DGG.SUNKEN,
+            borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(frame)
         
@@ -128,8 +177,17 @@ class ArmyListBuilderGUI:
         sorted_units = sorted(self.available_units.keys())
         y_pos = 0
         
-        for unit_name in sorted_units:
+        for idx, unit_name in enumerate(sorted_units):
             stats = self.available_units[unit_name]['characteristics']
+            
+            # Alternating row colors
+            row_color = (0.2, 0.2, 0.25, 0.6) if idx % 2 == 0 else (0.15, 0.15, 0.2, 0.6)
+            row_bg = DirectFrame(
+                frameSize=(-0.95, 0.95, -0.07, 0.0),
+                frameColor=row_color,
+                pos=(0, 0, y_pos - 0.065),
+                parent=frame.getCanvas()
+            )
             
             # Unit name
             name_text = DirectLabel(
@@ -138,7 +196,7 @@ class ArmyListBuilderGUI:
                 text_align=TextNode.ALeft,
                 pos=(-0.9, 0, y_pos),
                 frameColor=(0, 0, 0, 0),
-                text_fg=(1, 1, 1, 1),
+                text_fg=(0.9, 0.85, 0.4, 1),
                 parent=frame.getCanvas()
             )
             
@@ -149,11 +207,11 @@ class ArmyListBuilderGUI:
             
             stats_text = DirectLabel(
                 text=stats_str,
-                text_scale=0.04,
+                text_scale=0.038,
                 text_align=TextNode.ALeft,
                 pos=(-0.9, 0, y_pos - 0.06),
                 frameColor=(0, 0, 0, 0),
-                text_fg=(0.7, 0.7, 0.7, 1),
+                text_fg=(0.6, 0.75, 0.85, 1),
                 parent=frame.getCanvas()
             )
             
@@ -161,11 +219,16 @@ class ArmyListBuilderGUI:
         
         # Back button
         back_btn = DirectButton(
-            text="Back to Main Menu",
+            text="< Back to Main Menu",
+            text_scale=0.9,
             scale=0.07,
             pos=(0, 0, -0.85),
             command=self.show_main_menu,
-            frameSize=(-3, 3, -0.5, 1)
+            frameSize=(-3.5, 3.5, -0.6, 1.1),
+            frameColor=(0.3, 0.3, 0.4, 1),
+            text_fg=(1, 1, 1, 1),
+            relief=DGG.RAISED,
+            borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(back_btn)
     
@@ -174,22 +237,38 @@ class ArmyListBuilderGUI:
         self.clear_screen()
         self.current_screen = "add_unit"
         
+        # Background
+        bg_frame = DirectFrame(
+            frameSize=(-1.2, 1.2, -0.95, 0.95),
+            frameColor=(0.05, 0.05, 0.1, 0.9),
+            pos=(0, 0, 0)
+        )
+        self.gui_elements.append(bg_frame)
+        
         # Title
         title = OnscreenText(
-            text="ADD UNIT TO ARMY",
+            text="*** ADD UNIT TO ARMY ***",
             pos=(0, 0.9),
             scale=0.1,
-            fg=(1, 1, 0, 1),
+            fg=(0.3, 1, 0.3, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
+        
+        # Decorative line
+        line_frame = DirectFrame(
+            frameSize=(-0.8, 0.8, -0.003, 0.003),
+            frameColor=(0.3, 0.8, 0.3, 1),
+            pos=(0, 0, 0.82)
+        )
+        self.gui_elements.append(line_frame)
         
         # Instructions
         instructions = OnscreenText(
             text="Select a unit type:",
             pos=(0, 0.75),
             scale=0.06,
-            fg=(0.9, 0.9, 0.9, 1),
+            fg=(0.8, 0.9, 0.8, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(instructions)
@@ -203,9 +282,11 @@ class ArmyListBuilderGUI:
         unit_frame = DirectScrolledFrame(
             canvasSize=(-0.4, 0.4, -canvas_height, 0),
             frameSize=(-0.5, 0.5, -0.55, 0.65),
-            frameColor=(0.2, 0.2, 0.2, 0.8),
             pos=(0, 0, 0),
             scrollBarWidth=0.04,
+            frameColor=(0.15, 0.2, 0.15, 0.9),
+            relief=DGG.SUNKEN,
+            borderWidth=(0.01, 0.01),
             verticalScroll_scrollSize=0.1,
             verticalScroll_thumb_relief=DGG.RAISED,
             verticalScroll_incButton_relief=DGG.RAISED,
@@ -215,7 +296,9 @@ class ArmyListBuilderGUI:
         
         # Add unit buttons to the scrolled frame
         y_pos = -0.05
-        for unit_name in sorted_units:
+        for idx, unit_name in enumerate(sorted_units):
+            # Alternating button colors
+            btn_color = (0.25, 0.35, 0.25, 1) if idx % 2 == 0 else (0.2, 0.3, 0.2, 1)
             btn = DirectButton(
                 text=unit_name,
                 text_scale=0.045,
@@ -225,8 +308,8 @@ class ArmyListBuilderGUI:
                 command=self.show_unit_config_screen,
                 extraArgs=[unit_name],
                 frameSize=(-0.38, 0.38, -0.04, 0.04),
-                frameColor=(0.3, 0.3, 0.3, 1),
-                text_fg=(1, 1, 1, 1),
+                frameColor=btn_color,
+                text_fg=(0.9, 1, 0.9, 1),
                 relief=DGG.RAISED,
                 borderWidth=(0.005, 0.005),
                 parent=unit_frame.getCanvas()
@@ -235,11 +318,16 @@ class ArmyListBuilderGUI:
         
         # Back button
         back_btn = DirectButton(
-            text="Back",
+            text="< Back",
+            text_scale=0.9,
             scale=0.07,
             pos=(0, 0, -0.85),
             command=self.show_main_menu,
-            frameSize=(-2, 2, -0.5, 1)
+            frameSize=(-2.5, 2.5, -0.6, 1.1),
+            frameColor=(0.3, 0.3, 0.4, 1),
+            text_fg=(1, 1, 1, 1),
+            relief=DGG.RAISED,
+            borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(back_btn)
     
@@ -248,12 +336,22 @@ class ArmyListBuilderGUI:
         self.clear_screen()
         self.current_screen = "unit_config"
         
+        # Background
+        bg_frame = DirectFrame(
+            frameSize=(-1.0, 1.0, -0.9, 0.95),
+            frameColor=(0.05, 0.1, 0.05, 0.95),
+            pos=(0, 0, 0),
+            relief=DGG.SUNKEN,
+            borderWidth=(0.01, 0.01)
+        )
+        self.gui_elements.append(bg_frame)
+        
         # Title
         title = OnscreenText(
-            text=f"CONFIGURE: {unit_name}",
+            text=f">> CONFIGURE: {unit_name}",
             pos=(0, 0.9),
             scale=0.08,
-            fg=(1, 1, 0, 1),
+            fg=(0.3, 1, 0.5, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
@@ -268,17 +366,27 @@ class ArmyListBuilderGUI:
             text=stats_str,
             pos=(0, 0.75),
             scale=0.05,
-            fg=(0.8, 0.8, 0.8, 1),
+            fg=(0.6, 0.9, 1, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(stats_label)
+        
+        # Input panel background
+        input_panel = DirectFrame(
+            frameSize=(-0.8, 0.8, -0.15, 0.7),
+            frameColor=(0.1, 0.15, 0.1, 0.8),
+            pos=(0, 0, 0),
+            relief=DGG.SUNKEN,
+            borderWidth=(0.008, 0.008)
+        )
+        self.gui_elements.append(input_panel)
         
         # Number of models entry
         models_label = OnscreenText(
             text="Number of Models:",
             pos=(-0.5, 0.5),
-            scale=0.06,
-            fg=(1, 1, 1, 1),
+            scale=0.055,
+            fg=(0.9, 1, 0.9, 1),
             align=TextNode.ALeft
         )
         self.gui_elements.append(models_label)
@@ -290,7 +398,8 @@ class ArmyListBuilderGUI:
             initialText="10",
             numLines=1,
             width=5,
-            frameColor=(0.3, 0.3, 0.3, 1)
+            frameColor=(0.2, 0.3, 0.2, 1),
+            text_fg=(1, 1, 1, 1)
         )
         self.gui_elements.append(models_entry)
         
@@ -298,8 +407,8 @@ class ArmyListBuilderGUI:
         files_label = OnscreenText(
             text="Files (Width):",
             pos=(-0.5, 0.3),
-            scale=0.06,
-            fg=(1, 1, 1, 1),
+            scale=0.055,
+            fg=(0.9, 1, 0.9, 1),
             align=TextNode.ALeft
         )
         self.gui_elements.append(files_label)
@@ -311,7 +420,8 @@ class ArmyListBuilderGUI:
             initialText="5",
             numLines=1,
             width=5,
-            frameColor=(0.3, 0.3, 0.3, 1)
+            frameColor=(0.2, 0.3, 0.2, 1),
+            text_fg=(1, 1, 1, 1)
         )
         self.gui_elements.append(files_entry)
         
@@ -319,8 +429,8 @@ class ArmyListBuilderGUI:
         ranks_label = OnscreenText(
             text="Ranks (Depth):",
             pos=(-0.5, 0.1),
-            scale=0.06,
-            fg=(1, 1, 1, 1),
+            scale=0.055,
+            fg=(0.9, 1, 0.9, 1),
             align=TextNode.ALeft
         )
         self.gui_elements.append(ranks_label)
@@ -332,29 +442,39 @@ class ArmyListBuilderGUI:
             initialText="2",
             numLines=1,
             width=5,
-            frameColor=(0.3, 0.3, 0.3, 1)
+            frameColor=(0.2, 0.3, 0.2, 1),
+            text_fg=(1, 1, 1, 1)
         )
         self.gui_elements.append(ranks_entry)
         
         # Add button
         add_btn = DirectButton(
-            text="Add to Army",
+            text="[+] Add to Army",
+            text_scale=0.9,
             scale=0.08,
-            pos=(0, 0, -0.3),
+            pos=(0, 0, -0.35),
             command=self.add_configured_unit,
             extraArgs=[unit_name, models_entry, files_entry, ranks_entry],
-            frameSize=(-3, 3, -0.5, 1),
-            frameColor=(0, 0.6, 0, 1)
+            frameSize=(-3.5, 3.5, -0.6, 1.1),
+            frameColor=(0.2, 0.7, 0.2, 1),
+            text_fg=(1, 1, 1, 1),
+            relief=DGG.RAISED,
+            borderWidth=(0.015, 0.015)
         )
         self.gui_elements.append(add_btn)
         
         # Back button
         back_btn = DirectButton(
-            text="Cancel",
+            text="< Cancel",
+            text_scale=0.9,
             scale=0.07,
             pos=(0, 0, -0.6),
             command=self.show_add_unit_screen,
-            frameSize=(-2, 2, -0.5, 1)
+            frameSize=(-2.5, 2.5, -0.6, 1.1),
+            frameColor=(0.5, 0.3, 0.3, 1),
+            text_fg=(1, 1, 1, 1),
+            relief=DGG.RAISED,
+            borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(back_btn)
     
@@ -389,15 +509,31 @@ class ArmyListBuilderGUI:
         self.clear_screen()
         self.current_screen = "army_list"
         
+        # Background
+        bg_frame = DirectFrame(
+            frameSize=(-1.2, 1.2, -0.95, 0.95),
+            frameColor=(0.05, 0.05, 0.1, 0.9),
+            pos=(0, 0, 0)
+        )
+        self.gui_elements.append(bg_frame)
+        
         # Title
         title = OnscreenText(
-            text="CURRENT ARMY LIST",
+            text="*** CURRENT ARMY LIST ***",
             pos=(0, 0.9),
             scale=0.1,
-            fg=(1, 1, 0, 1),
+            fg=(0.8, 0.4, 1, 1),
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
+        
+        # Decorative line
+        line_frame = DirectFrame(
+            frameSize=(-0.8, 0.8, -0.003, 0.003),
+            frameColor=(0.7, 0.3, 0.9, 1),
+            pos=(0, 0, 0.82)
+        )
+        self.gui_elements.append(line_frame)
         
         if not self.army_list:
             empty_msg = OnscreenText(
@@ -418,7 +554,9 @@ class ArmyListBuilderGUI:
                 frameSize=(-1, 1, -0.6, 0.7),
                 pos=(0, 0, 0),
                 scrollBarWidth=0.04,
-                frameColor=(0.2, 0.2, 0.2, 0.8),
+                frameColor=(0.15, 0.15, 0.2, 0.9),
+                relief=DGG.SUNKEN,
+                borderWidth=(0.01, 0.01),
                 verticalScroll_scrollSize=0.1
             )
             self.gui_elements.append(frame)
@@ -426,15 +564,24 @@ class ArmyListBuilderGUI:
             # Add army units
             y_pos = -0.05
             for idx, army_unit in enumerate(self.army_list):
+                # Alternating row background
+                row_color = (0.2, 0.15, 0.25, 0.6) if idx % 2 == 0 else (0.15, 0.12, 0.2, 0.6)
+                row_bg = DirectFrame(
+                    frameSize=(-0.92, 0.92, -0.09, 0.0),
+                    frameColor=row_color,
+                    pos=(0, 0, y_pos - 0.07),
+                    parent=frame.getCanvas()
+                )
+                
                 # Unit info
                 unit_text = f"{idx+1}. {army_unit['name']}"
                 name_label = DirectLabel(
                     text=unit_text,
-                    text_scale=0.05,
+                    text_scale=0.048,
                     text_align=TextNode.ALeft,
                     pos=(-0.9, 0, y_pos),
                     frameColor=(0, 0, 0, 0),
-                    text_fg=(1, 1, 1, 1),
+                    text_fg=(0.9, 0.7, 1, 1),
                     parent=frame.getCanvas()
                 )
                 
@@ -442,24 +589,25 @@ class ArmyListBuilderGUI:
                 config_text = f"Models: {army_unit['nmodels']} | Formation: {army_unit['files']}x{army_unit['ranks']}"
                 config_label = DirectLabel(
                     text=config_text,
-                    text_scale=0.04,
+                    text_scale=0.038,
                     text_align=TextNode.ALeft,
                     pos=(-0.9, 0, y_pos - 0.06),
                     frameColor=(0, 0, 0, 0),
-                    text_fg=(0.7, 0.7, 0.7, 1),
+                    text_fg=(0.6, 0.7, 0.85, 1),
                     parent=frame.getCanvas()
                 )
                 
                 # Remove button
                 remove_btn = DirectButton(
-                    text="Remove",
+                    text="[X]",
                     text_scale=0.028,
                     text_pos=(0, -0.006),
                     pos=(0.68, 0, y_pos - 0.03),
                     command=self.remove_unit_from_army,
                     extraArgs=[idx],
                     frameSize=(-0.7, 0.7, -0.08, 0.10),
-                    frameColor=(0.7, 0, 0, 1),
+                    frameColor=(0.8, 0.2, 0.2, 1),
+                    text_fg=(1, 1, 1, 1),
                     relief=DGG.RAISED,
                     borderWidth=(0.003, 0.003),
                     parent=frame.getCanvas()
@@ -469,22 +617,36 @@ class ArmyListBuilderGUI:
             
             # Summary
             total_models = sum(u['nmodels'] for u in self.army_list)
+            summary_box = DirectFrame(
+                frameSize=(-0.6, 0.6, -0.05, 0.05),
+                frameColor=(0.2, 0.15, 0.25, 0.9),
+                pos=(0, 0, -0.75),
+                relief=DGG.RAISED,
+                borderWidth=(0.008, 0.008)
+            )
+            self.gui_elements.append(summary_box)
+            
             summary = OnscreenText(
-                text=f"Total Units: {len(self.army_list)} | Total Models: {total_models}",
-                pos=(0, -0.75),
-                scale=0.06,
-                fg=(0.8, 1, 0.8, 1),
+                text=f"Total: {len(self.army_list)} Units | {total_models} Models",
+                pos=(0, -0.755),
+                scale=0.055,
+                fg=(0.7, 1, 0.8, 1),
                 align=TextNode.ACenter
             )
             self.gui_elements.append(summary)
         
         # Back button
         back_btn = DirectButton(
-            text="Back to Main Menu",
+            text="← Back to Main Menu",
+            text_scale=0.9,
             scale=0.07,
             pos=(0, 0, -0.85),
             command=self.show_main_menu,
-            frameSize=(-3, 3, -0.5, 1)
+            frameSize=(-3.5, 3.5, -0.6, 1.1),
+            frameColor=(0.3, 0.3, 0.4, 1),
+            text_fg=(1, 1, 1, 1),
+            relief=DGG.RAISED,
+            borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(back_btn)
     
@@ -697,8 +859,8 @@ class ListBuilderApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
         
-        # Set background color
-        self.setBackgroundColor(0.1, 0.1, 0.15, 1)
+        # Set background color - dark mystical blue/purple
+        self.setBackgroundColor(0.08, 0.06, 0.15, 1)
         
         # Disable mouse camera control
         self.disableMouse()
@@ -709,8 +871,13 @@ class ListBuilderApp(ShowBase):
         # Add ESC key to exit
         self.accept('escape', self.userExit)
         
+        print("="*60)
+        print("WARHAMMER ARMY LIST BUILDER - GUI")
+        print("="*60)
         print("Army List Builder GUI initialized")
+        print("Navigate through menus to build your army")
         print("Press ESC to exit")
+        print("="*60)
 
 
 if __name__ == "__main__":

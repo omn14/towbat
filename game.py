@@ -555,7 +555,7 @@ class MyApp(ShowBase):
         self.units.append(self.direWolves)
         self.direWolves.bodyNP.setPos(-30,-20,0)
 
-
+        self.load_player1_army("my_army.json")
 
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
@@ -729,6 +729,122 @@ class MyApp(ShowBase):
 
         
     
+    def load_army_from_json(self, filename, player_num=1, start_pos=Point3(0, -20, 0), spacing=12):
+        """
+        Load army units from a JSON file created by the list builder
+        
+        Args:
+            filename: Path to the JSON army list file
+            player_num: 1 or 2, determines which player's army this is
+            start_pos: Starting position for the first unit
+            spacing: Horizontal spacing between units
+        
+        Returns:
+            List of created unitGraphics objects
+        """
+        # Create a mapping from unit names (from characteristics JSON) to model paths and classes
+        unit_model_mapping = {
+            'Man at Arms': {'path': 'models/bret_bowmen.bam', 'class': model, 'color': (1, 0, 0, 1)},
+            'Man_at_Arm': {'path': 'models/bret_bowmen.bam', 'class': model, 'color': (1, 0, 0, 1)},
+            'Mounted Knight of the Realm': {'path': 'models/bret_knight.bam', 'class': MountedKnightOfTheRealm, 'color': (1, 0, 0, 1)},
+            'Jade Lancer': {'path': 'models/jade_lancer.bam', 'class': JadeLancer, 'color': (1, 1, 0, 1)},
+            'Jade Warrior': {'path': 'models/jade_warrior.bam', 'class': JadeWarrior, 'color': (1, 1, 0, 1)},
+            'Night Goblin': {'path': 'models/goblin_archers.bam', 'class': NightGoblin, 'color': (0, 1, 0, 1)},
+            'Goblin Wolf Rider': {'path': 'models/goblin_wolfriders.bam', 'class': GoblinWolfRider, 'color': (0, 1, 0, 1)},
+            'Black Knight': {'path': 'models/black_knights.bam', 'class': BlackKnight, 'color': (0, 0, 1, 1)},
+            'Zombie': {'path': 'models/zombies.bam', 'class': Zombie, 'color': (0, 0, 1, 1)},
+            'Orc Boyz': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
+            'Orc Boy': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
+            'Black Orc': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
+            'Necromancer': {'path': 'models/zombies.bam', 'class': Necromancer, 'color': (0, 0, 1, 1)},
+            'Saurus Warrior': {'path': 'models/jade_warrior.bam', 'class': model, 'color': (1, 1, 0, 1)},
+            'Pegasus Knight': {'path': 'models/bret_knight.bam', 'class': model, 'color': (1, 0, 0, 1)},
+            'Dire Wolf': {'path': 'models/dire_wolves.bam', 'class': DireWolf, 'color': (0, 0, 1, 1)},
+        }
+        
+        # Load the JSON file
+        try:
+            with open(filename, 'r') as f:
+                army_data = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: File {filename} not found!")
+            return []
+        except json.JSONDecodeError:
+            print(f"Error: Invalid JSON in {filename}!")
+            return []
+        
+        created_units = []
+        current_x = start_pos.x
+        
+        for idx, army_unit_data in enumerate(army_data):
+            unit_name = army_unit_data['name']
+            nmodels = army_unit_data['nmodels']
+            files = army_unit_data['files']
+            ranks = army_unit_data['ranks']
+            
+            # Get model info from mapping, default to generic if not found
+            model_info = unit_model_mapping.get(unit_name, {
+                'path': 'models/jade_warrior.bam',
+                'class': model,
+                'color': (0.5, 0.5, 0.5, 1)
+            })
+            
+            try:
+                # Create model instance
+                model_class = model_info['class']
+                if model_class == model:
+                    # Basic model
+                    model_instance = model(unit_name, "")
+                elif model_class in [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight]:
+                    # Mounted units need mount units
+                    # For simplicity, create basic mounts
+                    mount_model = model(f"{unit_name} Mount", "")
+                    mount_unit = unit(f"{unit_name} Mount Unit", mount_model, nmodels, files, ranks)
+                    model_instance = model_class(unit_name, "", mountUnit=mount_unit)
+                else:
+                    # Other special classes
+                    model_instance = model_class(unit_name, "")
+                
+                model_instance.armor_save = 7  # Default armor save
+                
+                # Create unit instance
+                unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
+                
+                # Create unit graphics
+                graphics_name = unit_name.replace(' ', '') + str(idx)
+                unit_graphics = unitGraphics(
+                    self,
+                    graphics_name,
+                    model_info['path'],
+                    unit_instance,
+                    scale=1.0,
+                    BulletWorld=self.world,
+                    color=model_info['color']
+                )
+                
+                # Position the unit
+                unit_graphics.bodyNP.setPos(current_x, start_pos.y, start_pos.z)
+                
+                # Add to appropriate lists
+                self.units.append(unit_graphics)
+                if player_num == 1:
+                    self.player1Units.append(unit_graphics)
+                else:
+                    self.player2Units.append(unit_graphics)
+                
+                created_units.append(unit_graphics)
+                
+                # Update position for next unit
+                current_x += spacing
+                
+                print(f"Loaded unit: {unit_name} ({nmodels} models, {files}x{ranks})")
+                
+            except Exception as e:
+                print(f"Error creating unit {unit_name}: {e}")
+                continue
+        
+        print(f"Successfully loaded {len(created_units)} units from {filename}")
+        return created_units
 
     def bakeTextures(self, target_np, texture_size=512, name_suffix="_baked"):
         tex = Texture()
@@ -4552,6 +4668,25 @@ class MyApp(ShowBase):
         else:
             self.list_builder.hide()
             self.list_builder_active = False
+    
+    def load_player1_army(self, filename="my_army.json"):
+        """Load player 1's army from a file"""
+        print(f"Loading Player 1 army from {filename}...")
+        units = self.load_army_from_json(filename, player_num=1, start_pos=Point3(-20, -25, 0), spacing=12)
+        if units:
+            print(f"Player 1 army loaded: {len(units)} units")
+        return units
+    
+    def load_player2_army(self, filename="my_army.json"):
+        """Load player 2's army from a file"""
+        print(f"Loading Player 2 army from {filename}...")
+        units = self.load_army_from_json(filename, player_num=2, start_pos=Point3(-20, 25, 0), spacing=12)
+        if units:
+            print(f"Player 2 army loaded: {len(units)} units")
+            # Set heading to face player 1
+            for unit in units:
+                unit.bodyNP.setH(180)
+        return units
 
 app = MyApp()
 app.run()

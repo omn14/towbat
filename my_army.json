@@ -7,24 +7,17 @@
         "json_file": "black_orc_characteristics.json"
     },
     {
-        "name": "Bretonnian Warhorse",
+        "name": "Dire Wolf",
         "nmodels": 10,
         "files": 5,
         "ranks": 2,
-        "json_file": "bretonnian_warhorse_characteristics.json"
+        "json_file": "dire_wolf_characteristics.json"
     },
     {
         "name": "Orc Boy",
         "nmodels": 10,
         "files": 5,
         "ranks": 2,
-        "json_file": "orc_boyz_characteristics.json"
-    },
-    {
-        "name": "Orc Boy",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 3,
         "json_file": "orc_boyz_characteristics.json"
     }
 ]
