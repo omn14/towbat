@@ -13,7 +13,9 @@ from panda3d.core import (
     Vec3,
     NodePath,
     Shader,
-    TransparencyAttrib
+    TransparencyAttrib,
+    BitMask32,
+    ColorWriteAttrib
 )
 from panda3d.bullet import (
     BulletRigidBodyNode,
@@ -275,6 +277,38 @@ class CampaignMap:
         
         return collision_np
     
+    def contryCollision(self, bullet_world, contryNP):
+        if self.terrain_root is None:
+            raise RuntimeError("Must load heightmap before creating collision mesh")
+        
+        # Create triangle mesh from terrain geometry
+        mesh = BulletTriangleMesh()
+        
+        # Iterate through terrain geometry and add to mesh
+        for geom_node in contryNP.findAllMatches('**/+GeomNode'):
+            geom_node_obj = geom_node.node()
+            for i in range(geom_node_obj.getNumGeoms()):
+                geom = geom_node_obj.getGeom(i)
+                mesh.addGeom(geom, True, geom_node.getTransform(contryNP))
+        
+        # Create collision shape
+        shape = BulletTriangleMeshShape(mesh, dynamic=False)
+        
+        # Create rigid body node
+        name=contryNP.getName()
+        collision_node = BulletRigidBodyNode(f'{name}_collision')
+        collision_node.addShape(shape)
+        collision_node.setMass(0)  # Static object
+        
+        # Create NodePath and attach to render
+        collision_np = self.base.render.attachNewNode(collision_node)
+        collision_np.setTransform(contryNP.getTransform())
+        
+        # Add to bullet world
+        bullet_world.attachRigidBody(collision_node)
+        
+        return collision_np
+    
     def set_position(self, x, y, z):
         """Set the terrain position in world space."""
         if self.terrain_root:
@@ -311,6 +345,8 @@ class CampaignMap:
 if __name__ == "__main__":
     from direct.showbase.ShowBase import ShowBase
     from panda3d.core import AmbientLight, DirectionalLight, Vec4
+    from panda3d.bullet import BulletWorld
+    from panda3d.core import Vec3
     
     class TerrainDemo(ShowBase):
         def __init__(self):
@@ -329,11 +365,13 @@ if __name__ == "__main__":
             self.disable_mouse()
             self.camera.setPos(1000, -1000, 1500)
             self.camera.lookAt(500, 750, 0)
+            self.camera.lookAt(1025, 0, 0)
             #self.camera.lookAt(self.campaign_map.terrain_root)
             self.accept("m", self.enMo)  # Press 'm' to enable mouse control
             # Move terrain so center is at origin (0,0,0)
             terrain_size = self.campaign_map.get_terrain_size()
-            self.campaign_map.set_position(-terrain_size[0] / 2, -terrain_size[1] / 2, 0)
+            print("Terrain size:", terrain_size)
+            self.campaign_map.set_position(-1024 / 2, -2048 / 2, 0)
             
             # Set up lighting
             
@@ -352,6 +390,30 @@ if __name__ == "__main__":
 
             # Update task for dynamic LOD
             self.taskMgr.add(self.update_terrain, "update_terrain")
+
+            self.country = self.loader.loadModel("models/blender/maps1.bam")
+            self.country.reparentTo(self.render)
+            self.camera.lookAt(self.country)
+
+            # Create Bullet physics world
+            self.bullet_world = BulletWorld()
+            self.bullet_world.setGravity(Vec3(0, 0, -9.81))
+
+            # Create collision meshes for terrain and country
+            #self.campaign_map.create_collision_mesh(self.bullet_world)
+            self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.001"))
+            self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.002"))
+
+            # Add physics update task
+            self.taskMgr.add(self.update_physics, "update_physics")
+
+            self.accept("mouse1", self.mouseClick)
+            #mask_model.setBin("background", 10)
+            #self.campaign_map.terrain_root.setAttrib(ColorWriteAttrib.make(ColorWriteAttrib.C_off))
+
+            # Target model uses normal depth testing
+            #self.campaign_map.terrain_root.setBin("opaque", 20)
+            # Depth test will naturally occlude where mask is closer
         
         def update_terrain(self, task):
             self.campaign_map.update()
@@ -359,6 +421,36 @@ if __name__ == "__main__":
         
         def enMo(self):
             self.enableMouse()
+
+        def update_physics(self, task):
+            dt = globalClock.getDt()
+            self.bullet_world.doPhysics(dt)
+            return task.cont
+        
+        def mouseClick(self):
+            if self.mouseWatcherNode.hasMouse():
+                mpos = self.mouseWatcherNode.getMouse()
+                print("Mouse position:", mpos)
+                pMouse = base.mouseWatcherNode.getMouse()
+                pFrom = Point3()
+                pTo = Point3()
+                base.camLens.extrude(pMouse, pFrom, pTo)
+                # Transform to global coordinates
+                pFrom = render.getRelativePoint(base.cam, pFrom)
+                pTo = render.getRelativePoint(base.cam, pTo)
+                result = self.bullet_world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
+
+                if result.hasHit():
+                    print(f"Hit: {result.getNode().getName()} at {result.getHitPos()}")
+                    np=self.render.find("**/"+result.getNode().getName().split("_")[0])
+                    np.setColor(1, 0, 0, .5)  # Example: change color on hit
+                    #np.setBin("fixed", 100)  # Render on top
+                    np.setTransparency(TransparencyAttrib.MAlpha)
+                    np.setBin("transparent", 50)
+                    #np.setAttrib(ColorWriteAttrib.make(ColorWriteAttrib.C_off))
+                    np.setDepthTest(False)
+                else:
+                    print("No collision detected")
     
     # Run demo
     demo = TerrainDemo()
