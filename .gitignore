@@ -3,7 +3,7 @@ poetry.lock
 *.pyc
 *.bin
 *.gltf
-*.blend*
+*.blend1
 *.zip
 *.stl
 screenshots/*

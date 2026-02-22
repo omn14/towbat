@@ -347,6 +347,19 @@ if __name__ == "__main__":
     from panda3d.core import AmbientLight, DirectionalLight, Vec4
     from panda3d.bullet import BulletWorld
     from panda3d.core import Vec3
+    import random
+    from panda3d.core import AntialiasAttrib
+    from panda3d.core import loadPrcFileData
+    from panda3d.core import TransparencyAttrib, ColorWriteAttrib
+    from panda3d.core import Shader
+
+    # Configure before ShowBase creation
+    loadPrcFileData("", """
+        framebuffer-multisample 1
+        multisamples 4
+        framebuffer-hardware 1
+        framebuffer-software 0
+    """)
     
     class TerrainDemo(ShowBase):
         def __init__(self):
@@ -399,13 +412,54 @@ if __name__ == "__main__":
             self.bullet_world = BulletWorld()
             self.bullet_world.setGravity(Vec3(0, 0, -9.81))
 
+            # Load shader
+            cloud_shader = Shader.load(
+                Shader.SL_GLSL,
+                vertex="cloud.vert.txt",
+                fragment="cloud.frag.txt"
+            )
+            
+            # Store nodes with cloud shader for time updates
+            self.cloud_nodes = []
+
             # Create collision meshes for terrain and country
             #self.campaign_map.create_collision_mesh(self.bullet_world)
-            self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.001"))
-            self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.002"))
+            # Create a plane above the terrain for cloud shader
+            cloud_plane = self.loader.loadModel("models/box")  # Simple plane/box model
+            cloud_plane.setScale(1000, 2000, 1)  # Scale to cover terrain area
+            cloud_plane.setPos(-512, -1024, 20)  # Position above terrain
+            cloud_plane.setShader(cloud_shader)
+            cloud_plane.setShaderInput("customTime", 0.0)
+            cloud_plane.setShaderInput("cloudColor", Vec4(1.0, 1.0, 1.0, 1.0))
+            cloud_plane.setShaderInput("skyColor", Vec4(0.5, 0.7, 0.9, 0.1))
+            cloud_plane.setShaderInput("cloudCoverage", 0.5)  # 0.0 = no clouds, 1.0 = full coverage
+            cloud_plane.setTransparency(TransparencyAttrib.MAlpha)
+            cloud_plane.setBin("transparent", 10)
+            cloud_plane.reparentTo(self.render)
+            self.cloud_nodes.append(cloud_plane)
+            for childe in self.country.getChildren():
+                print(childe.getName())
+                np = self.campaign_map.contryCollision(self.bullet_world, childe)
+                childe.setColor(.1,.1,.1, 0.3)
+                childe.setTransparency(TransparencyAttrib.MAlpha)
+                childe.setBin("transparent", 50)
+                childe.setDepthTest(False)
+                """ childe.setShader(cloud_shader)
+                # Set shader inputs
+                childe.setShaderInput("customTime", 0.0)  # Initialize time
+                childe.setShaderInput("cloudColor", Vec4(1.0, 1.0, 1.0, 1.0))  # White
+                childe.setShaderInput("skyColor", Vec4(0.5, 0.7, 0.9, 0.3))    # Light blue
+                childe.setTransparency(TransparencyAttrib.MAlpha)
+                childe.setBin("transparent", 10)
+                # Store reference for updates
+                self.cloud_nodes.append(childe) """
+            #self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.002"))
 
             # Add physics update task
             self.taskMgr.add(self.update_physics, "update_physics")
+            
+            # Add cloud time update task
+            self.taskMgr.add(self.update_cloud_time, "update_cloud_time")
 
             self.accept("mouse1", self.mouseClick)
             #mask_model.setBin("background", 10)
@@ -414,6 +468,7 @@ if __name__ == "__main__":
             # Target model uses normal depth testing
             #self.campaign_map.terrain_root.setBin("opaque", 20)
             # Depth test will naturally occlude where mask is closer
+            #self.render.setAntialias(AntialiasAttrib.MAuto)
         
         def update_terrain(self, task):
             self.campaign_map.update()
@@ -425,6 +480,12 @@ if __name__ == "__main__":
         def update_physics(self, task):
             dt = globalClock.getDt()
             self.bullet_world.doPhysics(dt)
+            return task.cont
+        
+        def update_cloud_time(self, task):
+            # Update time uniform for all cloud shader nodes
+            for node in self.cloud_nodes:
+                node.setShaderInput("customTime", task.time*0.1)
             return task.cont
         
         def mouseClick(self):
@@ -443,7 +504,7 @@ if __name__ == "__main__":
                 if result.hasHit():
                     print(f"Hit: {result.getNode().getName()} at {result.getHitPos()}")
                     np=self.render.find("**/"+result.getNode().getName().split("_")[0])
-                    np.setColor(1, 0, 0, .5)  # Example: change color on hit
+                    np.setColor(random.random(), random.random(), random.random(), 0.3)
                     #np.setBin("fixed", 100)  # Render on top
                     np.setTransparency(TransparencyAttrib.MAlpha)
                     np.setBin("transparent", 50)
