@@ -3,6 +3,7 @@ Campaign Map module for Panda3D terrain rendering.
 Loads PNG heightmaps as terrain and applies texture overlays.
 """
 
+from direct.fsm.FSM import FSM
 from panda3d.core import (
     GeoMipTerrain, 
     Texture, 
@@ -11,6 +12,7 @@ from panda3d.core import (
     Filename,
     Point3,
     Vec3,
+    Vec4,
     NodePath,
     Shader,
     TransparencyAttrib,
@@ -341,6 +343,401 @@ class CampaignMap:
         self.texture = None
 
 
+class CountryFSM(FSM):
+    """
+    Finite State Machine for managing country selection and states.
+    Dynamically creates states for each country in the provided country model.
+    """
+    
+    def __init__(self, country_model, base=None):
+        """
+        Initialize the CountryFSM.
+        
+        Args:
+            country_model: NodePath containing country children
+            base: Optional ShowBase instance for rendering operations
+        """
+        FSM.__init__(self, 'CountryFSM')
+        self.country_model = country_model
+        self.base = base
+        self.countries = {}
+        self.current_country_np = None
+        self.highlighted_neighbors = []  # Track currently highlighted neighbors
+        self.visited_countries = set()  # Track countries that have been visited/clicked
+        
+        # Dictionary to store which countries border each other
+        # Format: {country_name: [list of neighboring country names]}
+        self.borders = {}
+        
+        # Create texture stage for color overlays
+        self.color_stage = TextureStage('country_color')
+        #self.color_stage.setMode(TextureStage.MModulate)  # Multiply blend with base texture
+        self.color_stage.setMode(TextureStage.MBlend)
+        self.color_stage.setSort(10)  # Render after base texture
+        
+        # Create solid color textures for different states
+        self.default_texture = self._create_color_texture(Vec4(0.1, 0.1, 0.1, 1))
+        self.selected_texture = self._create_color_texture(Vec4(0.0, 0.8, 0.2, 1))
+        self.neighbor_texture = self._create_color_texture(Vec4(1.2, 0.5, 0.8, 1))
+        self.hover_texture = self._create_color_texture(Vec4(0.8, 0.8, 0.0, 1))
+        self.visited_texture = self._create_color_texture(Vec4(0.3, 0.6, 0.3, 1))  # Darker green for visited
+        
+        # Store reference to each country NodePath by name
+        for child in country_model.getChildren():
+            country_name = child.getName()
+            self.countries[country_name] = child
+            self.borders[country_name] = []  # Initialize empty borders list
+            
+            # Apply default color texture to country
+            child.setTexture(self.color_stage, self.default_texture)
+            
+            print(f"Registered country state: {country_name}")
+        
+        # Default colors for states (kept for reference)
+        self.default_color = Vec4(0.1, 0.1, 0.1, 0.3)
+        self.selected_color = Vec4(0.0, 0.8, 0.2, 0.5)
+        self.neighbor_color = Vec4(0.2, 0.5, 0.8, 0.4)  # Blue for neighbors
+        self.hover_color = Vec4(0.8, 0.8, 0.0, 0.4)
+        self.visited_color = Vec4(0.3, 0.6, 0.3, 1.0)  # Darker green for visited
+    
+    def _create_color_texture(self, color):
+        """
+        Create a 1x1 solid color texture for blending.
+        
+        Args:
+            color: Vec4 color (r, g, b, a)
+            
+        Returns:
+            Texture object
+        """
+        # Create a 1x1 image with alpha channel
+        img = PNMImage(1, 1, 4)  # 4 channels = RGBA
+        img.addAlpha()
+        img.setXelA(0, 0, color[0], color[1], color[2], color[3])
+        
+        # Convert to texture
+        tex = Texture()
+        tex.setup2dTexture(1, 1, Texture.TUnsignedByte, Texture.FRgba)
+        tex.load(img)
+        
+        # Set wrap and filter modes  
+        tex.setWrapU(Texture.WMClamp)
+        tex.setWrapV(Texture.WMClamp)
+        tex.setMinfilter(Texture.FTNearest)
+        tex.setMagfilter(Texture.FTNearest)
+        
+        return tex
+    
+    def enterNone(self):
+        """Enter the None/idle state - no country selected."""
+        print("FSM: Entering None state")
+        # Reset all countries to default appearance, but keep visited countries colored
+        for country_name, country_np in self.countries.items():
+            if country_name in self.visited_countries:
+                # Keep visited color
+                country_np.setTexture(self.color_stage, self.visited_texture)
+            else:
+                # Reset to default
+                country_np.setTexture(self.color_stage, self.default_texture)
+        self.current_country_np = None
+        self.highlighted_neighbors = []
+    
+    def exitNone(self):
+        """Exit the None/idle state."""
+        print("FSM: Exiting None state")
+    
+    def selectCountry(self, country_name):
+        """
+        Transition to a specific country state.
+        Only allows transitions to neighboring countries or from None state.
+        Prevents revisiting already visited countries.
+        
+        Args:
+            country_name: Name of the country to select
+        """
+        if country_name not in self.countries:
+            print(f"Warning: Country '{country_name}' not found")
+            return
+        
+        # Check if country has already been visited
+        if country_name in self.visited_countries:
+            print(f"Cannot select {country_name}: Already visited")
+            # Visual feedback for visited country
+            if country_name in self.countries:
+                invalid_np = self.countries[country_name]
+                # Could add a brief red flash or pulse effect here
+            return
+        
+        current_state = self.state
+        
+        # Allow transition if:
+        # 1. Currently in None state (first selection)
+        # 2. Target country is a neighbor of current country AND not visited
+        if current_state == 'None':
+            self.request(country_name)
+        elif country_name in self.borders.get(current_state, []):
+            print(f"Transitioning from {current_state} to neighboring {country_name}")
+            self.request(country_name)
+        else:
+            print(f"Cannot transition: {country_name} is not adjacent to {current_state}")
+            # Optionally provide visual feedback that the transition is invalid
+            if country_name in self.countries:
+                # Flash the country to indicate it's not accessible
+                invalid_np = self.countries[country_name]
+                original_color = invalid_np.getColor()
+                invalid_np.setColor(Vec4(1.0, 0.0, 0.0, 0.5))  # Red flash
+                # You could add a task to reset color after a delay
+    
+    def deselectCountry(self):
+        """Deselect the current country and return to None state."""
+        self.request('None')
+    
+    def __getattr__(self, name):
+        """
+        Dynamically handle enter/exit methods for country states.
+        This allows the FSM to work with any country names without
+        explicitly defining methods for each one.
+        """
+        # Check if this is an enter method for a known country
+        if name.startswith('enter'):
+            country_name = name[5:]  # Remove 'enter' prefix
+            if country_name in self.countries:
+                return lambda: self._enterCountry(country_name)
+        
+        # Check if this is an exit method for a known country
+        elif name.startswith('exit'):
+            country_name = name[4:]  # Remove 'exit' prefix
+            if country_name in self.countries:
+                return lambda: self._exitCountry(country_name)
+        
+        # If not a state method, raise AttributeError
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+    
+    def _enterCountry(self, country_name):
+        """Generic enter method for any country state."""
+        print(f"FSM: Entering {country_name} state")
+        self.current_country_np = self.countries[country_name]
+                # Mark this country as visited
+        self.visited_countries.add(country_name)
+                # Highlight the selected country with texture stage
+        self.current_country_np.setTexture(self.color_stage, self.selected_texture)
+        self.color_stage.setColor((0, 1, 1, 1))  # Ensure full color from texture
+        self.current_country_np.setTransparency(TransparencyAttrib.MAlpha)
+        self.current_country_np.setBin("transparent", 60)
+        
+        # Highlight neighboring countries (only unvisited ones)
+        self.highlighted_neighbors = []
+        if country_name in self.borders:
+            for neighbor_name in self.borders[country_name]:
+                # Only highlight if not visited
+                if neighbor_name in self.countries and neighbor_name not in self.visited_countries:
+                    neighbor_np = self.countries[neighbor_name]
+                    neighbor_np.setTexture(self.color_stage, self.neighbor_texture)
+                    self.color_stage.setColor((1, 1, 1, 1))  # Ensure full color from texture
+                    neighbor_np.setTransparency(TransparencyAttrib.MAlpha)
+                    neighbor_np.setBin("transparent", 55)
+                    self.highlighted_neighbors.append(neighbor_name)
+                    print(f"  Highlighted neighbor: {neighbor_name}")
+                elif neighbor_name in self.visited_countries:
+                    print(f"  Skipping visited neighbor: {neighbor_name}")
+        
+        # You can add custom behavior here, such as:
+        # - Displaying country information
+        # - Playing sounds
+        # - Triggering animations
+        # - Updating UI elements
+    
+    def _exitCountry(self, country_name):
+        """Generic exit method for any country state."""
+        print(f"FSM: Exiting {country_name} state")
+        
+        if self.current_country_np:
+            # Set to visited color instead of default
+            self.current_country_np.setTexture(self.color_stage, self.visited_texture)
+            self.current_country_np.setBin("transparent", 50)
+        
+        # Reset highlighted neighbors - check if they're visited
+        for neighbor_name in self.highlighted_neighbors:
+            if neighbor_name in self.countries:
+                if neighbor_name in self.visited_countries:
+                    # Keep visited color
+                    self.countries[neighbor_name].setTexture(self.color_stage, self.visited_texture)
+                else:
+                    # Reset to default
+                    self.countries[neighbor_name].setTexture(self.color_stage, self.default_texture)
+                self.countries[neighbor_name].setBin("transparent", 50)
+        
+        self.highlighted_neighbors = []
+    
+    def hoverCountry(self, country_name):
+        """Temporarily highlight a country on hover without changing state."""
+        if country_name in self.countries and country_name != self.state:
+            self.countries[country_name].setTexture(self.color_stage, self.hover_texture)
+    
+    def unhoverCountry(self, country_name):
+        """Remove hover highlight from a country."""
+        if country_name in self.countries and country_name != self.state:
+            # Restore appropriate color based on visited status
+            if country_name in self.visited_countries:
+                self.countries[country_name].setTexture(self.color_stage, self.visited_texture)
+            else:
+                self.countries[country_name].setTexture(self.color_stage, self.default_texture)
+    
+    def getCurrentCountry(self):
+        """Get the currently selected country name."""
+        return self.state if self.state != 'None' else None
+    
+    def getCountryNodePath(self, country_name):
+        """Get the NodePath for a specific country."""
+        return self.countries.get(country_name)
+    
+    def getAllCountries(self):
+        """Get a list of all country names."""
+        return list(self.countries.keys())
+    
+    def setBorders(self, country_name, neighboring_countries):
+        """
+        Define which countries border a specific country.
+        
+        Args:
+            country_name: Name of the country
+            neighboring_countries: List of country names that border this country
+        """
+        if country_name in self.countries:
+            self.borders[country_name] = neighboring_countries
+            print(f"Set borders for {country_name}: {neighboring_countries}")
+        else:
+            print(f"Warning: Cannot set borders for unknown country '{country_name}'")
+    
+    def addBorder(self, country1, country2, bidirectional=True):
+        """
+        Add a border between two countries.
+        
+        Args:
+            country1: First country name
+            country2: Second country name
+            bidirectional: If True, adds border in both directions (default)
+        """
+        if country1 in self.countries and country2 in self.countries:
+            if country2 not in self.borders[country1]:
+                self.borders[country1].append(country2)
+            
+            if bidirectional and country1 not in self.borders[country2]:
+                self.borders[country2].append(country1)
+            
+            print(f"Added border: {country1} <-> {country2}" if bidirectional else f"Added border: {country1} -> {country2}")
+        else:
+            print(f"Warning: Cannot add border between unknown countries")
+    
+    def getBorders(self, country_name):
+        """
+        Get the list of neighboring countries.
+        
+        Args:
+            country_name: Name of the country
+            
+        Returns:
+            List of neighboring country names
+        """
+        return self.borders.get(country_name, [])
+    
+    def isNeighbor(self, country1, country2):
+        """
+        Check if two countries are neighbors.
+        
+        Args:
+            country1: First country name
+            country2: Second country name
+            
+        Returns:
+            True if countries are neighbors, False otherwise
+        """
+        return country2 in self.borders.get(country1, [])
+    
+    def getAvailableMoves(self, country_name=None):
+        """
+        Get list of unvisited neighboring countries that can be moved to.
+        
+        Args:
+            country_name: Name of the country (defaults to current state)
+            
+        Returns:
+            List of unvisited neighboring country names
+        """
+        if country_name is None:
+            country_name = self.state
+        
+        if country_name == 'None' or country_name not in self.borders:
+            return []
+        
+        # Filter out visited countries from neighbors
+        available = [n for n in self.borders[country_name] 
+                    if n not in self.visited_countries and n in self.countries]
+        return available
+    
+    def hasAvailableMoves(self, country_name=None):
+        """
+        Check if there are any unvisited neighbors to move to.
+        
+        Args:
+            country_name: Name of the country (defaults to current state)
+            
+        Returns:
+            True if there are unvisited neighbors, False otherwise
+        """
+        return len(self.getAvailableMoves(country_name)) > 0
+    
+    def clearVisitedCountries(self, reset_state=True):
+        """
+        Clear the visited countries set and reset all colors to default.
+        
+        Args:
+            reset_state: If True, also returns FSM to None state (default: True)
+        """
+        self.visited_countries.clear()
+        for country_np in self.countries.values():
+            country_np.setTexture(self.color_stage, self.default_texture)
+        
+        if reset_state and self.state != 'None':
+            self.request('None')
+        
+        print("Cleared all visited countries")
+    
+    def getVisitedCountries(self):
+        """Get the set of visited country names."""
+        return self.visited_countries.copy()
+    
+    def isVisited(self, country_name):
+        """Check if a country has been visited."""
+        return country_name in self.visited_countries
+    
+    def markAsVisited(self, country_name):
+        """Manually mark a country as visited."""
+        if country_name in self.countries:
+            self.visited_countries.add(country_name)
+            if country_name != self.state:  # Don't change if currently selected
+                self.countries[country_name].setTexture(self.color_stage, self.visited_texture)
+            print(f"Marked {country_name} as visited")
+        else:
+            print(f"Warning: Cannot mark unknown country '{country_name}' as visited")
+    
+    def setCountryColor(self, country_name, color):
+        """
+        Set a custom color for a specific country using texture stage blending.
+        
+        Args:
+            country_name: Name of the country
+            color: Vec4 color (r, g, b, a)
+        """
+        if country_name in self.countries:
+            # Create a new color texture for this color
+            color_texture = self._create_color_texture(color)
+            self.countries[country_name].setTexture(self.color_stage, color_texture)
+            print(f"Set custom color for {country_name}: {color}")
+        else:
+            print(f"Warning: Cannot set color for unknown country '{country_name}'")
+
+
 # Example usage (for testing)
 if __name__ == "__main__":
     from direct.showbase.ShowBase import ShowBase
@@ -434,16 +831,18 @@ if __name__ == "__main__":
             cloud_plane.setShaderInput("skyColor", Vec4(0.5, 0.7, 0.9, 0.1))
             cloud_plane.setShaderInput("cloudCoverage", 0.5)  # 0.0 = no clouds, 1.0 = full coverage
             cloud_plane.setTransparency(TransparencyAttrib.MAlpha)
-            cloud_plane.setBin("transparent", 10)
+            cloud_plane.setBin("transparent", 100)
             cloud_plane.reparentTo(self.render)
             self.cloud_nodes.append(cloud_plane)
             for childe in self.country.getChildren():
                 print(childe.getName())
                 np = self.campaign_map.contryCollision(self.bullet_world, childe)
-                childe.setColor(.1,.1,.1, 0.3)
+                
+                # Setup transparency and rendering for texture stage blending
                 childe.setTransparency(TransparencyAttrib.MAlpha)
                 childe.setBin("transparent", 50)
                 childe.setDepthTest(False)
+                #childe.setDepthWrite(False)
                 """ childe.setShader(cloud_shader)
                 # Set shader inputs
                 childe.setShaderInput("customTime", 0.0)  # Initialize time
@@ -454,6 +853,56 @@ if __name__ == "__main__":
                 # Store reference for updates
                 self.cloud_nodes.append(childe) """
             #self.campaign_map.contryCollision(self.bullet_world, self.country.find("**/Plane.002"))
+            
+            # Initialize Country FSM
+            self.country_fsm = CountryFSM(self.country, self)
+            self.country_fsm.request('None')  # Start in None state
+            print(f"Available countries: {self.country_fsm.getAllCountries()}")
+            
+            # Define country borders (adjacency relationships)
+            # Replace these with your actual country names and their neighbors
+            # Example format:
+            # self.country_fsm.addBorder("CountryA", "CountryB")  # Makes A and B neighbors
+            
+            # Get all countries for easy reference
+            all_countries = self.country_fsm.getAllCountries()
+            
+            # Example: Define borders automatically or manually
+            # You can define borders like this:
+            # self.country_fsm.addBorder("Plane", "Plane.001")
+            # self.country_fsm.addBorder("Plane.001", "Plane.002")
+            # self.country_fsm.addBorder("Plane.002", "Plane.003")
+            # etc...
+            
+            #self.country_fsm.addBorder("Plane.008", "Plane.007")
+            #self.country_fsm.addBorder("Plane.008", "Plane.011")
+            #base.toggleTexture()
+            
+            
+            self.country_fsm.setBorders("Plane.005", ["Plane.007", "Plane.006", "Plane.009"])
+            self.country_fsm.setBorders("Plane.006", ["Plane.005", "Plane.009", "Plane.010", "Plane.011", "Plane.007"])
+            self.country_fsm.setBorders("Plane.007", ["Plane.005", "Plane.006", "Plane.011", "Plane.008"])
+            self.country_fsm.setBorders("Plane.008", ["Plane.007", "Plane.011"])
+            self.country_fsm.setBorders("Plane.009", ["Plane.005", "Plane.006", "Plane.010", "Plane.013"])
+            self.country_fsm.setBorders("Plane.010", ["Plane.006", "Plane.009", "Plane.012", "Plane.013", "Plane.011"])
+            self.country_fsm.setBorders("Plane.011", ["Plane.006", "Plane.007", "Plane.008", "Plane.010", "Plane.012", "Plane.016"])
+            self.country_fsm.setBorders("Plane.012", ["Plane.010", "Plane.011","Plane.013", "Plane.016", "Plane.015"])
+            self.country_fsm.setBorders("Plane.013", ["Plane.009", "Plane.010", "Plane.012", "Plane.015", "Plane.014"])
+            self.country_fsm.setBorders("Plane.014", ["Plane.013", "Plane.015"])
+            self.country_fsm.setBorders("Plane.015", ["Plane.012", "Plane.013", "Plane.014", "Plane.016", "Plane.017", "Plane.018"])
+            self.country_fsm.setBorders("Plane.016", ["Plane.011", "Plane.012", "Plane.015", "Plane.017"])
+            self.country_fsm.setBorders("Plane.017", ["Plane.015", "Plane.016", "Plane.019"])
+            self.country_fsm.setBorders("Plane.018", ["Plane.015"])
+            self.country_fsm.setBorders("Plane.019", ["Plane.017"])
+            """ # Or use a more flexible approach:
+            if len(all_countries) >= 2:
+                # Example: Connect first few countries in a chain for demonstration
+                for i in range(min(len(all_countries) - 1, 10)):
+                    self.country_fsm.addBorder(all_countries[i], all_countries[i + 1])
+                    print(f"Auto-connected: {all_countries[i]} <-> {all_countries[i + 1]}") """
+            
+            print("\\nBorder configuration complete. Selected country will highlight its neighbors in blue.")
+            print("You can only transition to neighboring (blue-highlighted) countries.\\n")
 
             # Add physics update task
             self.taskMgr.add(self.update_physics, "update_physics")
@@ -462,6 +911,7 @@ if __name__ == "__main__":
             self.taskMgr.add(self.update_cloud_time, "update_cloud_time")
 
             self.accept("mouse1", self.mouseClick)
+            self.accept("mouse3", self.deselect)  # Right-click to deselect
             #mask_model.setBin("background", 10)
             #self.campaign_map.terrain_root.setAttrib(ColorWriteAttrib.make(ColorWriteAttrib.C_off))
 
@@ -502,16 +952,30 @@ if __name__ == "__main__":
                 result = self.bullet_world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
                 if result.hasHit():
-                    print(f"Hit: {result.getNode().getName()} at {result.getHitPos()}")
-                    np=self.render.find("**/"+result.getNode().getName().split("_")[0])
-                    np.setColor(random.random(), random.random(), random.random(), 0.3)
-                    #np.setBin("fixed", 100)  # Render on top
-                    np.setTransparency(TransparencyAttrib.MAlpha)
-                    np.setBin("transparent", 50)
-                    #np.setAttrib(ColorWriteAttrib.make(ColorWriteAttrib.C_off))
-                    np.setDepthTest(False)
+                    hit_node_name = result.getNode().getName()
+                    print(f"Hit: {hit_node_name} at {result.getHitPos()}")
+                    
+                    # Extract country name from collision node name (removes '_collision' suffix)
+                    country_name = hit_node_name.split("_")[0]
+                    
+                    # Use FSM to select the country
+                    self.country_fsm.selectCountry(country_name)
+                    
+                    # Old manual color code (now handled by FSM):
+                    # np=self.render.find("**/"+country_name)
+                    # np.setColor(random.random(), random.random(), random.random(), 0.3)
+                    # np.setTransparency(TransparencyAttrib.MAlpha)
+                    # np.setBin("transparent", 50)
+                    # np.setDepthTest(False)
                 else:
                     print("No collision detected")
+                    # Deselect if clicking empty space
+                    self.country_fsm.deselectCountry()
+        
+        def deselect(self):
+            """Handle right-click to deselect country."""
+            print("Deselecting country")
+            self.country_fsm.deselectCountry()
     
     # Run demo
     demo = TerrainDemo()
