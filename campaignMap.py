@@ -436,6 +436,7 @@ class CountryFSM(FSM):
             if country_name in self.visited_countries:
                 # Keep visited color
                 country_np.setTexture(self.color_stage, self.visited_texture)
+                self.color_stage.setColor((1, 1, 1, 1))  # Ensure full color from texture
             else:
                 # Reset to default
                 country_np.setTexture(self.color_stage, self.default_texture)
