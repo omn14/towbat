@@ -321,6 +321,7 @@ class gameFSM(FSM):
         """Show campaign map, hide battle scene."""
         print("Entering Campaign Phase")
         self.game.debugText.setText("Current phase: Campaign Map")
+        self.game.debugNP.hide()  # Hide Bullet debug during campaign map
 
         # Save current camera transform
         self._saved_cam_pos = self.game.camera.getPos()
@@ -337,7 +338,7 @@ class gameFSM(FSM):
         self.game.cloud_plane.show()
 
         # Position camera for campaign view (offset to match campaign map position)
-        self.game.camera.setPos(self.game.campaign_offset_x, -500, 1800)
+        self.game.camera.setPos(self.game.campaign_offset_x-500, -1500, 1200)
         self.game.camera.lookAt(self.game.country_model)
 
         # Start campaign update tasks
@@ -354,6 +355,7 @@ class gameFSM(FSM):
     def exitCampaignPhase(self):
         """Hide campaign map, restore battle scene."""
         print("Exiting Campaign Phase")
+        self.game.debugNP.show()  # Show Bullet debug for campaign map
 
         # Hide campaign elements
         self.game.campaign_map.hide()
@@ -1870,10 +1872,10 @@ class MyApp(ShowBase):
         debugNode.showConstraints(True)
         debugNode.showBoundingBoxes(False)
         debugNode.showNormals(True)
-        debugNP = render.attachNewNode(debugNode)
+        self.debugNP = render.attachNewNode(debugNode)
         
-        self.world.setDebugNode(debugNP.node())
-        debugNP.show()
+        self.world.setDebugNode(self.debugNP.node())
+        self.debugNP.show()
         # Add simple Bullet collision geometry (sphere) to smiley_copy
 
         # Estimate radius from bounding box
