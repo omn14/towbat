@@ -369,64 +369,85 @@ class CountryFSM(FSM):
         # Format: {country_name: [list of neighboring country names]}
         self.borders = {}
         
-        # Create texture stage for color overlays
-        self.color_stage = TextureStage('country_color')
-        #self.color_stage.setMode(TextureStage.MModulate)  # Multiply blend with base texture
-        self.color_stage.setMode(TextureStage.MBlend)
-        self.color_stage.setSort(10)  # Render after base texture
+        # Load the country color GLSL shader
+        self.country_shader = Shader.load(
+            Shader.SL_GLSL,
+            vertex="shaders/country_color.vert",
+            fragment="shaders/country_color.frag"
+        )
         
-        # Create solid color textures for different states
-        self.default_texture = self._create_color_texture(Vec4(0.1, 0.1, 0.1, 1))
-        self.selected_texture = self._create_color_texture(Vec4(0.0, 0.8, 0.2, 1))
-        self.neighbor_texture = self._create_color_texture(Vec4(1.2, 0.5, 0.8, 1))
-        self.hover_texture = self._create_color_texture(Vec4(0.8, 0.8, 0.0, 1))
-        self.visited_texture = self._create_color_texture(Vec4(0.3, 0.6, 0.3, 1))  # Darker green for visited
+        # Define colors for different states (r, g, b, blend_strength)
+        self.selected_color = Vec4(0.0, 0.8, 0.2, 0.7)
+        self.neighbor_color = Vec4(0.2, 0.5, 0.8, 0.6)  # Blue for neighbors
+        self.hover_color = Vec4(0.8, 0.8, 0.0, 0.5)
+        self.visited_color = Vec4(0.3, 0.6, 0.3, 0.6)  # Darker green for visited
+        self.visited_color = self.selected_color
+        
+        # Blend mode: 0=multiply, 1=overlay, 2=additive
+        self.color_blend_mode = 2.0
+        
+        # Generate a unique default color per country using golden-ratio hue spacing
+        self.country_default_colors = {}
+        children = list(country_model.getChildren())
+        golden_ratio = 0.618033988749895
+        base_hue = 0.0  # Starting hue
         
         # Store reference to each country NodePath by name
-        for child in country_model.getChildren():
+        for i, child in enumerate(children):
             country_name = child.getName()
             self.countries[country_name] = child
             self.borders[country_name] = []  # Initialize empty borders list
             
-            # Apply default color texture to country
-            child.setTexture(self.color_stage, self.default_texture)
+            # Generate a unique hue, then convert HSV -> RGB
+            hue = (base_hue + i * golden_ratio) % 1.0
+            saturation = 0.5
+            value = 0.6
+            color_rgb = self._hsv_to_rgb(hue, saturation, value)
+            default_color = Vec4(color_rgb[0], color_rgb[1], color_rgb[2], 0.4)
+            self.country_default_colors[country_name] = default_color
             
-            print(f"Registered country state: {country_name}")
+            # Apply shader and set unique default color
+            child.setShader(self.country_shader)
+            child.setShaderInput("countryColor", default_color)
+            child.setShaderInput("colorBlendMode", self.color_blend_mode)
+            child.setShaderInput("animState", 0.0)
+            child.setShaderInput("countryTime", 0.0)
+            
+            print(f"Registered country state: {country_name} with color {default_color}")
         
-        # Default colors for states (kept for reference)
-        self.default_color = Vec4(0.1, 0.1, 0.1, 0.3)
-        self.selected_color = Vec4(0.0, 0.8, 0.2, 0.5)
-        self.neighbor_color = Vec4(0.2, 0.5, 0.8, 0.4)  # Blue for neighbors
-        self.hover_color = Vec4(0.8, 0.8, 0.0, 0.4)
-        self.visited_color = Vec4(0.3, 0.6, 0.3, 1.0)  # Darker green for visited
+        # Start a per-frame task to feed time to the shader
+        if self.base is not None:
+            self.base.taskMgr.add(self._update_country_time, "update_country_time")
     
-    def _create_color_texture(self, color):
+    @staticmethod
+    def _hsv_to_rgb(h, s, v):
+        """Convert HSV (0-1 range) to RGB (0-1 range)."""
+        import colorsys
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        return (r, g, b)
+    
+    def _get_default_color(self, country_name):
+        """Get the unique default color for a country."""
+        return self.country_default_colors.get(country_name, Vec4(0.1, 0.1, 0.1, 0.3))
+    
+    def _update_country_time(self, task):
+        """Per-frame task to update the countryTime uniform on all countries."""
+        t = task.time
+        for country_np in self.countries.values():
+            country_np.setShaderInput("countryTime", t)
+        return task.cont
+    
+    def _apply_country_color(self, country_np, color, anim_state=0.0):
         """
-        Create a 1x1 solid color texture for blending.
+        Apply a color and animation state to a country via the GLSL shader.
         
         Args:
-            color: Vec4 color (r, g, b, a)
-            
-        Returns:
-            Texture object
+            country_np: NodePath of the country
+            color: Vec4 color (r, g, b, blend_strength)
+            anim_state: 0=idle, 1=selected pulse, 2=neighbor wave, 3=hover shimmer
         """
-        # Create a 1x1 image with alpha channel
-        img = PNMImage(1, 1, 4)  # 4 channels = RGBA
-        img.addAlpha()
-        img.setXelA(0, 0, color[0], color[1], color[2], color[3])
-        
-        # Convert to texture
-        tex = Texture()
-        tex.setup2dTexture(1, 1, Texture.TUnsignedByte, Texture.FRgba)
-        tex.load(img)
-        
-        # Set wrap and filter modes  
-        tex.setWrapU(Texture.WMClamp)
-        tex.setWrapV(Texture.WMClamp)
-        tex.setMinfilter(Texture.FTNearest)
-        tex.setMagfilter(Texture.FTNearest)
-        
-        return tex
+        country_np.setShaderInput("countryColor", color)
+        country_np.setShaderInput("animState", float(anim_state))
     
     def enterNone(self):
         """Enter the None/idle state - no country selected."""
@@ -434,12 +455,9 @@ class CountryFSM(FSM):
         # Reset all countries to default appearance, but keep visited countries colored
         for country_name, country_np in self.countries.items():
             if country_name in self.visited_countries:
-                # Keep visited color
-                country_np.setTexture(self.color_stage, self.visited_texture)
-                self.color_stage.setColor((1, 1, 1, 1))  # Ensure full color from texture
+                self._apply_country_color(country_np, self.visited_color, anim_state=0.0)
             else:
-                # Reset to default
-                country_np.setTexture(self.color_stage, self.default_texture)
+                self._apply_country_color(country_np, self._get_default_color(country_name), anim_state=0.0)
         self.current_country_np = None
         self.highlighted_neighbors = []
     
@@ -518,11 +536,10 @@ class CountryFSM(FSM):
         """Generic enter method for any country state."""
         print(f"FSM: Entering {country_name} state")
         self.current_country_np = self.countries[country_name]
-                # Mark this country as visited
+        # Mark this country as visited
         self.visited_countries.add(country_name)
-                # Highlight the selected country with texture stage
-        self.current_country_np.setTexture(self.color_stage, self.selected_texture)
-        self.color_stage.setColor((0, 1, 1, 1))  # Ensure full color from texture
+        # Highlight the selected country via shader with pulsing animation
+        self._apply_country_color(self.current_country_np, self.selected_color, anim_state=1.0)
         self.current_country_np.setTransparency(TransparencyAttrib.MAlpha)
         self.current_country_np.setBin("transparent", 60)
         
@@ -533,8 +550,7 @@ class CountryFSM(FSM):
                 # Only highlight if not visited
                 if neighbor_name in self.countries and neighbor_name not in self.visited_countries:
                     neighbor_np = self.countries[neighbor_name]
-                    neighbor_np.setTexture(self.color_stage, self.neighbor_texture)
-                    self.color_stage.setColor((1, 1, 1, 1))  # Ensure full color from texture
+                    self._apply_country_color(neighbor_np, self.neighbor_color, anim_state=2.0)
                     neighbor_np.setTransparency(TransparencyAttrib.MAlpha)
                     neighbor_np.setBin("transparent", 55)
                     self.highlighted_neighbors.append(neighbor_name)
@@ -553,36 +569,37 @@ class CountryFSM(FSM):
         print(f"FSM: Exiting {country_name} state")
         
         if self.current_country_np:
-            # Set to visited color instead of default
-            self.current_country_np.setTexture(self.color_stage, self.visited_texture)
+            # Set to visited color instead of default (no animation)
+            self._apply_country_color(self.current_country_np, self.visited_color, anim_state=0.0)
             self.current_country_np.setBin("transparent", 50)
         
         # Reset highlighted neighbors - check if they're visited
         for neighbor_name in self.highlighted_neighbors:
             if neighbor_name in self.countries:
                 if neighbor_name in self.visited_countries:
-                    # Keep visited color
-                    self.countries[neighbor_name].setTexture(self.color_stage, self.visited_texture)
+                    self._apply_country_color(self.countries[neighbor_name], self.visited_color, anim_state=0.0)
                 else:
-                    # Reset to default
-                    self.countries[neighbor_name].setTexture(self.color_stage, self.default_texture)
+                    self._apply_country_color(self.countries[neighbor_name], self._get_default_color(neighbor_name), anim_state=0.0)
                 self.countries[neighbor_name].setBin("transparent", 50)
         
         self.highlighted_neighbors = []
     
     def hoverCountry(self, country_name):
-        """Temporarily highlight a country on hover without changing state."""
+        """Temporarily highlight a country on hover with shimmer animation."""
         if country_name in self.countries and country_name != self.state:
-            self.countries[country_name].setTexture(self.color_stage, self.hover_texture)
+            self._apply_country_color(self.countries[country_name], self.hover_color, anim_state=3.0)
     
     def unhoverCountry(self, country_name):
         """Remove hover highlight from a country."""
         if country_name in self.countries and country_name != self.state:
-            # Restore appropriate color based on visited status
+            # Restore appropriate color and animation based on status
             if country_name in self.visited_countries:
-                self.countries[country_name].setTexture(self.color_stage, self.visited_texture)
+                self._apply_country_color(self.countries[country_name], self.visited_color, anim_state=0.0)
+            elif country_name in self.highlighted_neighbors:
+                # Restore neighbor wave animation
+                self._apply_country_color(self.countries[country_name], self.neighbor_color, anim_state=2.0)
             else:
-                self.countries[country_name].setTexture(self.color_stage, self.default_texture)
+                self._apply_country_color(self.countries[country_name], self._get_default_color(country_name), anim_state=0.0)
     
     def getCurrentCountry(self):
         """Get the currently selected country name."""
@@ -696,8 +713,8 @@ class CountryFSM(FSM):
             reset_state: If True, also returns FSM to None state (default: True)
         """
         self.visited_countries.clear()
-        for country_np in self.countries.values():
-            country_np.setTexture(self.color_stage, self.default_texture)
+        for country_name, country_np in self.countries.items():
+            self._apply_country_color(country_np, self._get_default_color(country_name), anim_state=0.0)
         
         if reset_state and self.state != 'None':
             self.request('None')
@@ -717,26 +734,35 @@ class CountryFSM(FSM):
         if country_name in self.countries:
             self.visited_countries.add(country_name)
             if country_name != self.state:  # Don't change if currently selected
-                self.countries[country_name].setTexture(self.color_stage, self.visited_texture)
+                self._apply_country_color(self.countries[country_name], self.visited_color, anim_state=0.0)
             print(f"Marked {country_name} as visited")
         else:
             print(f"Warning: Cannot mark unknown country '{country_name}' as visited")
     
     def setCountryColor(self, country_name, color):
         """
-        Set a custom color for a specific country using texture stage blending.
+        Set a custom color for a specific country via the GLSL shader.
         
         Args:
             country_name: Name of the country
-            color: Vec4 color (r, g, b, a)
+            color: Vec4 color (r, g, b, blend_strength)
         """
         if country_name in self.countries:
-            # Create a new color texture for this color
-            color_texture = self._create_color_texture(color)
-            self.countries[country_name].setTexture(self.color_stage, color_texture)
+            self._apply_country_color(self.countries[country_name], color)
             print(f"Set custom color for {country_name}: {color}")
         else:
             print(f"Warning: Cannot set color for unknown country '{country_name}'")
+    
+    def setBlendMode(self, mode):
+        """
+        Set the color blend mode for all countries.
+        
+        Args:
+            mode: 0 = multiply, 1 = overlay, 2 = additive
+        """
+        self.color_blend_mode = float(mode)
+        for country_np in self.countries.values():
+            country_np.setShaderInput("colorBlendMode", self.color_blend_mode)
 
 
 # Example usage (for testing)
@@ -767,10 +793,10 @@ if __name__ == "__main__":
             self.campaign_map = CampaignMap(self)
             
             # Load heightmap (replace with your heightmap path)
-            self.campaign_map.load_heightmap("assets/textures/wals_dem.png",height_scale=25)
+            self.campaign_map.load_heightmap("assets/textures/wals_dem_resized.png",height_scale=25)
             
             # Apply texture (replace with your texture path)
-            self.campaign_map.set_texture("assets/textures/wals_tex.png")
+            self.campaign_map.set_texture("assets/textures/wals_tex_resized.png")
             
             # Position camera to view terrain
             self.disable_mouse()
