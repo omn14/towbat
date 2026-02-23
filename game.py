@@ -49,6 +49,7 @@ from rulesFunctions import *
 from deployPhase import *
 from gameStateAnalyzer import *
 from listBuilderGUI import ArmyListBuilderGUI
+from campaignMap import CampaignMap, CountryFSM
 
 #import charge_impact_effect
 from direct.particles.ParticleEffect import ParticleEffect
@@ -316,12 +317,70 @@ class gameFSM(FSM):
             #unit.hasMovedThisTurn=False
             unit.updateTextNode()
 
+    def enterCampaignPhase(self):
+        """Show campaign map, hide battle scene."""
+        print("Entering Campaign Phase")
+        self.game.debugText.setText("Current phase: Campaign Map")
 
+        # Save current camera transform
+        self._saved_cam_pos = self.game.camera.getPos()
+        self._saved_cam_hpr = self.game.camera.getHpr()
 
+        # Hide battle elements
+        self.game.ground.hide()
+        for u in self.game.units:
+            u.bodyNP.hide()
 
+        # Show campaign elements
+        self.game.campaign_map.show()
+        self.game.country_model.show()
+        self.game.cloud_plane.show()
 
+        # Position camera for campaign view (offset to match campaign map position)
+        self.game.camera.setPos(self.game.campaign_offset_x, -500, 1800)
+        self.game.camera.lookAt(self.game.country_model)
 
+        # Start campaign update tasks
+        self.game.taskMgr.add(self.game.update_campaign_terrain, "update_campaign_terrain")
+        self.game.taskMgr.add(self.game.update_cloud_time, "update_cloud_time")
 
+        # Bind mouse for campaign interaction
+        self.game.ignore('mouse1')
+        self.ignore('mouse1')  # Stop FSM's own mouseMenuCollide handler
+        self.game.accept('mouse1', self.game.campaign_mouse_click)
+        self.game.accept('mouse3', self.game.campaign_deselect)
+        self.game.accept('m', self.game.enableMouse)
+
+    def exitCampaignPhase(self):
+        """Hide campaign map, restore battle scene."""
+        print("Exiting Campaign Phase")
+
+        # Hide campaign elements
+        self.game.campaign_map.hide()
+        self.game.country_model.hide()
+        self.game.cloud_plane.hide()
+
+        # Stop campaign tasks
+        self.game.taskMgr.remove("update_campaign_terrain")
+        self.game.taskMgr.remove("update_cloud_time")
+
+        # Show battle elements
+        self.game.ground.show()
+        for u in self.game.units:
+            u.bodyNP.show()
+
+        # Restore camera
+        self.game.disableMouse()
+        self.game.camera.setPos(self._saved_cam_pos)
+        self.game.camera.setHpr(self._saved_cam_hpr)
+
+        # Unbind campaign mouse, restore battle mouse
+        self.game.ignore('mouse1')
+        self.game.ignore('mouse3')
+        self.game.ignore('m')
+        self.accept('mouse1', self.mouseMenuCollide)  # Restore FSM's own handler
+        self.game.accept('mouse1', self.game.setActiveUnit,
+                         [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
 
 
 class MyApp(ShowBase):
@@ -388,6 +447,7 @@ class MyApp(ShowBase):
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
         self.setup_bullet()
+        self.setup_campaign_map()
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
@@ -587,7 +647,7 @@ class MyApp(ShowBase):
         self.setActiveUnitTaskName="taskLoopStrategy"
 
         self.fsm = gameFSM(self)
-        
+        self.accept('c', self.toggle_campaign_map)
 
         if 0:
             self.fsm.currentPhaseIndex=2
@@ -1640,6 +1700,121 @@ class MyApp(ShowBase):
             mayChange=True
         )
         return text_node
+
+    def toggle_campaign_map(self):
+        """Toggle between campaign map and battle view."""
+        if self.fsm.state == 'CampaignPhase':
+            # Return to whatever battle phase we were in
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+        else:
+            self.fsm.request('CampaignPhase')
+
+    def setup_campaign_map(self):
+        """Initialize campaign map components (hidden initially)."""
+        # Create campaign map terrain
+        self.campaign_map = CampaignMap(self)
+        self.campaign_map.load_heightmap("assets/textures/wals_dem_resized.png", height_scale=25)
+        self.campaign_map.set_texture("assets/textures/wals_tex_resized.png")
+        # Offset far to the right so it doesn't overlap the battle board
+        self.campaign_offset_x = 2000
+        self.campaign_map.set_position(self.campaign_offset_x - 1024 / 2, -2048 / 2, 0)
+
+        # Load country overlay model
+        self.country_model = self.loader.loadModel("models/blender/maps1.bam")
+        self.country_model.setPos(self.campaign_offset_x, 0, 0)
+        self.country_model.reparentTo(self.render)
+
+        # Create collision meshes for each country child
+        for child in self.country_model.getChildren():
+            self.campaign_map.contryCollision(self.world, child)
+            child.setTransparency(TransparencyAttrib.MAlpha)
+            child.setBin("transparent", 50)
+            child.setDepthTest(False)
+
+        # Initialize country FSM with shader-based coloring
+        self.country_fsm = CountryFSM(self.country_model, self)
+        self.country_fsm.request('None')
+
+        # Define country borders
+        self.country_fsm.setBorders("Plane.005", ["Plane.007", "Plane.006", "Plane.009"])
+        self.country_fsm.setBorders("Plane.006", ["Plane.005", "Plane.009", "Plane.010", "Plane.011", "Plane.007"])
+        self.country_fsm.setBorders("Plane.007", ["Plane.005", "Plane.006", "Plane.011", "Plane.008"])
+        self.country_fsm.setBorders("Plane.008", ["Plane.007", "Plane.011"])
+        self.country_fsm.setBorders("Plane.009", ["Plane.005", "Plane.006", "Plane.010", "Plane.013"])
+        self.country_fsm.setBorders("Plane.010", ["Plane.006", "Plane.009", "Plane.012", "Plane.013", "Plane.011"])
+        self.country_fsm.setBorders("Plane.011", ["Plane.006", "Plane.007", "Plane.008", "Plane.010", "Plane.012", "Plane.016"])
+        self.country_fsm.setBorders("Plane.012", ["Plane.010", "Plane.011", "Plane.013", "Plane.016", "Plane.015"])
+        self.country_fsm.setBorders("Plane.013", ["Plane.009", "Plane.010", "Plane.012", "Plane.015", "Plane.014"])
+        self.country_fsm.setBorders("Plane.014", ["Plane.013", "Plane.015"])
+        self.country_fsm.setBorders("Plane.015", ["Plane.012", "Plane.013", "Plane.014", "Plane.016", "Plane.017", "Plane.018"])
+        self.country_fsm.setBorders("Plane.016", ["Plane.011", "Plane.012", "Plane.015", "Plane.017"])
+        self.country_fsm.setBorders("Plane.017", ["Plane.015", "Plane.016", "Plane.019"])
+        self.country_fsm.setBorders("Plane.018", ["Plane.015"])
+        self.country_fsm.setBorders("Plane.019", ["Plane.017"])
+
+        # Load cloud shader
+        self.cloud_shader = Shader.load(
+            Shader.SL_GLSL,
+            vertex="cloud.vert.txt",
+            fragment="cloud.frag.txt"
+        )
+
+        # Create cloud plane above terrain
+        self.cloud_nodes = []
+        self.cloud_plane = self.loader.loadModel("models/box")
+        self.cloud_plane.setScale(1000, 2000, 1)
+        self.cloud_plane.setPos(self.campaign_offset_x - 512, -1024, 20)
+        self.cloud_plane.setShader(self.cloud_shader)
+        self.cloud_plane.setShaderInput("customTime", 0.0)
+        self.cloud_plane.setShaderInput("cloudColor", Vec4(1.0, 1.0, 1.0, 1.0))
+        self.cloud_plane.setShaderInput("skyColor", Vec4(0.5, 0.7, 0.9, 0.1))
+        self.cloud_plane.setShaderInput("cloudCoverage", 0.5)
+        self.cloud_plane.setTransparency(TransparencyAttrib.MAlpha)
+        self.cloud_plane.setBin("transparent", 100)
+        self.cloud_plane.reparentTo(self.render)
+        self.cloud_nodes.append(self.cloud_plane)
+
+        # Hide everything campaign-related initially
+        self.campaign_map.hide()
+        self.country_model.hide()
+        self.cloud_plane.hide()
+
+        print(f"Campaign map initialized. Available countries: {self.country_fsm.getAllCountries()}")
+
+    def update_campaign_terrain(self, task):
+        """Update terrain LOD for campaign map."""
+        self.campaign_map.update()
+        return task.cont
+
+    def update_cloud_time(self, task):
+        """Update time uniform for cloud shader nodes."""
+        for node in self.cloud_nodes:
+            node.setShaderInput("customTime", task.time * 0.1)
+        return task.cont
+
+    def campaign_mouse_click(self):
+        """Handle mouse click on campaign map for country selection."""
+        if self.mouseWatcherNode.hasMouse():
+            pMouse = self.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            self.camLens.extrude(pMouse, pFrom, pTo)
+            pFrom = render.getRelativePoint(self.cam, pFrom)
+            pTo = render.getRelativePoint(self.cam, pTo)
+            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
+
+            if result.hasHit():
+                hit_node_name = result.getNode().getName()
+                print(f"Campaign hit: {hit_node_name} at {result.getHitPos()}")
+                country_name = hit_node_name.split("_")[0]
+                self.country_fsm.selectCountry(country_name)
+            else:
+                print("No country hit")
+                self.country_fsm.deselectCountry()
+
+    def campaign_deselect(self):
+        """Handle right-click to deselect country on campaign map."""
+        self.country_fsm.deselectCountry()
 
     def setup_shader(self):
         #surface = self.render.find("**/ground")

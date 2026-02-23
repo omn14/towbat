@@ -304,7 +304,7 @@ class CampaignMap:
         
         # Create NodePath and attach to render
         collision_np = self.base.render.attachNewNode(collision_node)
-        collision_np.setTransform(contryNP.getTransform())
+        collision_np.setTransform(contryNP.getNetTransform())
         
         # Add to bullet world
         bullet_world.attachRigidBody(collision_node)
