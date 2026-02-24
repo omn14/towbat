@@ -3,11 +3,9 @@ Game State Tree Structure for Minimax Algorithm with Alpha-Beta Pruning
 For Warhammer-style turn-based strategy game
 """
 
-import copy
 import math
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
-import json
 
 
 @dataclass
@@ -82,15 +80,21 @@ class GameState:
         )
     
     def clone(self):
-        """Create a deep copy of this state"""
+        """Create a fast copy of this state (avoids slow copy.deepcopy)"""
+        new_units = []
+        for u in self.units:
+            new_u = u.copy()  # shallow dict copy
+            new_u['isInCombatWith'] = u['isInCombatWith'][:]
+            new_u['isInCombatFlank'] = u['isInCombatFlank'][:] if u['isInCombatFlank'] else []
+            new_units.append(new_u)
         return GameState(
             current_phase=self.current_phase,
             current_phase_index=self.current_phase_index,
             current_round=self.current_round,
             current_player=self.current_player,
             max_rounds=self.max_rounds,
-            units=copy.deepcopy(self.units),
-            score=self.score
+            units=new_units,
+            score=None,  # Don't carry cached score from parent
         )
     
     def get_unit_by_name(self, name: str) -> Optional[Dict]:
@@ -230,7 +234,7 @@ class MinimaxTree:
             if not node.children:
                 self._expand_node(node, 1)
             
-            for child in node.children:
+            for i, child in enumerate(node.children):
                 # Determine if child is maximizing based on which player moves next
                 child_maximizing = (child.state.current_player == 1)
                 eval_score = self.minimax(child, depth - 1, alpha, beta, child_maximizing)
@@ -243,7 +247,7 @@ class MinimaxTree:
                 
                 # Alpha-beta pruning
                 if beta <= alpha:
-                    self.nodes_pruned += len(node.children) - node.children.index(child) - 1
+                    self.nodes_pruned += len(node.children) - i - 1
                     break
             
             node.value = max_eval
@@ -258,7 +262,7 @@ class MinimaxTree:
             if not node.children:
                 self._expand_node(node, 1)
             
-            for child in node.children:
+            for i, child in enumerate(node.children):
                 # Determine if child is maximizing based on which player moves next
                 child_maximizing = (child.state.current_player == 1)
                 eval_score = self.minimax(child, depth - 1, alpha, beta, child_maximizing)
@@ -271,7 +275,7 @@ class MinimaxTree:
                 
                 # Alpha-beta pruning
                 if beta <= alpha:
-                    self.nodes_pruned += len(node.children) - node.children.index(child) - 1
+                    self.nodes_pruned += len(node.children) - i - 1
                     break
             
             node.value = min_eval
@@ -320,20 +324,34 @@ class MinimaxTree:
         phase = state.current_phase
         
         if phase == 'MovementPhase':
-            # Generate movement actions for each unit
+            # Generate smart movement actions: move toward each enemy + forward advance
+            enemy_units = state.get_player_units(3 - current_player)
             for unit in player_units:
                 if not unit['hasMovedThisTurn'] and unit['state'] != 'InCombat':
-                    # Sample movement positions (in real implementation, use pathfinding)
-                    for dx in [-5, 0, 5]:
-                        for dy in [-10, -5, 0, 5, 10]:
-                            if dx == 0 and dy == 0:
-                                continue
-                            actions.append(GameAction(
-                                'move',
-                                unit['name'],
-                                {'target_x': unit['position'][0] + dx, 
-                                 'target_y': unit['position'][1] + dy}
-                            ))
+                    move_dist = 8  # Standard movement distance
+                    
+                    # Move toward each enemy unit (much fewer branches than grid)
+                    for enemy in enemy_units:
+                        if enemy['nmodels'] <= 0:
+                            continue
+                        dx = enemy['position'][0] - unit['position'][0]
+                        dy = enemy['position'][1] - unit['position'][1]
+                        dist = max(1.0, math.sqrt(dx*dx + dy*dy))
+                        actions.append(GameAction(
+                            'move',
+                            unit['name'],
+                            {'target_x': unit['position'][0] + dx/dist * move_dist,
+                             'target_y': unit['position'][1] + dy/dist * move_dist}
+                        ))
+                    
+                    # Generic forward advance (toward enemy deployment zone)
+                    forward_dir = 1 if current_player == 1 else -1
+                    actions.append(GameAction(
+                        'move',
+                        unit['name'],
+                        {'target_x': unit['position'][0],
+                         'target_y': unit['position'][1] + forward_dir * move_dist}
+                    ))
             
             # Always can end phase
             actions.append(GameAction('end_phase', 'system', {}))
@@ -463,6 +481,7 @@ class MinimaxTree:
         """
         Evaluate a game state and return a score.
         Positive values favor player 1, negative favor player 2.
+        Lightweight version - avoids O(n^2) flanking calculations for speed.
         """
         if state.score is not None:
             return state.score
@@ -478,94 +497,9 @@ class MinimaxTree:
         
         score = p1_strength - p2_strength
         
-        # Positional bonuses - encourage both players to move towards center/enemy
-        # Player 1 starts at negative Y, should move towards positive Y (towards enemy)
-        # Player 2 starts at positive Y, should move towards negative Y (towards enemy)
-        p1_pos_bonus = 0
-        p2_pos_bonus = 0
-        for unit in player1_units:
-            p1_pos_bonus += unit['position'][1] * 5  # Higher Y = better for P1 (maximizing)
-            
-        
-        for unit in player2_units:
-            p2_pos_bonus += unit['position'][1] * 5  # Track P2's Y position
-        
-        # P2 minimizes score, so higher Y values should increase score (making it less desirable for P2)
-        # Lower Y values decrease score (making it more desirable for P2)
-        score += p1_pos_bonus + p2_pos_bonus
-
-        # Flanking bonus - reward units positioned to attack enemy flanks/rear
-        
-        p1_flank_bonus = 0
-        p2_flank_bonus = 0
-        
-        for unit in player1_units:
-            if unit['nmodels'] == 0 or unit['isInCombat']:
-                continue
-            unit_pos = unit['position']
-            
-            for enemy in player2_units:
-                if enemy['nmodels'] == 0 :
-                    continue
-                enemy_pos = enemy['position']
-                
-                # Calculate distance
-                dx = enemy_pos[0] - unit_pos[0]
-                dy = enemy_pos[1] - unit_pos[1]
-                distance = math.sqrt(dx*dx + dy*dy)
-                
-                if distance < 20:  # Within threatening range (charge distance)
-                    # Calculate angle from enemy facing to our unit
-                    direction_x = unit_pos[0] - enemy_pos[0]
-                    direction_y = unit_pos[1] - enemy_pos[1]
-                    angle_to_unit = math.degrees(math.atan2(direction_y, direction_x))
-                    relative_angle = angle_to_unit - enemy['heading']
-                    
-                    # Normalize to -180 to 180
-                    while relative_angle > 180:
-                        relative_angle -= 360
-                    while relative_angle < -180:
-                        relative_angle += 360
-                    
-                    if 45 < abs(relative_angle) < 135:  # Flank position
-                        p1_flank_bonus += 15
-                    elif abs(relative_angle) > 135:  # Rear position
-                        p1_flank_bonus += 30
-        
-        for unit in player2_units:
-            if unit['nmodels'] == 0 or unit['isInCombat']:
-                continue
-            unit_pos = unit['position']
-            
-            for enemy in player1_units:
-                if enemy['nmodels'] == 0 :
-                    continue
-                enemy_pos = enemy['position']
-                
-                # Calculate distance
-                dx = enemy_pos[0] - unit_pos[0]
-                dy = enemy_pos[1] - unit_pos[1]
-                distance = math.sqrt(dx*dx + dy*dy)
-                
-                if distance < 20:  # Within threatening range
-                    # Calculate angle from enemy facing to our unit
-                    direction_x = unit_pos[0] - enemy_pos[0]
-                    direction_y = unit_pos[1] - enemy_pos[1]
-                    angle_to_unit = math.degrees(math.atan2(direction_y, direction_x))
-                    relative_angle = angle_to_unit - enemy['heading']
-                    
-                    # Normalize to -180 to 180
-                    while relative_angle > 180:
-                        relative_angle -= 360
-                    while relative_angle < -180:
-                        relative_angle += 360
-                    
-                    if 45 < abs(relative_angle) < 135:  # Flank position
-                        p2_flank_bonus += 15
-                    elif abs(relative_angle) > 135:  # Rear position
-                        p2_flank_bonus += 30
-        
-        #score += p1_flank_bonus - p2_flank_bonus
+        # Lightweight positional bonuses
+        score += sum(u['position'][1] * 5 for u in player1_units)
+        score += sum(u['position'][1] * 5 for u in player2_units)
 
         # CRITICAL: Penalize unused action potential
         # If units haven't moved/attacked yet, that's wasted opportunity
@@ -596,9 +530,7 @@ class MinimaxTree:
         if False:  # Set to True to enable debug
             print(f"[Eval] P{state.current_player} | Score: {score:.1f} | "
                   f"Strength: {p1_strength-p2_strength:.0f} | "
-                  f"Flank: P1={p1_flank_bonus} P2={p2_flank_bonus} | "
-                  f"Unused P1/P2: {unused_p1_actions}/{unused_p2_actions} | "
-                  f"PosBonus: {p1_pos_bonus:.0f}+{p2_pos_bonus:.0f}")
+                  f"Unused P1/P2: {unused_p1_actions}/{unused_p2_actions}")
         
         return score
     

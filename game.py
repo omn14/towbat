@@ -64,7 +64,7 @@ import json
 from datetime import datetime
 
 loadPrcFileData('', 'show-frame-rate-meter true')
-loadPrcFileData('', 'want-pstats 1')
+#loadPrcFileData('', 'want-pstats 1')
 
 class gameFSM(FSM):
     def __init__(self, Game):

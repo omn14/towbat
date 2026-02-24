@@ -91,7 +91,7 @@ class EnhancedAI:
         
         # Find best move with time limit (iterative deepening)
         # Set time_limit based on game urgency (in seconds)
-        time_limit = 60.0  # Adjust as needed
+        time_limit = 30.0  # 10 seconds — iterative deepening returns best found so far
         best_action, expected_value = self.tree.find_best_move_timed(state, time_limit)
         
         #self.tree.print_tree(self.tree.root.best_child)  # Optional: Print the tree for debugging

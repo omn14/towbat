@@ -6,7 +6,6 @@ Includes: iterative deepening, transposition tables, move ordering, quiescence s
 from typing import Dict, List, Tuple, Optional
 from gameStateTree import GameState, GameStateNode, GameAction, MinimaxTree
 import time
-import hashlib
 import json
 
 
@@ -22,18 +21,13 @@ class TranspositionTable:
         self.hits = 0
         self.misses = 0
     
-    def _hash_state(self, state: GameState) -> str:
-        """Create a hash of the game state"""
-        # Create deterministic string representation
-        state_str = f"{state.current_phase}_{state.current_player}_"
-        
-        # Sort units by name for consistency
-        sorted_units = sorted(state.units, key=lambda u: u['name'])
-        for unit in sorted_units:
-            state_str += f"{unit['name']}:{unit['position']}:{unit['nmodels']}:"
-        
-        # Hash it
-        return hashlib.md5(state_str.encode()).hexdigest()
+    def _hash_state(self, state: GameState) -> int:
+        """Create a fast structural hash of the game state (replaces slow MD5)"""
+        parts = [state.current_phase, state.current_player]
+        for unit in sorted(state.units, key=lambda u: u['name']):
+            parts.append((unit['name'], unit['position'], unit['nmodels'],
+                          unit['hasMovedThisTurn'], unit['hasAttackedThisTurn']))
+        return hash(tuple(parts))
     
     def store(self, state: GameState, score: float, depth: int, flag: str = 'exact'):
         """
@@ -228,6 +222,20 @@ class OptimizedMinimaxTree(MinimaxTree):
             node.value = score
             return score
         
+        # Null-move pruning: if skipping our turn still causes a cutoff, prune
+        if depth >= 3 and not self._is_volatile(node.state):
+            null_state = self._apply_action(node.state, GameAction('end_phase', 'system', {}))
+            null_node = GameStateNode(null_state, depth=node.depth + 1)
+            null_maximizing = (null_state.current_player == 1)
+            null_score = self.minimax_optimized(
+                null_node, depth - 3, alpha, beta, null_maximizing,
+                is_initial_turn, return_count
+            )
+            if maximizing and null_score >= beta:
+                return beta
+            elif not maximizing and null_score <= alpha:
+                return alpha
+        
         # Generate children if needed
         if not node.children:
             self._expand_node(node, 1)
@@ -252,7 +260,7 @@ class OptimizedMinimaxTree(MinimaxTree):
         best_child = None
         flag = 'upperbound'
         
-        for child in node.children:
+        for i, child in enumerate(node.children):
             if self.search_cancelled:
                 break
             
@@ -275,7 +283,7 @@ class OptimizedMinimaxTree(MinimaxTree):
             
             if beta <= alpha:
                 flag = 'lowerbound'
-                self.nodes_pruned += len(node.children) - node.children.index(child) - 1
+                self.nodes_pruned += len(node.children) - i - 1
                 break
         
         if max_eval > alpha and flag != 'lowerbound':
@@ -298,7 +306,7 @@ class OptimizedMinimaxTree(MinimaxTree):
         best_child = None
         flag = 'lowerbound'
         
-        for child in node.children:
+        for i, child in enumerate(node.children):
             if self.search_cancelled:
                 break
             
@@ -321,7 +329,7 @@ class OptimizedMinimaxTree(MinimaxTree):
             
             if beta <= alpha:
                 flag = 'upperbound'
-                self.nodes_pruned += len(node.children) - node.children.index(child) - 1
+                self.nodes_pruned += len(node.children) - i - 1
                 break
         
         if min_eval < beta and flag != 'upperbound':
@@ -374,20 +382,9 @@ class OptimizedMinimaxTree(MinimaxTree):
         return alpha if maximizing else beta
     
     def _is_volatile(self, state: GameState) -> bool:
-        """Check if position is volatile (in combat, about to attack, etc.)"""
-        # Position is volatile if units are in combat
-        for unit in state.units:
-            if unit['isInCombat']:
-                return True
-            # Or if units are very close to each other
-            for other in state.units:
-                if unit['player'] != other['player']:
-                    dx = unit['position'][0] - other['position'][0]
-                    dy = unit['position'][1] - other['position'][1]
-                    dist = (dx**2 + dy**2)**0.5
-                    if dist < 5:  # Very close
-                        return True
-        return False
+        """Check if position is volatile (in combat). Simplified O(n) check."""
+        # Only check combat status - proximity is already handled by _apply_action
+        return any(u['isInCombat'] for u in state.units)
     
     def _generate_tactical_actions(self, state: GameState) -> List[GameAction]:
         """Generate only tactical/capturing moves for quiescence search"""
