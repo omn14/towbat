@@ -164,7 +164,7 @@ class EnhancedAI:
             # Shoot at weakest enemy
             for unit in player_units:
                 
-                if not unit['hasAttackedThisTurn']:
+                if not unit['hasAttackedThisTurn'] and unit['ranged']:
                     weakest = min(enemy_units, key=lambda e: e['nmodels'])
                     return GameAction('shoot', unit['name'], {'target': weakest['name']})
         
@@ -199,7 +199,7 @@ class EnhancedAI:
             # Shoot at nearest threat
             enemy_units = state.get_player_units(3 - self.player_num)
             for unit in player_units:
-                if not unit['hasAttackedThisTurn']:
+                if not unit['hasAttackedThisTurn'] and unit['ranged']:
                     nearest = min(enemy_units, 
                         key=lambda e: self._distance(unit['position'], e['position']))
                     return GameAction('shoot', unit['name'], {'target': nearest['name']})
@@ -214,7 +214,7 @@ class EnhancedAI:
         
         if state.current_phase == 'ShootingPhase':
             for unit in player_units:
-                if not unit['hasAttackedThisTurn']:
+                if not unit['hasAttackedThisTurn'] and unit['ranged']:
                     # Target most valuable enemy
                     best_target = max(enemy_units, 
                         key=lambda e: e['nmodels'] * e['A'])
@@ -255,6 +255,8 @@ class EnhancedAI:
             unit = self._get_unit_by_name(action.unit_name)
             target = self._get_unit_by_name(action.parameters['target'])
             if unit and target:
+                # Mark the unit as having attacked so it can't shoot again this turn
+                unit.hasAttackedThisTurn = True
                 # Execute shooting
                 # Example: self.game.shootAt(unit, target)
                 pass
@@ -263,6 +265,8 @@ class EnhancedAI:
             unit = self._get_unit_by_name(action.unit_name)
             target = self._get_unit_by_name(action.parameters['target'])
             if unit and target:
+                # Mark the unit as having attacked so it can't attack again this turn
+                unit.hasAttackedThisTurn = True
                 # Execute melee attack
                 # Example: self.game.meleeAttack(unit, target)
                 pass

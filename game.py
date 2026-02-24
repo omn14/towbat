@@ -617,7 +617,7 @@ class MyApp(ShowBase):
         self.units.append(self.direWolves)
         self.direWolves.bodyNP.setPos(-30,-20,0)
 
-        self.load_player1_army("my_army.json")
+        #self.load_player1_army("my_army.json")
 
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])

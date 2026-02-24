@@ -314,92 +314,163 @@ class MinimaxTree:
     
     def _generate_possible_actions(self, state: GameState) -> List[GameAction]:
         """
-        Generate all possible legal actions from current state.
-        This is game-specific and needs to be customized.
+        Generate possible actions from current state using SINGLE-UNIT SELECTION.
+        
+        Instead of generating actions for ALL units (which explodes combinatorially),
+        we pick the single highest-priority unit that hasn't acted yet, and only
+        generate its actions. After it acts, the next call picks the next unit.
+        
+        This changes branching from O(all_units × moves_per_unit) to O(moves_per_unit).
+        With 5 units × 4 moves each: old = 20 branches, new = 4 branches per node.
         """
         actions = []
         current_player = state.current_player
         player_units = state.get_player_units(current_player)
+        enemy_units = state.get_player_units(3 - current_player)
         
         phase = state.current_phase
         
         if phase == 'MovementPhase':
-            # Generate smart movement actions: move toward each enemy + forward advance
-            enemy_units = state.get_player_units(3 - current_player)
-            for unit in player_units:
-                if not unit['hasMovedThisTurn'] and unit['state'] != 'InCombat':
-                    move_dist = 8  # Standard movement distance
+            # Find the single highest-priority unit that still needs to move
+            best_unit = self._pick_most_relevant_unit(
+                [u for u in player_units if not u['hasMovedThisTurn'] and u['state'] != 'InCombat'],
+                enemy_units
+            )
+            
+            if best_unit:
+                move_dist = 8  # Standard movement distance
+                
+                # Move toward each nearby/relevant enemy
+                for enemy in enemy_units:
+                    if enemy['nmodels'] <= 0:
+                        continue
+                    dx = enemy['position'][0] - best_unit['position'][0]
+                    dy = enemy['position'][1] - best_unit['position'][1]
+                    dist = max(1.0, math.sqrt(dx*dx + dy*dy))
                     
-                    # Move toward each enemy unit (much fewer branches than grid)
-                    for enemy in enemy_units:
-                        if enemy['nmodels'] <= 0:
-                            continue
-                        dx = enemy['position'][0] - unit['position'][0]
-                        dy = enemy['position'][1] - unit['position'][1]
-                        dist = max(1.0, math.sqrt(dx*dx + dy*dy))
-                        actions.append(GameAction(
-                            'move',
-                            unit['name'],
-                            {'target_x': unit['position'][0] + dx/dist * move_dist,
-                             'target_y': unit['position'][1] + dy/dist * move_dist}
-                        ))
+                    # Skip enemies that are very far away (irrelevant targets)
+                    if dist > 60:
+                        continue
                     
-                    # Generic forward advance (toward enemy deployment zone)
-                    forward_dir = 1 if current_player == 1 else -1
                     actions.append(GameAction(
                         'move',
-                        unit['name'],
-                        {'target_x': unit['position'][0],
-                         'target_y': unit['position'][1] + forward_dir * move_dist}
+                        best_unit['name'],
+                        {'target_x': best_unit['position'][0] + dx/dist * move_dist,
+                         'target_y': best_unit['position'][1] + dy/dist * move_dist}
                     ))
+                
+                # Generic forward advance (toward enemy deployment zone)
+                forward_dir = 1 if current_player == 1 else -1
+                actions.append(GameAction(
+                    'move',
+                    best_unit['name'],
+                    {'target_x': best_unit['position'][0],
+                     'target_y': best_unit['position'][1] + forward_dir * move_dist}
+                ))
             
             # Always can end phase
             actions.append(GameAction('end_phase', 'system', {}))
         
         elif phase == 'ShootingPhase':
-            # Generate shooting actions
-            enemy_units = state.get_player_units(3 - current_player)
-            for unit in player_units:
-                if not unit['hasAttackedThisTurn'] and unit['ranged']:
-                    for enemy in enemy_units:
+            # Find the single best ranged unit that hasn't shot yet
+            ranged_units = [u for u in player_units if not u['hasAttackedThisTurn'] and u['ranged']]
+            best_unit = self._pick_most_relevant_unit(ranged_units, enemy_units)
+            
+            if best_unit:
+                for enemy in enemy_units:
+                    if enemy['nmodels'] > 0:
                         actions.append(GameAction(
                             'shoot',
-                            unit['name'],
+                            best_unit['name'],
                             {'target': enemy['name']}
                         ))
             
             actions.append(GameAction('end_phase', 'system', {}))
         
         elif phase == 'CombatPhase':
-            # Generate combat actions
-            for unit in player_units:
-                if unit['isInCombat'] and not unit['hasAttackedThisTurn']:
-                    for enemy_name in unit['isInCombatWith']:
-                        actions.append(GameAction(
-                            'attack',
-                            unit['name'],
-                            {'target': enemy_name}
-                        ))
+            # Find the single best combat unit that hasn't attacked yet
+            combat_units = [u for u in player_units if u['isInCombat'] and not u['hasAttackedThisTurn']]
+            best_unit = self._pick_most_relevant_unit(combat_units, enemy_units)
+            
+            if best_unit:
+                for enemy_name in best_unit['isInCombatWith']:
+                    actions.append(GameAction(
+                        'attack',
+                        best_unit['name'],
+                        {'target': enemy_name}
+                    ))
             
             actions.append(GameAction('end_phase', 'system', {}))
         
         elif phase == 'StrategyPhase':
-            # Generate strategy actions (rallying, spell casting, etc.)
             actions.append(GameAction('end_phase', 'system', {}))
         
-        # IMPORTANT: Always put end_phase at the end of the list
-        # This ensures tactical actions are evaluated first in minimax
+        # Put end_phase last so tactical actions are evaluated first
         end_phase_actions = [a for a in actions if a.action_type == 'end_phase']
         other_actions = [a for a in actions if a.action_type != 'end_phase']
         actions = other_actions + end_phase_actions
         
         # Limit action space for performance
-        #print(len(actions), "possible actions generated")
-        if len(actions) > 20:
-            # Prune to most promising actions using heuristics
-            actions = self._prune_actions(state, actions)[:20]
+        if len(actions) > 12:
+            actions = self._prune_actions(state, actions)[:12]
         
         return actions
+    
+    def _pick_most_relevant_unit(self, candidates: List[Dict], enemy_units: List[Dict]) -> Optional[Dict]:
+        """
+        Pick the single most relevant/urgent unit to act next.
+        
+        Priority order:
+        1. Units already in combat (must fight)
+        2. Units closest to an enemy (most impactful moves)
+        3. Strongest units (biggest impact)
+        
+        Units far from all enemies are deprioritized — their moves matter less.
+        """
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        
+        living_enemies = [e for e in enemy_units if e['nmodels'] > 0]
+        if not living_enemies:
+            return candidates[0]
+        
+        scored = []
+        for unit in candidates:
+            priority = 0
+            
+            # Highest priority: already in combat
+            if unit['isInCombat']:
+                priority += 1000
+            
+            # Distance to nearest enemy (closer = higher priority)
+            min_dist = float('inf')
+            for enemy in living_enemies:
+                dx = enemy['position'][0] - unit['position'][0]
+                dy = enemy['position'][1] - unit['position'][1]
+                dist = math.sqrt(dx*dx + dy*dy)
+                min_dist = min(min_dist, dist)
+            
+            # Invert distance: close units get high score, far units low
+            # Units within charge range (~10) get big bonus
+            if min_dist < 10:
+                priority += 500
+            elif min_dist < 20:
+                priority += 200
+            elif min_dist < 40:
+                priority += 50
+            # Units > 40 away get minimal priority (their exact move matters less)
+            
+            priority += 100.0 / max(1.0, min_dist)
+            
+            # Tiebreak: stronger units first (more impactful)
+            priority += unit['nmodels'] * unit['A'] * unit['S'] * 0.1
+            
+            scored.append((priority, unit))
+        
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return scored[0][1]
     
     def _apply_action(self, state: GameState, action: GameAction) -> GameState:
         """
@@ -554,24 +625,29 @@ class MinimaxTree:
     
     def _prune_actions(self, state: GameState, actions: List[GameAction]) -> List[GameAction]:
         """Prune less promising actions using heuristics"""
-        # Sort actions by estimated value
+        enemy_units = state.get_player_units(3 - state.current_player)
+        living_enemies = [e for e in enemy_units if e['nmodels'] > 0]
+        
         scored_actions = []
         for action in actions:
-            # Quick heuristic scoring
             score = 0
             if action.action_type == 'attack':
                 score = 100  # Prioritize attacks
             elif action.action_type == 'shoot':
                 score = 80  # Prioritize shooting
             elif action.action_type == 'move':
-                # Prioritize moving towards enemy
-                target_x = action.parameters.get('target_x', 0)
-                target_y = action.parameters.get('target_y', 0)
-                # Score based on forward movement
-                score = 50 #+ target_y #abs(target_y)
+                # Score by how close the move gets to nearest enemy
+                tx = action.parameters.get('target_x', 0)
+                ty = action.parameters.get('target_y', 0)
+                if living_enemies:
+                    min_dist = min(
+                        math.sqrt((e['position'][0]-tx)**2 + (e['position'][1]-ty)**2)
+                        for e in living_enemies
+                    )
+                    score = 50 + max(0, 30 - min_dist)  # Closer = higher
+                else:
+                    score = 50
             elif action.action_type == 'end_phase':
-                # ALWAYS evaluate end_phase LAST
-                # This ensures tactical moves are tried first
                 score = -1000
             scored_actions.append((score, action))
         
