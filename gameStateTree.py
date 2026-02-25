@@ -6,6 +6,10 @@ For Warhammer-style turn-based strategy game
 import math
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
+from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole, MATCHUP_TABLE, FLANK_BONUS, REAR_BONUS
+
+# Module-level classifier singleton (caches classifications across calls)
+_classifier = UnitTypeClassifier()
 
 
 @dataclass
@@ -62,12 +66,27 @@ class GameState:
                 'armor_save': unit.unit.model.armor_save,
                 'charging': unit.unit.model.charging,
                 'ranged' : any(unit.unit.model.weapons.get(weapon).get('tag') == 'ranged' for weapon in unit.unit.model.weapons),
-                    
                 
+                # Special rule flags for classifier
+                'is_unbreakable': any(r.get('Unbreakable', False) for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'is_stubborn': any('stubborn' in r.get('name', '').lower() for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'has_regen': any(r.get('regen') for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'has_mount': any(r.get('tag') == 'mount' for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'is_flying': any('fly' in r.get('name', '').lower() for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'has_charge_bonus': any(r.get('charge') for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'M': int(unit.unit.model.characteristics.get('M', 4)) if unit.unit.model.characteristics.get('M', '4') not in ('-', '0', '') else 4,
+                'W': int(unit.unit.model.characteristics.get('W', 1)),
+                    
                 # Combat relationships (store indices instead of references)
                 'isInCombatWith': [u.unitName for u in unit.isInCombatWith],
                 'isInCombatFlank': unit.isInCombatFlank.copy() if unit.isInCombatFlank else []
             }
+            
+            # Classify unit type and store on the dict
+            main_type, support_role = _classifier.classify_from_dict(unit_data)
+            unit_data['unit_type'] = main_type.value
+            unit_data['support_role'] = support_role.value
+            
             units.append(unit_data)
         
         return cls(
@@ -471,6 +490,18 @@ class MinimaxTree:
             # Tiebreak: stronger units first (more impactful)
             priority += unit['nmodels'] * unit['A'] * unit['S'] * 0.1
             
+            # Unit type priority bonuses
+            u_type = unit.get('unit_type', 'basic')
+            u_role = unit.get('support_role', 'none')
+            if u_type == 'hammer' and min_dist < 15:
+                priority += 300  # Hammer units near enemies are highest priority (charge!)
+            elif u_type == 'anvil':
+                priority += 50   # Anvils are less urgent to move (they hold anyway)
+            elif u_type == 'cannon_fodder':
+                priority += 30   # Fodder is low priority for movement
+            if u_role == 'fast':
+                priority += 150  # Fast units should maneuver for flanks
+            
             scored.append((priority, unit))
         
         scored.sort(reverse=True, key=lambda x: x[0])
@@ -512,6 +543,14 @@ class MinimaxTree:
             
             priority += 100.0 / max(1.0, min_dist)
             priority += unit['nmodels'] * unit['A'] * unit['S'] * 0.1
+            
+            # Unit type bonuses for top-N selection
+            u_type = unit.get('unit_type', 'basic')
+            u_role = unit.get('support_role', 'none')
+            if u_type == 'hammer':
+                priority += 200
+            if u_role == 'fast':
+                priority += 100
             
             scored.append((priority, unit))
         
@@ -610,17 +649,80 @@ class MinimaxTree:
         player1_units = state.get_player_units(1)
         player2_units = state.get_player_units(2)
         
-        # Quick evaluation based on army strength
-        p1_strength = sum(u['nmodels'] * u['A'] * u['S'] 
-                         for u in player1_units)
-        p2_strength = sum(u['nmodels'] * u['A'] * u['S'] 
-                         for u in player2_units)
+        # ── Type-weighted army strength ──
+        # Each unit type has a base value multiplier reflecting its strategic worth
+        TYPE_VALUE = {
+            'hammer': 2.5,
+            'anvil': 1.6,
+            'superior': 1.3,
+            'basic': 1.0,
+            'cannon_fodder': 0.5,
+        }
+
+        def _unit_value(u):
+            """Value a single unit incorporating its type."""
+            base = u['nmodels'] * u['A'] * u['S']
+            type_mult = TYPE_VALUE.get(u.get('unit_type', 'basic'), 1.0)
+            return base * type_mult
+
+        p1_strength = sum(_unit_value(u) for u in player1_units)
+        p2_strength = sum(_unit_value(u) for u in player2_units)
         
         score = p1_strength - p2_strength
         
-        # Lightweight positional bonuses
+        # ── Matchup bonuses: reward good combat pairings ──
+        for u in player1_units:
+            if u['isInCombat'] and u['nmodels'] > 0:
+                u_type = UnitType(u.get('unit_type', 'basic'))
+                for enemy_name in u['isInCombatWith']:
+                    enemy = state.get_unit_by_name(enemy_name)
+                    if enemy and enemy['nmodels'] > 0:
+                        e_type = UnitType(enemy.get('unit_type', 'basic'))
+                        matchup = MATCHUP_TABLE[u_type][e_type]
+                        # Check flanking
+                        is_flanking = 'flank' in (u.get('isInCombatFlank') or [])
+                        is_rear = 'rear' in (u.get('isInCombatFlank') or [])
+                        if is_rear:
+                            matchup += REAR_BONUS
+                        elif is_flanking:
+                            matchup += FLANK_BONUS
+                        score += (matchup - 1.0) * 15  # reward favorable matchups
+
+        for u in player2_units:
+            if u['isInCombat'] and u['nmodels'] > 0:
+                u_type = UnitType(u.get('unit_type', 'basic'))
+                for enemy_name in u['isInCombatWith']:
+                    enemy = state.get_unit_by_name(enemy_name)
+                    if enemy and enemy['nmodels'] > 0:
+                        e_type = UnitType(enemy.get('unit_type', 'basic'))
+                        matchup = MATCHUP_TABLE[u_type][e_type]
+                        is_flanking = 'flank' in (u.get('isInCombatFlank') or [])
+                        is_rear = 'rear' in (u.get('isInCombatFlank') or [])
+                        if is_rear:
+                            matchup += REAR_BONUS
+                        elif is_flanking:
+                            matchup += FLANK_BONUS
+                        score -= (matchup - 1.0) * 15  # P2 good matchup hurts P1
+
+        # ── Positional bonuses ──
         score += sum(u['position'][1] * 5 for u in player1_units)
         score += sum(u['position'][1] * 5 for u in player2_units)
+
+        # ── Fast unit flanking threat bonus ──
+        for u in player1_units:
+            if u.get('support_role') == 'fast' and not u['isInCombat'] and u['nmodels'] > 0:
+                score += 8  # latent flanking threat
+        for u in player2_units:
+            if u.get('support_role') == 'fast' and not u['isInCombat'] and u['nmodels'] > 0:
+                score -= 8
+
+        # ── Shooting unit value: ranged units that haven't fired ──
+        for u in player1_units:
+            if u.get('support_role') == 'shooting' and not u['hasAttackedThisTurn'] and u['nmodels'] > 0:
+                score += 5
+        for u in player2_units:
+            if u.get('support_role') == 'shooting' and not u['hasAttackedThisTurn'] and u['nmodels'] > 0:
+                score -= 5
 
         # CRITICAL: Penalize unused action potential
         # If units haven't moved/attacked yet, that's wasted opportunity

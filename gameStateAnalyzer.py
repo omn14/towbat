@@ -1,8 +1,14 @@
+from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
+from strategyAdvisor import StrategyAdvisor
+
+
 class GameStateAnalyzer:
     """Heuristic functions to evaluate the current game state"""
     
     def __init__(self, game):
         self.game = game
+        self.classifier = UnitTypeClassifier()
+        self.advisor = StrategyAdvisor(self.classifier)
     
     def calculate_army_strength(self, player_units):
         """
@@ -234,7 +240,7 @@ class GameStateAnalyzer:
     
     def suggest_strategy(self, player_num):
         """
-        Suggest strategic approach based on current state.
+        Suggest strategic approach based on current state and unit type composition.
         """
         evaluation = self.evaluate_overall_state(player_num)
         score = evaluation['total_score']
@@ -242,19 +248,61 @@ class GameStateAnalyzer:
         
         player_units = self.game.player1Units if player_num == 1 else self.game.player2Units
         
+        # Classify all friendly unit models
+        models = [u.unit.model for u in player_units if not u.bodyNP.isEmpty()]
+        compositions = self.classifier.classify_army(models)
+        
+        # Get top strategy recommendation
+        top_strats = self.advisor.recommend_strategies(models, from_dict=False, top_n=1)
+        strat_hint = ""
+        if top_strats:
+            strat, fit = top_strats[0]
+            strat_hint = f" [{strat.name} ({fit:.0%} fit)]"
+        
         if score > 50:
-            return "AGGRESSIVE: Press the advantage with charges and flanking maneuvers"
+            return f"AGGRESSIVE: Press the advantage with charges and flanking maneuvers{strat_hint}"
         elif score > 0:
-            return "OPPORTUNISTIC: Seek favorable engagements, avoid unfavorable trades"
+            return f"OPPORTUNISTIC: Seek favorable engagements, avoid unfavorable trades{strat_hint}"
         elif metrics['momentum'] > 0:
-            return "DEFENSIVE: Consolidate position, use terrain and formations"
+            return f"DEFENSIVE: Consolidate position, use terrain and formations{strat_hint}"
         else:
             # Count fleeing units
             fleeing_count = sum(1 for u in player_units if u.state == "IsFleeing")
             if fleeing_count > len(player_units) / 3:
-                return "DESPERATE: Rally fleeing units, defensive formations critical"
+                return f"DESPERATE: Rally fleeing units, defensive formations critical{strat_hint}"
             else:
-                return "CAUTIOUS: Minimize losses, look for rally opportunities"
+                return f"CAUTIOUS: Minimize losses, look for rally opportunities{strat_hint}"
+
+    def get_unit_classifications(self, player_num):
+        """
+        Return unit type classifications for all of a player's units.
+        Returns: {unit_name: (UnitType, SupportRole)}
+        """
+        player_units = self.game.player1Units if player_num == 1 else self.game.player2Units
+        result = {}
+        for u in player_units:
+            if u.bodyNP.isEmpty():
+                continue
+            main_t, support_r = self.classifier.classify_from_model(u.unit.model)
+            label = self.classifier.get_type_label(main_t, support_r)
+            result[u.unitName] = {
+                'type': main_t,
+                'role': support_r,
+                'label': label,
+            }
+        return result
+
+    def get_strategy_report(self, player_num):
+        """
+        Generate a full strategy report including matchup analysis.
+        """
+        player_units = self.game.player1Units if player_num == 1 else self.game.player2Units
+        enemy_units = self.game.player2Units if player_num == 1 else self.game.player1Units
+        
+        my_models = [u.unit.model for u in player_units if not u.bodyNP.isEmpty()]
+        enemy_models = [u.unit.model for u in enemy_units if not u.bodyNP.isEmpty()]
+        
+        return self.advisor.full_report(my_models, enemy_models, from_dict=False)
 
 
 # Usage in game.py:

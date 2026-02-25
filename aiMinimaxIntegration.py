@@ -266,7 +266,7 @@ class EnhancedAI:
             target = self._get_unit_by_name(action.parameters['target'])
             if unit and target:
                 # Mark the unit as having attacked so it can't attack again this turn
-                unit.hasAttackedThisTurn = True
+                #unit.hasAttackedThisTurn = True
                 # Execute melee attack
                 # Example: self.game.meleeAttack(unit, target)
                 pass
@@ -294,11 +294,15 @@ class EnhancedAI:
         # Make decision
         action = self.make_decision()
         
-        # Execute action
-        self.execute_action(action)
+        
 
         visualizer = TreeVisualizer(self.tree)
         visualizer.print_best_path()
+
+        print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
+
+        # Execute action
+        self.execute_action(action)
 
         #visualizer.print_tree_ascii(max_depth=19)
 
