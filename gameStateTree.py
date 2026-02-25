@@ -331,7 +331,7 @@ class MinimaxTree:
         phase = state.current_phase
         
         # Max units the AI will consider moving (limits branching, not actual gameplay)
-        max_units_to_consider = 3
+        max_units_to_consider = 4
         
         if phase == 'MovementPhase':
             # Filter to only the top N most relevant unmoved units
@@ -527,8 +527,9 @@ class MinimaxTree:
         
         if action.action_type == 'move':
             unit = new_state.get_unit_by_name(action.unit_name)
-            
+            maxMovesAllowed = 2
             if unit and not unit['isInCombat'] and not unit['hasMovedThisTurn']:
+                
                 dx = action.parameters['target_x'] - unit['position'][0]
                 dy = action.parameters['target_y'] - unit['position'][1]
                 unit['position'] = (
@@ -541,7 +542,10 @@ class MinimaxTree:
                 new_heading = math.degrees(math.atan2(dy, dx))
                 unit['heading'] = new_heading
                 unit['hasMovedThisTurn'] = True
-
+                already_moved = sum(1 for u in new_state.units if u['hasMovedThisTurn'])
+                if already_moved >= maxMovesAllowed:
+                    for u in new_state.units:
+                        u['hasMovedThisTurn'] = True  # Force all units to have moved to encourage end phase
                 # Check if unit is within 5 units of an enemy unit
                 enemy_units = new_state.get_player_units(3 - unit['player'])
                 for enemy in enemy_units:
@@ -564,7 +568,7 @@ class MinimaxTree:
                 # Simulate combat (simplified)
                 unit['hasAttackedThisTurn'] = True
                 # Rough damage calculation
-                damage = max(0, int(unit['nmodels'] * 0.1))
+                damage = max(0, int(unit['nmodels'] * 0.1))+1
                 target['nmodels'] = max(0, target['nmodels'] - damage)
         
         elif action.action_type == 'attack':
