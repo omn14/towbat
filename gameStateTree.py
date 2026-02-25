@@ -330,27 +330,36 @@ class MinimaxTree:
         
         phase = state.current_phase
         
+        # Max units allowed to move per turn (limits branching in the tree)
+        max_moves_per_turn = 3
+        
         if phase == 'MovementPhase':
-            # Find the single highest-priority unit that still needs to move
-            best_unit = self._pick_most_relevant_unit(
-                [u for u in player_units if not u['hasMovedThisTurn'] and u['state'] != 'InCombat'],
-                enemy_units
-            )
+            # Count how many of this player's units have already moved
+            already_moved = sum(1 for u in player_units if u['hasMovedThisTurn'])
+            
+            # Only generate move actions if under the limit
+            best_unit = None
+            if already_moved < max_moves_per_turn:
+                best_unit = self._pick_most_relevant_unit(
+                    [u for u in player_units if not u['hasMovedThisTurn'] and u['state'] != 'InCombat'],
+                    enemy_units
+                )
             
             if best_unit:
                 move_dist = 8  # Standard movement distance
                 
-                # Move toward each nearby/relevant enemy
-                for enemy in enemy_units:
-                    if enemy['nmodels'] <= 0:
-                        continue
+                # Only consider the 3 closest enemies (limits branching)
+                living_enemies = [e for e in enemy_units if e['nmodels'] > 0]
+                living_enemies.sort(key=lambda e: (
+                    (e['position'][0] - best_unit['position'][0])**2 +
+                    (e['position'][1] - best_unit['position'][1])**2
+                ))
+                closest_enemies = living_enemies[:3]
+                
+                for enemy in closest_enemies:
                     dx = enemy['position'][0] - best_unit['position'][0]
                     dy = enemy['position'][1] - best_unit['position'][1]
                     dist = max(1.0, math.sqrt(dx*dx + dy*dy))
-                    
-                    # Skip enemies that are very far away (irrelevant targets)
-                    if dist > 60:
-                        continue
                     
                     actions.append(GameAction(
                         'move',
