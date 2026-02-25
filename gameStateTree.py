@@ -330,20 +330,15 @@ class MinimaxTree:
         
         phase = state.current_phase
         
-        # Max units allowed to move per turn (limits branching in the tree)
-        max_moves_per_turn = 3
+        # Max units the AI will consider moving (limits branching, not actual gameplay)
+        max_units_to_consider = 3
         
         if phase == 'MovementPhase':
-            # Count how many of this player's units have already moved
-            already_moved = sum(1 for u in player_units if u['hasMovedThisTurn'])
+            # Filter to only the top N most relevant unmoved units
+            unmoved = [u for u in player_units if not u['hasMovedThisTurn'] and u['state'] != 'InCombat']
+            candidates = self._pick_top_n_units(unmoved, enemy_units, max_units_to_consider)
             
-            # Only generate move actions if under the limit
-            best_unit = None
-            if already_moved < max_moves_per_turn:
-                best_unit = self._pick_most_relevant_unit(
-                    [u for u in player_units if not u['hasMovedThisTurn'] and u['state'] != 'InCombat'],
-                    enemy_units
-                )
+            best_unit = self._pick_most_relevant_unit(candidates, enemy_units)
             
             if best_unit:
                 move_dist = 8  # Standard movement distance
@@ -480,6 +475,48 @@ class MinimaxTree:
         
         scored.sort(reverse=True, key=lambda x: x[0])
         return scored[0][1]
+    
+    def _pick_top_n_units(self, candidates: List[Dict], enemy_units: List[Dict], n: int) -> List[Dict]:
+        """
+        Return the top N most relevant units from candidates.
+        Uses the same priority logic as _pick_most_relevant_unit but returns
+        multiple units. Units outside top N are ignored by the AI search tree,
+        reducing branching without limiting actual gameplay.
+        """
+        if len(candidates) <= n:
+            return candidates
+        
+        living_enemies = [e for e in enemy_units if e['nmodels'] > 0]
+        if not living_enemies:
+            return candidates[:n]
+        
+        scored = []
+        for unit in candidates:
+            priority = 0
+            if unit['isInCombat']:
+                priority += 1000
+            
+            min_dist = float('inf')
+            for enemy in living_enemies:
+                dx = enemy['position'][0] - unit['position'][0]
+                dy = enemy['position'][1] - unit['position'][1]
+                dist = math.sqrt(dx*dx + dy*dy)
+                min_dist = min(min_dist, dist)
+            
+            if min_dist < 10:
+                priority += 500
+            elif min_dist < 20:
+                priority += 200
+            elif min_dist < 40:
+                priority += 50
+            
+            priority += 100.0 / max(1.0, min_dist)
+            priority += unit['nmodels'] * unit['A'] * unit['S'] * 0.1
+            
+            scored.append((priority, unit))
+        
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [unit for _, unit in scored[:n]]
     
     def _apply_action(self, state: GameState, action: GameAction) -> GameState:
         """
