@@ -5,18 +5,38 @@ import requests
 
 import os
 
+# Base directory for unit characteristic JSON files, organised by faction
+ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
+
+
+def _find_json_file(filename: str) -> str:
+    """Search army_units/ subfolders for a characteristics JSON file.
+    Returns the full path if found, otherwise returns the filename as-is
+    (for legacy/fallback behaviour)."""
+    if os.path.isfile(filename):
+        return filename
+    for root, _dirs, files in os.walk(ARMY_UNITS_DIR):
+        if filename in files:
+            return os.path.join(root, filename)
+    return filename  # fallback: will trigger fetch from URL
+
+
 class model:
     def __init__(self, name: str, url: str):
         self.name = name
         self.url = url
         self.characteristics = {}
         
-        self.json_file_path = self.name.replace(" ", "_").lower() + '_characteristics.json'
+        json_filename = self.name.replace(" ", "_").replace("-", "_").lower() + '_characteristics.json'
+        self.json_file_path = _find_json_file(json_filename)
         if os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
         else:
             self.model_data = self.fetch_model_data(url)
             self.characteristics = self.get_characteristics_from_html(self.model_data)
+            # Save into army_units/ root if no faction folder matched
+            os.makedirs(ARMY_UNITS_DIR, exist_ok=True)
+            self.json_file_path = os.path.join(ARMY_UNITS_DIR, json_filename)
             store_dict_to_file(self.characteristics, self.json_file_path)
         self.armor_save = 7
         self.AP = 0  # Armor Penetration
@@ -156,9 +176,9 @@ class SaurusWarrior(model):
         self.weapons.update({
             'spear': {'name': 'spear'},
             'halberd': {'name': 'halberd',
-                        'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
+                        'description': '+1 Strength in combat.',
                         'tag': 'combat',
-                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1)}
+                        'to_modify_stat': lambda model_instance: setattr(model_instance, 'AP', model_instance.AP + 1)}
         })
 
 class NightGoblin(model):
@@ -446,4 +466,283 @@ class Necromancer(model):
 
         self.AP = 0  # Example Armor Penetration value for Necromancers
 
-    
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Orc & Goblin Tribes — additional units
+# ═══════════════════════════════════════════════════════════════════════
+
+class WarBoar(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'War Boar',
+                                   'description': 'Tusked charge.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+class OrcBoarBoy(model):
+    """Hammer (Fast) — heavy cavalry of the Waaagh."""
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Orc Boar Boy',
+                                   'description': 'Orc mounted on a war boar.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on War Boar',
+                                   'description': 'Grants additional movement and charge impact.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+        self.special_rules.append({'name': 'Furious charge',
+                                   'description': '+1 Strength on the charge.',
+                                   'tag': 'combat',
+                                   'charge': plus1attacks})
+        self.AP = 0
+        self.armor_save = 4
+
+        self.weapons.update({
+            'cavalry spear': {'name': 'cavalry spear',
+                              'description': '+1 S when charging.',
+                              'tag': 'combat',
+                              'charge': lambda mi: plusSTAT(mi, 'S', 1, -99)},
+        })
+
+class Troll(model):
+    """Anvil — regeneration and 3 wounds make them nearly impossible to shift."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Troll',
+                                   'description': 'Large, regenerating creature.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'regeneration',
+                                   'description': 'Regeneration (4+).',
+                                   'tag': 'special',
+                                   'regen': 4})
+        self.special_rules.append({'name': 'Stupidity',
+                                   'description': 'Must test for Stupidity each turn.',
+                                   'tag': 'psychology'})
+        self.AP = 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Vampire Counts — additional units
+# ═══════════════════════════════════════════════════════════════════════
+
+class SkeletonWarrior(model):
+    """Cannon Fodder — weak stats but Unbreakable keeps them on the field."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'Unbreakable undead.',
+                                   'tag': 'special',
+                                   'Unbreakable': True})
+        self.AP = 0
+        self.armor_save = 6
+
+class CryptGhoul(model):
+    """Basic — decent stats but no armour, fights on par."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'Unbreakable undead.',
+                                   'tag': 'special',
+                                   'Unbreakable': True})
+        self.special_rules.append({'name': 'Poison',
+                                   'description': 'Attacks are Poisoned (to-hit roll of 6 auto-wounds).',
+                                   'tag': 'combat'})
+        self.AP = 0
+
+class GraveGuard(model):
+    """Superior — elite undead infantry with heavy armour and Killing Blow."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Fearless',
+                                   'description': 'Unbreakable undead.',
+                                   'tag': 'special',
+                                   'Unbreakable': True})
+        self.special_rules.append({'name': 'Killing Blow',
+                                   'description': 'To-wound roll of 6 causes instant death.',
+                                   'tag': 'combat'})
+        self.AP = 0
+        self.armor_save = 4
+
+        self.weapons.update({
+            'great weapon': {'name': 'great weapon',
+                             'description': '+2 Strength, strikes last.',
+                             'tag': 'combat',
+                             'to_modify_stat': lambda mi: plusSTAT(mi, 'S', 2, -99)},
+        })
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Bretonnia — additional units
+# ═══════════════════════════════════════════════════════════════════════
+
+class PeasantBowman(model):
+    """Cannon Fodder (Shooting) — cheap ranged peasants."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Peasant Bowman',
+                                   'description': 'Poorly trained peasant levy.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+        self.weapons.update({
+            'longbow': {'name': 'longbow',
+                        'description': 'Standard ranged weapon.',
+                        'tag': 'ranged',
+                        'ranged_range': 24,
+                        'ranged_shots': 1,
+                        'ranged_strength': 3,
+                        'ranged_AP': 0,
+                        'volley_fire': True},
+        })
+
+class GrailKnight(model):
+    """Hammer (Fast) — the elite of Bretonnia, blessed by the Lady."""
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Grail Knight',
+                                   'description': 'Blessed warriors of the Grail.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on Bretonnian Warhorse',
+                                   'description': 'Mounted cavalry.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+        self.special_rules.append({'name': 'Blessing of the Lady',
+                                   'description': 'Ward save (5+).',
+                                   'tag': 'special'})
+        self.AP = 0
+        self.armor_save = 2
+
+        self.weapons.update({
+            'lance': {'name': 'lance',
+                      'description': '+2 S when charging.',
+                      'tag': 'combat',
+                      'charge': lambda mi: plusSTAT(mi, 'S', 2, -99)},
+            'sword': {'name': 'sword'},
+        })
+
+class BattlePilgrim(model):
+    """Anvil — fanatical peasants with Stubborn and decent Leadership."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Stubborn',
+                                   'description': 'Always uses unmodified Leadership for Break tests.',
+                                   'tag': 'psychology'})
+        self.special_rules.append({'name': 'Grail Reliquae',
+                                   'description': 'Inspired by holy relics — Stubborn and immune to Fear.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Grand Cathay — additional units
+# ═══════════════════════════════════════════════════════════════════════
+
+class PeasantSpearman(model):
+    """Cannon Fodder — cheap Cathayan levy with spears."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Peasant Spearman',
+                                   'description': 'Low-quality infantry levy.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+        self.weapons.update({
+            'spear': {'name': 'spear',
+                      'description': 'Fight in extra rank.',
+                      'tag': 'combat'},
+        })
+
+class IronHailGunner(model):
+    """Basic (Shooting) — handgun-armed Cathayan infantry."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Iron Hail Gunner',
+                                   'description': 'Cathayan firearms regiment.',
+                                   'tag': 'special'})
+        self.AP = 0
+        self.armor_save = 5
+
+        self.weapons.update({
+            'handgun': {'name': 'iron hail handgun',
+                        'description': 'Armour-piercing firearm.',
+                        'tag': 'ranged',
+                        'ranged_range': 24,
+                        'ranged_shots': 1,
+                        'ranged_strength': 4,
+                        'ranged_AP': 1,
+                        'volley_fire': False},
+        })
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Lizardmen — additional units
+# ═══════════════════════════════════════════════════════════════════════
+
+class Skink(model):
+    """Cannon Fodder (Shooting) — nimble skirmishers with blowpipes."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Skink',
+                                   'description': 'Fast, expendable skirmisher.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+        self.weapons.update({
+            'blowpipe': {'name': 'blowpipe',
+                         'description': 'Short-ranged poisoned missile weapon.',
+                         'tag': 'ranged',
+                         'ranged_range': 12,
+                         'ranged_shots': 2,
+                         'ranged_strength': 3,
+                         'ranged_AP': 0,
+                         'volley_fire': False},
+        })
+
+class TempleGuard(model):
+    """Anvil — Stubborn elite Saurus guarding the temple-cities."""
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Stubborn',
+                                   'description': 'Always uses unmodified Leadership for Break tests.',
+                                   'tag': 'psychology'})
+        self.special_rules.append({'name': 'Temple Guard',
+                                   'description': 'Elite guardians of the Slann.',
+                                   'tag': 'special'})
+        self.AP = 0
+        self.armor_save = 4
+
+        self.weapons.update({
+            'halberd': {'name': 'halberd',
+                        'description': '+1 Strength in combat.',
+                        'tag': 'combat',
+                        'to_modify_stat': lambda mi: plusSTAT(mi, 'S', 1, -99)},
+        })
+
+class ColdOne(model):
+    def __init__(self, name: str, url: str):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Cold One',
+                                   'description': 'Cold-blooded mount.',
+                                   'tag': 'special'})
+        self.AP = 0
+
+class ColdOneRider(model):
+    """Hammer (Fast) — heavy Saurus cavalry on savage Cold One mounts."""
+    def __init__(self, name: str, url: str, mountUnit: model = None):
+        super().__init__(name, url)
+        self.special_rules.append({'name': 'Cold One Rider',
+                                   'description': 'Saurus mounted on a Cold One.',
+                                   'tag': 'special'})
+        self.special_rules.append({'name': 'Mounted on Cold One',
+                                   'description': 'Grants additional movement and attacks.',
+                                   'tag': 'mount',
+                                   'mountUnit': mountUnit})
+        self.AP = 0
+        self.armor_save = 3
+
+        self.weapons.update({
+            'cavalry spear': {'name': 'cavalry spear',
+                              'description': '+1 S when charging.',
+                              'tag': 'combat',
+                              'charge': lambda mi: plusSTAT(mi, 'S', 1, -99)},
+        })

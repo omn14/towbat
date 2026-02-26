@@ -233,22 +233,35 @@ class UnitTypeClassifier:
         staying = self._staying_power_score(stats, has_unbreakable, has_stubborn, has_regen)
 
         # ── HAMMER: devastating offensive output ──
-        # High combat power, especially with charge bonuses or mounted
+        # Requires charge bonus or mount (hit-and-run/impact) to be a true hammer.
+        # High-combat units without those traits are superior or anvils, not hammers.
         hammer_score = combat
         if has_charge_bonus:
             hammer_score += 0.5
         if has_mount:
             hammer_score += 0.4
-        if stats.get('W', 1) >= 2:
+        # Multi-wound only boosts hammer if the unit also has charge/mount punch
+        if stats.get('W', 1) >= 2 and (has_charge_bonus or has_mount):
             hammer_score += 0.3
 
-        if hammer_score >= 2.0:
+        if hammer_score >= 2.0 and (has_charge_bonus or has_mount):
             return UnitType.HAMMER
 
         # ── ANVIL: exceptional staying power ──
-        if staying >= 2.5 or (has_unbreakable and combat < 1.5):
+        # Unbreakable/stubborn anvils must NOT also be high-combat (those are superior).
+        if has_regen and stats.get('W', 1) >= 2:
+            # Regenerating multi-wound bruisers (trolls, etc.) are quintessential anvils
             return UnitType.ANVIL
-        if has_stubborn and stats['Ld'] >= 7:
+        if has_unbreakable and combat < 1.1:
+            # Weak but unbreakable (skeletons, zombies) — never break
+            return UnitType.ANVIL
+        if has_stubborn and stats['Ld'] >= 8 and stats.get('armor_save', 7) <= 5:
+            # Heavily armoured elite Stubborn units (Temple Guard, etc.)
+            # Their role is to hold the line regardless of combat output
+            if not has_charge_bonus and not has_mount:
+                return UnitType.ANVIL
+        if has_stubborn and stats['Ld'] >= 7 and combat < 1.5:
+            # Stubborn on decent leadership with moderate combat = holds the line
             return UnitType.ANVIL
 
         # ── CANNON FODDER: clearly below basic ──
@@ -260,7 +273,10 @@ class UnitTypeClassifier:
             return UnitType.CANNON_FODDER
 
         # ── SUPERIOR: noticeably above basic ──
-        if combat >= 1.2 or (combat >= 1.0 and staying >= 1.5):
+        # Units with good combat (or unbreakable/stubborn + decent combat)
+        if combat >= 1.2:
+            return UnitType.SUPERIOR
+        if combat >= 1.0 and (staying >= 1.5 or has_unbreakable or has_stubborn):
             return UnitType.SUPERIOR
 
         # ── BASIC: everything else ──
