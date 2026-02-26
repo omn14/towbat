@@ -1,0 +1,56 @@
+[
+    {
+        "name": "Iron Hail Gunner",
+        "faction": "grand_cathay",
+        "role": "shooting",
+        "nmodels": 10,
+        "files": 10,
+        "ranks": 1,
+        "json_file": "army_units/grand_cathay/iron_hail_gunner_characteristics.json"
+    },
+    {
+        "name": "Peasant Bowman",
+        "faction": "bretonnia",
+        "role": "shooting",
+        "nmodels": 10,
+        "files": 10,
+        "ranks": 1,
+        "json_file": "army_units/bretonnia/peasant_bowman_characteristics.json"
+    },
+    {
+        "name": "Skink",
+        "faction": "lizardmen",
+        "role": "shooting_skirmish",
+        "nmodels": 10,
+        "files": 10,
+        "ranks": 1,
+        "json_file": "army_units/lizardmen/skink_characteristics.json"
+    },
+    {
+        "name": "Night Goblin",
+        "faction": "orc_and_goblin_tribes",
+        "role": "shooting_screen",
+        "nmodels": 20,
+        "files": 10,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/night_goblin_characteristics.json"
+    },
+    {
+        "name": "Jade Warrior",
+        "faction": "grand_cathay",
+        "role": "front_screen",
+        "nmodels": 15,
+        "files": 5,
+        "ranks": 3,
+        "json_file": "army_units/grand_cathay/jade_warrior_characteristics.json"
+    },
+    {
+        "name": "Temple Guard",
+        "faction": "lizardmen",
+        "role": "anvil_screen",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/lizardmen/temple_guard_characteristics.json"
+    }
+]

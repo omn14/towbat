@@ -477,7 +477,7 @@ class MyApp(ShowBase):
         self.player2Units = []
         
         
-        url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+        """ url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
         man_at_arm = model("Man_at_Arm", url_man_at_arm)
         man_at_arm.armor_save = 7
         man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
@@ -495,7 +495,7 @@ class MyApp(ShowBase):
                           'ranged_strength': 3,
                           'ranged_AP': 0,
                           'volley_fire': True}
-        })
+        }) """
 
         
 
@@ -518,7 +518,7 @@ class MyApp(ShowBase):
         self.player2Units.append(self.mountedKnightOfTheRealm) """
 
 
-        cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
+        """ cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
         cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 6,6,1)
         jade_lancer = JadeLancer("Jade Lancer", "-", mountUnit=cathayan_warhorse_unit)
         jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 6,6,1)
@@ -526,15 +526,15 @@ class MyApp(ShowBase):
         self.jadeLancers.bodyNP.setPos(30,25,0)
         self.jadeLancers.bodyNP.setH(180)
         self.units.append(self.jadeLancers)
-        self.player2Units.append(self.jadeLancers)
+        self.player2Units.append(self.jadeLancers) """
 
-        jade_warrior = JadeWarrior("Jade Warrior", "-")
+        """ jade_warrior = JadeWarrior("Jade Warrior", "-")
         jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 15,5,3)
         self.jadeWarriors = unitGraphics(self,'JadeWarriors','models/jade_warrior.bam',jade_warrior_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
         self.jadeWarriors.bodyNP.setPos(0,30,0)
         self.jadeWarriors.bodyNP.setH(180)
         self.units.append(self.jadeWarriors)
-        self.player2Units.append(self.jadeWarriors)
+        self.player2Units.append(self.jadeWarriors) """
 
 
 
@@ -562,20 +562,20 @@ class MyApp(ShowBase):
         self.player1Units.append(self.goblinWolfRiders)
         print("Goblin wolf riders loaded") """
 
-        skeletal_steed = SkeletalSteed("Skeletal Steed", "url_skeletal_steed")
+        """ skeletal_steed = SkeletalSteed("Skeletal Steed", "url_skeletal_steed")
         skeletal_steed_unit = unit("Skeletal Steed Unit", skeletal_steed, 6,6,1)
         black_knight = BlackKnight("Black Knight", "url_black_knight", mountUnit=skeletal_steed_unit)
         black_knight_unit = unit("Black Knight Unit", black_knight, 6,6,1)
         self.blackKnights = unitGraphics(self,'BlackKnights','models/black_knights.bam',black_knight_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.blackKnights)
-        self.units.append(self.blackKnights)
+        self.units.append(self.blackKnights) """
 
-        zombie = Zombie("Zombie", "url_zombie")
+        """ zombie = Zombie("Zombie", "url_zombie")
         zombie_unit = unit("Zombie Unit", zombie, 30,6,5)
         self.zombies = unitGraphics(self,'Zombies','models/zombies.bam',zombie_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.zombies)
         self.units.append(self.zombies)
-        self.zombies.bodyNP.setPos(-25,-25,0)
+        self.zombies.bodyNP.setPos(-25,-25,0) """
 
         spells ={
             'Raise Dead': {
@@ -603,21 +603,23 @@ class MyApp(ShowBase):
             }
         }
 
-        necromancer = Necromancer("Necromancer", "url_necromancer", spells=spells)
+        """ necromancer = Necromancer("Necromancer", "url_necromancer", spells=spells)
         necromancer_unit = unit("Necromancer Unit", necromancer, 1,1,1)
         self.necromancer = unitGraphics(self,'Necromancer','models/zombies.bam',necromancer_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.necromancer)
         self.units.append(self.necromancer)
-        self.necromancer.bodyNP.setPos(-20,-20,0)
+        self.necromancer.bodyNP.setPos(-20,-20,0) """
 
-        direWolf = DireWolf("Dire Wolf", "url_dire_wolf")
+        """ direWolf = DireWolf("Dire Wolf", "url_dire_wolf")
         direWolf_unit = unit("Dire Wolf Unit", direWolf, 5,5,1)
         self.direWolves = unitGraphics(self,'DireWolves','models/dire_wolves.bam',direWolf_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
         self.player1Units.append(self.direWolves)
         self.units.append(self.direWolves)
-        self.direWolves.bodyNP.setPos(-30,-20,0)
+        self.direWolves.bodyNP.setPos(-30,-20,0) """
 
         #self.load_player1_army("my_army.json")
+        self.load_player1_army("strategy_armies/gunline.json")
+        self.load_player2_army("strategy_armies/horde_rush.json")
 
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
@@ -741,7 +743,7 @@ class MyApp(ShowBase):
             self.jadeLancers.bodyNP.setPos(10, 9, 0)
             self.jadeWarriors.bodyNP.setPos(0,9,0)
         
-        if 1: #test Deployment
+        if 0: #test Deployment
             self.fsm.request("DeployPhase")
             self.blackKnights.bodyNP.setPos(11,-9,0)
             self.zombies.bodyNP.setPos(0,-9,0)

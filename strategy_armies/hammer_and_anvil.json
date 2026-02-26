@@ -1,0 +1,65 @@
+[
+    {
+        "name": "Battle Pilgrim",
+        "faction": "bretonnia",
+        "role": "anvil",
+        "nmodels": 15,
+        "files": 5,
+        "ranks": 3,
+        "json_file": "army_units/bretonnia/battle_pilgrim_characteristics.json"
+    },
+    {
+        "name": "Zombie",
+        "faction": "vampire_counts",
+        "role": "anvil",
+        "nmodels": 20,
+        "files": 5,
+        "ranks": 4,
+        "json_file": "army_units/vampire_counts/zombie_characteristics.json"
+    },
+    {
+        "name": "Temple Guard",
+        "faction": "lizardmen",
+        "role": "anvil",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/lizardmen/temple_guard_characteristics.json"
+    },
+    {
+        "name": "Grail Knight",
+        "faction": "bretonnia",
+        "role": "hammer",
+        "nmodels": 8,
+        "files": 4,
+        "ranks": 2,
+        "json_file": "army_units/bretonnia/grail_knight_characteristics.json"
+    },
+    {
+        "name": "Cold One Rider",
+        "faction": "lizardmen",
+        "role": "hammer",
+        "nmodels": 8,
+        "files": 4,
+        "ranks": 2,
+        "json_file": "army_units/lizardmen/cold_one_rider_characteristics.json"
+    },
+    {
+        "name": "Orc Boy",
+        "faction": "orc_and_goblin_tribes",
+        "role": "basic_support",
+        "nmodels": 15,
+        "files": 5,
+        "ranks": 3,
+        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
+    },
+    {
+        "name": "Black Orc",
+        "faction": "orc_and_goblin_tribes",
+        "role": "superior_support",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json"
+    }
+]

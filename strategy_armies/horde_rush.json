@@ -1,0 +1,65 @@
+[
+    {
+        "name": "Orc Boy",
+        "faction": "orc_and_goblin_tribes",
+        "role": "basic_horde",
+        "nmodels": 20,
+        "files": 10,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
+    },
+    {
+        "name": "Orc Boy",
+        "faction": "orc_and_goblin_tribes",
+        "role": "basic_horde",
+        "nmodels": 20,
+        "files": 10,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
+    },
+    {
+        "name": "Night Goblin",
+        "faction": "orc_and_goblin_tribes",
+        "role": "cannon_fodder_screen",
+        "nmodels": 30,
+        "files": 10,
+        "ranks": 3,
+        "json_file": "army_units/orc_and_goblin_tribes/night_goblin_characteristics.json"
+    },
+    {
+        "name": "Night Goblin",
+        "faction": "orc_and_goblin_tribes",
+        "role": "cannon_fodder_screen",
+        "nmodels": 30,
+        "files": 10,
+        "ranks": 3,
+        "json_file": "army_units/orc_and_goblin_tribes/night_goblin_characteristics.json"
+    },
+    {
+        "name": "Goblin Wolf Rider",
+        "faction": "orc_and_goblin_tribes",
+        "role": "fast_flanker",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json"
+    },
+    {
+        "name": "Orc Boy",
+        "faction": "orc_and_goblin_tribes",
+        "role": "basic_horde",
+        "nmodels": 20,
+        "files": 10,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
+    },
+    {
+        "name": "Skeleton Warrior",
+        "faction": "vampire_counts",
+        "role": "anvil_support",
+        "nmodels": 20,
+        "files": 10,
+        "ranks": 2,
+        "json_file": "army_units/vampire_counts/skeleton_warrior_characteristics.json"
+    }
+]
