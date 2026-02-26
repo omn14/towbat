@@ -875,7 +875,9 @@ class MyApp(ShowBase):
                 unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
                 
                 # Create unit graphics
-                graphics_name = unit_name.replace(' ', '') + str(idx)
+                # Include player_num in the name so P1 and P2 units with the
+                # same model type get unique collision-node / lookup names.
+                graphics_name = f"P{player_num}_{unit_name.replace(' ', '')}{idx}"
                 unit_graphics = unitGraphics(
                     self,
                     graphics_name,
