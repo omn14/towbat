@@ -3842,11 +3842,12 @@ class MyApp(ShowBase):
                 continue
             unit.madePursuitChoice=True
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
-            choice = Choice(persuitOrNot, Vec3(0,0,10))
+            """ choice = Choice(persuitOrNot, Vec3(0,0,10))
             battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
             await battleChoice
             selected_choice = choice.choice
-            del choice
+            del choice """
+            selected_choice = await taskMgr.add(self.makeChoiceNew(persuitOrNot, Vec3(0,0,10)))
             print(f"Selected choice: {selected_choice}")
             if selected_choice == persuitOrNot[0]:
                 print(f"{unit.unit.name} chooses to pursue!")
@@ -3883,11 +3884,12 @@ class MyApp(ShowBase):
         self.attackSequence2 = Sequence()
         for unit in loserUnit.isInCombatWith:
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
-            choice = Choice(persuitOrNot, Vec3(0,0,10))
+            """ choice = Choice(persuitOrNot, Vec3(0,0,10))
             battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
             await battleChoice
             selected_choice = choice.choice
-            del choice
+            del choice """
+            selected_choice = await taskMgr.add(self.makeChoiceNew(persuitOrNot, Vec3(0,0,10)))
             print(f"Selected choice: {selected_choice}")
             if selected_choice == persuitOrNot[0]:
                 print(f"{unit.unit.name} chooses to pursue!")
@@ -4009,11 +4011,12 @@ class MyApp(ShowBase):
                 continue
             unit.madePursuitChoice=True
             persuitOrNot = [unit.unitName+'\nPersuit', unit.unitName+'\nRestrain']
-            choice = Choice(persuitOrNot, Vec3(0,0,10))
+            """ choice = Choice(persuitOrNot, Vec3(0,0,10))
             battleChoice = taskMgr.add(self.makeChoice, "makeChoiceTask", extraArgs=[choice], appendTask=False)
             await battleChoice
             selected_choice = choice.choice
-            del choice
+            del choice """
+            selected_choice = await taskMgr.add(self.makeChoiceNew(persuitOrNot, Vec3(0,0,10)))
             print(f"Selected choice: {selected_choice}")
             unit.request("Idle")
             if selected_choice == persuitOrNot[0]:
