@@ -7,7 +7,7 @@ from gameStateTree import GameState, GameAction
 from minimaxOptimizations import OptimizedMinimaxTree
 from gameStateAnalyzer import GameStateAnalyzer
 from treeVisualization import DecisionExplainer, TreeVisualizer
-
+from direct.showbase.DirectObject import DirectObject
 
 class EnhancedAI:
     """
@@ -43,6 +43,10 @@ class EnhancedAI:
         self.decisions_made = 0
         self.minimax_decisions = 0
         self.heuristic_decisions = 0
+
+        self._move_complete = False
+        self.helper1 = DirectObject()
+        self.helper1.accept('unit-move-complete', self.endLoopWaitForMoveComplete)
     
     def make_decision(self):
         """
@@ -91,7 +95,7 @@ class EnhancedAI:
         
         # Find best move with time limit (iterative deepening)
         # Set time_limit based on game urgency (in seconds)
-        time_limit = 30.0  # 10 seconds — iterative deepening returns best found so far
+        time_limit = 3.0  # 10 seconds — iterative deepening returns best found so far
         best_action, expected_value = self.tree.find_best_move_timed(state, time_limit)
         
         #self.tree.print_tree(self.tree.root.best_child)  # Optional: Print the tree for debugging
@@ -228,7 +232,7 @@ class EnhancedAI:
         dy = pos1[1] - pos2[1]
         return (dx**2 + dy**2)**0.5
     
-    def execute_action(self, action: GameAction):
+    async def execute_action(self, action: GameAction):
         """
         Execute an action in the actual game.
         Translates GameAction to actual game commands.
@@ -249,6 +253,10 @@ class EnhancedAI:
                 # This depends on your actual game implementation
                 # Example: self.game.moveUnit(unit, target_pos)
                 self.game.ball.setPos(target_pos)  # Placeholder for movement command
+                self.game.pathTowardsMouse(unit,action.parameters['target_x'],
+                                           action.parameters['target_y'])
+                self.game.moveUnit(unit)
+                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 pass
         
         elif action.action_type == 'shoot':
@@ -302,7 +310,7 @@ class EnhancedAI:
         print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
 
         # Execute action
-        self.execute_action(action)
+        taskMgr.add(self.execute_action(action), "executeActionTask")
 
         #visualizer.print_tree_ascii(max_depth=19)
 
@@ -328,6 +336,17 @@ class EnhancedAI:
                 self.game.unitToMove=unit
                 taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
                 break
+    
+    def loopWaitForMoveComplete(self,unit,task):
+        print(f"Waiting for move complete for unit: {unit.unit.name}")
+        if self._move_complete:
+            self._move_complete = False
+            print(f"signal recieved for unit: {unit.unit.name}")
+            return task.done
+        return task.cont
+    
+    def endLoopWaitForMoveComplete(self):
+        self._move_complete = True
 # Example: Replacing existing AI in game.py
 """
 In game.py, replace:
