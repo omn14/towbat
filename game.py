@@ -221,6 +221,7 @@ class gameFSM(FSM):
                     print(f"AI controlling unit: {unit.unit.name}")
                     taskMgr.add(self.game.AIplayer2.take_turn(), "aimove2", extraArgs=[], appendTask=False)
              """
+            #taskMgr.add(self.game.AIplayer2.take_turn())
             pass
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn())
         
@@ -650,9 +651,9 @@ class MyApp(ShowBase):
         # Replace: self.AIplayer2 = ClassAI(...)
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=9
+            player_num=2, use_minimax=True, minimax_depth=19
         )
-        self.AIplayer2.tree.stop_after_n_returns = 2
+        self.AIplayer2.tree.stop_after_n_returns = 1
         async def auppp():
             for unit in self.player2Units:
                 action = await taskMgr.add(self.AIplayer2.take_turn())

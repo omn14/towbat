@@ -70,7 +70,7 @@ class EnhancedAI:
         Determine if minimax should be used for this decision.
         Use minimax for important decisions, heuristics for trivial ones.
         """
-        return True  # For simplicity, always use minimax
+        #return True  # For simplicity, always use minimax
         # Always use minimax in combat phase
         if state.current_phase == 'CombatPhase':
             return True
@@ -132,10 +132,11 @@ class EnhancedAI:
         self.decisions_made += 1
         
         # Use existing evaluation functions for quick decisions
-        evaluation = self.analyzer.evaluate_overall_state(self.player_num)
-        strategy = self.analyzer.suggest_strategy(self.player_num)
+        current = state.current_player
+        evaluation = self.analyzer.evaluate_overall_state(current)
+        strategy = self.analyzer.suggest_strategy(current)
         
-        print(f"\n[AI Heuristic] Player {self.player_num}")
+        print(f"\n[AI Heuristic] Player {current}")
         print(f"  Assessment: {evaluation['assessment']}")
         print(f"  Strategy: {strategy}")
         
@@ -149,8 +150,9 @@ class EnhancedAI:
     
     def _aggressive_action(self, state: GameState) -> GameAction:
         """Generate aggressive action - prioritize attacks and charges"""
-        player_units = state.get_player_units(self.player_num)
-        enemy_units = state.get_player_units(3 - self.player_num)
+        current = state.current_player
+        player_units = state.get_player_units(current)
+        enemy_units = state.get_player_units(3 - current)
         
         if state.current_phase == 'MovementPhase':
             # Move towards nearest enemy
@@ -196,7 +198,8 @@ class EnhancedAI:
     
     def _defensive_action(self, state: GameState) -> GameAction:
         """Generate defensive action - consolidate and protect"""
-        player_units = state.get_player_units(self.player_num)
+        current = state.current_player
+        player_units = state.get_player_units(current)
         
         if state.current_phase == 'MovementPhase':
             # Move towards center/friendly units
@@ -213,7 +216,7 @@ class EnhancedAI:
         
         elif state.current_phase == 'ShootingPhase':
             # Shoot at nearest threat
-            enemy_units = state.get_player_units(3 - self.player_num)
+            enemy_units = state.get_player_units(3 - current)
             for unit in player_units:
                 if not unit['hasAttackedThisTurn'] and unit['ranged']:
                     nearest = min(enemy_units, 
@@ -225,8 +228,9 @@ class EnhancedAI:
     def _balanced_action(self, state: GameState) -> GameAction:
         """Generate balanced action - opportunistic"""
         # Mix of aggressive and defensive
-        player_units = state.get_player_units(self.player_num)
-        enemy_units = state.get_player_units(3 - self.player_num)
+        current = state.current_player
+        player_units = state.get_player_units(current)
+        enemy_units = state.get_player_units(3 - current)
         
         if state.current_phase == 'ShootingPhase':
             for unit in player_units:
