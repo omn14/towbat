@@ -151,8 +151,14 @@ class gameFSM(FSM):
         print("Entering Deploy Phase")
         # Create a ghost node for the boundary area
         self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
-        depW=44
+        #small battle marchment, adjust as needed
+        """ depW=44
         depH=7.5
+        boxW=20
+        boxH=50 """
+        #Full scale battle, adjust as needed
+        depW=72
+        depH=12
         boxW=20
         boxH=50
         self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(boxW, 100, 10)),TransformState.makePos(Point3(depW/2+boxW, 0, 0)))
@@ -163,6 +169,7 @@ class gameFSM(FSM):
         self.game.boundary_np = render.attachNewNode(self.game.boundary_ghost)
         self.game.boundary_np.setCollideMask(BitMask32.bit(11))  # Set collide mask to match unit bodies
         self.game.boundary_np.setPos(0, -7.5-7.5/2, 0)
+        self.game.boundary_np.setPos(0, -depH-depH/2, 0)
         base.world.attachRigidBody(self.game.boundary_ghost)
 
         self.game.debugText.setText(f"Current phase: Deploy Phase")
@@ -209,6 +216,11 @@ class gameFSM(FSM):
         self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
         if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
+            """ for unit in self.game.player2Units:
+                if unit.state == "Idle":
+                    print(f"AI controlling unit: {unit.unit.name}")
+                    taskMgr.add(self.game.AIplayer2.take_turn(), "aimove2", extraArgs=[], appendTask=False)
+             """
             pass
             #taskMgr.add(self.game.AIplayer2.takeMoveTurn())
         
@@ -621,6 +633,7 @@ class MyApp(ShowBase):
         self.load_player1_army("strategy_armies/gunline.json")
         self.load_player2_army("strategy_armies/horde_rush.json")
 
+
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
         #self.messenger.toggleVerbose()
@@ -637,10 +650,16 @@ class MyApp(ShowBase):
         # Replace: self.AIplayer2 = ClassAI(...)
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=18
+            player_num=2, use_minimax=True, minimax_depth=9
         )
-        self.AIplayer2.tree.stop_after_n_returns = 1
-        self.accept('a', self.AIplayer2.take_turn)
+        self.AIplayer2.tree.stop_after_n_returns = 2
+        async def auppp():
+            for unit in self.player2Units:
+                action = await taskMgr.add(self.AIplayer2.take_turn())
+                if action.action_type == 'end_phase':
+                    break
+        self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
+        #self.accept('a-up', lambda: taskMgr.add(auppp()))
 
         # In your game class __init__:
         self.list_builder = None
@@ -753,10 +772,13 @@ class MyApp(ShowBase):
             self.jadeLancers.bodyNP.setPos(10, 9, 0)
             self.jadeWarriors.bodyNP.setPos(0,9,0)
 
+        if 1: 
+            self.fsm.request("DeployPhase")
+
 
         
 
-        if 0:
+        if 1:
             self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
             self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
         else:

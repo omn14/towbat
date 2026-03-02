@@ -3,11 +3,14 @@ Integration example: Using MinimaxTree with the existing AI system
 This shows how to enhance ClassAI with minimax decision-making
 """
 
+from concurrent.futures import ThreadPoolExecutor
+
 from gameStateTree import GameState, GameAction
 from minimaxOptimizations import OptimizedMinimaxTree
 from gameStateAnalyzer import GameStateAnalyzer
 from treeVisualization import DecisionExplainer, TreeVisualizer
 from direct.showbase.DirectObject import DirectObject
+from direct.task import Task
 
 class EnhancedAI:
     """
@@ -48,7 +51,7 @@ class EnhancedAI:
         self.helper1 = DirectObject()
         self.helper1.accept('unit-move-complete', self.endLoopWaitForMoveComplete)
     
-    def make_decision(self):
+    async def make_decision(self):
         """
         Main decision-making function.
         Decides between minimax (slow but optimal) or heuristics (fast but suboptimal).
@@ -58,7 +61,7 @@ class EnhancedAI:
         
         # Use minimax for critical decisions, heuristics for simple ones
         if self.use_minimax and self._should_use_minimax(current_state):
-            return self._minimax_decision(current_state)
+            return await self._minimax_decision(current_state)
         else:
             return self._heuristic_decision(current_state)
     
@@ -88,15 +91,24 @@ class EnhancedAI:
         # Use heuristics when we're clearly winning or losing
         return False
     
-    def _minimax_decision(self, state: GameState) -> GameAction:
-        """Make decision using minimax algorithm"""
+    _executor = ThreadPoolExecutor(max_workers=1)
+
+    async def _minimax_decision(self, state: GameState) -> GameAction:
+        """Make decision using minimax algorithm (runs search in background thread)"""
         self.minimax_decisions += 1
         self.decisions_made += 1
         
         # Find best move with time limit (iterative deepening)
         # Set time_limit based on game urgency (in seconds)
-        time_limit = 3.0  # 10 seconds — iterative deepening returns best found so far
-        best_action, expected_value = self.tree.find_best_move_timed(state, time_limit)
+        time_limit = 3.0
+        # Submit to a background thread so the main loop stays responsive
+        future = self._executor.submit(
+            self.tree.find_best_move_timed, state, time_limit
+        )
+        # Poll the future, yielding back to Panda3D each frame
+        while not future.done():
+            await Task.pause(0)  # yield one frame to the task manager
+        best_action, expected_value = future.result()
         
         #self.tree.print_tree(self.tree.root.best_child)  # Optional: Print the tree for debugging
         # Get statistics
@@ -291,7 +303,7 @@ class EnhancedAI:
                 return unit
         return None
     
-    def take_turn(self):
+    async def take_turn(self):
         """
         Main entry point for AI turn.
         Makes decision and executes it.
@@ -299,8 +311,9 @@ class EnhancedAI:
         if not self.active:
             return
         
-        # Make decision
-        action = self.make_decision()
+        # Make decision (await the coroutine directly — wrapping in taskMgr.add
+        # loses the return value, so action would always be None)
+        action = await self.make_decision()
         
         
 
@@ -310,7 +323,7 @@ class EnhancedAI:
         print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
 
         # Execute action
-        taskMgr.add(self.execute_action(action), "executeActionTask")
+        await self.execute_action(action)
 
         #visualizer.print_tree_ascii(max_depth=19)
 
@@ -318,6 +331,8 @@ class EnhancedAI:
         explainer.explain_decision()
 
         visualizer.print_statistics_detailed() """
+        if action.action_type != 'end_phase':
+            await taskMgr.add(self.take_turn())
         
         return action
     

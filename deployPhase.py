@@ -4,7 +4,8 @@ import random
 def taskMoveUnit(game,unit,task):
     #game.ignore('mouse1')
     if game.roundCounter.current_player == 2 and game.AIplayer2.active:
-        pxy = (random.uniform(-22, 22), random.uniform(7.5, 15))
+        #pxy = (random.uniform(-22, 22), random.uniform(7.5, 15))
+        pxy = (random.uniform(-36, 36), random.uniform(12, 24))
     else:
         pxy = getMouseXY()
 
@@ -58,14 +59,17 @@ def endMoveUnit(game,taskToEnd):
     taskMgr.remove(taskToEnd)
     game.unitToMove.isDeployed=True
     game.accept('mouse1', game.setActiveUnit,[game.setActiveUnitTask, game.setActiveUnitTaskName])
+    depH=12
     if game.roundCounter.current_player == 2:
         if not allUnitsDeployed(game.player1Units):
             game.roundCounter.request('PlayerOne')
-            game.boundary_np.setPos(0, -7.5-7.5/2, 0)
+            #game.boundary_np.setPos(0, -7.5-7.5/2, 0)
+            game.boundary_np.setPos(0, -depH-depH/2, 0)
+
     else:
         if not allUnitsDeployed(game.player2Units):
             game.roundCounter.request('PlayerTwo')
-            game.boundary_np.setPos(0, 7.5+7.5/2, 0)
+            game.boundary_np.setPos(0, depH+depH/2, 0)
             if game.roundCounter.current_player == 2 and game.AIplayer2.active:
                 game.AIplayer2.deployUnits()
             
