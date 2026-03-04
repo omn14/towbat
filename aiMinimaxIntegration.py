@@ -178,16 +178,16 @@ class EnhancedAI:
     def _strategy_aware_action(self, state: GameState,
                                player_units, enemy_units) -> GameAction:
         """Pick the next action by iterating units in priority order and
-        translating their tactical role into a concrete GameAction."""
+        translating their tactical role into a concrete GameAction.
+
+        The army-level strategy modifies which units act first and how
+        each role translates into movement."""
 
         phase = state.current_phase
+        strat_name = self._current_strategy.name if self._current_strategy else None
 
-        # Sort units so high-impact roles act first
-        ROLE_PRIORITY = {
-            'RALLY': 0, 'SHOOT': 1, 'REDIRECT': 2, 'SCREEN': 3,
-            'BLOCK': 4, 'HOLD': 5, 'FLANK': 6, 'CHARGE': 7,
-            'ENGAGE': 8, 'ADVANCE': 9, 'FIGHT': 10,
-        }
+        # ── Role priority varies by strategy ──────────────────────────
+        ROLE_PRIORITY = self._get_role_priority(strat_name)
 
         def _unit_priority(u):
             role_info = self._tactical_roles.get(u['name'])
@@ -211,7 +211,8 @@ class EnhancedAI:
                 target = self._find_unit_dict(target_name, enemy_units) if target_name else None
 
                 move = self._movement_for_role(
-                    unit, role, target, player_units, enemy_units)
+                    unit, role, target, player_units, enemy_units,
+                    strat_name)
                 if move:
                     return move
 
@@ -254,27 +255,77 @@ class EnhancedAI:
         return GameAction('end_phase', 'system', {})
 
     # ------------------------------------------------------------------
-    # Per-role movement vectors
+    # Strategy-dependent role priorities
     # ------------------------------------------------------------------
 
-    def _movement_for_role(self, unit, role, target, friendlies, enemies
-                           ) -> GameAction | None:
+    @staticmethod
+    def _get_role_priority(strat_name):
+        """Return role-priority dict tuned for the active strategy.
+
+        Lower number = acts first.  The strategy shifts which units
+        the AI processes first, so the most doctrinally-important
+        units always get their move before the rest.
+        """
+        BASE = {
+            'RALLY': 0, 'SHOOT': 1, 'REDIRECT': 2, 'SCREEN': 3,
+            'BLOCK': 4, 'HOLD': 5, 'FLANK': 6, 'CHARGE': 7,
+            'ENGAGE': 8, 'ADVANCE': 9, 'FIGHT': 10,
+        }
+        if strat_name == 'Hammer and Anvil':
+            # Anvils pin first, then hammers strike the engaged foe
+            return {**BASE, 'BLOCK': 1, 'HOLD': 2, 'CHARGE': 6, 'FLANK': 7}
+        if strat_name == 'Gunline':
+            # Shooting is king; screens protect; melee stays back
+            return {**BASE, 'SHOOT': 0, 'SCREEN': 1, 'HOLD': 2,
+                    'ADVANCE': 10, 'CHARGE': 10, 'ENGAGE': 10}
+        if strat_name == 'Refused Flank':
+            # Hammers & flankers first to create the concentration
+            return {**BASE, 'CHARGE': 1, 'FLANK': 2, 'ENGAGE': 3}
+        if strat_name == 'Horde Rush':
+            # Everyone charges — advance roles first
+            return {**BASE, 'ADVANCE': 1, 'CHARGE': 2, 'ENGAGE': 3,
+                    'SCREEN': 8, 'HOLD': 9}
+        if strat_name == 'Fast Strike':
+            # Flanking units are the core; nobody goes head-on
+            return {**BASE, 'FLANK': 1, 'CHARGE': 5, 'ADVANCE': 8}
+        if strat_name == 'Attrition Grind':
+            # Blockers and holders first; measured advance
+            return {**BASE, 'BLOCK': 1, 'HOLD': 2, 'ENGAGE': 3,
+                    'ADVANCE': 4, 'CHARGE': 7}
+        return BASE
+
+    # ------------------------------------------------------------------
+    # Per-role movement vectors (strategy-modified)
+    # ------------------------------------------------------------------
+
+    def _movement_for_role(self, unit, role, target, friendlies, enemies,
+                           strat_name=None) -> GameAction | None:
         """Translate a tactical role into a movement GameAction.
-        
-        Returns None if this unit shouldn't move (e.g. HOLD / SHOOT roles).
+
+        The active strategy name modifies how each role behaves:
+          - Hammer & Anvil : hammers wait for an anvil to engage first
+          - Gunline        : shooters never kite; melee units screen
+          - Refused Flank  : all movement biased toward one battlefield flank
+          - Fast Strike    : everything tries to flank; no direct advances
+          - Horde Rush     : everyone rushes forward, no screening
+          - Attrition Grind: slower, tighter advance
+
+        Returns None if this unit shouldn't move.
         """
         ux, uy = unit['position'][0], unit['position'][1]
         move_speed = unit.get('M', 4) * 2  # base movement allowance
 
+        # ── RALLY ─────────────────────────────────────────────────────
         if role == 'RALLY':
-            # Fleeing — don't move (rally happens automatically)
             return None
 
+        # ── SHOOT ─────────────────────────────────────────────────────
         if role == 'SHOOT':
-            # Ranged units *stay still* (or inch back from approaching enemies)
+            if strat_name == 'Gunline':
+                # Gunline: shooters NEVER move — hold the firing line
+                return None
             nearest_enemy_dist = self._nearest_enemy_distance(unit, enemies)
             if nearest_enemy_dist < 12:
-                # Kite: move away from nearest enemy
                 ne = min(enemies,
                          key=lambda e: self._distance(unit['position'], e['position']))
                 dx = ux - ne['position'][0]
@@ -283,13 +334,24 @@ class EnhancedAI:
                 return self._move_action(unit, ux + dx, uy + dy)
             return None  # stay and shoot
 
+        # ── HOLD ──────────────────────────────────────────────────────
         if role == 'HOLD':
-            # Anvil with no specific target — hold position
-            return None
+            if strat_name == 'Hammer and Anvil':
+                # Anvil with no target still advances slowly to create
+                # contact for the hammer to exploit
+                return self._move_toward_target(
+                    unit, enemies, move_speed * 0.5)
+            if strat_name == 'Attrition Grind':
+                # Slowly close the gap in a measured advance
+                return self._move_toward_target(
+                    unit, enemies, move_speed * 0.4)
+            return None  # default: hold position
 
+        # ── SCREEN ────────────────────────────────────────────────────
         if role == 'SCREEN':
-            # Cannon fodder screens: position between most valuable friendly
-            # and the nearest enemy threat
+            if strat_name == 'Horde Rush':
+                # Horde Rush: no screening — rush forward instead
+                return self._move_toward_target(unit, enemies, move_speed)
             valuable = self._most_valuable_friendly(unit, friendlies)
             if valuable and enemies:
                 ne = min(enemies,
@@ -302,8 +364,8 @@ class EnhancedAI:
                 return self._move_action(unit, ux + dx, uy + dy)
             return None
 
+        # ── REDIRECT / BLOCK ──────────────────────────────────────────
         if role in ('REDIRECT', 'BLOCK'):
-            # Move directly toward the target to intercept it
             if target:
                 dx = target['position'][0] - ux
                 dy = target['position'][1] - uy
@@ -311,28 +373,50 @@ class EnhancedAI:
                 return self._move_action(unit, ux + dx, uy + dy)
             return None
 
+        # ── FLANK ─────────────────────────────────────────────────────
         if role == 'FLANK':
-            # Fast unit — swing wide to approach the target's flank
             if target:
                 tx, ty = target['position'][0], target['position'][1]
-                # Offset perpendicular to the direct line
                 dx, dy = tx - ux, ty - uy
                 dist = (dx*dx + dy*dy) ** 0.5
                 if dist > 0:
-                    # Perpendicular swing (rotate 90°) blended with approach
                     perp_x, perp_y = -dy / dist, dx / dist
                     approach_x, approach_y = dx / dist, dy / dist
-                    # Blend: 60% approach + 40% swing when far, more approach when close
-                    blend = min(1.0, dist / 30.0)  # 0..1 how far away
-                    fx = approach_x * (1 - 0.4 * blend) + perp_x * 0.4 * blend
-                    fy = approach_y * (1 - 0.4 * blend) + perp_y * 0.4 * blend
+                    blend = min(1.0, dist / 30.0)
+                    # Fast Strike: wider flanking arc (60% perp)
+                    swing = 0.6 if strat_name == 'Fast Strike' else 0.4
+                    fx = approach_x * (1 - swing * blend) + perp_x * swing * blend
+                    fy = approach_y * (1 - swing * blend) + perp_y * swing * blend
                     fx, fy = self._normalize(fx, fy, move_speed)
+                    # Refused Flank: bias toward chosen flank
+                    if strat_name == 'Refused Flank':
+                        fx, fy = self._bias_to_flank(fx, fy, friendlies)
                     return self._move_action(unit, ux + fx, uy + fy)
-            # No specific target — sweep toward nearest enemy flank
             return self._move_toward_target(unit, enemies, move_speed)
 
+        # ── CHARGE ────────────────────────────────────────────────────
         if role == 'CHARGE':
-            # Hammer — move directly at the best charge target
+            if strat_name == 'Hammer and Anvil':
+                # Only charge if an anvil is already in combat (pinning)
+                anvil_engaged = any(
+                    f.get('isInCombat') and
+                    self._tactical_roles.get(f['name'], {}).get('role') in ('HOLD', 'BLOCK', 'FIGHT')
+                    for f in friendlies if f['name'] != unit['name']
+                )
+                if not anvil_engaged:
+                    # Anvil hasn't pinned yet — advance cautiously
+                    return self._move_toward_target(
+                        unit, enemies, move_speed * 0.4)
+            if strat_name == 'Fast Strike':
+                # Fast Strike: hammers also flank rather than charge head-on
+                if target:
+                    return self._flank_toward(unit, target, move_speed, swing=0.5)
+            if strat_name == 'Refused Flank' and target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                dx, dy = self._bias_to_flank_vec(dx, dy, friendlies)
+                return self._move_action(unit, ux + dx, uy + dy)
             if target:
                 dx = target['position'][0] - ux
                 dy = target['position'][1] - uy
@@ -340,21 +424,40 @@ class EnhancedAI:
                 return self._move_action(unit, ux + dx, uy + dy)
             return self._move_toward_target(unit, enemies, move_speed)
 
+        # ── ENGAGE ────────────────────────────────────────────────────
         if role == 'ENGAGE':
-            # Superior — advance toward a favorable target
+            speed_mult = 0.6 if strat_name == 'Attrition Grind' else 1.0
+            if strat_name == 'Gunline':
+                # Gunline: melee units screen instead of engaging
+                return self._screen_friendlies(unit, friendlies, enemies, move_speed)
+            if strat_name == 'Fast Strike':
+                # Swing to flank instead of direct engagement
+                if target:
+                    return self._flank_toward(unit, target, move_speed, swing=0.35)
             if target:
                 dx = target['position'][0] - ux
                 dy = target['position'][1] - uy
-                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                dx, dy = self._clamp_movement(dx, dy, move_speed * speed_mult)
                 return self._move_action(unit, ux + dx, uy + dy)
-            return self._move_toward_target(unit, enemies, move_speed)
+            return self._move_toward_target(unit, enemies, move_speed * speed_mult)
 
+        # ── ADVANCE ───────────────────────────────────────────────────
         if role == 'ADVANCE':
-            # Basic — simple advance toward nearest enemy
-            return self._move_toward_target(unit, enemies, move_speed)
+            if strat_name == 'Gunline':
+                # Gunline: basic units screen rather than advance
+                return self._screen_friendlies(unit, friendlies, enemies, move_speed)
+            if strat_name == 'Fast Strike':
+                # Even basic units try a slight flank
+                if enemies:
+                    nearest = min(enemies,
+                                  key=lambda e: self._distance(
+                                      unit['position'], e['position']))
+                    return self._flank_toward(unit, nearest, move_speed, swing=0.25)
+            speed_mult = 0.6 if strat_name == 'Attrition Grind' else 1.0
+            return self._move_toward_target(unit, enemies, move_speed * speed_mult)
 
+        # ── FIGHT ─────────────────────────────────────────────────────
         if role == 'FIGHT':
-            # Already in combat — don't move
             return None
 
         # Fallback: advance
@@ -422,12 +525,68 @@ class EnhancedAI:
         if dist <= max_dist or dist == 0:
             return dx, dy
         return dx / dist * max_dist, dy / dist * max_dist
-    
+
     def _distance(self, pos1, pos2):
         """Calculate distance between two positions"""
         dx = pos1[0] - pos2[0]
         dy = pos1[1] - pos2[1]
         return (dx**2 + dy**2)**0.5
+
+    # ------------------------------------------------------------------
+    # Strategy-dependent movement helpers
+    # ------------------------------------------------------------------
+
+    def _flank_toward(self, unit, target, move_speed, swing=0.4):
+        """Move toward *target* with a perpendicular swing component.
+        *swing* controls how wide the arc is (0 = straight, 1 = pure perp).
+        """
+        ux, uy = unit['position'][0], unit['position'][1]
+        tx, ty = target['position'][0], target['position'][1]
+        dx, dy = tx - ux, ty - uy
+        dist = (dx*dx + dy*dy) ** 0.5
+        if dist == 0:
+            return None
+        perp_x, perp_y = -dy / dist, dx / dist
+        approach_x, approach_y = dx / dist, dy / dist
+        blend = min(1.0, dist / 30.0)
+        fx = approach_x * (1 - swing * blend) + perp_x * swing * blend
+        fy = approach_y * (1 - swing * blend) + perp_y * swing * blend
+        fx, fy = self._normalize(fx, fy, move_speed)
+        return self._move_action(unit, ux + fx, uy + fy)
+
+    def _screen_friendlies(self, unit, friendlies, enemies, move_speed):
+        """Position between the most valuable friendly and the nearest enemy."""
+        valuable = self._most_valuable_friendly(unit, friendlies)
+        if valuable and enemies:
+            ne = min(enemies,
+                     key=lambda e: self._distance(
+                         valuable['position'], e['position']))
+            mid_x = (valuable['position'][0] + ne['position'][0]) / 2
+            mid_y = (valuable['position'][1] + ne['position'][1]) / 2
+            ux, uy = unit['position'][0], unit['position'][1]
+            dx, dy = mid_x - ux, mid_y - uy
+            dx, dy = self._clamp_movement(dx, dy, move_speed)
+            return self._move_action(unit, ux + dx, uy + dy)
+        return None
+
+    def _bias_to_flank(self, fx, fy, friendlies):
+        """Bias a movement vector toward the army's weighted flank.
+        Returns modified (fx, fy)."""
+        return self._bias_to_flank_vec(fx, fy, friendlies)
+
+    def _bias_to_flank_vec(self, dx, dy, friendlies):
+        """Shift a vector toward the side of the battlefield where friendly
+        units are already concentrated (the 'refused flank' side)."""
+        if not friendlies:
+            return dx, dy
+        avg_x = sum(f['position'][0] for f in friendlies) / len(friendlies)
+        # Nudge 30 % toward the army centroid's X side
+        bias = 0.3
+        if avg_x > 0:
+            dx += abs(dx) * bias
+        else:
+            dx -= abs(dx) * bias
+        return dx, dy
     
     async def execute_action(self, action: GameAction):
         """
@@ -516,8 +675,8 @@ class EnhancedAI:
         explainer.explain_decision()
 
         visualizer.print_statistics_detailed() """
-        """ if action.action_type != 'end_phase':
-            await taskMgr.add(self.take_turn()) """
+        if action.action_type != 'end_phase':
+            await taskMgr.add(self.take_turn())
         
         return action
     
