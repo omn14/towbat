@@ -4,7 +4,7 @@
 
 The original `game.py` was a **4,899-line monolith** containing the entire game application: FSM phase management, spell logic, save/load persistence, physics setup, unit movement, combat resolution, campaign map, rendering, and UI — all in a single file with scattered imports, dead code blocks, and commented-out experiments.
 
-The refactored `game.py` is **2,753 lines** (~2,150 lines removed), with four cohesive subsystems extracted into their own modules and the remaining code organized with section headers and cleaned imports.
+The refactored `game.py` is **1,493 lines** (~3,400 lines removed), with five cohesive subsystems extracted into their own modules and the remaining code organized with section headers and cleaned imports.
 
 ---
 
@@ -81,15 +81,23 @@ Added 18 section headers (`# ─── Section Name ───`) to organize `MyA
 - Camera Zoom & Controls
 - List Builder & Army Management UI
 
-### 7. Extracted `combat_resolution.py` (1,071 lines)
+### 8. Extracted `movement_system.py` (1,372 lines)
 
-**What:** Twelve combat-related methods were extracted into a `CombatResolver` class: `checkUnitContactSmall`, `chargeAndChargeReaction`, `fleeInterval`, `rullTerninger`, `chargeInterval`, `getFlankFromContact`, `printBattleResults`, `verySimpleBattleStart`, `verySimpleBattle`, `GiveGroundFromCombat`, `FBIGFromCombat`, and `fleeFromCombat`.
+**What:** Twenty-four movement-related methods were extracted into a `MovementSystem` class, organized into five sections:
 
-**Why:** These methods form a tightly coupled combat subsystem covering charge resolution, dice rolling, melee battle simulation, leadership tests, pursuit/flee/give-ground outcomes, and FBIG (Fall Back in Good Order). They had no business living in the main game class alongside camera controls and UI code.
+- **Drawing Helpers** (8 methods): `draw_circle`, `draw_arc`, `check_bullet_collision`, `shootingArc`, `pointArc`, `mirrorPointArc`, `rotatePoint`, `meshPointArc`
+- **Movement & Pathfinding** (3 methods): `pathTowardsMouse`, `debug_ray`, `drawRectangle`
+- **Unit Movement Execution** (1 method): `moveUnit`
+- **Flee, Pursuit & Rally** (5 methods): `checkFleeCaught`, `fleeDirectionMultUnits`, `centerOfModels`, `getCenterOfUnit`, `removeModelsFromUnit`
+- **Sweep Tests & Fallback** (7 methods): `sweepTest`, `sweepTestRot`, `sweepTestDir`, `fallBackContactTest`, `fallBack`, `fallBack2`, `pursuitMove`
 
-**Key decision:** `CombatResolver` receives the game instance (`self.game`) and accesses all game state through it. Game attributes like `world`, `units`, `player1Units`, `player2Units`, `playerNP`, `unitToMove`, `attackSequence`, `autoRoll`, `autoCharge`, `autoHold`, and `diceInfoText` are accessed via `self.game.*`. Panda3D globals (`render`, `taskMgr`, `messenger`, `loader`, `base`) remain as globals. Thin delegate methods on `MyApp` preserve the `self.methodName()` call interface for all internal callers and external callers (e.g., `deployPhase.py` calling `game.checkUnitContactSmall()`).
+**Why:** These methods form a deeply interconnected movement/pathfinding subsystem. `pathTowardsMouse` computes arc-based movement paths using `pointArc`, `rotatePoint`, and `mirrorPointArc` for geometry, then validates them with `sweepTestRot` and `sweepTestDir` for collision detection. `moveUnit` executes the computed path and uses `fallBackContactTest` to resolve overlaps. The flee/pursuit methods handle post-combat movement (retreat, rally, pursuit). Keeping all of this inline at ~1,300 lines made `game.py` hard to navigate.
 
-### 8. Naming Improvements
+**Key decision:** Same delegate pattern as `combat_resolution.py`. `MovementSystem` receives the game instance; all game state (e.g., `world`, `units`, `player1Units`, `player2Units`, `ground`, `arcPoint`, `polygonpoints`, `mesh_drawer`) is accessed via `self.game.*`. Intra-module method calls (e.g., `self.rotatePoint()` from `pointArc()`) stay as `self.method()`. Methods called on the game that live *outside* MovementSystem (e.g., `checkUnitContactSmall`, `chargeAndChargeReaction`, `getSelectedUnit`, `bakeTextures`) are called via `self.game.method()`. Thin delegate methods on `MyApp` preserve the `self.methodName()` interface for all callers including `combat_resolution.py`, `ClassAI.py`, and `aiMinimaxIntegration.py`.
+
+**Dead code preserved:** Eight methods have no active callers (`draw_circle`, `draw_arc`, `check_bullet_collision`, `meshPointArc`, `centerOfModels`, `getCenterOfUnit`, `pursuitMove`, `debug_ray`) but were extracted rather than deleted since they belong to the module conceptually and may be needed in future.
+
+### 9. Naming Improvements
 
 - `gameFSM` → `GamePhaseFSM` (PEP 8 class naming)
 - `spell` / `spellDevilsVisit` / `spellRaiseDead` → `Spell` / `DevilsVisitSpell` / `RaiseDeadSpell`
@@ -104,18 +112,19 @@ Added 18 section headers (`# ─── Section Name ───`) to organize `MyA
 ## File Structure After Refactoring
 
 ```
-game.py              (2,753 lines)  — Main game application
-combat_resolution.py (1,071 lines)  — Combat resolution subsystem
-game_fsm.py          (365 lines)    — Game phase state machine
-spell_system.py      (180 lines)    — Spell base class + implementations
-persistence.py       (163 lines)    — Save/load game state
-game_original.py     (4,899 lines)  — Backup of original (can be deleted)
+game.py                (1,493 lines)  — Main game application
+movement_system.py     (1,372 lines)  — Movement, pathfinding & sweep tests
+combat_resolution.py   (1,071 lines)  — Combat resolution subsystem
+game_fsm.py            (365 lines)    — Game phase state machine
+spell_system.py        (180 lines)    — Spell base class + implementations
+persistence.py         (163 lines)    — Save/load game state
+game_original.py       (4,899 lines)  — Backup of original (can be deleted)
 ```
 
 ## What's Left (Future Work)
 
 1. **Rename Norwegian variables** — `terninger`→`dice_set`, `terning`→`die` across combat methods (50+ occurrences, needs test coverage first)
 2. ~~**Extract combat resolution**~~ — Done. 12 methods (1,071 lines) extracted to `combat_resolution.py`
-3. **Extract movement system** — `pathTowardsMouse`, `moveUnit`, sweep tests (~400 lines) are another candidate
-4. **Extract drawing helpers** — Circle/arc/rectangle drawing methods (~200 lines) are self-contained
+3. ~~**Extract movement system**~~ — Done. 24 methods (1,372 lines) extracted to `movement_system.py`
+4. ~~**Extract drawing helpers**~~ — Done. Included in `movement_system.py` (tightly coupled with pathfinding)
 5. **Remove remaining commented-out blocks** — A few `""" ... """` blocks remain inside active methods (e.g., inside `mouseHoverUnit`)
