@@ -8,6 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from gameStateTree import GameState, GameAction
 from minimaxOptimizations import OptimizedMinimaxTree
 from gameStateAnalyzer import GameStateAnalyzer
+from strategyAdvisor import StrategyAdvisor
+from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole, MATCHUP_TABLE
 from treeVisualization import DecisionExplainer, TreeVisualizer
 from direct.showbase.DirectObject import DirectObject
 from direct.task import Task
@@ -26,10 +28,16 @@ class EnhancedAI:
         self.player_num = player_num
         self.active = True
         
-        # Initialize analyzer and tree
+        # Initialize analyzer, classifier and strategy advisor
         self.analyzer = GameStateAnalyzer(game)
+        self.classifier = UnitTypeClassifier()
+        self.advisor = StrategyAdvisor(self.classifier)
         self.use_minimax = use_minimax
         self.minimax_depth = minimax_depth
+        
+        # Cached strategy info (refreshed each decision)
+        self._current_strategy = None
+        self._tactical_roles = {}
         
         if use_minimax:
             # Use optimized tree with transposition table, move ordering, and iterative deepening
@@ -127,120 +135,293 @@ class EnhancedAI:
         return best_action
     
     def _heuristic_decision(self, state: GameState) -> GameAction:
-        """Make decision using fast heuristics (existing AI logic)"""
+        """Make decision using strategy-advisor-driven heuristics.
+        
+        Each unit receives a tactical role from the StrategyAdvisor based on
+        its unit-type classification and the army-level strategy.  The role
+        determines *how* the unit moves, *what* it targets, and *why*.
+        """
         self.heuristic_decisions += 1
         self.decisions_made += 1
-        
-        # Use existing evaluation functions for quick decisions
+
         current = state.current_player
-        evaluation = self.analyzer.evaluate_overall_state(current)
-        strategy = self.analyzer.suggest_strategy(current)
-        
-        print(f"\n[AI Heuristic] Player {current}")
-        print(f"  Assessment: {evaluation['assessment']}")
-        print(f"  Strategy: {strategy}")
-        
-        # Generate a simple action based on strategy
-        if "AGGRESSIVE" in strategy:
-            return self._aggressive_action(state)
-        elif "DEFENSIVE" in strategy:
-            return self._defensive_action(state)
+        player_units = state.get_player_units(current)
+        enemy_units  = state.get_player_units(3 - current)
+
+        # ── 1. Pick army-level strategy ──────────────────────────────
+        top_strats = self.advisor.recommend_strategies(
+            player_units, from_dict=True, top_n=1)
+        if top_strats:
+            self._current_strategy, fit = top_strats[0]
         else:
-            return self._balanced_action(state)
-    
-    def _aggressive_action(self, state: GameState) -> GameAction:
-        """Generate aggressive action - prioritize attacks and charges"""
-        current = state.current_player
-        player_units = state.get_player_units(current)
-        enemy_units = state.get_player_units(3 - current)
-        
-        if state.current_phase == 'MovementPhase':
-            # Move towards nearest enemy
-            for unit in player_units:
-                if not unit['hasMovedThisTurn']:
-                    # Find nearest enemy
-                    nearest_enemy = min(enemy_units, 
-                        key=lambda e: self._distance(unit['position'], e['position']))
-                    
-                    # Move towards enemy
-                    dx = nearest_enemy['position'][0] - unit['position'][0]
-                    dy = nearest_enemy['position'][1] - unit['position'][1]
-                    
-                    # Normalize and scale by movement
-                    dist = (dx**2 + dy**2)**0.5
-                    if dist > 0:
-                        move_dist = 8  # Simplified movement
-                        dx = (dx / dist) * move_dist
-                        dy = (dy / dist) * move_dist
-                    
-                    return GameAction('move', unit['name'], {
-                        'target_x': unit['position'][0] + dx,
-                        'target_y': unit['position'][1] + dy
-                    })
-        
-        elif state.current_phase == 'ShootingPhase':
-            # Shoot at weakest enemy
-            for unit in player_units:
-                
-                if not unit['hasAttackedThisTurn'] and unit['ranged']:
-                    weakest = min(enemy_units, key=lambda e: e['nmodels'])
-                    return GameAction('shoot', unit['name'], {'target': weakest['name']})
-        
-        elif state.current_phase == 'CombatPhase':
-            # Attack in combat
-            for unit in player_units:
-                if unit['isInCombat'] and not unit['hasAttackedThisTurn']:
-                    if unit['isInCombatWith']:
-                        return GameAction('attack', unit['name'], 
-                                        {'target': unit['isInCombatWith'][0]})
-        
+            self._current_strategy = None
+            fit = 0.0
+
+        # ── 2. Assign per-unit tactical roles ────────────────────────
+        self._tactical_roles = self.advisor.assign_tactical_roles(
+            player_units, enemy_units)
+
+        strat_name = self._current_strategy.name if self._current_strategy else 'None'
+        print(f"\n[AI Heuristic] Player {current}")
+        print(f"  Strategy: {strat_name} ({fit:.0%} fit)")
+        for uname, info in self._tactical_roles.items():
+            print(f"    {uname:20s} -> {info['role']:10s} "
+                  f"target={info['target'] or '-':20s} ({info['reason']})")
+
+        # ── 3. Generate the next concrete action ─────────────────────
+        return self._strategy_aware_action(state, player_units, enemy_units)
+
+    # ------------------------------------------------------------------
+    # Strategy-aware action generation (replaces aggressive/defensive/balanced)
+    # ------------------------------------------------------------------
+
+    def _strategy_aware_action(self, state: GameState,
+                               player_units, enemy_units) -> GameAction:
+        """Pick the next action by iterating units in priority order and
+        translating their tactical role into a concrete GameAction."""
+
+        phase = state.current_phase
+
+        # Sort units so high-impact roles act first
+        ROLE_PRIORITY = {
+            'RALLY': 0, 'SHOOT': 1, 'REDIRECT': 2, 'SCREEN': 3,
+            'BLOCK': 4, 'HOLD': 5, 'FLANK': 6, 'CHARGE': 7,
+            'ENGAGE': 8, 'ADVANCE': 9, 'FIGHT': 10,
+        }
+
+        def _unit_priority(u):
+            role_info = self._tactical_roles.get(u['name'])
+            if not role_info:
+                return 99
+            return ROLE_PRIORITY.get(role_info['role'], 50)
+
+        ordered = sorted(player_units, key=_unit_priority)
+
+        # ── MOVEMENT PHASE ───────────────────────────────────────────
+        if phase == 'MovementPhase':
+            for unit in ordered:
+                if unit['hasMovedThisTurn']:
+                    continue
+                role_info = self._tactical_roles.get(unit['name'])
+                if not role_info:
+                    continue
+
+                role   = role_info['role']
+                target_name = role_info['target']
+                target = self._find_unit_dict(target_name, enemy_units) if target_name else None
+
+                move = self._movement_for_role(
+                    unit, role, target, player_units, enemy_units)
+                if move:
+                    return move
+
+        # ── SHOOTING PHASE ───────────────────────────────────────────
+        elif phase == 'ShootingPhase':
+            for unit in ordered:
+                if unit['hasAttackedThisTurn'] or not unit.get('ranged'):
+                    continue
+                role_info = self._tactical_roles.get(unit['name'])
+                if not role_info:
+                    continue
+
+                # Shooting units use their advisor-assigned target;
+                # non-shooting units with ranged weapons fire opportunistically
+                target_name = role_info['target']
+                if role_info['role'] == 'SHOOT' and target_name:
+                    return GameAction('shoot', unit['name'],
+                                     {'target': target_name})
+                elif target_name:
+                    # Non-shooting roles still fire if they have a ranged weapon.
+                    # Pick the advisor target if reachable, else nearest enemy.
+                    return GameAction('shoot', unit['name'],
+                                     {'target': target_name})
+                elif enemy_units:
+                    nearest = min(enemy_units,
+                                  key=lambda e: self._distance(
+                                      unit['position'], e['position']))
+                    return GameAction('shoot', unit['name'],
+                                     {'target': nearest['name']})
+
+        # ── COMBAT PHASE ─────────────────────────────────────────────
+        elif phase == 'CombatPhase':
+            for unit in ordered:
+                if not unit['isInCombat'] or unit['hasAttackedThisTurn']:
+                    continue
+                if unit['isInCombatWith']:
+                    return GameAction('attack', unit['name'],
+                                     {'target': unit['isInCombatWith'][0]})
+
         return GameAction('end_phase', 'system', {})
-    
-    def _defensive_action(self, state: GameState) -> GameAction:
-        """Generate defensive action - consolidate and protect"""
-        current = state.current_player
-        player_units = state.get_player_units(current)
+
+    # ------------------------------------------------------------------
+    # Per-role movement vectors
+    # ------------------------------------------------------------------
+
+    def _movement_for_role(self, unit, role, target, friendlies, enemies
+                           ) -> GameAction | None:
+        """Translate a tactical role into a movement GameAction.
         
-        if state.current_phase == 'MovementPhase':
-            # Move towards center/friendly units
-            for unit in player_units:
-                if not unit['hasMovedThisTurn']:
-                    # Move to battlefield center
-                    dx = -unit['position'][0] * 0.3  # Gentle move towards center
-                    dy = -unit['position'][1] * 0.3
-                    
-                    return GameAction('move', unit['name'], {
-                        'target_x': unit['position'][0] + dx,
-                        'target_y': unit['position'][1] + dy
-                    })
-        
-        elif state.current_phase == 'ShootingPhase':
-            # Shoot at nearest threat
-            enemy_units = state.get_player_units(3 - current)
-            for unit in player_units:
-                if not unit['hasAttackedThisTurn'] and unit['ranged']:
-                    nearest = min(enemy_units, 
-                        key=lambda e: self._distance(unit['position'], e['position']))
-                    return GameAction('shoot', unit['name'], {'target': nearest['name']})
-        
-        return GameAction('end_phase', 'system', {})
-    
-    def _balanced_action(self, state: GameState) -> GameAction:
-        """Generate balanced action - opportunistic"""
-        # Mix of aggressive and defensive
-        current = state.current_player
-        player_units = state.get_player_units(current)
-        enemy_units = state.get_player_units(3 - current)
-        
-        if state.current_phase == 'ShootingPhase':
-            for unit in player_units:
-                if not unit['hasAttackedThisTurn'] and unit['ranged']:
-                    # Target most valuable enemy
-                    best_target = max(enemy_units, 
-                        key=lambda e: e['nmodels'] * e['A'])
-                    return GameAction('shoot', unit['name'], {'target': best_target['name']})
-        
-        return GameAction('end_phase', 'system', {})
+        Returns None if this unit shouldn't move (e.g. HOLD / SHOOT roles).
+        """
+        ux, uy = unit['position'][0], unit['position'][1]
+        move_speed = unit.get('M', 4) * 2  # base movement allowance
+
+        if role == 'RALLY':
+            # Fleeing — don't move (rally happens automatically)
+            return None
+
+        if role == 'SHOOT':
+            # Ranged units *stay still* (or inch back from approaching enemies)
+            nearest_enemy_dist = self._nearest_enemy_distance(unit, enemies)
+            if nearest_enemy_dist < 12:
+                # Kite: move away from nearest enemy
+                ne = min(enemies,
+                         key=lambda e: self._distance(unit['position'], e['position']))
+                dx = ux - ne['position'][0]
+                dy = uy - ne['position'][1]
+                dx, dy = self._normalize(dx, dy, move_speed * 0.5)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return None  # stay and shoot
+
+        if role == 'HOLD':
+            # Anvil with no specific target — hold position
+            return None
+
+        if role == 'SCREEN':
+            # Cannon fodder screens: position between most valuable friendly
+            # and the nearest enemy threat
+            valuable = self._most_valuable_friendly(unit, friendlies)
+            if valuable and enemies:
+                ne = min(enemies,
+                         key=lambda e: self._distance(
+                             valuable['position'], e['position']))
+                mid_x = (valuable['position'][0] + ne['position'][0]) / 2
+                mid_y = (valuable['position'][1] + ne['position'][1]) / 2
+                dx, dy = mid_x - ux, mid_y - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return None
+
+        if role in ('REDIRECT', 'BLOCK'):
+            # Move directly toward the target to intercept it
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return None
+
+        if role == 'FLANK':
+            # Fast unit — swing wide to approach the target's flank
+            if target:
+                tx, ty = target['position'][0], target['position'][1]
+                # Offset perpendicular to the direct line
+                dx, dy = tx - ux, ty - uy
+                dist = (dx*dx + dy*dy) ** 0.5
+                if dist > 0:
+                    # Perpendicular swing (rotate 90°) blended with approach
+                    perp_x, perp_y = -dy / dist, dx / dist
+                    approach_x, approach_y = dx / dist, dy / dist
+                    # Blend: 60% approach + 40% swing when far, more approach when close
+                    blend = min(1.0, dist / 30.0)  # 0..1 how far away
+                    fx = approach_x * (1 - 0.4 * blend) + perp_x * 0.4 * blend
+                    fy = approach_y * (1 - 0.4 * blend) + perp_y * 0.4 * blend
+                    fx, fy = self._normalize(fx, fy, move_speed)
+                    return self._move_action(unit, ux + fx, uy + fy)
+            # No specific target — sweep toward nearest enemy flank
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        if role == 'CHARGE':
+            # Hammer — move directly at the best charge target
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        if role == 'ENGAGE':
+            # Superior — advance toward a favorable target
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        if role == 'ADVANCE':
+            # Basic — simple advance toward nearest enemy
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        if role == 'FIGHT':
+            # Already in combat — don't move
+            return None
+
+        # Fallback: advance
+        return self._move_toward_target(unit, enemies, move_speed)
+
+    # ------------------------------------------------------------------
+    # Movement helpers
+    # ------------------------------------------------------------------
+
+    def _move_action(self, unit, tx, ty) -> GameAction:
+        return GameAction('move', unit['name'],
+                          {'target_x': tx, 'target_y': ty})
+
+    def _move_toward_target(self, unit, enemies, move_speed) -> GameAction | None:
+        if not enemies:
+            return None
+        nearest = min(enemies,
+                      key=lambda e: self._distance(
+                          unit['position'], e['position']))
+        ux, uy = unit['position'][0], unit['position'][1]
+        dx = nearest['position'][0] - ux
+        dy = nearest['position'][1] - uy
+        dx, dy = self._clamp_movement(dx, dy, move_speed)
+        return self._move_action(unit, ux + dx, uy + dy)
+
+    def _find_unit_dict(self, name, unit_list):
+        """Find a unit dict by name in a list."""
+        if not name:
+            return None
+        for u in unit_list:
+            if u.get('name') == name:
+                return u
+        return None
+
+    def _nearest_enemy_distance(self, unit, enemies):
+        if not enemies:
+            return float('inf')
+        return min(self._distance(unit['position'], e['position'])
+                   for e in enemies)
+
+    def _most_valuable_friendly(self, unit, friendlies):
+        """Return the most valuable friendly unit (highest combat power) that
+        isn't this unit itself."""
+        best = None
+        best_val = -1
+        for f in friendlies:
+            if f['name'] == unit['name']:
+                continue
+            val = f.get('nmodels', 1) * f.get('A', 1) * f.get('S', 3)
+            if val > best_val:
+                best_val = val
+                best = f
+        return best
+
+    @staticmethod
+    def _normalize(dx, dy, length):
+        dist = (dx*dx + dy*dy) ** 0.5
+        if dist == 0:
+            return 0, 0
+        return dx / dist * length, dy / dist * length
+
+    @staticmethod
+    def _clamp_movement(dx, dy, max_dist):
+        dist = (dx*dx + dy*dy) ** 0.5
+        if dist <= max_dist or dist == 0:
+            return dx, dy
+        return dx / dist * max_dist, dy / dist * max_dist
     
     def _distance(self, pos1, pos2):
         """Calculate distance between two positions"""
@@ -335,8 +516,8 @@ class EnhancedAI:
         explainer.explain_decision()
 
         visualizer.print_statistics_detailed() """
-        if action.action_type != 'end_phase':
-            await taskMgr.add(self.take_turn())
+        """ if action.action_type != 'end_phase':
+            await taskMgr.add(self.take_turn()) """
         
         return action
     
