@@ -4,7 +4,7 @@
 
 The original `game.py` was a **4,899-line monolith** containing the entire game application: FSM phase management, spell logic, save/load persistence, physics setup, unit movement, combat resolution, campaign map, rendering, and UI — all in a single file with scattered imports, dead code blocks, and commented-out experiments.
 
-The refactored `game.py` is **3,997 lines** (~900 lines removed), with three cohesive subsystems extracted into their own modules and the remaining code organized with section headers and cleaned imports.
+The refactored `game.py` is **2,753 lines** (~2,150 lines removed), with four cohesive subsystems extracted into their own modules and the remaining code organized with section headers and cleaned imports.
 
 ---
 
@@ -81,7 +81,15 @@ Added 18 section headers (`# ─── Section Name ───`) to organize `MyA
 - Camera Zoom & Controls
 - List Builder & Army Management UI
 
-### 7. Naming Improvements
+### 7. Extracted `combat_resolution.py` (1,071 lines)
+
+**What:** Twelve combat-related methods were extracted into a `CombatResolver` class: `checkUnitContactSmall`, `chargeAndChargeReaction`, `fleeInterval`, `rullTerninger`, `chargeInterval`, `getFlankFromContact`, `printBattleResults`, `verySimpleBattleStart`, `verySimpleBattle`, `GiveGroundFromCombat`, `FBIGFromCombat`, and `fleeFromCombat`.
+
+**Why:** These methods form a tightly coupled combat subsystem covering charge resolution, dice rolling, melee battle simulation, leadership tests, pursuit/flee/give-ground outcomes, and FBIG (Fall Back in Good Order). They had no business living in the main game class alongside camera controls and UI code.
+
+**Key decision:** `CombatResolver` receives the game instance (`self.game`) and accesses all game state through it. Game attributes like `world`, `units`, `player1Units`, `player2Units`, `playerNP`, `unitToMove`, `attackSequence`, `autoRoll`, `autoCharge`, `autoHold`, and `diceInfoText` are accessed via `self.game.*`. Panda3D globals (`render`, `taskMgr`, `messenger`, `loader`, `base`) remain as globals. Thin delegate methods on `MyApp` preserve the `self.methodName()` call interface for all internal callers and external callers (e.g., `deployPhase.py` calling `game.checkUnitContactSmall()`).
+
+### 8. Naming Improvements
 
 - `gameFSM` → `GamePhaseFSM` (PEP 8 class naming)
 - `spell` / `spellDevilsVisit` / `spellRaiseDead` → `Spell` / `DevilsVisitSpell` / `RaiseDeadSpell`
@@ -96,7 +104,8 @@ Added 18 section headers (`# ─── Section Name ───`) to organize `MyA
 ## File Structure After Refactoring
 
 ```
-game.py              (3,997 lines)  — Main game application
+game.py              (2,753 lines)  — Main game application
+combat_resolution.py (1,071 lines)  — Combat resolution subsystem
 game_fsm.py          (365 lines)    — Game phase state machine
 spell_system.py      (180 lines)    — Spell base class + implementations
 persistence.py       (163 lines)    — Save/load game state
@@ -106,7 +115,7 @@ game_original.py     (4,899 lines)  — Backup of original (can be deleted)
 ## What's Left (Future Work)
 
 1. **Rename Norwegian variables** — `terninger`→`dice_set`, `terning`→`die` across combat methods (50+ occurrences, needs test coverage first)
-2. **Extract combat resolution** — `checkUnitContactSmall` and related methods (~600 lines) could become their own module
+2. ~~**Extract combat resolution**~~ — Done. 12 methods (1,071 lines) extracted to `combat_resolution.py`
 3. **Extract movement system** — `pathTowardsMouse`, `moveUnit`, sweep tests (~400 lines) are another candidate
 4. **Extract drawing helpers** — Circle/arc/rectangle drawing methods (~200 lines) are self-contained
 5. **Remove remaining commented-out blocks** — A few `""" ... """` blocks remain inside active methods (e.g., inside `mouseHoverUnit`)
