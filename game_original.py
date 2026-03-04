@@ -1,43 +1,45 @@
-# ─── Standard Library ───────────────────────────────────────────────────────
-import math
-import json
-
-# ─── Panda3D Core ────────────────────────────────────────────────────────────
-from panda3d.core import (
-    Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32, TransformState,
-    CardMaker, Shader, Texture, TextNode, NodePath, MeshDrawer, LineSegs,
-    DirectionalLight, AmbientLight, NurbsCurveEvaluator, NurbsCurveResult,
-    GraphicsPipe, GraphicsOutput, LQuaterniond, LVector3d,
-    OrthographicLens, Camera, RenderState, TextureStage,
-    FrameBufferProperties, WindowProperties, TransparencyAttrib,
-    PStatClient, loadPrcFileData,
-)
-
-# ─── Panda3D Bullet Physics ─────────────────────────────────────────────────
-from panda3d.bullet import (
-    BulletWorld, BulletPlaneShape, BulletRigidBodyNode,
-    BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape,
-    BulletSphereShape, BulletDebugNode,
-    BulletCharacterControllerNode, BulletCapsuleShape, ZUp,
-)
-
-# ─── Panda3D Direct ─────────────────────────────────────────────────────────
 from direct.showbase.ShowBase import ShowBase
-from direct.task.Task import Task
+from panda3d.core import Plane, PlaneNode, Point3, Vec2, Vec3, Vec4, BitMask32, TransformState
+from panda3d.core import CardMaker
+from panda3d.core import PStatClient
+from panda3d.bullet import BulletWorld, BulletPlaneShape, BulletRigidBodyNode, BulletTriangleMesh, BulletTriangleMeshShape, BulletBoxShape
 from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
-from direct.interval.IntervalGlobal import Sequence, ProjectileInterval, Wait, Parallel
+from direct.interval.IntervalGlobal import Sequence, ProjectileInterval, Wait
 from direct.interval.FunctionInterval import Func
-from direct.gui.OnscreenText import OnscreenText
-from direct.particles.ParticleEffect import ParticleEffect
+from panda3d.core import Shader
+from direct.task.Task import Task
 
-# ─── Shaders ─────────────────────────────────────────────────────────────────
 from shaders.chargedistshaders import *
+from panda3d.core import Texture
+from panda3d.core import DirectionalLight, AmbientLight
+from panda3d.core import MeshDrawer, NodePath
+from panda3d.core import TextNode
+import math
+from panda3d.bullet import BulletSphereShape, BulletRigidBodyNode
+from panda3d.bullet import BulletDebugNode
+from direct.directutil import Mopath
+from direct.interval.MopathInterval import MopathInterval
+from panda3d.core import NurbsCurveEvaluator, NurbsCurveResult
+from panda3d.core import NurbsCurve
+from panda3d.core import GraphicsPipe
 
-# ─── Project Modules ─────────────────────────────────────────────────────────
+
+from panda3d.bullet import BulletCharacterControllerNode
+from panda3d.bullet import BulletCapsuleShape
+from panda3d.bullet import ZUp
+from direct.gui.OnscreenText import OnscreenText
+from panda3d.core import LQuaterniond, LVector3d
+from direct.fsm.FSM import FSM
+from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
+from panda3d.core import Vec3, BitMask32
+from panda3d.core import LineSegs
+#from panda3d.core import AsyncFuture
+
 from models import *
 from units import *
 from toHitAndToWound import *
 from battleFunctions import *
+
 from dice import *
 from choiceFunctions import *
 from ClassOutOfBounds import *
@@ -49,19 +51,354 @@ from gameStateAnalyzer import *
 from listBuilderGUI import ArmyListBuilderGUI
 from campaignMap import CampaignMap, CountryFSM
 
-# ─── Extracted Subsystems ────────────────────────────────────────────────────
-from game_fsm import GamePhaseFSM
-from spell_system import DevilsVisitSpell, RaiseDeadSpell
-from persistence import save_game_state, load_game_state
+#import charge_impact_effect
+from direct.particles.ParticleEffect import ParticleEffect
+from direct.interval.IntervalGlobal import Parallel
+from panda3d.core import GraphicsOutput, Camera, OrthographicLens, RenderState
+from panda3d.core import Texture, FrameBufferProperties, WindowProperties
+from panda3d.core import CardMaker, TransparencyAttrib
+from panda3d.core import RenderState, TextureStage
+from panda3d.core import loadPrcFileData
 
-# ─── Config ──────────────────────────────────────────────────────────────────
+import json
+from datetime import datetime
+
 loadPrcFileData('', 'show-frame-rate-meter true')
+#loadPrcFileData('', 'want-pstats 1')
+
+class gameFSM(FSM):
+    def __init__(self, Game):
+        FSM.__init__(self, 'GameFSM')
+        self.game = Game
+
+        self.endOfTurnSpells = []
+        
+        self.endPhaseCube = self.createMenuCollisionCube("endPhase",Point3(5,20,3))
+        
+        self.phases = ['StrategyPhase', 'MovementPhase', 'ShootingPhase', 'CombatPhase']
+        self.currentPhaseIndex=0
+
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        self.request(self.phases[self.currentPhaseIndex])
+
+        self.menuCubes= base.camera.findAllMatches("**/*MenuCube")
+        print(self.menuCubes)
+
+
+        self.accept('mouse1', self.mouseMenuCollide)
+
+    def createMenuCollisionCube(self, name='StrategyPhase',pos=Point3(5, 20, 0)):
+        # Create a Bullet collision cube (visible + physics) for debugging
+
+        half_extents = Vec3(1, 1, 1)  # Half sizes (so cube is 2x2x2)
+        shape = BulletBoxShape(half_extents)
+        cube_node = BulletRigidBodyNode(name)
+        cube_node.setMass(0)  # 0 = static; set >0 to make it dynamic
+        cube_node.addShape(shape)
+
+        cubeNP = base.camera.attachNewNode(cube_node)
+        cubeNP.setPos(pos)  # Raise slightly above ground
+        cubeNP.setCollideMask(BitMask32.bit(2))  # Set collision mask
+        cubeNP.setName(name)
+
+        # Attach to existing Bullet world (created in MyApp.setup_bullet)
+        base.world.attachRigidBody(cube_node)
+
+        # Optional visible geometry
+        try:
+            model = loader.loadModel('models/box')
+            model.reparentTo(cubeNP)
+            model.setScale(2)  # Box model is unit-sized; scale to match 2x2x2
+            model.setPos(-1,-1,-1)
+        except Exception:
+            pass
+        return cubeNP
+
+    def mouseMenuCollide(self):
+        
+        if base.mouseWatcherNode.hasMouse():
+            x = base.mouseWatcherNode.getMouseX()
+            y = base.mouseWatcherNode.getMouseY()
+            #print(x,y)
+            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
+            #pFrom = Point3(0, 0, 0)
+            #pTo = Point3(10, 0, 0)
+
+            # Get to and from pos in camera coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
+
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            result = base.world.rayTestClosest(pFrom, pTo,BitMask32.bit(2))
+
+            if result.hasHit():
+                """ print(result.hasHit())
+                print(result.getHitPos())
+                print(result.getHitNormal())
+                print(result.getHitFraction())
+                print(result.getNode()) """
+                
+                self.currentPhaseIndex = (self.currentPhaseIndex + 1) % len(self.phases)
+                #self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+                self.request(self.phases[self.currentPhaseIndex])
+
+    def enterDeployPhase(self):
+        print("Entering Deploy Phase")
+        # Create a ghost node for the boundary area
+        self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
+        #small battle marchment, adjust as needed
+        """ depW=44
+        depH=7.5
+        boxW=20
+        boxH=50 """
+        #Full scale battle, adjust as needed
+        depW=72
+        depH=12
+        boxW=20
+        boxH=50
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(boxW, 100, 10)),TransformState.makePos(Point3(depW/2+boxW, 0, 0)))
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(boxW, 100, 10)),TransformState.makePos(Point3(-depW/2-boxW, 0, 0)))  # Your boundary
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(depW/2, boxH, 10)),TransformState.makePos(Point3(0, depH/2+boxH, 0)))
+        self.game.boundary_ghost.addShape(BulletBoxShape(Vec3(depW/2, boxH, 10)),TransformState.makePos(Point3(0, -depH/2-boxH, 0)))
+        # Attach to scene
+        self.game.boundary_np = render.attachNewNode(self.game.boundary_ghost)
+        self.game.boundary_np.setCollideMask(BitMask32.bit(11))  # Set collide mask to match unit bodies
+        self.game.boundary_np.setPos(0, -7.5-7.5/2, 0)
+        self.game.boundary_np.setPos(0, -depH-depH/2, 0)
+        base.world.attachRigidBody(self.game.boundary_ghost)
+
+        self.game.debugText.setText(f"Current phase: Deploy Phase")
+        self.game.setActiveUnitTask=self.game.taskLoopDeploy
+        self.game.setActiveUnitTaskName="taskLoopDeploy"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+
+    def exitDeployPhase(self):
+        base.world.removeRigidBody(self.game.boundary_ghost)
+        self.game.boundary_np.removeNode()
+
+    def enterStrategyPhase(self):
+        self.currentPhaseIndex = 0
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        self.game.setActiveUnitTask=self.game.taskLoopStrategy
+        self.game.setActiveUnitTaskName="taskLoopStrategy"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopStrategy, "taskLoopStrategy"])
+        print("Entering Strategy Phase")
+        self.game.ground.setShaderInput("isActive", False)
+        for unit in self.game.units:
+            unit.hasAttackedThisTurn=False
+            if unit.state != "InCombat" and unit.state != "IsFleeing":
+                unit.hasMovedThisTurn=False
+                unit.attemptedRallyThisTurn=False
+                unit.request("Idle")
+            unit.updateTextNode()
+
+        
+
+    def exitStrategyPhase(self):
+        print("Exiting Strategy Phase")
+        self.game.ignore('mouse1')
+        if taskMgr.hasTaskNamed("taskLoopStrategy"):
+            taskMgr.remove("taskLoopStrategy")
+        
+
+    def enterMovementPhase(self):
+        print("Entering Movement Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        self.game.setActiveUnitTask=self.game.taskLoopPathTowardsMouse
+        self.game.setActiveUnitTaskName="taskLoopPathTowardsMouse"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
+            #taskMgr.add(self.game.AIplayer2.takeMoveTurn,"aimove2",extraArgs=[], appendTask=False)
+            """ for unit in self.game.player2Units:
+                if unit.state == "Idle":
+                    print(f"AI controlling unit: {unit.unit.name}")
+                    taskMgr.add(self.game.AIplayer2.take_turn(), "aimove2", extraArgs=[], appendTask=False)
+             """
+            #taskMgr.add(self.game.AIplayer2.take_turn())
+            pass
+            #taskMgr.add(self.game.AIplayer2.takeMoveTurn())
+        
+        
+
+    def exitMovementPhase(self):
+        print("Exiting Movement Phase")
+        taskMgr.remove("taskLoopPathTowardsMouse")
+        self.cleanup()
+        self.game.ignore('mouse1')
+        #self.game.ground.setShaderInput("isActive", False)
+        self.game.boundries.contactTest(self.game.boundries.northBoundry,180,Vec3(0,-0.1,0))
+        self.game.boundries.contactTest(self.game.boundries.southBoundry,0,Vec3(0,0.1,0))
+        self.game.boundries.contactTest(self.game.boundries.westBoundry,270,Vec3(0.1,0,0))
+        self.game.boundries.contactTest(self.game.boundries.eastBoundry,90,Vec3(-0.1,0,0))
+        for u in self.game.unitCopies:
+            u.removeNode()
+        self.game.unitCopies=[]
+        
+
+    def enterShootingPhase(self):
+        print("Entering Shooting Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        
+        
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskShootingArcUpdate, "taskShootingArcUpdate"])
+        self.game.setActiveUnitTask=self.game.taskShootingArcUpdate
+        self.game.setActiveUnitTaskName="taskShootingArcUpdate"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        
+
+        
+
+    def exitShootingPhase(self):
+        print("Exiting Shooting Phase")
+        self.game.ignore('mouse1')
+        self.cleanup()
+        self.game.ground.setShaderInput("isActive", False)
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
+        
+
+    def enterCombatPhase(self):
+        print("Entering Combat Phase")
+        self.game.debugText.setText(f"Current phase: {self.phases[self.currentPhaseIndex]}")
+        #self.game.accept('mouse1', self.game.setActiveUnit,[self.game.taskStartCombat, "taskStartCombat"])
+        self.game.setActiveUnitTask=self.game.taskStartCombat
+        self.game.setActiveUnitTaskName="taskStartCombat"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        
+        for unit in self.game.units:
+            if unit.state == "InCombat":
+                unit.hasAttackedThisTurn=False
+        if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
+            pass
+            #taskMgr.add(self.game.AIplayer2.takeCombatTurn())
+
+
+    def exitCombatPhase(self):
+        print("Exiting Combat Phase")
+        self.game.ignore('mouse1')
+        self.game.roundCounter.next_turn()
+        self.game.roundCounter.update_round_display()
+        for spell in self.endOfTurnSpells:
+            spell.endSpell()
+        self.endOfTurnSpells=[]
+        for u in self.game.unitCopies:
+            u.removeNode()
+        self.game.unitCopies=[]
+
+    def enterMakeChoice(self):
+        print("Entering Make Choice Phase")
+        self.game.debugText.setText(f"Current phase: MakeChoice")
+        self.game.accept('mouse1', self.game.makeChoiceSelection)
+    
+    def exitMakeChoice(self):
+        print("Exiting Make Choice Phase")
+        self.game.ignore('mouse1')
+
+    def enterSpellPhase(self):
+        print("Entering Spell Phase")
+        self.game.debugText.setText(f"Casting a spell")
+        self.activeSpell=None
+        self.spellFunctionToCast=None
+        taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
+        self.game.setActiveUnitTask=self.game.taskMagicArcUpdate
+        self.game.setActiveUnitTaskName="taskMagicArcUpdate"
+        self.game.accept('mouse1', self.game.setActiveUnit,[self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+
+    def exitSpellPhase(self):
+        print("Exiting Spell Phase")
+        self.activeSpell=None
+        self.spellFunctionToCast=None
+        self.game.ignore('mouse1')
+        self.cleanup()
+        self.game.ground.setShaderInput("isActive", False)
+        taskMgr.remove("taskMagicArcUpdate")
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
+        self.game.trajectoryLine.removeNode()
+
+    def cleanup(self):
+        
+        for unit in self.game.units:
+            unit.model.setColor(unit.color)
+            unit.endedInUnit=False
+            #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+            #unit.hasMovedThisTurn=False
+            unit.updateTextNode()
+
+    def enterCampaignPhase(self):
+        """Show campaign map, hide battle scene."""
+        print("Entering Campaign Phase")
+        self.game.debugText.setText("Current phase: Campaign Map")
+        self.game.debugNP.hide()  # Hide Bullet debug during campaign map
+
+        # Save current camera transform
+        self._saved_cam_pos = self.game.camera.getPos()
+        self._saved_cam_hpr = self.game.camera.getHpr()
+
+        # Hide battle elements
+        self.game.ground.hide()
+        for u in self.game.units:
+            u.bodyNP.hide()
+
+        # Show campaign elements
+        self.game.campaign_map.show()
+        self.game.country_model.show()
+        self.game.cloud_plane.show()
+
+        # Position camera for campaign view (offset to match campaign map position)
+        self.game.camera.setPos(self.game.campaign_offset_x-500, -1500, 1200)
+        self.game.camera.lookAt(self.game.country_model)
+
+        # Start campaign update tasks
+        self.game.taskMgr.add(self.game.update_campaign_terrain, "update_campaign_terrain")
+        self.game.taskMgr.add(self.game.update_cloud_time, "update_cloud_time")
+
+        # Bind mouse for campaign interaction
+        self.game.ignore('mouse1')
+        self.ignore('mouse1')  # Stop FSM's own mouseMenuCollide handler
+        self.game.accept('mouse1', self.game.campaign_mouse_click)
+        self.game.accept('mouse3', self.game.campaign_deselect)
+        self.game.accept('m', self.game.enableMouse)
+
+    def exitCampaignPhase(self):
+        """Hide campaign map, restore battle scene."""
+        print("Exiting Campaign Phase")
+        self.game.debugNP.show()  # Show Bullet debug for campaign map
+
+        # Hide campaign elements
+        self.game.campaign_map.hide()
+        self.game.country_model.hide()
+        self.game.cloud_plane.hide()
+
+        # Stop campaign tasks
+        self.game.taskMgr.remove("update_campaign_terrain")
+        self.game.taskMgr.remove("update_cloud_time")
+
+        # Show battle elements
+        self.game.ground.show()
+        for u in self.game.units:
+            u.bodyNP.show()
+
+        # Restore camera
+        self.game.disableMouse()
+        self.game.camera.setPos(self._saved_cam_pos)
+        self.game.camera.setHpr(self._saved_cam_hpr)
+
+        # Unbind campaign mouse, restore battle mouse
+        self.game.ignore('mouse1')
+        self.game.ignore('mouse3')
+        self.game.ignore('m')
+        self.accept('mouse1', self.mouseMenuCollide)  # Restore FSM's own handler
+        self.game.accept('mouse1', self.game.setActiveUnit,
+                         [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
 
 
 class MyApp(ShowBase):
-
-    # ─── Initialization ──────────────────────────────────────────────────────
-
     def __init__(self):
         super().__init__()
 
@@ -151,16 +488,116 @@ class MyApp(ShowBase):
         self.units = []
         self.player1Units = []
         self.player2Units = []
+        
+        
+        """ url_man_at_arm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/3ddf-271a-aaec-73eb/man-at-arms"
+        man_at_arm = model("Man_at_Arm", url_man_at_arm)
+        man_at_arm.armor_save = 7
+        man_at_arm_unit = unit("Man_at_Arm Unit", man_at_arm, 10,5,2)
+        self.bretBowmen = unitGraphics(self,'BretBowmen','models/bret_bowmen.bam',man_at_arm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        self.bretBowmen.bodyNP.setPos(25,35,0)
+        self.bretBowmen.bodyNP.setH(180)
+        self.units.append(self.bretBowmen)
+        self.player2Units.append(self.bretBowmen)
+        self.bretBowmen.unit.model.weapons.update({
+            'short bow': {'name': 'short bow',
+                          'description': 'weaker ranged weapon',
+                          'tag': 'ranged',
+                          'ranged_range': 12,
+                          'ranged_shots': 1,
+                          'ranged_strength': 3,
+                          'ranged_AP': 0,
+                          'volley_fire': True}
+        }) """
 
-        # Spell definitions for wizard units
-        spells = {
+        
+
+        
+        """
+        url_knight_of_the_realm = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/54ce-96e7-b7e1-3b4b/mounted-knight-of-the-realm"
+        url_bretonnian_warhorse = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/kingdom-of-bretonnia/71c3-30e-c81-cb64/bretonnian-warhorse"
+        bretonnian_warhorse = BretonnianWarhorse("Bretonnian Warhorse", url_bretonnian_warhorse)
+        bretonnian_warhorse.armor_save = 7
+        bretonnian_warhorse_unit = unit("Bretonnian Warhorse Unit", bretonnian_warhorse, 5,5,1)
+        mounted_knight_of_the_realm = MountedKnightOfTheRealm("Mounted Knight of the Realm", 
+                                                            url_knight_of_the_realm, 
+                                                            mountUnit=bretonnian_warhorse_unit)
+        mounted_knight_of_the_realm.armor_save = 3
+        mounted_knight_of_the_realm.equip_weapon('lance')
+        mounted_knight_of_the_realm_unit = unit("Mounted Knight of the Realm Unit", mounted_knight_of_the_realm, 5,5,1)
+        self.mountedKnightOfTheRealm = unitGraphics(self,'MountedKnightOfTheRealm','models/bret_knight.bam',mounted_knight_of_the_realm_unit, scale=1.0, BulletWorld=self.world, color=(1,0,0,1))
+        self.mountedKnightOfTheRealm.bodyNP.setPos(20,20,0)
+        self.units.append(self.mountedKnightOfTheRealm)
+        self.player2Units.append(self.mountedKnightOfTheRealm) """
+
+
+        """ cathayan_warhorse = CathayanWarhorse("Cathayan Warhorse", "-")
+        cathayan_warhorse_unit = unit("Cathayan Warhorse Unit", cathayan_warhorse, 6,6,1)
+        jade_lancer = JadeLancer("Jade Lancer", "-", mountUnit=cathayan_warhorse_unit)
+        jade_lancer_unit = unit("Jade Lancer Unit", jade_lancer, 6,6,1)
+        self.jadeLancers = unitGraphics(self,'JadeLancers','models/jade_lancer.bam',jade_lancer_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
+        self.jadeLancers.bodyNP.setPos(30,25,0)
+        self.jadeLancers.bodyNP.setH(180)
+        self.units.append(self.jadeLancers)
+        self.player2Units.append(self.jadeLancers) """
+
+        """ jade_warrior = JadeWarrior("Jade Warrior", "-")
+        jade_warrior_unit = unit("Jade Warrior Unit", jade_warrior, 15,5,3)
+        self.jadeWarriors = unitGraphics(self,'JadeWarriors','models/jade_warrior.bam',jade_warrior_unit, scale=1.0, BulletWorld=self.world, color=(1,1,0,1))
+        self.jadeWarriors.bodyNP.setPos(0,30,0)
+        self.jadeWarriors.bodyNP.setH(180)
+        self.units.append(self.jadeWarriors)
+        self.player2Units.append(self.jadeWarriors) """
+
+
+
+        
+        """ url_night_goblin = "https://www.newrecruit.eu/wiki/tow/warhammer-the-old-world/orc-and-goblin-tribes/f241-11e2-3771-3b16/night-goblin"
+        night_goblin = NightGoblin("Night Goblin", url_night_goblin)
+        night_goblin.armor_save = 7 
+        night_goblin_unit = unit("Night Goblin Unit", night_goblin, 30,10,3)
+        self.goblins = unitGraphics(self,'Goblins','models/goblin_archers.bam',night_goblin_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblins.bodyNP.setPos(0,-20,0)
+        self.goblins.unit.model.equip_weapon('short bow')
+        self.units.append(self.goblins)
+        self.player1Units.append(self.goblins)
+        
+        url_goblin_wolf_rider = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/9e93-cbcd-9787-baaa/goblin-wolf-rider"
+        url_giant_wolf = "https://www.newrecruit.eu/wiki/warhammer-armies-project/warhammer-armies-project/orcs-%26-goblins/2b89-9731-8924-f606/giant-wolf"
+        giant_wolf = GiantWolf("Giant Wolf", url_giant_wolf)
+        giant_wolf_unit = unit("Giant Wolf Unit", giant_wolf, 15,5,3)
+        goblin_wolf_rider = GoblinWolfRider("Goblin Wolf Rider", url_goblin_wolf_rider, mountUnit=giant_wolf_unit)
+        goblin_wolf_rider_unit = unit("Goblin Wolf Rider Unit", goblin_wolf_rider, 15,5,3)
+        self.goblinWolfRiders = unitGraphics(self,'GoblinWolfRiders','models/goblin_wolfriders.bam',goblin_wolf_rider_unit, scale=1.0, BulletWorld=self.world, color=(0,1,0,1))
+        self.goblinWolfRiders.bodyNP.setPos(-20,-30,0)
+        #self.goblinWolfRiders.bodyNP.setH(90)
+        self.units.append(self.goblinWolfRiders)
+        self.player1Units.append(self.goblinWolfRiders)
+        print("Goblin wolf riders loaded") """
+
+        """ skeletal_steed = SkeletalSteed("Skeletal Steed", "url_skeletal_steed")
+        skeletal_steed_unit = unit("Skeletal Steed Unit", skeletal_steed, 6,6,1)
+        black_knight = BlackKnight("Black Knight", "url_black_knight", mountUnit=skeletal_steed_unit)
+        black_knight_unit = unit("Black Knight Unit", black_knight, 6,6,1)
+        self.blackKnights = unitGraphics(self,'BlackKnights','models/black_knights.bam',black_knight_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.blackKnights)
+        self.units.append(self.blackKnights) """
+
+        """ zombie = Zombie("Zombie", "url_zombie")
+        zombie_unit = unit("Zombie Unit", zombie, 30,6,5)
+        self.zombies = unitGraphics(self,'Zombies','models/zombies.bam',zombie_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.zombies)
+        self.units.append(self.zombies)
+        self.zombies.bodyNP.setPos(-25,-25,0) """
+
+        spells ={
             'Raise Dead': {
                 'description': 'Allows the Necromancer to raise fallen units as Zombies.',
                 'casting_value': 7,
                 'range': 12,
                 'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
                 'phase': 'strategy',
-                'class': RaiseDeadSpell
+                'class': self.spellRaiseDead
             },
             'Deathly Chill': {
                 'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
@@ -170,15 +607,30 @@ class MyApp(ShowBase):
                 'phase': 'shooting'
             },
             'Devils visit': {
-                'description': 'Increase ally movement',
+                'description': 'Ingrease ally movement',
                 'casting_value': 6,
                 'range': 18,
                 'effect': 'increases the movement characteristic of ally',
                 'phase': 'strategy',
-                'class': DevilsVisitSpell
+                'class': self.spellDevilsVisit
             }
         }
 
+        """ necromancer = Necromancer("Necromancer", "url_necromancer", spells=spells)
+        necromancer_unit = unit("Necromancer Unit", necromancer, 1,1,1)
+        self.necromancer = unitGraphics(self,'Necromancer','models/zombies.bam',necromancer_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.necromancer)
+        self.units.append(self.necromancer)
+        self.necromancer.bodyNP.setPos(-20,-20,0) """
+
+        """ direWolf = DireWolf("Dire Wolf", "url_dire_wolf")
+        direWolf_unit = unit("Dire Wolf Unit", direWolf, 5,5,1)
+        self.direWolves = unitGraphics(self,'DireWolves','models/dire_wolves.bam',direWolf_unit, scale=1.0, BulletWorld=self.world, color=(0,0,1,1))
+        self.player1Units.append(self.direWolves)
+        self.units.append(self.direWolves)
+        self.direWolves.bodyNP.setPos(-30,-20,0) """
+
+        #self.load_player1_army("my_army.json")
         self.load_player1_army("strategy_armies/gunline.json")
         self.load_player2_army("strategy_armies/horde_rush.json")
 
@@ -218,14 +670,125 @@ class MyApp(ShowBase):
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
 
-        self.fsm = GamePhaseFSM(self)
+        self.fsm = gameFSM(self)
         self.accept('c', self.toggle_campaign_map)
 
-        self.fsm.request("DeployPhase")
+        if 0:
+            self.fsm.currentPhaseIndex=2
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,0,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
 
-        self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
-        self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+        if 0:
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-30,0)
+            self.goblinWolfRiders.bodyNP.setPos(0,-40,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+        if 0: #battle test
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-13,0)
+            self.goblinWolfRiders.bodyNP.setPos(10,-15,0)
+            self.bretBowmen.bodyNP.setPos(0,13,0)
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
 
+        if 0: #fall back through enemy allay tests
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(11,6,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
+            self.mountedKnightOfTheRealm.bodyNP.setPos(3,10,0)
+            self.unitToMove=self.goblins
+
+        if 0: #charge tests
+            self.fsm.currentPhaseIndex=1
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(11,6,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.mountedKnightOfTheRealm.bodyNP.setH(180)
+            self.unitToMove=self.goblins
+
+        if 0: #rally test
+            self.fsm.currentPhaseIndex=0
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.request("IsFleeing")
+            self.goblins.bodyNP.setPos(0,0,0)
+            self.bretBowmen.bodyNP.setPos(0,4,0)
+
+        if 0:
+            self.fsm.currentPhaseIndex=3
+            self.fsm.request(self.fsm.phases[self.fsm.currentPhaseIndex])
+            self.goblins.bodyNP.setPos(0,-3,0)
+            self.goblinWolfRiders.bodyNP.setPos(10,5,0)
+            self.goblinWolfRiders.bodyNP.setH(90)
+            self.bretBowmen.bodyNP.setPos(0,5,0)
+            #self.drawProjectileTrajectory(Point3(0,0,0), Point3(10,10,0))
+            self.unitToMove=self.goblins
+            self.bretBowmen.isInCombatWith.append(self.goblins)
+            self.bretBowmen.isInCombatWith.append(self.goblinWolfRiders)
+            self.bretBowmen.isInCombatFlank.append('front')
+            self.bretBowmen.isInCombatFlank.append('front')
+            self.bretBowmen.isInCombat=True
+            self.goblins.isInCombatWith.append(self.bretBowmen)
+            self.goblins.isInCombat=True
+            self.goblins.isInCombatFlank.append('front')
+            self.goblinWolfRiders.isInCombatWith.append(self.bretBowmen)
+            self.goblinWolfRiders.isInCombat=True
+            self.goblinWolfRiders.isInCombatFlank.append('left')
+        if 0: #battle march
+            self.blackKnights.bodyNP.setPos(0,-9,0)
+            self.zombies.bodyNP.setPos(11,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+        if 0: #battle march zombies center
+            self.blackKnights.bodyNP.setPos(11,-9,0)
+            self.zombies.bodyNP.setPos(0,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            self.necromancer.bodyNP.setPos(0,-14,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+        
+        if 0: #test Deployment
+            self.fsm.request("DeployPhase")
+            self.blackKnights.bodyNP.setPos(11,-9,0)
+            self.zombies.bodyNP.setPos(0,-9,0)
+            self.direWolves.bodyNP.setPos(-11,-9,0)
+            self.necromancer.bodyNP.setPos(0,-14,0)
+            
+            self.jadeLancers.bodyNP.setPos(10, 9, 0)
+            self.jadeWarriors.bodyNP.setPos(0,9,0)
+
+        if 1: 
+            self.fsm.request("DeployPhase")
+
+
+        
+
+        if 1:
+            self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
+            self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+        else:
+            self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=44, height=30, color=Vec4(1, 1, 0, 1))
+            self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=44, height=15, color=Vec4(1, 1, 1, 1))
+
+
+
+        
         self.z2= loader.loadModel("models/zup-axis")
         self.z2.reparentTo(render)
         #self.z2.setPos(oposUnit)
@@ -253,8 +816,6 @@ class MyApp(ShowBase):
 
         
     
-    # ─── Army Loading ─────────────────────────────────────────────────────
-
     def load_army_from_json(self, filename, player_num=1, start_pos=Point3(0, -20, 0), spacing=12):
         """
         Load army units from a JSON file created by the list builder
@@ -374,8 +935,6 @@ class MyApp(ShowBase):
         print(f"Successfully loaded {len(created_units)} units from {filename}")
         return created_units
 
-    # ─── Texture Baking ──────────────────────────────────────────────────
-
     def bakeTextures(self, target_np, texture_size=512, name_suffix="_baked"):
         tex = Texture()
         tex.setMinfilter(Texture.FTLinear)
@@ -493,8 +1052,6 @@ class MyApp(ShowBase):
             self.applyBakedTexture(node, baked_texture)
         return baked_texture
 
-    # ─── Projectiles & Visual Effects ────────────────────────────────────
-
     def drawProjectileTrajectory(self,startPos,endPos,n=20):
         # Remove existing trajectory line if it exists
         if hasattr(self, 'trajectoryLine'):
@@ -542,8 +1099,6 @@ class MyApp(ShowBase):
         #for trajectory in self.trajectories:
         #    trajectory.start()
         return parallel_trajectories
-
-    # ─── Task Management & Phase Loops ────────────────────────────────────
 
     def startTaskFunction(self,taskfunction,taskname):
         if taskMgr.hasTaskNamed(taskname):
@@ -618,8 +1173,6 @@ class MyApp(ShowBase):
             unit.request("Idle")
         unit.attemptedRallyThisTurn=True
         return
-
-    # ─── Phase Task Loops ─────────────────────────────────────────────────
 
     def taskLoopDeploy(self, task):
         #base.messenger.toggleVerbose()
@@ -831,8 +1384,6 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result.getNode()).setCollideMask(mask)
                         #self.toCleanup.append(np)
 
-    # ─── Camera & UI ──────────────────────────────────────────────────────
-
     def cameraShake(self, intensity=1.0, duration=0.5):
         original_pos = self.camera.getPos()
 
@@ -981,6 +1532,137 @@ class MyApp(ShowBase):
                     self.roundCounter.request('PlayerTwo')
                 self.fsm.request("StrategyPhase")
 
+    
+    
+
+    class spell():
+        def __init__(self, name, casting_value,durationList=None):
+            self.name = name
+            self.casting_value = casting_value
+            self.durationList = durationList
+
+    class spellDevilsVisit(spell):
+        def __init__(self,name,casting_value,durationList):
+            super().__init__(name,casting_value,durationList)
+            self.affectedUnit = None
+
+        async def spellFunction(self, unit):
+            self.affectedUnit = unit
+            terningerLd=[]
+            for i in range(2):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            ld_score = sum(ldDice)
+            for terning in terningerLd:
+                terning.remove(base.world)
+
+            #if ld_score < self.fsm.activeSpell.get('casting_value',12):
+            if ld_score < self.casting_value:
+                print(f"Devil's Visit failed for unit: {unit.unit.name} with score: {ld_score}")
+                return
+            print(f"Devil's Visit succeeded for unit: {unit.unit.name} with score: {ld_score}")
+            self.durationList.append(self)
+            
+            plusSTAT(unit.unit.model, 'M', 11, -99)
+
+        def endSpell(self):
+            plusSTAT(self.affectedUnit.unit.model, 'M', -11, -99)
+    
+    class spellRaiseDead(spell):
+        def __init__(self,name,casting_value,durationList):
+            super().__init__(name,casting_value,durationList)
+
+        def endSpell(self):
+            pass
+
+        async def spellFunction(self, unit):
+            taskMgr.remove("taskShootingTrajectoryDrawLine")
+            terningerLd=[]
+            for i in range(2):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            ld_score = sum(ldDice)
+            for terning in terningerLd:
+                terning.remove(base.world)
+
+            if ld_score > 7:
+                print(f"Raising dead failed for unit: {unit.unit.name} with LD score: {ld_score}")
+                return
+            print(f"Raising dead succeeded for unit: {unit.unit.name} with LD score: {ld_score}")
+            oldranks=(unit.unit.nmodels-1)//unit.unit.files
+
+            terningerLd=[]
+            for i in range(1):
+                terning = Dice(base.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
+                terningerLd.append(terning)
+            for terning in terningerLd:
+                terning.roll()
+            await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
+            ldDice = []
+            for terning in terningerLd:
+                ldDice.append(terning.currentValue)
+            d3_score = sum(ldDice)/2
+            for terning in terningerLd:
+                terning.remove(base.world)
+
+            print (f"Dead models to raise for unit: {unit.unit.name} is: {d3_score}")
+            unit.unit.nmodels += int(math.ceil(d3_score))+2
+            children = unit.model.getChildren()
+            #ranks=unit.unit.ranks
+            files=unit.unit.files
+            newranks=(unit.unit.nmodels-1)//files
+            unit.unit.ranks=newranks
+            rankdiff=newranks-oldranks
+            print("Raising dead for unit:", unit.unit.name, "Old ranks:", oldranks, "New ranks:", newranks, "Rank difference:", rankdiff)
+            if unit.unit.nmodels != len(children):
+                diffnmodel=unit.unit.nmodels-len(children)
+                for i in range(diffnmodel):
+                    clone=children[0].copyTo(unit.model)
+                    children.append(clone)
+            
+            while len(children)>unit.unit.nmodels:
+                children[-1].removeNode()
+                children = unit.model.getChildren()
+
+            for i, child in enumerate(children):
+                row = i // files
+                col = i % files
+                #print(f"Positioning child {child.getName()} at row {row}, col {col}")
+                p=Point3(col * (unit.modelWidth ),-row * (unit.modelHeight ), 0)
+                pp=p-Point3(unit.unitWidth*2, -unit.modelHeight/2,0)
+                child.setPos(p)
+
+            base.world.removeRigidBody(unit.bodyNP.node())
+            for shape in unit.bodyNP.node().shapes:
+                unit.bodyNP.node().removeShape(shape)
+            bounds = unit.model.getTightBounds()
+            box_size = bounds[1] - bounds[0]
+            shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
+            #body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
+            unit.bodyNP.node().addShape(shape)
+            unit.bodyNP.node().setMass(0)  # Static object
+            base.world.attachRigidBody(unit.bodyNP.node())
+            unit.model.setPos(0,0,0)
+            unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
+            rot=LRotationf()
+            rot.setHpr(unit.bodyNP.getHpr())
+            fwd=rot.getForward()
+            #unit.bodyNP.setPos(unit.bodyNP.getPos()-Vec3(0,unit.modelHeight/2,0)*rankdiff)
+            unit.bodyNP.setPos(unit.bodyNP.getPos()-fwd*unit.modelHeight/2*rankdiff)
+
+
     def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
         
         #self.p.start(parent=render, renderParent=render)
@@ -1003,8 +1685,6 @@ class MyApp(ShowBase):
                        )
         seq.start()
         taskMgr.remove("taskShootingTrajectoryDrawLine")
-
-    # ─── Unit Selection & Interaction ─────────────────────────────────────
 
     def getSelectedUnit(self,cnode):
         #if isinstance(cnode, BulletRigidBodyNode):
@@ -1049,8 +1729,6 @@ class MyApp(ShowBase):
             mayChange=True
         )
         return text_node
-
-    # ─── Campaign Map ─────────────────────────────────────────────────────
 
     def toggle_campaign_map(self):
         """Toggle between campaign map and battle view."""
@@ -1167,8 +1845,6 @@ class MyApp(ShowBase):
         """Handle right-click to deselect country on campaign map."""
         self.country_fsm.deselectCountry()
 
-    # ─── Shader & Physics Setup ───────────────────────────────────────────
-
     def setup_shader(self):
         #surface = self.render.find("**/ground")
         surface = self.ground
@@ -1270,8 +1946,6 @@ class MyApp(ShowBase):
         interval = LerpPosInterval(node, duration, target_pos,blendType='easeInOut')
         mySequence = Sequence(interval)
         mySequence.start()
-
-    # ─── Drawing Helpers (circles, arcs, rectangles) ─────────────────────
 
     def draw_circle(self, center=Point3(0, 0, 0), radius=5, segments=32, color=(1, 0, 0, 1)):
 
@@ -1448,6 +2122,69 @@ class MyApp(ShowBase):
         print(result.getNumContacts())
         return result.getNumContacts() > 0
 
+    
+
+    def upAndDown(self):
+        
+        #time = task.time
+        #surface.setZ(0+sin(time)*3)
+        if base.mouseWatcherNode.hasMouse():
+            x = base.mouseWatcherNode.getMouseX()
+            y = base.mouseWatcherNode.getMouseY()
+            #print(x,y)
+            #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
+            #pFrom = Point3(0, 0, 0)
+            #pTo = Point3(10, 0, 0)
+
+            # Get to and from pos in camera coordinates
+            pMouse = base.mouseWatcherNode.getMouse()
+            pFrom = Point3()
+            pTo = Point3()
+            base.camLens.extrude(pMouse, pFrom, pTo)
+
+            # Transform to global coordinates
+            pFrom = render.getRelativePoint(base.cam, pFrom)
+            pTo = render.getRelativePoint(base.cam, pTo)
+
+            result = self.world.rayTestClosest(pFrom, pTo)
+
+            print(result.hasHit())
+            print(result.getHitPos())
+            print(result.getHitNormal())
+            print(result.getHitFraction())
+            print(result.getNode())
+            #surface.set_shader_input("pos", result.getHitPos())
+
+            #self.smiley.setPos(result.getHitPos() + Vec3(0,0,0))
+            self.goblins.bodyNP.setPos(result.getHitPos())
+            #self.move_node_smoothly(self.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
+            #dist = (self.smiley.getPos() - self.smiley_copy.getPos()).length()
+            #print(f"Distance between smilies: {dist}")
+
+            
+            groundSizeboundingbox=self.ground.getTightBounds()
+            print(groundSizeboundingbox)
+            self.ground.set_shader_input("pos", result.getHitPos()/abs(groundSizeboundingbox[0][0]))
+            print(self.goblins.model.getTightBounds())
+            unitWidth=abs(self.goblins.model.getTightBounds()[1][0]-self.goblins.model.getTightBounds()[0][0])
+            unitHeight=abs(self.goblins.model.getTightBounds()[1][1]-self.goblins.model.getTightBounds()[0][1])
+            print(f"Unit Width: {unitWidth}, Unit Height: {unitHeight}")
+            self.ground.set_shader_input("unitSize", Vec3(unitWidth, unitHeight, 0))
+
+            
+
+            """ 
+            #self.draw_circle(center=Point3(0, 0, 5), radius=10, segments=64, color=(1, 1, 1, 1))
+            self.draw_arc(center=Point3(0,0, 0), radius=self.unitHeight/2, remainingmove=5, start_angle=0, end_angle=45, segments=64, color=(1, 1, 1, 1))
+            #self.mesh_drawer_node.reparentTo(self.smiley)
+            print(self.smiley.ls())
+            self.mesh_drawer_node.setPos(Vec3(-self.unitWidth/4, -self.unitHeight/4, 0))
+            self.mesh_drawer_node.setZ(0)
+            self.mesh_drawer_node.setHpr(90,0,0)
+            collision = self.check_bullet_collision(self.mesh_drawer_node, self.smiley_copy)
+            #self.mesh_drawer_node.hide() 
+            """
+            return
     
     def shootingArc(self, origo, num_points=40, rotationangle=30,radius=0.15):
         points =[]
@@ -1701,8 +2438,6 @@ class MyApp(ShowBase):
         bodyNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(bodyNP.node())
         return points
-
-    # ─── Movement & Pathfinding ───────────────────────────────────────────
 
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():
@@ -2027,8 +2762,6 @@ class MyApp(ShowBase):
         
         return rectangleLine
 
-    # ─── Unit Movement Execution ──────────────────────────────────────────
-
     def moveUnit(self, unit):
         if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             taskMgr.remove("taskLoopPathTowardsMouse")
@@ -2120,7 +2853,7 @@ class MyApp(ShowBase):
             await cyn.ma
         #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
-        print("event received")
+        print("event recieced")
         cynchoice = cyn.choice
         
         print('Event delivered with args:', cyn.choice)
@@ -2133,7 +2866,7 @@ class MyApp(ShowBase):
         print("Waiting for choice...")
         await choice.ma
         self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
-        print("event received")
+        print("event recieced")
         selected_choice = choice.choice
         print('Event delivered with args:', choice.choice)
         return
@@ -2737,8 +3470,6 @@ class MyApp(ShowBase):
             del terninger
         return 
 
-    # ─── Combat Resolution ────────────────────────────────────────────────
-
     def getFlankFromContact(self, unit, contact):
         flank = "front"
         print("Unit collision detected!")
@@ -2836,6 +3567,9 @@ class MyApp(ShowBase):
         print(f"suffered wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {suffered_wounds}")
         print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
         print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
+
+    def waitForChoice(self, choice,function,task):
+        pass
 
     async def verySimpleBattleStart(self,task):
         #await messenger.future("choice-made")
@@ -3424,8 +4158,6 @@ class MyApp(ShowBase):
         
         
 
-    # ─── Flee, Pursuit & Rally ────────────────────────────────────────────
-
     def checkFleeCaught(self, fleeUnit, pursuerUnit,task):
         #fleeUnit.bodyNP.setCollideMask(BitMask32.bit(2))
         #pursuerUnit.bodyNP.setCollideMask(BitMask32.bit(2))
@@ -3795,7 +4527,7 @@ class MyApp(ShowBase):
             move_interval2,
             #Func(self.fallBackContactTest, loser,direction),
             rotate_interval2,
-            #Func(self.pursuitMove, winner, loser)
+            #Func(self.persuitMove, winner, loser)
         )
         sequence.start()
         #if rally:
@@ -3882,7 +4614,7 @@ class MyApp(ShowBase):
             move_interval2,
             #Func(self.fallBackContactTest, loser,direction),
             rotate_interval2,
-            #Func(self.pursuitMove, winner, loser)
+            #Func(self.persuitMove, winner, loser)
         )
         #sequence.start()
         #if rally:
@@ -3891,7 +4623,7 @@ class MyApp(ShowBase):
 
     
 
-    def pursuitMove(self, winner, loser):
+    def persuitMove(self, winner, loser):
         if loser.isEmpty():
             "looser is destryed, no pursuit"
             #TODO: winner overruns
@@ -3930,17 +4662,188 @@ class MyApp(ShowBase):
 
     
 
-    # ─── Persistence ──────────────────────────────────────────────────────
-
     def save_game_state(self, filename=None):
-        """Delegate to persistence module."""
-        return save_game_state(self, filename)
+        """
+        Save the current game state to a file.
+        
+        Args:
+            filename (str): Optional filename. If None, generates timestamped filename.
+        """
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"savegame_{timestamp}.json"
+        
+        game_state = {
+            # FSM State
+            'current_phase': self.fsm.phases[self.fsm.currentPhaseIndex],
+            'current_phase_index': self.fsm.currentPhaseIndex,
+            
+            # Round Counter
+            'current_round': self.roundCounter.currentRoundPlayer,
+            'current_player': self.roundCounter.current_player,
+            'max_rounds': self.roundCounter.max_rounds,
+            
+            # AI Settings
+            'ai_player2_active': self.AIplayer2.active,
+            
+            # Units data
+            'units': []
+        }
+        
+        # Save each unit's state
+        for unit in self.units:
+            unit_data = {
+                'name': unit.unitName,
+                'position': list(unit.bodyNP.getPos()),
+                'heading': unit.bodyNP.getH(),
+                'pitch': unit.bodyNP.getP(),
+                'roll': unit.bodyNP.getR(),
+                'state': unit.state,
+                'color': list(unit.color),
+                
+                # Combat/turn state
+                'isInCombat': unit.isInCombat,
+                'hasMovedThisTurn': unit.hasMovedThisTurn,
+                'hasAttackedThisTurn': unit.hasAttackedThisTurn,
+                'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
+                'isDeployed': unit.isDeployed,
+                
+                # Unit composition
+                'nmodels': unit.unit.nmodels,
+                'files': unit.unit.files,
+                'ranks': unit.unit.ranks,
+                
+                # Model characteristics
+                'characteristics': unit.unit.model.characteristics,
+                'armor_save': unit.unit.model.armor_save,
+                'charging': unit.unit.model.charging,
+                
+                # Which player
+                'player': 1 if unit in self.player1Units else 2,
+                
+                # Combat relationships (store unit names)
+                'isInCombatWith': [u.unitName for u in unit.isInCombatWith],
+                'isInCombatFlank': unit.isInCombatFlank
+            }
+            
+            # Save equipped weapon
+            if unit.unit.model.equipedWeapon:
+                unit_data['equipped_weapon'] = unit.unit.model.equipedWeapon['name']
+            else:
+                unit_data['equipped_weapon'] = None
+                
+            game_state['units'].append(unit_data)
+        
+        # Write to file
+        with open(filename, 'w') as f:
+            json.dump(game_state, f, indent=2)
+        
+        print(f"Game saved to {filename}")
+        return filename
+
 
     def load_game_state(self, filename):
-        """Delegate to persistence module."""
-        load_game_state(self, filename)
+        """
+        Load a saved game state from a file.
+        
+        Args:
+            filename (str): The filename to load from.
+        """
+        with open(filename, 'r') as f:
+            game_state = json.load(f)
+        
+        # Restore FSM state
+        self.fsm.currentPhaseIndex = game_state['current_phase_index']
+        self.fsm.request(game_state['current_phase'])
+        
+        # Restore round counter
+        self.roundCounter.currentRoundPlayer = game_state['current_round']
+        self.roundCounter.current_player = game_state['current_player']
+        if self.roundCounter.current_player == 1:
+            self.roundCounter.enterPlayerOne()
+        else:
+            self.roundCounter.enterPlayerTwo()
+        self.roundCounter.max_rounds = game_state['max_rounds']
+        self.roundCounter.update_round_display()
+        
+        # Restore AI settings
+        self.AIplayer2.active = game_state['ai_player2_active']
+        
+        # Create a mapping of unit names to unit objects
+        unit_map = {unit.unitName: unit for unit in self.units}
+        
+        # Restore unit states
+        for unit_data in game_state['units']:
+            unit_name = unit_data['name']
+            
+            if unit_name in unit_map:
+                unit = unit_map[unit_name]
+                
+                # Restore position and rotation
+                unit.bodyNP.setPos(*unit_data['position'])
+                unit.bodyNP.setH(unit_data['heading'])
+                unit.bodyNP.setP(unit_data['pitch'])
+                unit.bodyNP.setR(unit_data['roll'])
+                
+                # Restore state
+                unit.request(unit_data['state'])
+                
+                # Restore combat/turn state
+                unit.isInCombat = unit_data['isInCombat']
+                unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
+                unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
+                unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
+                unit.isDeployed = unit_data['isDeployed']
+                
+                # Restore unit composition
+                unit.unit.nmodels = unit_data['nmodels']
+                unit.unit.files = unit_data['files']
+                unit.unit.ranks = unit_data['ranks']
+                
+                # Restore model characteristics
+                unit.unit.model.characteristics = unit_data['characteristics']
+                unit.unit.model.armor_save = unit_data['armor_save']
+                unit.unit.model.charging = unit_data['charging']
+                
+                # Restore equipped weapon
+                if unit_data['equipped_weapon']:
+                    unit.unit.model.equip_weapon(unit_data['equipped_weapon'])
+                
+                # Clear combat relationships (will be restored in second pass)
+                unit.isInCombatWith = []
+                unit.isInCombatFlank = []
+        
+        # Second pass: restore combat relationships
+        for unit_data in game_state['units']:
+            unit_name = unit_data['name']
+            if unit_name in unit_map:
+                unit = unit_map[unit_name]
+                
+                # Restore combat relationships
+                for combat_unit_name in unit_data['isInCombatWith']:
+                    if combat_unit_name in unit_map:
+                        unit.isInCombatWith.append(unit_map[combat_unit_name])
+                
+                unit.isInCombatFlank = unit_data['isInCombatFlank']
+                
+                # Update text display
+                unit.updateTextNode()
+        
+        print(f"Game loaded from {filename}")
+        #self.debugText.setText(f"Loaded: {filename}")
+        self.debugTextUnit.setText(f"Loaded: {filename}")
 
-    # ─── Camera Zoom & Controls ───────────────────────────────────────────
+        evaluation = self.analyzer.evaluate_overall_state(player_num=1)
+        print(f"Player 1 Assessment: {evaluation['assessment']}")
+        print(f"Total Score: {evaluation['total_score']:.1f}")
+        strategy = self.analyzer.suggest_strategy(player_num=1)
+        print(f"Suggested Strategy: {strategy}")
+
+        evaluation = self.analyzer.evaluate_overall_state(player_num=2)
+        print(f"Player 2 Assessment: {evaluation['assessment']}")
+        print(f"Total Score: {evaluation['total_score']:.1f}")
+        strategy = self.analyzer.suggest_strategy(player_num=2)
+        print(f"Suggested Strategy: {strategy}")
 
     def zoomIn(self):
         # Move camera closer (towards Y=0 from Y=-75)
@@ -3962,8 +4865,6 @@ class MyApp(ShowBase):
     
 
     # Add this method:
-    # ─── List Builder & Army Management UI ────────────────────────────────
-
     def toggle_list_builder(self):
         if not self.list_builder_active:
             if self.list_builder is None:
