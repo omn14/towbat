@@ -576,10 +576,13 @@ class MinimaxTree:
                     action.parameters['target_y'],
                     unit['position'][2]
                 )
-                # Calculate new heading based on movement direction
-                
-                new_heading = math.degrees(math.atan2(dy, dx))
-                unit['heading'] = new_heading
+                # Use explicit heading when provided (e.g. screening),
+                # otherwise derive heading from movement direction.
+                if 'target_heading' in action.parameters:
+                    unit['heading'] = action.parameters['target_heading']
+                else:
+                    new_heading = math.degrees(math.atan2(dy, dx))
+                    unit['heading'] = new_heading
                 unit['hasMovedThisTurn'] = True
                 already_moved = sum(1 for u in new_state.units if u['hasMovedThisTurn'])
                 if already_moved >= maxMovesAllowed:

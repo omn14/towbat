@@ -958,7 +958,8 @@ class MyApp(ShowBase):
             if result2.hasHit():
                 total_hits = 0
                 selected_unit = self.getSelectedUnit(result2.getNode())
-                attacker = self.unitToMove.unit
+                self.shootAt(self.unitToMove, selected_unit)
+                """ attacker = self.unitToMove.unit
                 defender = selected_unit.unit
                 print(attacker.name, "shooting an arrow at",defender.name)
                 #attacker.model.equip_weapon('short bow')
@@ -968,7 +969,7 @@ class MyApp(ShowBase):
                 #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
                 self.unitToMove.bodyNP.setCollideMask(BitMask32.bit(4))
                 selected_unit.bodyNP.setCollideMask(BitMask32.bit(4))
-                self.shootingAnimation(self.unitToMove,selected_unit,total_wounds)
+                self.shootingAnimation(self.unitToMove,selected_unit,total_wounds) """
                 """ for c in result2.getNode().getChildren():
                     #print(c.getName())
                     if "Model" in c.getName():
@@ -993,6 +994,23 @@ class MyApp(ShowBase):
                     self.roundCounter.request('PlayerTwo')
                 self.fsm.request("StrategyPhase")
 
+    def shootAt(self, attackerUnit, defenderUnit):
+        print(f"{attackerUnit.unit.name} shoots at {defenderUnit.unit.name}")
+        # Implement shooting logic here (e.g., calculate hits, wounds, etc.)
+        # For demonstration, we'll just print the action
+        # You can replace this with actual battle simulation logic
+        attacker = attackerUnit.unit
+        defender = defenderUnit.unit
+        print(attacker.name, "shooting an arrow at",defender.name)
+        #attacker.model.equip_weapon('short bow')
+        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
+        self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+        #unit.model.setColor(unit.color)
+        #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+        attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+        defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
+        self.shootingAnimation(attackerUnit, defenderUnit, total_wounds)
+
     def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
         
         #self.p.start(parent=render, renderParent=render)
@@ -1011,7 +1029,8 @@ class MyApp(ShowBase):
                        Func(taskMgr.doMethodLater, 4.0, lambda task: self.p.disable(), 'stopParticles'),
                        Func(self.p_miss.start, parent=render, renderParent=render),
                        Func(self.removeModelsFromUnit, defenderUnit, total_wounds),
-                       Func(taskMgr.doMethodLater, 4.0, lambda task: self.p_miss.disable(), 'stopMissParticles')
+                       Func(taskMgr.doMethodLater, 4.0, lambda task: self.p_miss.disable(), 'stopMissParticles'),
+                       Func(taskMgr.doMethodLater, 3.0, lambda task: base.messenger.send('unit-move-complete'), 'unitmovecompletetask')
                        )
         seq.start()
         taskMgr.remove("taskShootingTrajectoryDrawLine")

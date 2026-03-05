@@ -948,10 +948,13 @@ class MovementSystem:
         cildren = unit.model.getChildren()
         if len(cildren) == 0:
             print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
-            if self.game.attackSequence.isPlaying():
-                print("Pausing attack sequence")
-                self.game.attackSequence.pause()
-                print(self.game.attackSequence.isPlaying())
+            try:
+                if self.game.attackSequence.isPlaying():
+                    print("Pausing attack sequence")
+                    self.game.attackSequence.pause()
+                    print(self.game.attackSequence.isPlaying())
+            except AttributeError:
+                pass
             #self.game.attackSequence.finish()
             for u in unit.isInCombatWith:
                 u.request("Idle")

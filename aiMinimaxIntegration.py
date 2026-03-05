@@ -4,6 +4,7 @@ This shows how to enhance ClassAI with minimax decision-making
 """
 
 from concurrent.futures import ThreadPoolExecutor
+import math
 
 from gameStateTree import GameState, GameAction
 from minimaxOptimizations import OptimizedMinimaxTree
@@ -359,16 +360,10 @@ class EnhancedAI:
             if strat_name == 'Horde Rush':
                 # Horde Rush: no screening — rush forward instead
                 return self._move_toward_target(unit, enemies, move_speed)
-            valuable = self._most_valuable_friendly(unit, friendlies)
-            if valuable and enemies:
-                ne = min(enemies,
-                         key=lambda e: self._distance(
-                             valuable['position'], e['position']))
-                mid_x = (valuable['position'][0] + ne['position'][0]) / 2
-                mid_y = (valuable['position'][1] + ne['position'][1]) / 2
-                dx, dy = mid_x - ux, mid_y - uy
-                dx, dy = self._clamp_movement(dx, dy, move_speed)
-                return self._move_action(unit, ux + dx, uy + dy)
+            act = self._screen_friendlies(unit, friendlies, enemies,
+                                          move_speed)
+            if act:
+                return act
             return None
 
         # ── REDIRECT / BLOCK ──────────────────────────────────────────
@@ -474,9 +469,11 @@ class EnhancedAI:
     # Movement helpers
     # ------------------------------------------------------------------
 
-    def _move_action(self, unit, tx, ty) -> GameAction:
-        return GameAction('move', unit['name'],
-                          {'target_x': tx, 'target_y': ty})
+    def _move_action(self, unit, tx, ty, target_heading=None) -> GameAction:
+        params = {'target_x': tx, 'target_y': ty}
+        if target_heading is not None:
+            params['target_heading'] = target_heading
+        return GameAction('move', unit['name'], params)
 
     def _move_toward_target(self, unit, enemies, move_speed) -> GameAction | None:
         if not enemies:
@@ -562,19 +559,63 @@ class EnhancedAI:
         return self._move_action(unit, ux + fx, uy + fy)
 
     def _screen_friendlies(self, unit, friendlies, enemies, move_speed):
-        """Position between the most valuable friendly and the nearest enemy."""
+        """Position between the most valuable friendly and the nearest enemy.
+
+        The unit advances *toward* the nearest enemy so that its heading
+        naturally faces the threat (the movement arc determines heading).
+        A small lateral component drifts the unit toward the ideal screen
+        position (the midpoint on the valuable↔enemy axis) without turning
+        so far that the flank is exposed.
+        """
         valuable = self._most_valuable_friendly(unit, friendlies)
-        if valuable and enemies:
-            ne = min(enemies,
-                     key=lambda e: self._distance(
-                         valuable['position'], e['position']))
-            mid_x = (valuable['position'][0] + ne['position'][0]) / 2
-            mid_y = (valuable['position'][1] + ne['position'][1]) / 2
-            ux, uy = unit['position'][0], unit['position'][1]
-            dx, dy = mid_x - ux, mid_y - uy
-            dx, dy = self._clamp_movement(dx, dy, move_speed)
-            return self._move_action(unit, ux + dx, uy + dy)
-        return None
+        if not valuable or not enemies:
+            return None
+
+        ne = min(enemies,
+                 key=lambda e: self._distance(
+                     valuable['position'], e['position']))
+        ux, uy = unit['position'][0], unit['position'][1]
+        ex, ey = ne['position'][0], ne['position'][1]
+        vx, vy = valuable['position'][0], valuable['position'][1]
+
+        # --- direction toward the enemy (unit will face this way) ---
+        enemy_dx, enemy_dy = ex - ux, ey - uy
+        dist_to_enemy = math.sqrt(enemy_dx ** 2 + enemy_dy ** 2)
+        if dist_to_enemy < 0.5:
+            return None
+        enx, eny = enemy_dx / dist_to_enemy, enemy_dy / dist_to_enemy
+
+        # --- ideal screen position: midpoint of valuable ↔ enemy ---
+        mid_x = (vx + ex) / 2
+        mid_y = (vy + ey) / 2
+        screen_dx, screen_dy = mid_x - ux, mid_y - uy
+
+        # Decompose the screen vector into advance (along enemy dir)
+        # and lateral (perpendicular) components.
+        advance = screen_dx * enx + screen_dy * eny
+        lat_dx = screen_dx - advance * enx
+        lat_dy = screen_dy - advance * eny
+        lat_mag = math.sqrt(lat_dx ** 2 + lat_dy ** 2)
+
+        # Cap lateral drift so the arc turn stays small (~17 °).
+        max_lateral = max(abs(advance) * 0.3, 0.5)
+        if lat_mag > max_lateral:
+            scale = max_lateral / lat_mag
+            lat_dx *= scale
+            lat_dy *= scale
+
+        dx = advance * enx + lat_dx
+        dy = advance * eny + lat_dy
+        dx, dy = self._clamp_movement(dx, dy, move_speed)
+
+        # target_heading is used only by the minimax evaluator;
+        # the real game derives heading from the movement arc.
+        dest_x, dest_y = ux + dx, uy + dy
+        face_dx, face_dy = ex - dest_x, ey - dest_y
+        heading = math.degrees(math.atan2(face_dy, face_dx))
+        return self._move_action(unit, dest_x, dest_y,
+                                 target_heading=heading)
+
 
     def _bias_to_flank(self, fx, fy, friendlies):
         """Bias a movement vector toward the army's weighted flank.
@@ -626,10 +667,15 @@ class EnhancedAI:
             unit = self._get_unit_by_name(action.unit_name)
             target = self._get_unit_by_name(action.parameters['target'])
             if unit and target:
-                # Mark the unit as having attacked so it can't shoot again this turn
-                unit.hasAttackedThisTurn = True
+                self.game.unitToMove=unit
+                #target_pos = target['position']
                 # Execute shooting
                 # Example: self.game.shootAt(unit, target)
+                #self.game.ball.setPos(target_pos)  # Placeholder for movement command
+                self.game.shootAt(unit,target)
+                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
+                # Mark the unit as having attacked so it can't shoot again this turn
+                unit.hasAttackedThisTurn = True
                 pass
         
         elif action.action_type == 'attack':
