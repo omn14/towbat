@@ -692,7 +692,9 @@ class MyApp(ShowBase):
                 print("Unit has no ranged weapon equipped, cant shoot.")
                 return task.done
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
-                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45)
+                                                       num_points=80, 
+                                                       rotationangle=self.unitToMove.bodyNP.getH()+45,
+                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('range',18)*3/100)
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.ground.setShaderInput("isActive", True)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
@@ -812,6 +814,7 @@ class MyApp(ShowBase):
         return localPoints
 
     def checkArrows(self,mask=BitMask32.bit(3)):
+        hit = False
         for point in self.shootingArcPoints:
             point = point * 2
             point -= Vec2(1,1)
@@ -834,7 +837,12 @@ class MyApp(ShowBase):
                         np.setColor(1,0,1,1)
                         NodePath.anyPath(result.getNode()).setCollideMask(mask)
                         #self.toCleanup.append(np)
-
+                        hit = True
+        if not hit:
+            print(f"no targets in shooting arc for unit {self.unitToMove.unit.name}")
+            #self.ground.setShaderInput("isActive", False)
+            if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
+                taskMgr.remove("taskShootingTrajectoryDrawLine")
     # ─── Camera & UI ──────────────────────────────────────────────────────
 
     def cameraShake(self, intensity=1.0, duration=0.5):
