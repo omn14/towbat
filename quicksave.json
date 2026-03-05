@@ -1,32 +1,32 @@
 {
-  "current_phase": "StrategyPhase",
-  "current_phase_index": 0,
+  "current_phase": "MovementPhase",
+  "current_phase_index": 1,
   "current_round": [
-    0,
-    0
+    3,
+    2
   ],
-  "current_player": 1,
+  "current_player": 2,
   "max_rounds": 6,
   "ai_player2_active": true,
   "units": [
     {
       "name": "P1_IronHailGunner0",
       "position": [
-        -27.286035537719727,
-        -14.669670104980469,
+        -28.854141235351562,
+        -0.13726341724395752,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 14.625,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0.5,
         0.5,
         0.5,
         1
       ],
-      "isInCombat": false,
+      "isInCombat": true,
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
@@ -49,18 +49,22 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "P2_OrcBoy1"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "P1_PeasantBowman1",
       "position": [
-        -12.462940216064453,
-        -13.414974212646484,
+        -13.715088844299316,
+        1.6290152072906494,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 10.125,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -100,22 +104,22 @@
     {
       "name": "P1_Skink2",
       "position": [
-        0.3067249059677124,
-        -13.683406829833984,
+        0.30672550201416016,
+        5.082313537597656,
         0.0
       ],
       "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0.5,
         0.5,
         0.5,
         1
       ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "isInCombat": true,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -137,8 +141,12 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "P2_OrcBoy5"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
@@ -277,14 +285,14 @@
     {
       "name": "P2_OrcBoy0",
       "position": [
-        -21.800079345703125,
-        13.916961669921875,
+        -19.48836898803711,
+        5.005411148071289,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 182.25,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         0,
         1,
@@ -292,7 +300,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -321,22 +329,22 @@
     {
       "name": "P2_OrcBoy1",
       "position": [
-        -29.46051788330078,
-        15.392138481140137,
-        0.0
+        -28.86614418029785,
+        1.4240281581878662,
+        4.440892098500626e-16
       ],
-      "heading": 180.0,
+      "heading": -165.375,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0,
         1,
         0,
         1
       ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "isInCombat": true,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -358,8 +366,12 @@
       "armor_save": 7,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "P1_IronHailGunner0"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {
@@ -453,21 +465,21 @@
     {
       "name": "P2_OrcBoy5",
       "position": [
-        -0.27339184284210205,
-        14.69136905670166,
+        -0.2733946740627289,
+        6.596672058105469,
         0.0
       ],
       "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "InCombat",
       "color": [
         0,
         1,
         0,
         1
       ],
-      "isInCombat": false,
+      "isInCombat": true,
       "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
@@ -490,8 +502,12 @@
       "armor_save": 7,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
+      "isInCombatWith": [
+        "P1_Skink2"
+      ],
+      "isInCombatFlank": [
+        "front"
+      ],
       "equipped_weapon": "hand weapon"
     },
     {

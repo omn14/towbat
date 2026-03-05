@@ -686,6 +686,9 @@ class EnhancedAI:
                 #unit.hasAttackedThisTurn = True
                 # Execute melee attack
                 # Example: self.game.meleeAttack(unit, target)
+                self.game.unitToMove=unit
+                taskMgr.add(self.game.combat.verySimpleBattleStart, "meleeTask", appendTask=True)
+                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 pass
         
         elif action.action_type == 'end_phase':

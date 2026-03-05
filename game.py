@@ -137,6 +137,7 @@ class MyApp(ShowBase):
         self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)
 
+        self.awaitingChoice = False
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugTextUnit.setText("Debug Info test")
 
@@ -590,6 +591,8 @@ class MyApp(ShowBase):
         return task.cont
     
     def giveSignal(self):
+        if self.awaitingChoice:
+            return
         self.signal = True
         return
 
@@ -906,6 +909,8 @@ class MyApp(ShowBase):
                         
 
     async def setActiveUnit(self,taskfunction,taskname):
+        if self.awaitingChoice:
+            return
         if base.mouseWatcherNode.hasMouse():
             # Get mouse position in normalized device coordinates
             pMouse = base.mouseWatcherNode.getMouse()
@@ -1340,22 +1345,29 @@ class MyApp(ShowBase):
         return self.movement.drawRectangle(center, width, height, color)
 
     def moveUnit(self, unit):
+        if self.awaitingChoice:
+            return
         self.movement.moveUnit(unit)
 
     async def makeChoiceNew(self, choices, position):
         cyn = Choice(choices, position)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
+        self.awaitingChoice = True
         self.ignore('mouse1')
         print("Waiting for choice...")
         if self.roundCounter.current_player == 2 and self.AIplayer2.active:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
-            cyn.hitbox = cyn.boxes[0].node()
-            
-            cyn.onMouseClick()
+            # AI auto-selects first choice — use first key for dicts, first element for lists
+            first_choice = next(iter(cyn.choices))
+            cyn.choice = first_choice
+            cyn.choiceMade = True
+            taskMgr.remove("mouseActivateTask")
+            taskMgr.add(cyn.cleanup())
         else:
             await cyn.ma
         #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
+        self.awaitingChoice = False
         self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
         print("event received")
         cynchoice = cyn.choice

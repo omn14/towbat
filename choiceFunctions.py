@@ -10,6 +10,7 @@ class Choice:
         self.choices = choices
         self.choiceMade = False
         self.choice = None
+        self.hitbox = None
         self.boxes = []
         for i, c in enumerate(self.choices):
             loc=pos+Vec3(i*16,0,20)
@@ -27,11 +28,14 @@ class Choice:
         self.helper1.ignore('mouse1')
         
         for box in self.boxes:
-            if box.node() == self.hitbox:
+            if box.isEmpty():
+                continue
+            if self.hitbox and box.node() == self.hitbox:
                 moveInterval = LerpPosInterval(box, 1.0, box.getPos()+Vec3(0,0,20))
                 await moveInterval
-            base.world.removeRigidBody(box.node())
-            box.removeNode()
+            if not box.isEmpty():
+                base.world.removeRigidBody(box.node())
+                box.removeNode()
         
 
     def onMouseClick(self):

@@ -860,7 +860,7 @@ class CombatResolver:
             self.game.attackSequence2.append(Wait(0.25))
 
         if not self.game.attackSequence.isPlaying():
-            self.game.attackSequence2.start()
+            await self.game.attackSequence2
 
     # ─── Post-Combat: Fall Back In Good Order ─────────────────────────────
 
