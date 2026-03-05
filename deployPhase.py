@@ -1,11 +1,218 @@
 from panda3d.core import Point3, BitMask32
 import random
+from strategyAdvisor import StrategyAdvisor
+from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
+
+
+# ── Strategy-aware deployment for AI ──────────────────────────────────
+
+# Cache to persist the chosen strategy across deploy calls within a game
+_deploy_strategy_cache = {}
+
+
+def _get_ai_deploy_position(game, unit):
+    """
+    Use the StrategyAdvisor to pick a smart deploy position for *unit*
+    based on the chosen army strategy and the opponent's already-deployed
+    units.  Prints a short reasoning line to the terminal.
+    """
+    classifier = UnitTypeClassifier()
+    advisor = StrategyAdvisor(classifier)
+
+    my_units = game.player2Units
+    enemy_units = game.player1Units
+
+    # Extract model objects from unitGraphics for the classifier
+    my_models = [u.unit.model for u in my_units]
+    enemy_models = [u.unit.model for u in enemy_units]
+
+    # ── 1. Pick / recall the army strategy ────────────────────────────
+    if 'strategy' not in _deploy_strategy_cache:
+        strats = advisor.recommend_strategies(my_models, from_dict=False)
+        best_strat, fit = strats[0] if strats else (None, 0)
+        _deploy_strategy_cache['strategy'] = best_strat
+        _deploy_strategy_cache['fit'] = fit
+
+        # Analyse matchup against the enemy
+        matchup = advisor.analyse_matchup(my_models, enemy_models, from_dict=False)
+        _deploy_strategy_cache['matchup'] = matchup
+
+        print("\n" + "=" * 60)
+        print(f"  AI DEPLOY — Strategy: {best_strat.name} (fit {fit:.0%})")
+        print(f"  {best_strat.description}")
+        print(f"  Matchup verdict: {matchup['verdict']}")
+        print("=" * 60)
+    
+    strategy = _deploy_strategy_cache['strategy']
+    matchup  = _deploy_strategy_cache['matchup']
+
+    # ── 2. Classify this unit ─────────────────────────────────────────
+    main_type, support_role = classifier.classify_from_model(unit.unit.model)
+    type_label = classifier.get_type_label(main_type, support_role)
+
+    # ── 3. Gather enemy positions already on the board ────────────────
+    deployed_enemies = [e for e in enemy_units if e.isDeployed]
+    enemy_positions = []
+    for e in deployed_enemies:
+        pos = e.bodyNP.getPos()
+        e_type, e_role = classifier.classify_from_model(e.unit.model)
+        enemy_positions.append((pos.x, pos.y, e_type, e_role, e.unit.name))
+
+    # Average enemy X (centre of mass) — fallback to 0 if none deployed
+    avg_enemy_x = 0.0
+    if enemy_positions:
+        avg_enemy_x = sum(p[0] for p in enemy_positions) / len(enemy_positions)
+
+    # Deploy bounds for player 2
+    x_min, x_max = -34.0, 34.0
+    y_min, y_max = 13.0, 23.0
+
+    # ── 4. Decide position based on strategy + unit type ──────────────
+    reason = ""
+
+    if strategy and strategy.name == "Hammer and Anvil":
+        if main_type == UnitType.ANVIL or main_type == UnitType.BASIC:
+            # Anvil/basic: deploy centrally, facing the enemy centre
+            x = _clamp(avg_enemy_x + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min, y_min + 4)  # front of deploy zone
+            reason = f"Centre-front as anvil to pin enemy (facing enemy centre at x≈{avg_enemy_x:.0f})"
+        elif main_type == UnitType.HAMMER:
+            # Hammer: deploy off to one flank
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            x = _clamp(flank + random.uniform(-3, 3), x_min, x_max)
+            y = random.uniform(y_min + 2, y_max - 2)
+            reason = f"Flank position (x≈{flank:.0f}) to deliver hammer charge"
+        elif support_role == SupportRole.FAST:
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            x = _clamp(flank + random.uniform(-2, 2), x_min, x_max)
+            y = random.uniform(y_min + 4, y_max)
+            reason = f"Wide flank (x≈{flank:.0f}) — fast unit to sweep around"
+        elif support_role == SupportRole.SHOOTING:
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_max - 4, y_max)
+            reason = "Rear-centre to maximise shooting arcs before contact"
+        else:
+            x = _clamp(avg_enemy_x + random.uniform(-8, 8), x_min, x_max)
+            y = random.uniform(y_min, y_min + 5)
+            reason = "Supporting centre line"
+
+    elif strategy and strategy.name == "Refused Flank":
+        # Concentrate everything on the weak flank
+        flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+        if support_role == SupportRole.SHOOTING or main_type == UnitType.CANNON_FODDER:
+            # Delay screen on the opposite side
+            x = _clamp(-flank + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min, y_min + 4)
+            reason = f"Delay screen on the strong flank (x≈{-flank:.0f}) to buy time"
+        else:
+            x = _clamp(flank + random.uniform(-5, 5), x_min, x_max)
+            y = random.uniform(y_min, y_min + 6)
+            reason = f"Concentrated strike force on weak flank (x≈{flank:.0f})"
+
+    elif strategy and strategy.name == "Gunline":
+        if support_role == SupportRole.SHOOTING:
+            x = _clamp(avg_enemy_x + random.uniform(-8, 8), x_min, x_max)
+            y = random.uniform(y_max - 5, y_max)
+            reason = "Shooting line — maximum range before enemy contact"
+        elif main_type in (UnitType.ANVIL, UnitType.BASIC):
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = "Front screen to protect the shooting line"
+        else:
+            x = _clamp(avg_enemy_x + random.uniform(-10, 10), x_min, x_max)
+            y = random.uniform(y_min + 2, y_max - 2)
+            reason = "Reserve — counter-charge anything that breaks through"
+
+    elif strategy and strategy.name == "Fast Strike":
+        if support_role == SupportRole.FAST or main_type == UnitType.HAMMER:
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            x = _clamp(flank + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min + 2, y_max - 2)
+            reason = f"Fast strike wing (x≈{flank:.0f}) — exploit mobility"
+        else:
+            x = _clamp(avg_enemy_x + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = "Centre anchor while fast units manoeuvre"
+
+    elif strategy and strategy.name == "Horde Rush":
+        # Spread wide across the entire front
+        spread = random.uniform(x_min + 4, x_max - 4)
+        x = spread
+        y = random.uniform(y_min, y_min + 4)
+        reason = "Wide front — flood the battlefield with bodies"
+
+    elif strategy and strategy.name == "Attrition Grind":
+        if main_type in (UnitType.ANVIL, UnitType.SUPERIOR):
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = "Grind line — engage across the front and hold"
+        else:
+            x = _clamp(avg_enemy_x + random.uniform(-8, 8), x_min, x_max)
+            y = random.uniform(y_min + 3, y_max - 2)
+            reason = "Second line support for the grinding front"
+
+    else:
+        # Fallback: generic positioning
+        x = random.uniform(x_min, x_max)
+        y = random.uniform(y_min, y_max)
+        reason = "Default deployment (no specific strategy match)"
+
+    # ── 5. Avoid overlapping already-deployed friendly units ──────────
+    deployed_friendly = [u for u in my_units if u.isDeployed]
+    for _ in range(10):  # up to 10 nudge attempts
+        collision = False
+        for f in deployed_friendly:
+            fp = f.bodyNP.getPos()
+            if abs(fp.x - x) < 5 and abs(fp.y - y) < 4:
+                collision = True
+                break
+        if not collision:
+            break
+        x += random.uniform(-4, 4)
+        x = _clamp(x, x_min, x_max)
+
+    # ── 6. Print reasoning ────────────────────────────────────────────
+    print(f"  DEPLOY {unit.unit.name:25s} [{type_label:18s}] -> ({x:+6.1f}, {y:5.1f})  | {reason}")
+
+    return (x, y)
+
+
+def _pick_weak_flank(enemy_positions, avg_enemy_x):
+    """
+    Return an x-coordinate on the flank where the enemy has fewer units.
+    Positive = right flank, negative = left flank.
+    """
+    if not enemy_positions:
+        return random.choice([-20, 20])
+
+    left_count  = sum(1 for p in enemy_positions if p[0] < avg_enemy_x)
+    right_count = sum(1 for p in enemy_positions if p[0] >= avg_enemy_x)
+
+    if left_count < right_count:
+        # Left flank is weaker
+        return random.uniform(-30, -15)
+    elif right_count < left_count:
+        return random.uniform(15, 30)
+    else:
+        # Even — pick the flank furthest from enemy hammers
+        enemy_hammers = [p for p in enemy_positions if p[2] == UnitType.HAMMER]
+        if enemy_hammers:
+            avg_hammer_x = sum(p[0] for p in enemy_hammers) / len(enemy_hammers)
+            return 25.0 if avg_hammer_x < 0 else -25.0
+        return random.choice([-22, 22])
+
+
+def _clamp(val, lo, hi):
+    return max(lo, min(hi, val))
+
+
+# ── Original deploy task (now strategy-aware for AI) ──────────────────
 
 def taskMoveUnit(game,unit,task):
     #game.ignore('mouse1')
     if game.roundCounter.current_player == 2 and game.AIplayer2.active:
-        #pxy = (random.uniform(-22, 22), random.uniform(7.5, 15))
-        pxy = (random.uniform(-36, 36), random.uniform(12, 24))
+        pxy = _get_ai_deploy_position(game, unit)
+
     else:
         pxy = getMouseXY()
 

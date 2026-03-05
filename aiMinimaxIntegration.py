@@ -168,6 +168,13 @@ class EnhancedAI:
             print(f"    {uname:20s} -> {info['role']:10s} "
                   f"target={info['target'] or '-':20s} ({info['reason']})")
 
+        # ── Push roles onto the actual unit objects for display ───────
+        for uname, info in self._tactical_roles.items():
+            unit_obj = self._get_unit_by_name(uname)
+            if unit_obj:
+                unit_obj.tacticalRole = info
+                unit_obj.updateTextNode()
+
         # ── 3. Generate the next concrete action ─────────────────────
         return self._strategy_aware_action(state, player_units, enemy_units)
 

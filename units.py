@@ -78,6 +78,7 @@ class unitGraphics(FSM):
         self.hasAttackedThisTurn=False
         self.attemptedRallyThisTurn=False
         self.endedInUnit=False
+        self.tacticalRole=None      # set by AI: e.g. {'role': 'CHARGE', 'target': '...', 'reason': '...'}
         self.madePursuitChoice=False
         self.isDeployed=False
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
@@ -104,12 +105,17 @@ class unitGraphics(FSM):
         
     def updateTextNode(self):
         text=f"In Combat: {self.isInCombat}\nMoved This Turn: {self.hasMovedThisTurn}\nAttacked This Turn: {self.hasAttackedThisTurn}"
-        row = f"In Combat: {self.isInCombat}\n"
+        row=f"Unit: {self.unitName}\n"
+        row += f"In Combat: {self.isInCombat}\n"
         row += f"Moved This Turn: {self.hasMovedThisTurn}\n"
         row += f"Attacked This Turn: {self.hasAttackedThisTurn}"
         row += f"\nEngaged With: {[unit.unitName for unit in self.isInCombatWith]}"
         row += f"\nFlanks: {self.isInCombatFlank}"
         row += f"\nState: {self.state}"
+        if self.tacticalRole:
+            row += f"\nRole: {self.tacticalRole['role']}"
+            if self.tacticalRole.get('target'):
+                row += f" -> {self.tacticalRole['target']}"
         self.text.setText(row)
 
     def setUpCollisions(self):

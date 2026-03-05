@@ -150,6 +150,8 @@ class GamePhaseFSM(FSM):
     def exitDeployPhase(self):
         base.world.removeRigidBody(self.game.boundary_ghost)
         self.game.boundary_np.removeNode()
+        # Ensure turn starts with player 1 after deployment
+        self.game.roundCounter.request('PlayerOne')
 
     def enterStrategyPhase(self):
         self.current_phase_index = 0
