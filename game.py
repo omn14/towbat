@@ -138,6 +138,7 @@ class MyApp(ShowBase):
         self.analyzer = GameStateAnalyzer(self)
 
         self.awaitingChoice = False
+        self.resolvingCombat = False
         self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugTextUnit.setText("Debug Info test")
 

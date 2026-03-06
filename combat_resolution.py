@@ -599,6 +599,7 @@ class CombatResolver:
     # ─── Battle Start & Resolution ────────────────────────────────────────
 
     async def verySimpleBattleStart(self, task):
+        self.game.resolvingCombat = True
         weps = self.game.unitToMove.unit.model.weapons
 
         wepchoice = await taskMgr.add(self.game.makeChoiceNew(weps, Vec3(0, 0, 10)))
@@ -606,7 +607,7 @@ class CombatResolver:
         self.game.unitToMove.unit.model.equip_weapon(wepchoice)
         print('Event delivered with args:', wepchoice)
 
-        taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
+        await taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
 
     async def verySimpleBattle(self, task):
@@ -755,6 +756,7 @@ class CombatResolver:
         loserUnits = []
         if player2_score == player1_score:
             print("Combat is a draw, no units flee.")
+            self.game.resolvingCombat = False
             messenger.send('unit-move-complete')
             return
         elif player2_score < player1_score:
@@ -816,6 +818,7 @@ class CombatResolver:
             for unit in loserUnit.isInCombatWith:
                 unit.madePursuitChoice = False
 
+        self.game.resolvingCombat = False
         messenger.send('unit-move-complete')
         return task.done
 
@@ -938,7 +941,7 @@ class CombatResolver:
 
         self.game.attackSequence2.append(Wait(2 * (len(persuingUnit) - 1)))
         await self.game.attackSequence2
-        loserUnit.request("Moved")
+        
         for i in range(0, len(persuingUnit) - 1):
             unit = persuingUnit[i]
             rFrom = unit.bodyNP.getHpr()
@@ -962,6 +965,7 @@ class CombatResolver:
             self.game.pathTowardsMouse(unit, loserUnit.bodyNP.getPos().x, loserUnit.bodyNP.getPos().y)
             self.game.moveUnit(unit)
             await Wait(5.0)
+        loserUnit.request("Moved")
 
     # ─── Post-Combat: Flee ────────────────────────────────────────────────
 

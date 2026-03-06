@@ -687,6 +687,7 @@ class EnhancedAI:
                 # Execute melee attack
                 # Example: self.game.meleeAttack(unit, target)
                 self.game.unitToMove=unit
+                self._move_complete = False
                 taskMgr.add(self.game.combat.verySimpleBattleStart, "meleeTask", appendTask=True)
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 pass

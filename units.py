@@ -165,13 +165,15 @@ class unitGraphics(FSM):
     def enterMoved(self):
         print(f"{self.unitName} is in moved state!")
         self.hasMovedThisTurn=True
-        messenger.send('unit-move-complete')
+        if not base.resolvingCombat:
+            messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterInCombat(self):
         print(f"{self.unitName} is in combat state!")
         self.isInCombat=True
-        messenger.send('unit-move-complete')
+        if not base.resolvingCombat:
+            messenger.send('unit-move-complete')
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
     
     def exitInCombat(self):
