@@ -595,6 +595,17 @@ class PeasantBowman(model):
                         'volley_fire': True},
         })
 
+        self.weapons.update({
+            'short bow': {'name': 'short bow',
+                          'description': 'weaker ranged weapon',
+                          'tag': 'ranged',
+                          'ranged_range': 12,
+                          'ranged_shots': 1,
+                          'ranged_strength': 3,
+                          'ranged_AP': 0,
+                          'volley_fire': True}
+        })
+
 class GrailKnight(model):
     """Hammer (Fast) — the elite of Bretonnia, blessed by the Lady."""
     def __init__(self, name: str, url: str, mountUnit: model = None):

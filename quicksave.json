@@ -2,32 +2,32 @@
   "current_phase": "MovementPhase",
   "current_phase_index": 1,
   "current_round": [
-    3,
-    2
+    1,
+    1
   ],
-  "current_player": 2,
-  "max_rounds": 6,
+  "current_player": 1,
+  "max_rounds": 16,
   "ai_player2_active": true,
   "units": [
     {
       "name": "P1_IronHailGunner0",
       "position": [
-        -28.854141235351562,
-        -0.13726341724395752,
+        -25.891971588134766,
+        0.9212539196014404,
         0.0
       ],
-      "heading": 14.625,
+      "heading": -5.625,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "InCombat",
+      "state": "Moved",
       "color": [
         0.5,
         0.5,
         0.5,
         1
       ],
-      "isInCombat": true,
-      "hasMovedThisTurn": false,
+      "isInCombat": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -49,25 +49,21 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [
-        "P2_OrcBoy1"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "P1_PeasantBowman1",
       "position": [
-        -13.715088844299316,
-        1.6290152072906494,
+        -12.024499893188477,
+        0.01996922492980957,
         0.0
       ],
-      "heading": 10.125,
+      "heading": -2.25,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         0.5,
         0.5,
@@ -75,7 +71,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -104,11 +100,11 @@
     {
       "name": "P1_Skink2",
       "position": [
-        0.30672550201416016,
-        5.082313537597656,
+        0.9015589356422424,
+        4.021271705627441,
         0.0
       ],
-      "heading": 0.0,
+      "heading": -1.1250041723251343,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "InCombat",
@@ -152,14 +148,14 @@
     {
       "name": "P1_NightGoblin3",
       "position": [
-        12.529854774475098,
-        -15.92977523803711,
+        12.726762771606445,
+        -0.4517101049423218,
         0.0
       ],
-      "heading": 0.0,
+      "heading": -5.625,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         0,
         1,
@@ -167,7 +163,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -196,14 +192,14 @@
     {
       "name": "P1_JadeWarrior4",
       "position": [
-        21.19308853149414,
-        -16.30731201171875,
+        21.15827751159668,
+        -0.6776190400123596,
         0.0
       ],
       "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         1,
         1,
@@ -211,7 +207,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -240,14 +236,14 @@
     {
       "name": "P1_TempleGuard5",
       "position": [
-        28.837215423583984,
-        -15.915611267089844,
+        28.672880172729492,
+        -1.7009162902832031,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 2.25,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Idle",
+      "state": "Moved",
       "color": [
         0.5,
         0.5,
@@ -255,7 +251,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": false,
+      "hasMovedThisTurn": true,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -285,14 +281,14 @@
     {
       "name": "P2_OrcBoy0",
       "position": [
-        -19.48836898803711,
-        5.005411148071289,
+        -24.93238067626953,
+        6.996574401855469,
         0.0
       ],
-      "heading": 182.25,
+      "heading": 174.375,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         1,
@@ -300,7 +296,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -329,22 +325,22 @@
     {
       "name": "P2_OrcBoy1",
       "position": [
-        -28.86614418029785,
-        1.4240281581878662,
-        4.440892098500626e-16
+        -14.30982494354248,
+        7.920140743255615,
+        0.0
       ],
-      "heading": -165.375,
+      "heading": 190.125,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "InCombat",
+      "state": "Idle",
       "color": [
         0,
         1,
         0,
         1
       ],
-      "isInCombat": true,
-      "hasMovedThisTurn": true,
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -366,22 +362,18 @@
       "armor_save": 7,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [
-        "P1_IronHailGunner0"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "P2_NightGoblin2",
       "position": [
-        -11.310511589050293,
-        20.82917022705078,
+        -14.442014694213867,
+        13.105692863464355,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 182.25,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -421,11 +413,11 @@
     {
       "name": "P2_NightGoblin3",
       "position": [
-        -18.754125595092773,
-        19.8277645111084,
+        -11.083956718444824,
+        17.18280029296875,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 186.75,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -465,11 +457,11 @@
     {
       "name": "P2_OrcBoy5",
       "position": [
-        -0.2733946740627289,
-        6.596672058105469,
+        0.5059089064598083,
+        5.5436930656433105,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 178.875,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "InCombat",
@@ -513,8 +505,8 @@
     {
       "name": "P2_SkeletonWarrior6",
       "position": [
-        4.759028434753418,
-        16.71982765197754,
+        10.821676254272461,
+        11.818041801452637,
         0.0
       ],
       "heading": 180.0,

@@ -5,6 +5,9 @@ This shows how to enhance ClassAI with minimax decision-making
 
 from concurrent.futures import ThreadPoolExecutor
 import math
+from panda3d.core import ClockObject
+
+globalClock = ClockObject.getGlobalClock()
 
 from gameStateTree import GameState, GameAction
 from minimaxOptimizations import OptimizedMinimaxTree
@@ -734,6 +737,9 @@ class EnhancedAI:
         visualizer.print_statistics_detailed() """
         if action.action_type != 'end_phase':
             await taskMgr.add(self.take_turn())
+        else:
+            self.game.fsm.nextPhase()
+            await taskMgr.add(self.take_turn())
         
         return action
     
@@ -754,10 +760,19 @@ class EnhancedAI:
                 break
     
     def loopWaitForMoveComplete(self,unit,task):
-        print(f"Waiting for move complete for unit: {unit.unit.name}")
+        if not hasattr(task, '_wait_elapsed'):
+            task._wait_elapsed = 0.0
+        task._wait_elapsed += globalClock.getDt()
+        if task._wait_elapsed % 2.0 < globalClock.getDt():
+            print(f"Waiting for move complete for unit: {unit.unit.name} ({task._wait_elapsed:.1f}s)")
         if self._move_complete:
             self._move_complete = False
-            print(f"signal recieved for unit: {unit.unit.name}")
+            print(f"signal received for unit: {unit.unit.name}")
+            return task.done
+        # Safety timeout: if we've been waiting too long, force-advance
+        if task._wait_elapsed > 30.0:
+            print(f"TIMEOUT: unit-move-complete never received for {unit.unit.name} after {task._wait_elapsed:.1f}s, forcing advance")
+            self._move_complete = False
             return task.done
         return task.cont
     

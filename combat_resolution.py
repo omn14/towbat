@@ -48,7 +48,7 @@ class CombatResolver:
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
         chargeYesNo = ["Yes", "No"]
-        if self.game.autoCharge:
+        if self.game.autoCharge or (self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active):
             cynchoice = "Yes"
         else:
             cynchoice = await taskMgr.add(self.game.makeChoiceNew(chargeYesNo, Vec3(-20, 0, 10)))
@@ -57,7 +57,7 @@ class CombatResolver:
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
-            if self.game.autoHold:
+            if self.game.autoHold or (self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active):
                 crchoice = "hold"
             else:
                 crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10)))
@@ -612,6 +612,17 @@ class CombatResolver:
 
     async def verySimpleBattle(self, task):
         print("Starting very simple battle...")
+        try:
+            await self._verySimpleBattleInner(task)
+        except Exception as e:
+            print(f"ERROR in verySimpleBattle: {e}")
+            import traceback
+            traceback.print_exc()
+            self.game.resolvingCombat = False
+            messenger.send('unit-move-complete')
+        return task.done
+
+    async def _verySimpleBattleInner(self, task):
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
         flank = self.game.unitToMove.isInCombatFlank[0]
@@ -656,6 +667,7 @@ class CombatResolver:
         player2_score = 0
         player2_flank_bonus = 0
         player2_rank_bonus = 0
+        modRemoveSequence = Sequence()
         for i in range(len(self.game.attackers)):
             unit = self.game.attackers[i]
             if unit.hasAttackedThisTurn:
@@ -743,7 +755,7 @@ class CombatResolver:
                     else:
                         player2_score += total_wounds
                     combWounds += total_wounds
-            self.game.attackSequence.append(
+            modRemoveSequence.append(
                 Func(self.game.removeModelsFromUnit, attackerUnit, combWounds))
 
         player1_score += player1_flank_bonus + player1_rank_bonus
@@ -752,6 +764,8 @@ class CombatResolver:
         print(f"Player 2 flank bonus: {player2_flank_bonus}, Player 1 flank bonus: {player1_flank_bonus}")
         print(f"Player 2 rank bonus: {player2_rank_bonus}, Player 1 rank bonus: {player1_rank_bonus}")
         await self.game.attackSequence
+        await modRemoveSequence
+
         self.game.attackSequence2 = Sequence()
         loserUnits = []
         if player2_score == player1_score:
@@ -772,7 +786,7 @@ class CombatResolver:
 
         for loserUnit in loserUnits:
             if loserUnit.bodyNP.isEmpty():
-                return
+                continue
 
             if any(rule.get('Unbreakable', False) for rule in loserUnit.unit.model.special_rules):
                 print(f"{loserUnit.unit.name} is Unbreakable and does not flee!, only gives ground.")
@@ -814,6 +828,8 @@ class CombatResolver:
                                    extraArgs=[loserUnit], appendTask=False)
 
         for loserUnit in loserUnits:
+            if loserUnit.bodyNP.isEmpty():
+                continue
             loserUnit.madePursuitChoice = False
             for unit in loserUnit.isInCombatWith:
                 unit.madePursuitChoice = False

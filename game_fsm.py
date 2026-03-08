@@ -106,6 +106,12 @@ class GamePhaseFSM(FSM):
             )
             self.request(self.PHASES[self.current_phase_index])
 
+    def nextPhase(self):
+        """Advance to the next phase in the cycle."""
+        self.current_phase_index = (
+            (self.current_phase_index + 1) % len(self.PHASES)
+        )
+        self.request(self.PHASES[self.current_phase_index])
     # ─── Phase Enter/Exit Handlers ──────────────────────────────────
 
     def enterDeployPhase(self):

@@ -889,7 +889,7 @@ class MovementSystem:
                 self.game.player1Units.remove(fleeUnit)
             if fleeUnit in self.game.player2Units:
                 self.game.player2Units.remove(fleeUnit)
-            #messenger.send('unit-move-complete')
+            messenger.send('unit-move-complete')
             return task.done
         return task.cont
 
@@ -958,6 +958,7 @@ class MovementSystem:
             #self.game.attackSequence.finish()
             for u in unit.isInCombatWith:
                 u.request("Idle")
+            #messenger.send('unit-move-complete')
             self.game.world.removeRigidBody(unit.bodyNP.node())
             unit.bodyNP.removeNode()
             unit.model.removeNode()

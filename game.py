@@ -190,7 +190,7 @@ class MyApp(ShowBase):
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.moveUnit,[self.unitToMove])
         #self.messenger.toggleVerbose()
-        self.roundCounter = RoundCounter(self,6)
+        self.roundCounter = RoundCounter(self,16)
 
         self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
         self.debugText.setText("Debug Info test")
@@ -276,22 +276,40 @@ class MyApp(ShowBase):
         """
         # Create a mapping from unit names (from characteristics JSON) to model paths and classes
         unit_model_mapping = {
-            'Man at Arms': {'path': 'models/bret_bowmen.bam', 'class': model, 'color': (1, 0, 0, 1)},
-            'Man_at_Arm': {'path': 'models/bret_bowmen.bam', 'class': model, 'color': (1, 0, 0, 1)},
-            'Mounted Knight of the Realm': {'path': 'models/bret_knight.bam', 'class': MountedKnightOfTheRealm, 'color': (1, 0, 0, 1)},
-            'Jade Lancer': {'path': 'models/jade_lancer.bam', 'class': JadeLancer, 'color': (1, 1, 0, 1)},
-            'Jade Warrior': {'path': 'models/jade_warrior.bam', 'class': JadeWarrior, 'color': (1, 1, 0, 1)},
-            'Night Goblin': {'path': 'models/goblin_archers.bam', 'class': NightGoblin, 'color': (0, 1, 0, 1)},
-            'Goblin Wolf Rider': {'path': 'models/goblin_wolfriders.bam', 'class': GoblinWolfRider, 'color': (0, 1, 0, 1)},
-            'Black Knight': {'path': 'models/black_knights.bam', 'class': BlackKnight, 'color': (0, 0, 1, 1)},
-            'Zombie': {'path': 'models/zombies.bam', 'class': Zombie, 'color': (0, 0, 1, 1)},
-            'Orc Boyz': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
-            'Orc Boy': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
-            'Black Orc': {'path': 'models/goblin_archers.bam', 'class': model, 'color': (0, 1, 0, 1)},
-            'Necromancer': {'path': 'models/zombies.bam', 'class': Necromancer, 'color': (0, 0, 1, 1)},
-            'Saurus Warrior': {'path': 'models/jade_warrior.bam', 'class': model, 'color': (1, 1, 0, 1)},
-            'Pegasus Knight': {'path': 'models/bret_knight.bam', 'class': model, 'color': (1, 0, 0, 1)},
-            'Dire Wolf': {'path': 'models/dire_wolves.bam', 'class': DireWolf, 'color': (0, 0, 1, 1)},
+            # ── Bretonnia ──────────────────────────────────────────────
+            'Man at Arms':                  {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
+            'Man_at_Arm':                   {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
+            'Mounted Knight of the Realm':  {'path': 'models/bret_knight.bam',      'class': MountedKnightOfTheRealm,'color': (1, 0, 0, 1)},
+            'Pegasus Knight':               {'path': 'models/bret_knight.bam',      'class': PegasusKnight,          'color': (1, 0, 0, 1)},
+            'Grail Knight':                 {'path': 'models/bret_knight.bam',      'class': GrailKnight,            'color': (1, 0, 0, 1)},
+            'Peasant Bowman':               {'path': 'models/bret_bowmen.bam',      'class': PeasantBowman,          'color': (1, 0, 0, 1)},
+            'Battle Pilgrim':               {'path': 'models/bret_bowmen.bam',      'class': BattlePilgrim,          'color': (1, 0, 0, 1)},
+            # ── Grand Cathay ───────────────────────────────────────────
+            'Jade Warrior':                 {'path': 'models/jade_warrior.bam',     'class': JadeWarrior,            'color': (1, 1, 0, 1)},
+            'Jade Lancer':                  {'path': 'models/jade_lancer.bam',      'class': JadeLancer,             'color': (1, 1, 0, 1)},
+            'Peasant Spearman':             {'path': 'models/jade_warrior.bam',     'class': PeasantSpearman,        'color': (1, 1, 0, 1)},
+            'Iron Hail Gunner':             {'path': 'models/jade_warrior.bam',     'class': IronHailGunner,         'color': (1, 1, 0, 1)},
+            # ── Orc & Goblin Tribes ────────────────────────────────────
+            'Night Goblin':                 {'path': 'models/goblin_archers.bam',   'class': NightGoblin,            'color': (0, 1, 0, 1)},
+            'Goblin Wolf Rider':            {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
+            'Orc Boyz':                     {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
+            'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
+            'Black Orc':                    {'path': 'models/goblin_archers.bam',   'class': BlackOrc,               'color': (0, 1, 0, 1)},
+            'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
+            'Troll':                        {'path': 'models/goblin_archers.bam',   'class': Troll,                  'color': (0, 1, 0, 1)},
+            # ── Vampire Counts ─────────────────────────────────────────
+            'Black Knight':                 {'path': 'models/black_knights.bam',    'class': BlackKnight,            'color': (0, 0, 1, 1)},
+            'Zombie':                       {'path': 'models/zombies.bam',          'class': Zombie,                 'color': (0, 0, 1, 1)},
+            'Dire Wolf':                    {'path': 'models/dire_wolves.bam',      'class': DireWolf,               'color': (0, 0, 1, 1)},
+            'Necromancer':                  {'path': 'models/zombies.bam',          'class': Necromancer,            'color': (0, 0, 1, 1)},
+            'Skeleton Warrior':             {'path': 'models/zombies.bam',          'class': SkeletonWarrior,        'color': (0, 0, 1, 1)},
+            'Crypt Ghoul':                  {'path': 'models/zombies.bam',          'class': CryptGhoul,             'color': (0, 0, 1, 1)},
+            'Grave Guard':                  {'path': 'models/black_knights.bam',    'class': GraveGuard,             'color': (0, 0, 1, 1)},
+            # ── Lizardmen ──────────────────────────────────────────────
+            'Saurus Warrior':               {'path': 'models/jade_warrior.bam',     'class': SaurusWarrior,          'color': (0, 1, 1, 1)},
+            'Skink':                        {'path': 'models/goblin_archers.bam',   'class': Skink,                  'color': (0, 1, 1, 1)},
+            'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'class': TempleGuard,            'color': (0, 1, 1, 1)},
+            'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'class': ColdOneRider,           'color': (0, 1, 1, 1)},
         }
         
         # Load the JSON file
@@ -327,7 +345,8 @@ class MyApp(ShowBase):
                 if model_class == model:
                     # Basic model
                     model_instance = model(unit_name, "")
-                elif model_class in [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight]:
+                elif model_class in [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
+                                      PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]:
                     # Mounted units need mount units
                     # For simplicity, create basic mounts
                     mount_model = model(f"{unit_name} Mount", "")
@@ -532,10 +551,12 @@ class MyApp(ShowBase):
         # setup the projectile interval
         self.trajectories = []
         self.projectiles = []
+        balls = []
         for i in range(n):
             ball = loader.loadModel("smiley")
             ball.reparentTo(render)
             ball.setPos(startPos+Vec3(random.uniform(-2,2),random.uniform(-2,2),0))
+            balls.append(ball)
             self.projectiles.append(ball)
             pos = endPos + Vec3(random.uniform(-2,2),random.uniform(-2,2),0)
             duration = random.uniform(0.9, 1.1)
@@ -547,7 +568,7 @@ class MyApp(ShowBase):
         #parallel_trajectories.start()
         #for trajectory in self.trajectories:
         #    trajectory.start()
-        return parallel_trajectories
+        return parallel_trajectories, balls
 
     # ─── Task Management & Phase Loops ────────────────────────────────────
 
@@ -1015,9 +1036,10 @@ class MyApp(ShowBase):
         #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
-        self.shootingAnimation(attackerUnit, defenderUnit, total_wounds)
+        attackerUnit.hasAttackedThisTurn = True
+        taskMgr.add(self.shootingAnimation(attackerUnit, defenderUnit, total_wounds))
 
-    def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
+    async def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
         
         #self.p.start(parent=render, renderParent=render)
         self.p.setPos(defenderUnit.bodyNP.getPos())
@@ -1029,16 +1051,27 @@ class MyApp(ShowBase):
         self.cameraShake(intensity=0.5, duration=0.3)
         
         
-        parTra = self.spawnProjectiles(5,attackerUnit.bodyNP.getPos(),defenderUnit.bodyNP.getPos())
-        seq = Sequence(parTra,
+        parTra, balls = self.spawnProjectiles(5,attackerUnit.bodyNP.getPos(),defenderUnit.bodyNP.getPos())
+        """ seq = Sequence(parTra,
                        Func(self.p.start, parent=render, renderParent=render),
                        Func(taskMgr.doMethodLater, 4.0, lambda task: self.p.disable(), 'stopParticles'),
                        Func(self.p_miss.start, parent=render, renderParent=render),
-                       Func(self.removeModelsFromUnit, defenderUnit, total_wounds),
+                       #Func(self.removeModelsFromUnit, defenderUnit, total_wounds),
                        Func(taskMgr.doMethodLater, 4.0, lambda task: self.p_miss.disable(), 'stopMissParticles'),
-                       Func(taskMgr.doMethodLater, 3.0, lambda task: base.messenger.send('unit-move-complete'), 'unitmovecompletetask')
+                       #Func(taskMgr.doMethodLater, 3.0, lambda task: base.messenger.send('unit-move-complete'), 'unitmovecompletetask')
                        )
-        seq.start()
+         """
+        #seq.start()
+        self.p.start(parent=render, renderParent=render)
+        self.p_miss.start(parent=render, renderParent=render)
+        await parTra
+        self.removeModelsFromUnit(defenderUnit, total_wounds)
+        await Task.pause(2.0)
+        self.p.disable()
+        self.p_miss.disable()
+        for ball in balls:
+            ball.removeNode()
+        messenger.send('unit-move-complete')
         taskMgr.remove("taskShootingTrajectoryDrawLine")
 
     # ─── Unit Selection & Interaction ─────────────────────────────────────
@@ -1356,7 +1389,7 @@ class MyApp(ShowBase):
         self.awaitingChoice = True
         self.ignore('mouse1')
         print("Waiting for choice...")
-        if self.roundCounter.current_player == 2 and self.AIplayer2.active:
+        if self.roundCounter.current_player in [1, 2] and self.AIplayer2.active:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
             # AI auto-selects first choice — use first key for dicts, first element for lists
@@ -1377,7 +1410,7 @@ class MyApp(ShowBase):
         del cyn
         return cynchoice
     
-    async def makeChoice(self, choice):
+    """ async def makeChoice(self, choice):
         choice.ma = taskMgr.add(choice.mouseActivate, "mouseActivateTask")
         self.ignore('mouse1')
         print("Waiting for choice...")
@@ -1387,7 +1420,7 @@ class MyApp(ShowBase):
         selected_choice = choice.choice
         print('Event delivered with args:', choice.choice)
         return
-
+ """
     # ─── Combat Resolution (delegates to CombatResolver) ─────────────────
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):

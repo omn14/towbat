@@ -159,6 +159,7 @@ class unitGraphics(FSM):
     
     def enterIdle(self):
         print(f"{self.unitName} is idle! state")
+        #messenger.send('unit-move-complete')
         self.hasMovedThisTurn=False
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
@@ -167,6 +168,8 @@ class unitGraphics(FSM):
         self.hasMovedThisTurn=True
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
+        else:
+            print(f"WARNING: {self.unitName} entered Moved during resolvingCombat, signal deferred to combat resolver")
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterInCombat(self):
@@ -174,6 +177,8 @@ class unitGraphics(FSM):
         self.isInCombat=True
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
+        else:
+            print(f"WARNING: {self.unitName} entered InCombat during resolvingCombat, signal deferred to combat resolver")
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
     
     def exitInCombat(self):
