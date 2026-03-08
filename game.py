@@ -133,6 +133,7 @@ class MyApp(ShowBase):
         
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
+        self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
         self.accept('wheel_up', self.zoomIn)  # Mouse wheel forward zooms in
         self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)
@@ -211,6 +212,7 @@ class MyApp(ShowBase):
                 action = await taskMgr.add(self.AIplayer2.take_turn())
                 if action.action_type == 'end_phase':
                     break
+        #self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         #self.accept('a-up', lambda: taskMgr.add(auppp()))
 

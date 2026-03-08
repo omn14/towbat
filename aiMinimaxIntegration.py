@@ -662,7 +662,9 @@ class EnhancedAI:
                 self.game.ball.setPos(target_pos)  # Placeholder for movement command
                 self.game.pathTowardsMouse(unit,action.parameters['target_x'],
                                            action.parameters['target_y'])
-                self.game.moveUnit(unit)
+                #self.game.moveUnit(unit)
+                taskMgr.doMethodLater(0.1, self.game.moveUnit, "moveTask", extraArgs=[unit], appendTask=False)
+                self._move_complete = False
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 pass
         
@@ -676,6 +678,7 @@ class EnhancedAI:
                 # Example: self.game.shootAt(unit, target)
                 #self.game.ball.setPos(target_pos)  # Placeholder for movement command
                 self.game.shootAt(unit,target)
+                self._move_complete = False
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 # Mark the unit as having attacked so it can't shoot again this turn
                 unit.hasAttackedThisTurn = True
@@ -710,37 +713,38 @@ class EnhancedAI:
     async def take_turn(self):
         """
         Main entry point for AI turn.
-        Makes decision and executes it.
+        Loops, making and executing decisions, until an end_phase action is produced.
         """
-        if not self.active:
+        if not self.active or getattr(self, '_turn_running', False):
             return
-        
-        # Make decision (await the coroutine directly — wrapping in taskMgr.add
-        # loses the return value, so action would always be None)
-        action = await self.make_decision()
-        
-        
+        self.game.save_game_state('previous_phase.json')
+        self._turn_running = True
 
-        visualizer = TreeVisualizer(self.tree)
-        visualizer.print_best_path()
+        while True:
+            self._move_complete = False  # Reset move completion flag at start of each decision loop
+            # Make decision (await directly so the return value is preserved)
+            action = await self.make_decision()
 
-        print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
+            visualizer = TreeVisualizer(self.tree)
+            visualizer.print_best_path()
 
-        # Execute action
-        await self.execute_action(action)
+            print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
 
-        #visualizer.print_tree_ascii(max_depth=19)
+            # Execute action
+            await self.execute_action(action)
 
-        """ explainer = DecisionExplainer(self.tree)
-        explainer.explain_decision()
+            #visualizer.print_tree_ascii(max_depth=19)
 
-        visualizer.print_statistics_detailed() """
-        if action.action_type != 'end_phase':
-            await taskMgr.add(self.take_turn())
-        else:
-            self.game.fsm.nextPhase()
-            await taskMgr.add(self.take_turn())
-        
+            """ explainer = DecisionExplainer(self.tree)
+            explainer.explain_decision()
+
+            visualizer.print_statistics_detailed() """
+
+            if action.action_type == 'end_phase':
+                self.game.fsm.nextPhase()
+                break
+
+        self._turn_running = False
         return action
     
     def print_statistics(self):
