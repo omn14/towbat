@@ -742,7 +742,7 @@ class EnhancedAI:
 
             if action.action_type == 'end_phase':
                 self.game.fsm.nextPhase()
-                break
+                #break
 
         self._turn_running = False
         return action

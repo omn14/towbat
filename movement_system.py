@@ -1109,7 +1109,7 @@ class MovementSystem:
     def fallBackContactTest(self, unitNP,moveVec=Vec3(0,0,0)):
         unit = self.game.getSelectedUnit(unitNP.node())
         print("fallBackContactTest called for unit:", unit.unit.name)
-        unit.bodyNP.setCollideMask(BitMask32.bit(1))
+        #unit.bodyNP.setCollideMask(BitMask32.bit(1))
         for us in self.game.units:
             us.bodyNP.node().setTransformDirty()
         for u in unit.isInCombatWith:
@@ -1117,7 +1117,7 @@ class MovementSystem:
         ghost = unit.bodyNP.node()
         
         result = base.world.contactTest(ghost)
-        unit.bodyNP.setCollideMask(unit.bitmask)
+        #unit.bodyNP.setCollideMask(unit.bitmask)
         for contact in result.getContacts():
             node_name = contact.getNode1().getName()
             if node_name.startswith('UnitCollision-') :
@@ -1137,9 +1137,9 @@ class MovementSystem:
 
                 contact_unit = self.game.getSelectedUnit(contact.getNode1())
                 #contact_unit.bodyNP.node().setTransformDirty()
-                if contact_unit in unit.isInCombatWith:
+                """ if contact_unit in unit.isInCombatWith:
                     print("Contact with unit in combat, no fallback movement applied.")
-                    continue
+                    continue """
                 self.game.z2.setPos(unit.bodyNP.getPos() + mpoint.getLocalPointA())
                 selected_unit = unit
                 """ if selected_unit.state == 'InCombat':
@@ -1159,6 +1159,15 @@ class MovementSystem:
                 np=unit.bodyNP
                 #np.setHpr(Vec3(H,0,0))
                 cpos=Vec3(np.getPos())
+                
+                if moveVec==Vec3(0,0,0):
+                    #moveVec=mpoint.getLocalPointA() * 1.1
+                    #moveVec=mpoint.getNormalWorldOnB() * (mpoint.getDistance() * 1.1)
+                    moveVec=unit.bodyNP.getPos() - contact_unit.bodyNP.getPos()
+                    moveVec.normalize()
+                    moveVec*=0.1
+                    moveVec.z=0
+                print("Applying fallback movement:", moveVec)
                 np.setPos(cpos+moveVec)
                 return self.fallBackContactTest(unitNP,moveVec)
         

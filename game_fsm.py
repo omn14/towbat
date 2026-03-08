@@ -101,13 +101,20 @@ class GamePhaseFSM(FSM):
         result = base.world.rayTestClosest(pFrom, pTo, BitMask32.bit(2))
 
         if result.hasHit():
-            self.current_phase_index = (
+            """ self.current_phase_index = (
                 (self.current_phase_index + 1) % len(self.PHASES)
             )
-            self.request(self.PHASES[self.current_phase_index])
+            self.request(self.PHASES[self.current_phase_index]) """
+            self.nextPhase()
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
+        for unit in units:
+            self.game.fallBackContactTest(unit.bodyNP)
+        units = self.game.player1Units if self.game.roundCounter.current_player == 1 else self.game.player2Units
+        for unit in units:
+            self.game.fallBackContactTest(unit.bodyNP)
         self.current_phase_index = (
             (self.current_phase_index + 1) % len(self.PHASES)
         )
