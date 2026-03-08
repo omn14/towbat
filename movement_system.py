@@ -274,6 +274,8 @@ class MovementSystem:
                 for i, p in enumerate(points):
                     points[i] = p-Vec2(quarternion.getForward().x, quarternion.getForward().y)*movedistance/4
                 points = points[2:] + points[:2]
+                self.game.moveArceDistance = .9
+                self.game.debugTextInfo.setText(f"Arc distance: {(self.game.moveArceDistance):.1f} ")
 
                 #return points
         elif behind < 0 and abs(behind) < 0.8:
@@ -314,6 +316,8 @@ class MovementSystem:
                 print(points[i])
             vinkel=rotationangle+90
             filipped = not filipped
+            self.game.moveArceDistance = .9
+            self.game.debugTextInfo.setText(f"Arc distance: {(self.game.moveArceDistance):.1f} ")
         
         
             
@@ -1111,9 +1115,11 @@ class MovementSystem:
         print("fallBackContactTest called for unit:", unit.unit.name)
         #unit.bodyNP.setCollideMask(BitMask32.bit(1))
         for us in self.game.units:
-            us.bodyNP.node().setTransformDirty()
+            if not us.bodyNP.isEmpty():
+                us.bodyNP.node().setTransformDirty()
         for u in unit.isInCombatWith:
-            u.bodyNP.node().setTransformDirty()
+            if not u.bodyNP.isEmpty():
+                u.bodyNP.node().setTransformDirty()
         ghost = unit.bodyNP.node()
         
         result = base.world.contactTest(ghost)

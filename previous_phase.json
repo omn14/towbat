@@ -2,10 +2,10 @@
   "current_phase": "MovementPhase",
   "current_phase_index": 1,
   "current_round": [
-    1,
-    1
+    4,
+    3
   ],
-  "current_player": 1,
+  "current_player": 2,
   "max_rounds": 16,
   "ai_player2_active": true,
   "units": [
@@ -19,7 +19,7 @@
       "heading": -5.625,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         1,
         1,
@@ -27,7 +27,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -63,7 +63,7 @@
       "heading": -2.25,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         1,
         0,
@@ -71,7 +71,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -100,8 +100,8 @@
     {
       "name": "P1_Skink2",
       "position": [
-        0.9015589356422424,
-        4.021271705627441,
+        0.9267116189002991,
+        3.9244866371154785,
         0.0
       ],
       "heading": -1.1250041723251343,
@@ -155,7 +155,7 @@
       "heading": -5.625,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         1,
@@ -163,7 +163,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -192,14 +192,14 @@
     {
       "name": "P1_JadeWarrior4",
       "position": [
-        21.15827751159668,
-        -0.6776190400123596,
+        18.596969604492188,
+        5.173314571380615,
         0.0
       ],
-      "heading": 0.0,
+      "heading": 28.125,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         1,
         1,
@@ -207,7 +207,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -236,14 +236,14 @@
     {
       "name": "P1_TempleGuard5",
       "position": [
-        28.672880172729492,
-        -1.7009162902832031,
+        21.70244789123535,
+        2.8325533866882324,
         0.0
       ],
-      "heading": 2.25,
+      "heading": 73.125,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         1,
@@ -251,7 +251,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -281,11 +281,11 @@
     {
       "name": "P2_OrcBoy0",
       "position": [
-        -24.93238067626953,
-        6.996574401855469,
+        -23.95515251159668,
+        5.047891616821289,
         0.0
       ],
-      "heading": 174.375,
+      "heading": -121.42516326904297,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -325,11 +325,11 @@
     {
       "name": "P2_OrcBoy1",
       "position": [
-        -14.30982494354248,
-        7.920140743255615,
+        -14.260003089904785,
+        7.851376533508301,
         0.0
       ],
-      "heading": 190.125,
+      "heading": 187.875,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",

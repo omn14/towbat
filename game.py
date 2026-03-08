@@ -78,6 +78,7 @@ class MyApp(ShowBase):
         self.autoRoll=False
         self.autoHold=False
         self.unitCopies = []
+        self.speedMultiplier = 2.0
         
 
         # Create a flat plane using CardMaker
@@ -561,7 +562,7 @@ class MyApp(ShowBase):
             balls.append(ball)
             self.projectiles.append(ball)
             pos = endPos + Vec3(random.uniform(-2,2),random.uniform(-2,2),0)
-            duration = random.uniform(0.9, 1.1)
+            duration = random.uniform(0.9, 1.1)/self.speedMultiplier
             trajectory = ProjectileInterval(ball, duration=duration,
                                             endPos=pos)
             self.trajectories.append(trajectory)
@@ -1068,7 +1069,7 @@ class MyApp(ShowBase):
         self.p_miss.start(parent=render, renderParent=render)
         await parTra
         self.removeModelsFromUnit(defenderUnit, total_wounds)
-        await Task.pause(2.0)
+        await Task.pause(2.0 / self.speedMultiplier)
         self.p.disable()
         self.p_miss.disable()
         for ball in balls:

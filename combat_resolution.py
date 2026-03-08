@@ -292,6 +292,7 @@ class CombatResolver:
                 maxmove = int(rule['mountUnit'].model.characteristics['M'])
         if unit.state == "IsPursuing":
             maxmove = 0
+        self.game.diceInfoText.setText(f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
         if not self.game.autoRoll:
             self.game.diceInfoText.setText(
                 f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
