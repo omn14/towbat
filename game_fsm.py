@@ -109,12 +109,12 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
-        units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
+        """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
         for unit in units:
             self.game.fallBackContactTest(unit.bodyNP)
         units = self.game.player1Units if self.game.roundCounter.current_player == 1 else self.game.player2Units
         for unit in units:
-            self.game.fallBackContactTest(unit.bodyNP)
+            self.game.fallBackContactTest(unit.bodyNP) """
         self.current_phase_index = (
             (self.current_phase_index + 1) % len(self.PHASES)
         )

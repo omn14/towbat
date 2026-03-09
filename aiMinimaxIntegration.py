@@ -97,7 +97,7 @@ class EnhancedAI:
         strength_ratio = p_strength / max(1, e_strength)
         
         # Use minimax when game is close (ratio between 0.7 and 1.4)
-        if 0.7 <= strength_ratio <= 1.4:
+        if 0.7 <= strength_ratio+3 <= 1.4:
             return True
         
         # Use heuristics when we're clearly winning or losing
@@ -639,6 +639,32 @@ class EnhancedAI:
             dx -= abs(dx) * bias
         return dx, dy
     
+    # ── Highlight helpers ─────────────────────────────────────────────────
+
+    def _highlight_acting_unit(self, unit):
+        """Visually mark the unit that is currently taking its AI action."""
+        if unit is None:
+            return
+        # Bright gold tint so the acting unit stands out clearly
+        unit.model.setColor(1, 0.85, 0, 1)
+        # Force its floating label visible so the name is readable
+        """  try:
+            unit.text_node.show()
+        except Exception:
+            pass """
+
+    def _unhighlight_acting_unit(self, unit):
+        """Restore the unit's original colour and hide its label."""
+        if unit is None:
+            return
+        unit.model.setColor(unit.color)
+        """ try:
+            unit.text_node.hide()
+        except Exception:
+            pass """
+
+    # ─────────────────────────────────────────────────────────────────────
+
     async def execute_action(self, action: GameAction):
         """
         Execute an action in the actual game.
@@ -653,7 +679,9 @@ class EnhancedAI:
         if action.action_type == 'move':
             # Find the actual unit object
             unit = self._get_unit_by_name(action.unit_name)
+            self._highlight_acting_unit(unit)
             if unit:
+                await Task.pause(1/self.game.speedMultiplier)  # Brief pause to show highlight before moving
                 target_pos = (action.parameters['target_x'], 
                             action.parameters['target_y'], 0)
                 # Use existing game movement system
@@ -666,11 +694,12 @@ class EnhancedAI:
                 taskMgr.doMethodLater(0.1, self.game.moveUnit, "moveTask", extraArgs=[unit], appendTask=False)
                 self._move_complete = False
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
-                pass
+            self._unhighlight_acting_unit(unit)
         
         elif action.action_type == 'shoot':
             unit = self._get_unit_by_name(action.unit_name)
             target = self._get_unit_by_name(action.parameters['target'])
+            self._highlight_acting_unit(unit)
             if unit and target:
                 self.game.unitToMove=unit
                 #target_pos = target['position']
@@ -682,11 +711,12 @@ class EnhancedAI:
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 # Mark the unit as having attacked so it can't shoot again this turn
                 unit.hasAttackedThisTurn = True
-                pass
+            self._unhighlight_acting_unit(unit)
         
         elif action.action_type == 'attack':
             unit = self._get_unit_by_name(action.unit_name)
             target = self._get_unit_by_name(action.parameters['target'])
+            self._highlight_acting_unit(unit)
             if unit and target:
                 # Mark the unit as having attacked so it can't attack again this turn
                 #unit.hasAttackedThisTurn = True
@@ -696,7 +726,7 @@ class EnhancedAI:
                 self._move_complete = False
                 taskMgr.add(self.game.combat.verySimpleBattleStart, "meleeTask", appendTask=True)
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
-                pass
+            self._unhighlight_acting_unit(unit)
         
         elif action.action_type == 'end_phase':
             # End current phase
@@ -742,7 +772,7 @@ class EnhancedAI:
 
             if action.action_type == 'end_phase':
                 self.game.fsm.nextPhase()
-                break
+                #break
 
         self._turn_running = False
         return action

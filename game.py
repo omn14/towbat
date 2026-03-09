@@ -185,8 +185,11 @@ class MyApp(ShowBase):
             }
         }
 
-        self.load_player1_army("strategy_armies/gunline.json")
-        self.load_player2_army("strategy_armies/horde_rush.json")
+        #self.load_player1_army("strategy_armies/gunline.json")
+        #self.load_player2_army("strategy_armies/horde_rush.json")
+
+        self.load_player1_army("strategy_armies/hammer_and_anvil.json")
+        self.load_player2_army("strategy_armies/hammer_and_anvil.json")
 
 
         self.unitToMove=self.player1Units[0]
@@ -314,6 +317,13 @@ class MyApp(ShowBase):
             'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'class': TempleGuard,            'color': (0, 1, 1, 1)},
             'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'class': ColdOneRider,           'color': (0, 1, 1, 1)},
         }
+
+        # Player color overrides – every unit in the same army shares one colour
+        player_colors = {
+            1: (1, 0, 0, 1),   # Player 1 → red
+            2: (0, 0, 1, 1),   # Player 2 → blue
+        }
+        player_color = player_colors.get(player_num, (0.5, 0.5, 0.5, 1))
         
         # Load the JSON file
         try:
@@ -375,7 +385,7 @@ class MyApp(ShowBase):
                     unit_instance,
                     scale=1.0,
                     BulletWorld=self.world,
-                    color=model_info['color']
+                    color=player_color
                 )
                 
                 # Position the unit

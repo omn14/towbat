@@ -2,27 +2,27 @@
   "current_phase": "MovementPhase",
   "current_phase_index": 1,
   "current_round": [
-    4,
-    3
+    0,
+    0
   ],
-  "current_player": 2,
+  "current_player": 1,
   "max_rounds": 16,
   "ai_player2_active": true,
   "units": [
     {
-      "name": "P1_IronHailGunner0",
+      "name": "P1_BattlePilgrim0",
       "position": [
-        -25.891971588134766,
-        0.9212539196014404,
+        -8.040700912475586,
+        -16.565528869628906,
         0.0
       ],
-      "heading": -5.625,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
       "color": [
         1,
-        1,
+        0,
         0,
         1
       ],
@@ -31,14 +31,14 @@
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 10,
-      "files": 10,
-      "ranks": 1,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
       "characteristics": {
-        "Model": "Iron Hail Gunner",
+        "Model": "Battle Pilgrim",
         "M": "4",
-        "WS": "3",
-        "BS": "4",
+        "WS": "2",
+        "BS": "2",
         "S": "3",
         "T": "3",
         "W": "1",
@@ -54,111 +54,19 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P1_PeasantBowman1",
+      "name": "P1_Zombie1",
       "position": [
-        -12.024499893188477,
-        0.01996922492980957,
+        -24.099328994750977,
+        -17.799365997314453,
         0.0
       ],
-      "heading": -2.25,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
       "color": [
         1,
         0,
-        0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 10,
-      "ranks": 1,
-      "characteristics": {
-        "Model": "Peasant Bowman",
-        "M": "4",
-        "WS": "2",
-        "BS": "3",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "5"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_Skink2",
-      "position": [
-        0.9267116189002991,
-        3.9244866371154785,
-        0.0
-      ],
-      "heading": -1.1250041723251343,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "InCombat",
-      "color": [
-        0,
-        1,
-        1,
-        1
-      ],
-      "isInCombat": true,
-      "hasMovedThisTurn": true,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 10,
-      "ranks": 1,
-      "characteristics": {
-        "Model": "Skink",
-        "M": "6",
-        "WS": "2",
-        "BS": "3",
-        "S": "3",
-        "T": "2",
-        "W": "1",
-        "I": "4",
-        "A": "1",
-        "Ld": "5"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [
-        "P2_OrcBoy5"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_NightGoblin3",
-      "position": [
-        12.726762771606445,
-        -0.4517101049423218,
-        0.0
-      ],
-      "heading": -5.625,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
         0,
         1
       ],
@@ -168,19 +76,20 @@
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
       "nmodels": 20,
-      "files": 10,
-      "ranks": 2,
+      "files": 5,
+      "ranks": 4,
       "characteristics": {
-        "Model": "Night Goblin",
+        "Model": "Zombie",
         "M": "4",
         "WS": "2",
-        "BS": "3",
+        "BS": "0",
         "S": "3",
         "T": "3",
         "W": "1",
-        "I": "3",
+        "I": "1",
         "A": "1",
-        "Ld": "4"
+        "Ld": "2",
+        "Type": "Undead"
       },
       "armor_save": 7,
       "charging": false,
@@ -190,64 +99,20 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P1_JadeWarrior4",
+      "name": "P1_TempleGuard2",
       "position": [
-        18.596969604492188,
-        5.173314571380615,
+        -30.283721923828125,
+        -16.111652374267578,
         0.0
       ],
-      "heading": 28.125,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
       "color": [
         1,
-        1,
         0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 15,
-      "files": 5,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Jade Warrior",
-        "M": "4",
-        "WS": "4",
-        "BS": "3",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "8"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_TempleGuard5",
-      "position": [
-        21.70244789123535,
-        2.8325533866882324,
-        0.0
-      ],
-      "heading": 73.125,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
         0,
-        1,
-        1,
         1
       ],
       "isInCombat": false,
@@ -279,19 +144,19 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P2_OrcBoy0",
+      "name": "P1_OrcBoy5",
       "position": [
-        -23.95515251159668,
-        5.047891616821289,
+        -17.345727920532227,
+        -16.19152069091797,
         0.0
       ],
-      "heading": -121.42516326904297,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
       "color": [
-        0,
         1,
+        0,
         0,
         1
       ],
@@ -300,108 +165,108 @@
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 20,
-      "files": 10,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Orc Boy",
-        "M": "4",
-        "WS": "3",
-        "BS": "3",
-        "S": "3",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_OrcBoy1",
-      "position": [
-        -14.260003089904785,
-        7.851376533508301,
-        0.0
-      ],
-      "heading": 187.875,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
-        0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 20,
-      "files": 10,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Orc Boy",
-        "M": "4",
-        "WS": "3",
-        "BS": "3",
-        "S": "3",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_NightGoblin2",
-      "position": [
-        -14.442014694213867,
-        13.105692863464355,
-        0.0
-      ],
-      "heading": 182.25,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
-        0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 30,
-      "files": 10,
+      "nmodels": 15,
+      "files": 5,
       "ranks": 3,
       "characteristics": {
-        "Model": "Night Goblin",
+        "Model": "Orc Boy",
+        "M": "4",
+        "WS": "3",
+        "BS": "3",
+        "S": "3",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "6"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P1_BlackOrc6",
+      "position": [
+        -1.4117330312728882,
+        -14.417381286621094,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Black Orc",
+        "M": "4",
+        "WS": "4",
+        "BS": "3",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_BattlePilgrim0",
+      "position": [
+        -21.707246780395508,
+        14.17285442352295,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
+      "characteristics": {
+        "Model": "Battle Pilgrim",
         "M": "4",
         "WS": "2",
-        "BS": "3",
+        "BS": "2",
         "S": "3",
         "T": "3",
         "W": "1",
         "I": "3",
         "A": "1",
-        "Ld": "4"
+        "Ld": "7"
       },
       "armor_save": 7,
       "charging": false,
@@ -411,102 +276,10 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P2_NightGoblin3",
+      "name": "P2_Zombie1",
       "position": [
-        -11.083956718444824,
-        17.18280029296875,
-        0.0
-      ],
-      "heading": 186.75,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
-        0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 30,
-      "files": 10,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Night Goblin",
-        "M": "4",
-        "WS": "2",
-        "BS": "3",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "4"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_OrcBoy5",
-      "position": [
-        0.5059089064598083,
-        5.5436930656433105,
-        0.0
-      ],
-      "heading": 178.875,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "InCombat",
-      "color": [
-        0,
-        1,
-        0,
-        1
-      ],
-      "isInCombat": true,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 20,
-      "files": 10,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Orc Boy",
-        "M": "4",
-        "WS": "3",
-        "BS": "3",
-        "S": "3",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [
-        "P1_Skink2"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_SkeletonWarrior6",
-      "position": [
-        10.821676254272461,
-        11.818041801452637,
+        -10.642148971557617,
+        14.479839324951172,
         0.0
       ],
       "heading": 180.0,
@@ -525,20 +298,153 @@
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
       "nmodels": 20,
-      "files": 10,
-      "ranks": 2,
+      "files": 5,
+      "ranks": 4,
       "characteristics": {
-        "Model": "Skeleton Warrior",
+        "Model": "Zombie",
         "M": "4",
         "WS": "2",
-        "BS": "2",
+        "BS": "0",
         "S": "3",
         "T": "3",
         "W": "1",
-        "I": "2",
+        "I": "1",
         "A": "1",
-        "Ld": "3",
+        "Ld": "2",
         "Type": "Undead"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_TempleGuard2",
+      "position": [
+        -28.134981155395508,
+        14.11785888671875,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Temple Guard",
+        "M": "4",
+        "WS": "4",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "1",
+        "A": "2",
+        "Ld": "8",
+        "Type": "Monstrous Infantry"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_OrcBoy5",
+      "position": [
+        -26.006824493408203,
+        17.875835418701172,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
+      "characteristics": {
+        "Model": "Orc Boy",
+        "M": "4",
+        "WS": "3",
+        "BS": "3",
+        "S": "3",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "6"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_BlackOrc6",
+      "position": [
+        -15.756670951843262,
+        14.123220443725586,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Black Orc",
+        "M": "4",
+        "WS": "4",
+        "BS": "3",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8"
       },
       "armor_save": 7,
       "charging": false,
