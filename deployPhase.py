@@ -151,6 +151,110 @@ def _get_ai_deploy_position(game, unit):
             y = random.uniform(y_min + 3, y_max - 2)
             reason = "Second line support for the grinding front"
 
+    elif strategy and strategy.name == "Strong Center":
+        # Hammers in the dead centre, basic/cannon-fodder as a screen
+        # in front, superior on the flanks, shooting on the far flanks,
+        # fast units wide.
+        if main_type == UnitType.HAMMER:
+            # Centre of the line, slightly back so screens are in front
+            x = _clamp(avg_enemy_x + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min + 2, y_min + 5)
+            reason = "Centre hammer — the fist of the formation"
+        elif main_type == UnitType.ANVIL:
+            # Beside the hammers in the centre
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_min + 1, y_min + 4)
+            reason = "Anvil — anchor next to the centre hammers"
+        elif main_type == UnitType.BASIC or main_type == UnitType.CANNON_FODDER:
+            # Screen in front of the centre
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_min, y_min + 2)
+            reason = "Screen/redirector — front of centre to absorb charges"
+        elif main_type == UnitType.SUPERIOR:
+            # Flanks of the formation
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            # Alternate deployed superior units between left and right
+            deployed_sup = [u for u in my_units
+                           if u.isDeployed
+                           and classifier.classify_from_model(u.unit.model)[0]
+                               == UnitType.SUPERIOR]
+            if len(deployed_sup) % 2 == 0:
+                x = _clamp(flank + random.uniform(-3, 3), x_min, x_max)
+            else:
+                x = _clamp(-flank + random.uniform(-3, 3), x_min, x_max)
+            y = random.uniform(y_min + 1, y_min + 4)
+            reason = "Superior — flank guard position"
+        elif support_role == SupportRole.SHOOTING:
+            # Far flanks to target enemy fast units
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            deployed_shoot = [u for u in my_units
+                             if u.isDeployed
+                             and classifier.classify_from_model(u.unit.model)[1]
+                                 == SupportRole.SHOOTING]
+            if len(deployed_shoot) % 2 == 0:
+                x = _clamp(25 + random.uniform(-3, 3), x_min, x_max)
+            else:
+                x = _clamp(-25 + random.uniform(-3, 3), x_min, x_max)
+            y = random.uniform(y_max - 4, y_max)
+            reason = "Shooting — far flank to cover against fast threats"
+        elif support_role == SupportRole.FAST:
+            # Wide on a flank to hunt war machines
+            flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+            x = _clamp(flank + random.uniform(-2, 4), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = "Fast unit — wide flank to hunt enemy shooting"
+        else:
+            x = _clamp(avg_enemy_x + random.uniform(-8, 8), x_min, x_max)
+            y = random.uniform(y_min, y_min + 4)
+            reason = "Supporting the centre formation"
+
+    elif strategy and strategy.name == "Cavalry Charge":
+        # Cavalry deploy on one flank with stronger units on the outside.
+        # Fast chaff units go to both flanks to hunt shooters.
+        flank = _pick_weak_flank(enemy_positions, avg_enemy_x)
+
+        if support_role == SupportRole.SHOOTING:
+            # Shooting support (bolt throwers etc.) — rear, covering field
+            x = _clamp(avg_enemy_x + random.uniform(-6, 6), x_min, x_max)
+            y = random.uniform(y_max - 4, y_max)
+            reason = "Rear shooting line — strip ranks before the charge"
+        elif (main_type == UnitType.CANNON_FODDER
+              or (support_role == SupportRole.FAST
+                  and main_type not in (UnitType.HAMMER, UnitType.SUPERIOR))):
+            # Fast redirectors / chaff — split to both flanks to hunt
+            # war machines / screening.  Alternate left/right.
+            deployed_chaff = [u for u in my_units
+                             if u.isDeployed
+                             and classifier.classify_from_model(u.unit.model)[0]
+                                 == UnitType.CANNON_FODDER]
+            if len(deployed_chaff) % 2 == 0:
+                x = _clamp(flank + random.uniform(-3, 3), x_min, x_max)
+            else:
+                x = _clamp(-flank + random.uniform(-3, 3), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = f"Fast chaff — flank sweep to hunt enemy shooters"
+        elif main_type == UnitType.HAMMER:
+            # Hammer cavalry — outer position on the chosen flank
+            # (stronger units further out to protect the flank edge)
+            x = _clamp(flank + random.uniform(0, 6), x_min, x_max)
+            y = random.uniform(y_min + 1, y_min + 5)
+            reason = f"Hammer cavalry — outer-flank (x≈{flank:.0f}) for decisive charge"
+        elif main_type == UnitType.SUPERIOR:
+            # Superior cav — inner flank next to hammers
+            x = _clamp(flank + random.uniform(-4, 2), x_min, x_max)
+            y = random.uniform(y_min + 1, y_min + 5)
+            reason = f"Superior cavalry — inner-flank support for hammer units"
+        elif main_type == UnitType.BASIC:
+            # Basic unit in the centre as bait / hold-up
+            x = _clamp(avg_enemy_x + random.uniform(-4, 4), x_min, x_max)
+            y = random.uniform(y_min, y_min + 3)
+            reason = "Basic unit — centre bait to hold up enemy hammer"
+        else:
+            # Fallback: anchor in the centre
+            x = _clamp(avg_enemy_x + random.uniform(-5, 5), x_min, x_max)
+            y = random.uniform(y_min, y_min + 4)
+            reason = "Centre anchor for cavalry army"
+
     else:
         # Fallback: generic positioning
         x = random.uniform(x_min, x_max)

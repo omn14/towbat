@@ -10,10 +10,10 @@
   "ai_player2_active": true,
   "units": [
     {
-      "name": "P1_BattlePilgrim0",
+      "name": "P1_GrailKnight0",
       "position": [
-        -8.040700912475586,
-        -16.565528869628906,
+        -2.184180736541748,
+        -16.798355102539062,
         0.0
       ],
       "heading": 0.0,
@@ -31,110 +31,21 @@
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 15,
-      "files": 5,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Battle Pilgrim",
-        "M": "4",
-        "WS": "2",
-        "BS": "2",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "7"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_Zombie1",
-      "position": [
-        -24.099328994750977,
-        -17.799365997314453,
-        0.0
-      ],
-      "heading": 0.0,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 20,
-      "files": 5,
-      "ranks": 4,
-      "characteristics": {
-        "Model": "Zombie",
-        "M": "4",
-        "WS": "2",
-        "BS": "0",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "1",
-        "A": "1",
-        "Ld": "2",
-        "Type": "Undead"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_TempleGuard2",
-      "position": [
-        -30.283721923828125,
-        -16.111652374267578,
-        0.0
-      ],
-      "heading": 0.0,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
+      "nmodels": 8,
+      "files": 4,
       "ranks": 2,
       "characteristics": {
-        "Model": "Temple Guard",
-        "M": "4",
-        "WS": "4",
-        "BS": "0",
+        "Model": "Grail Knight",
+        "M": "0",
+        "WS": "5",
+        "BS": "3",
         "S": "4",
-        "T": "4",
+        "T": "3",
         "W": "1",
-        "I": "1",
+        "I": "5",
         "A": "2",
         "Ld": "8",
-        "Type": "Monstrous Infantry"
+        "Type": "Cavalry"
       },
       "armor_save": 7,
       "charging": false,
@@ -144,10 +55,10 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P1_OrcBoy5",
+      "name": "P1_PegasusKnight1",
       "position": [
-        -17.345727920532227,
-        -16.19152069091797,
+        -9.281078338623047,
+        -16.863239288330078,
         0.0
       ],
       "heading": 0.0,
@@ -155,8 +66,8 @@
       "roll": 0.0,
       "state": "Idle",
       "color": [
-        0,
         1,
+        0,
         0,
         1
       ],
@@ -165,61 +76,17 @@
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 15,
-      "files": 5,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Orc Boy",
-        "M": "4",
-        "WS": "3",
-        "BS": "3",
-        "S": "3",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 1,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P1_BlackOrc6",
-      "position": [
-        -1.4117330312728882,
-        -14.417381286621094,
-        0.0
-      ],
-      "heading": 0.0,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        1,
-        0,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
+      "nmodels": 6,
+      "files": 3,
       "ranks": 2,
       "characteristics": {
-        "Model": "Black Orc",
-        "M": "4",
+        "Model": "Pegasus Knight",
+        "M": "-",
         "WS": "4",
-        "BS": "3",
+        "BS": "2",
         "S": "4",
         "T": "4",
-        "W": "1",
+        "W": "2",
         "I": "3",
         "A": "1",
         "Ld": "8"
@@ -232,13 +99,13 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P2_BattlePilgrim0",
+      "name": "P1_ColdOneRider2",
       "position": [
-        -21.707246780395508,
-        14.17285442352295,
+        3.2907238006591797,
+        -15.942005157470703,
         0.0
       ],
-      "heading": 180.0,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -246,6 +113,230 @@
         1,
         0,
         0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 8,
+      "files": 4,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Cold One Rider",
+        "M": "4",
+        "WS": "3",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "1",
+        "A": "1",
+        "Ld": "8",
+        "Type": "Cavalry"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P1_OrcBoarBoy3",
+      "position": [
+        -30.91825294494629,
+        -15.572711944580078,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Orc Boar Boy",
+        "M": "4",
+        "WS": "3",
+        "BS": "3",
+        "S": "3",
+        "T": "4",
+        "W": "1",
+        "I": "2",
+        "A": "1",
+        "Ld": "7",
+        "Type": "Cavalry"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P1_GoblinWolfRider4",
+      "position": [
+        32.92403793334961,
+        -14.982757568359375,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Goblin Wolf Rider",
+        "M": "4",
+        "WS": "2",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "2",
+        "A": "1",
+        "Ld": "6",
+        "Type": "Cavalry (Goblin)"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P1_DireWolf5",
+      "position": [
+        -23.419139862060547,
+        -14.00070571899414,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Dire Wolf",
+        "M": "9",
+        "WS": "3",
+        "BS": "0",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "3",
+        "Type": "War Beast"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P1_PeasantBowman6",
+      "position": [
+        15.26531982421875,
+        -14.270198822021484,
+        0.0
+      ],
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Peasant Bowman",
+        "M": "4",
+        "WS": "2",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "5"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 1,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_BattlePilgrim0",
+      "position": [
+        -0.3792039155960083,
+        13.916071891784668,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
         1
       ],
       "isInCombat": false,
@@ -278,8 +369,8 @@
     {
       "name": "P2_Zombie1",
       "position": [
-        -10.642148971557617,
-        14.479839324951172,
+        -7.351952075958252,
+        16.4006404876709,
         0.0
       ],
       "heading": 180.0,
@@ -323,8 +414,8 @@
     {
       "name": "P2_TempleGuard2",
       "position": [
-        -28.134981155395508,
-        14.11785888671875,
+        5.500781059265137,
+        14.926679611206055,
         0.0
       ],
       "heading": 180.0,
@@ -333,7 +424,7 @@
       "state": "Idle",
       "color": [
         0,
-        1,
+        0,
         1,
         1
       ],
@@ -366,10 +457,10 @@
       "equipped_weapon": "hand weapon"
     },
     {
-      "name": "P2_OrcBoy5",
+      "name": "P2_GrailKnight3",
       "position": [
-        -26.006824493408203,
-        17.875835418701172,
+        -26.596057891845703,
+        19.243610382080078,
         0.0
       ],
       "heading": 180.0,
@@ -378,8 +469,98 @@
       "state": "Idle",
       "color": [
         0,
-        1,
         0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 8,
+      "files": 4,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Grail Knight",
+        "M": "0",
+        "WS": "5",
+        "BS": "3",
+        "S": "4",
+        "T": "3",
+        "W": "1",
+        "I": "5",
+        "A": "2",
+        "Ld": "8",
+        "Type": "Cavalry"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_ColdOneRider4",
+      "position": [
+        26.41512680053711,
+        19.496580123901367,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 8,
+      "files": 4,
+      "ranks": 2,
+      "characteristics": {
+        "Model": "Cold One Rider",
+        "M": "4",
+        "WS": "3",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "1",
+        "A": "1",
+        "Ld": "8",
+        "Type": "Cavalry"
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_OrcBoy5",
+      "position": [
+        -10.733390808105469,
+        16.83138656616211,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
         1
       ],
       "isInCombat": false,
@@ -412,8 +593,8 @@
     {
       "name": "P2_BlackOrc6",
       "position": [
-        -15.756670951843262,
-        14.123220443725586,
+        11.261324882507324,
+        14.247756958007812,
         0.0
       ],
       "heading": 180.0,
@@ -422,8 +603,8 @@
       "state": "Idle",
       "color": [
         0,
-        1,
         0,
+        1,
         1
       ],
       "isInCombat": false,

@@ -188,8 +188,9 @@ class MyApp(ShowBase):
         #self.load_player1_army("strategy_armies/gunline.json")
         #self.load_player2_army("strategy_armies/horde_rush.json")
 
-        self.load_player1_army("strategy_armies/hammer_and_anvil.json")
-        self.load_player2_army("strategy_armies/hammer_and_anvil.json")
+        #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
+        self.load_player1_army("strategy_armies/cavalry_charge.json")
+        self.load_player2_army("strategy_armies/strong_center.json")
 
 
         self.unitToMove=self.player1Units[0]
@@ -361,9 +362,21 @@ class MyApp(ShowBase):
                 elif model_class in [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
                                       PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]:
                     # Mounted units need mount units
-                    # For simplicity, create basic mounts
-                    mount_model = model(f"{unit_name} Mount", "")
-                    mount_unit = unit(f"{unit_name} Mount Unit", mount_model, nmodels, files, ranks)
+                    # Map rider name to correct mount name so the right
+                    # characteristics JSON is found in army_units/.
+                    mount_name_map = {
+                        'Jade Lancer':                 'Cathayan Warhorse',
+                        'Mounted Knight of the Realm': 'Bretonnian Warhorse',
+                        'Goblin Wolf Rider':           'Giant Wolf',
+                        'Black Knight':                'Skeletal Steed',
+                        'Pegasus Knight':              'Barded Pegasus',
+                        'Grail Knight':                'Bretonnian Warhorse',
+                        'Orc Boar Boy':                'War Boar',
+                        'Cold One Rider':              'Cold One',
+                    }
+                    mount_name = mount_name_map.get(unit_name, f"{unit_name} Mount")
+                    mount_model = model(mount_name, "")
+                    mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
                     model_instance = model_class(unit_name, "", mountUnit=mount_unit)
                 else:
                     # Other special classes

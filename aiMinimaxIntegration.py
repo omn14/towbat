@@ -166,6 +166,18 @@ class EnhancedAI:
             player_units, enemy_units)
 
         strat_name = self._current_strategy.name if self._current_strategy else 'None'
+
+        # ── Strategies with specialised role assignment ────────────────
+        if strat_name == 'Cavalry Charge':
+            current_round = state.current_round
+            max_rounds = state.max_rounds
+            self._tactical_roles = self.advisor.assign_cavalry_charge_roles(
+                player_units, enemy_units,
+                current_round=current_round, max_rounds=max_rounds)
+        elif strat_name == 'Strong Center':
+            self._tactical_roles = self.advisor.assign_strong_center_roles(
+                player_units, enemy_units)
+        
         print(f"\n[AI Heuristic] Player {current}")
         print(f"  Strategy: {strat_name} ({fit:.0%} fit)")
         for uname, info in self._tactical_roles.items():
@@ -303,6 +315,22 @@ class EnhancedAI:
             # Blockers and holders first; measured advance
             return {**BASE, 'BLOCK': 1, 'HOLD': 2, 'ENGAGE': 3,
                     'ADVANCE': 4, 'CHARGE': 7}
+        if strat_name == 'Cavalry Charge':
+            # War-machine hunters go first; shooting strips ranks;
+            # bait redirects; then hammers charge (or delay)
+            return {**BASE,
+                    'HUNT_WARMACHINES': 0, 'SHOOT': 1, 'BAIT': 2,
+                    'REDIRECT': 3, 'FLANK': 4, 'DOUBLE_CHARGE': 5,
+                    'CHARGE': 6, 'DELAYED_CHARGE': 7, 'ADVANCE': 8}
+        if strat_name == 'Strong Center':
+            # Screens/redirectors go first to get in position;
+            # then centre hammers advance; flankers guard the sides;
+            # shooting picks off fast threats; war-machine hunters last
+            return {**BASE,
+                    'REDIRECT': 0, 'SCREEN': 1, 'BLOCK': 2,
+                    'CENTER_CHARGE': 3, 'HOLD': 4,
+                    'FLANK_GUARD': 5, 'SHOOT': 6,
+                    'HUNT_WARMACHINES': 7, 'FLANK': 8, 'ADVANCE': 9}
         return BASE
 
     # ------------------------------------------------------------------
@@ -399,6 +427,114 @@ class EnhancedAI:
                     return self._move_action(unit, ux + fx, uy + fy)
             return self._move_toward_target(unit, enemies, move_speed)
 
+        # ── HUNT_WARMACHINES ───────────────────────────────────────
+        if role == 'HUNT_WARMACHINES':
+            # Beeline for the enemy shooter/war machine at full speed
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        # ── BAIT ──────────────────────────────────────────────────────
+        if role == 'BAIT':
+            # Position in front of the enemy hammer to redirect it
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dist = (dx*dx + dy*dy) ** 0.5
+                if dist > 15:
+                    # Advance toward the hammer but not all the way
+                    dx, dy = self._clamp_movement(dx, dy, move_speed * 0.7)
+                    return self._move_action(unit, ux + dx, uy + dy)
+                # Close enough — hold in place to absorb the charge
+                return None
+            return self._move_toward_target(unit, enemies, move_speed * 0.5)
+
+        # ── DOUBLE_CHARGE ─────────────────────────────────────────────
+        if role == 'DOUBLE_CHARGE':
+            # Rush straight at the target at full speed to multi-charge
+            if target:
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dist = (dx*dx + dy*dy) ** 0.5
+                # Slight offset so multiple chargers don't stack perfectly
+                if dist > 0:
+                    perp_x, perp_y = -dy / dist, dx / dist
+                    # Tiny offset (10% perpendicular) to let them fan out
+                    fx = dx / dist + perp_x * 0.10
+                    fy = dy / dist + perp_y * 0.10
+                    fx, fy = self._normalize(fx, fy, move_speed)
+                    return self._move_action(unit, ux + fx, uy + fy)
+            return self._move_toward_target(unit, enemies, move_speed)
+
+        # ── DELAYED_CHARGE ────────────────────────────────────────────
+        if role == 'DELAYED_CHARGE':
+            # If there's a designated weak target, advance at 60% to
+            # pick it off while preserving positioning
+            if target:
+                dist_to = self._distance(unit['position'],
+                                         target['position'])
+                if dist_to < 20:
+                    # Close enough to commit at full speed
+                    dx = target['position'][0] - ux
+                    dy = target['position'][1] - uy
+                    dx, dy = self._clamp_movement(dx, dy, move_speed)
+                    return self._move_action(unit, ux + dx, uy + dy)
+                # Hang back — advance slowly
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed * 0.35)
+                return self._move_action(unit, ux + dx, uy + dy)
+            # No target — hold position (delayed game)
+            return None
+
+        # ── CENTER_CHARGE ─────────────────────────────────────────────
+        if role == 'CENTER_CHARGE':
+            # Strong Center: hammer advances steadily toward the centre
+            # of the enemy line.  Charges at full speed once close.
+            if target:
+                dist_to = self._distance(unit['position'],
+                                         target['position'])
+                if dist_to < 18:
+                    # Close enough — commit to the charge at full speed
+                    dx = target['position'][0] - ux
+                    dy = target['position'][1] - uy
+                    dx, dy = self._clamp_movement(dx, dy, move_speed)
+                    return self._move_action(unit, ux + dx, uy + dy)
+                # Still far — measured advance (70% speed) to stay
+                # together with the screening units
+                dx = target['position'][0] - ux
+                dy = target['position'][1] - uy
+                dx, dy = self._clamp_movement(dx, dy, move_speed * 0.7)
+                return self._move_action(unit, ux + dx, uy + dy)
+            return self._move_toward_target(unit, enemies, move_speed * 0.7)
+
+        # ── FLANK_GUARD ───────────────────────────────────────────────
+        if role == 'FLANK_GUARD':
+            # Strong Center: superior units stay on the flanks of the
+            # formation.  If a target is engaged with a friendly centre
+            # unit, swing into its flank.  Otherwise advance alongside
+            # the centre with a lateral offset.
+            if target:
+                t = self._find_unit_dict(target, enemies) if isinstance(target, str) else target
+                if t and t.get('isInCombat'):
+                    # Enemy is pinned — flank it
+                    return self._flank_toward(unit, t, move_speed, swing=0.45)
+                # Not yet engaged — advance alongside the formation
+                # with a perpendicular offset to cover the flank
+                dx = t['position'][0] - ux if t else 0
+                dy = t['position'][1] - uy if t else 0
+                dist = (dx*dx + dy*dy) ** 0.5
+                if dist > 0:
+                    perp_x, perp_y = -dy / dist, dx / dist
+                    fx = dx / dist * 0.75 + perp_x * 0.25
+                    fy = dy / dist * 0.75 + perp_y * 0.25
+                    fx, fy = self._normalize(fx, fy, move_speed * 0.8)
+                    return self._move_action(unit, ux + fx, uy + fy)
+            return self._move_toward_target(unit, enemies, move_speed * 0.7)
+
         # ── CHARGE ────────────────────────────────────────────────────
         if role == 'CHARGE':
             if strat_name == 'Hammer and Anvil':
@@ -416,6 +552,11 @@ class EnhancedAI:
                 # Fast Strike: hammers also flank rather than charge head-on
                 if target:
                     return self._flank_toward(unit, target, move_speed, swing=0.5)
+            if strat_name == 'Cavalry Charge':
+                # Cavalry Charge: assess break probability before committing
+                if target and not self._should_charge_cavalry(unit, target, friendlies):
+                    # Can't confidently break them — flank instead
+                    return self._flank_toward(unit, target, move_speed, swing=0.4)
             if strat_name == 'Refused Flank' and target:
                 dx = target['position'][0] - ux
                 dy = target['position'][1] - uy
@@ -638,6 +779,65 @@ class EnhancedAI:
         else:
             dx -= abs(dx) * bias
         return dx, dy
+
+    # ------------------------------------------------------------------
+    # Cavalry Charge helpers
+    # ------------------------------------------------------------------
+
+    def _should_charge_cavalry(self, unit, target, friendlies):
+        """Estimate whether the charge has a good (~80%) chance of
+        breaking the target.  Uses a simplified heuristic based on
+        unit type matchup, rank differential, and available support.
+
+        Returns True if the charge looks favourable.
+        """
+        # Get unit type classifications
+        u_type = self._tactical_roles.get(unit['name'], {}).get('unit_type', 'basic')
+        t_type = self._tactical_roles.get(target['name'], {}).get('unit_type', 'basic')
+
+        # Base matchup score from type
+        try:
+            u_enum = UnitType(u_type)
+            t_enum = UnitType(t_type)
+            matchup = MATCHUP_TABLE[u_enum][t_enum]
+        except (ValueError, KeyError):
+            matchup = 1.0
+
+        # Rank penalty: each enemy rank beyond 1 is −0.15 (harder to break)
+        enemy_ranks = target.get('ranks', 1)
+        rank_penalty = max(0, (enemy_ranks - 1)) * 0.15
+
+        # Support bonus: other friendly units within 20 of the target
+        support_count = 0
+        for f in friendlies:
+            if f['name'] == unit['name']:
+                continue
+            d = self._distance(f['position'], target['position'])
+            if d < 20:
+                support_count += 1
+        support_bonus = support_count * 0.25
+
+        # Charging bonus (cavalry always charges)
+        charge_bonus = 0.4
+
+        score = matchup + charge_bonus + support_bonus - rank_penalty
+        # 1.6 threshold ≈ "80% chance" on our simplified scale
+        return score >= 1.6
+
+    def _cavalry_flee_from_charge(self, unit, enemies, move_speed):
+        """Move directly away from the nearest enemy at maximum speed.
+        Cavalry should flee incoming charges to deny the opponent
+        combat, then rally next turn with their high Leadership."""
+        if not enemies:
+            return None
+        nearest = min(enemies,
+                      key=lambda e: self._distance(
+                          unit['position'], e['position']))
+        ux, uy = unit['position'][0], unit['position'][1]
+        dx = ux - nearest['position'][0]
+        dy = uy - nearest['position'][1]
+        dx, dy = self._normalize(dx, dy, move_speed)
+        return self._move_action(unit, ux + dx, uy + dy)
     
     # ── Highlight helpers ─────────────────────────────────────────────────
 
@@ -645,23 +845,22 @@ class EnhancedAI:
         """Visually mark the unit that is currently taking its AI action."""
         if unit is None:
             return
-        # Bright gold tint so the acting unit stands out clearly
-        unit.model.setColor(1, 0.85, 0, 1)
-        # Force its floating label visible so the name is readable
-        """  try:
-            unit.text_node.show()
+        try:
+            if not unit.model.isEmpty():
+                # Bright gold tint so the acting unit stands out clearly
+                unit.model.setColor(1, 0.85, 0, 1)
         except Exception:
-            pass """
+            pass
 
     def _unhighlight_acting_unit(self, unit):
         """Restore the unit's original colour and hide its label."""
         if unit is None:
             return
-        unit.model.setColor(unit.color)
-        """ try:
-            unit.text_node.hide()
+        try:
+            if not unit.model.isEmpty():
+                unit.model.setColor(unit.color)
         except Exception:
-            pass """
+            pass
 
     # ─────────────────────────────────────────────────────────────────────
 
@@ -772,7 +971,7 @@ class EnhancedAI:
 
             if action.action_type == 'end_phase':
                 self.game.fsm.nextPhase()
-                #break
+                break
 
         self._turn_running = False
         return action

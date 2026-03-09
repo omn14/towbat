@@ -1,0 +1,74 @@
+[
+    {
+        "name": "Black Orc",
+        "faction": "orc_and_goblin_tribes",
+        "role": "center_hammer",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json"
+    },
+    {
+        "name": "Temple Guard",
+        "faction": "lizardmen",
+        "role": "center_hammer",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/lizardmen/temple_guard_characteristics.json"
+    },
+    {
+        "name": "Orc Boy",
+        "faction": "orc_and_goblin_tribes",
+        "role": "center_screen",
+        "nmodels": 15,
+        "files": 5,
+        "ranks": 3,
+        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
+    },
+    {
+        "name": "Jade Warrior",
+        "faction": "grand_cathay",
+        "role": "center_screen",
+        "nmodels": 15,
+        "files": 5,
+        "ranks": 3,
+        "json_file": "army_units/grand_cathay/jade_warrior_characteristics.json"
+    },
+    {
+        "name": "Grave Guard",
+        "faction": "vampire_counts",
+        "role": "flank_guard",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/vampire_counts/grave_guard_characteristics.json"
+    },
+    {
+        "name": "Saurus Warrior",
+        "faction": "lizardmen",
+        "role": "flank_guard",
+        "nmodels": 12,
+        "files": 6,
+        "ranks": 2,
+        "json_file": "army_units/lizardmen/saurus_warrior_characteristics.json"
+    },
+    {
+        "name": "Goblin Wolf Rider",
+        "faction": "orc_and_goblin_tribes",
+        "role": "fast_hunter",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json"
+    },
+    {
+        "name": "Peasant Bowman",
+        "faction": "bretonnia",
+        "role": "flank_shooting",
+        "nmodels": 10,
+        "files": 5,
+        "ranks": 2,
+        "json_file": "army_units/bretonnia/peasant_bowman_characteristics.json"
+    }
+]

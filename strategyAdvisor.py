@@ -108,6 +108,63 @@ STRATEGIES = [
         strengths="Very resilient. Hard to outfight on even terms.",
         weaknesses="Slow. Hammer units or flank charges can break the grind.",
     ),
+    Strategy(
+        name="Cavalry Charge",
+        description=(
+            "An all-cavalry army that wins through devastating charges.  "
+            "Three sub-tactics exist: charge down the middle (double- or "
+            "multi-charge to overwhelm), flank charge (concentrate on one "
+            "side so your strongest unit protects the flank), or the delayed "
+            "game (hang back, pick off weak units and war machines, then "
+            "deliver an irresistible charge in the final turns).  Fast "
+            "units hunt enemy shooting and war machines first.  Shooting "
+            "allies strip rank bonuses before the charge.  Never charge "
+            "unless you have ~80%+ chance of breaking the target, or have "
+            "support ready.  Flee from enemy charges — cavalry rally easily "
+            "and preserve VP."
+        ),
+        requires={'hammer': 2, 'fast': 1},
+        strengths=(
+            "Devastating on the charge.  Mobility lets you choose "
+            "engagements.  Double-charging or multi-charging breaks even "
+            "ranked infantry.  The delayed variant is almost impossible "
+            "to counter if the opponent lacks shooting."
+        ),
+        weaknesses=(
+            "Low model count — every casualty hurts.  Extremely vulnerable "
+            "to massed shooting and war machines.  If the charge fails to "
+            "break the target, the cavalry will crumble in the following "
+            "round.  Struggles against other fast armies that can't be "
+            "delayed."
+        ),
+    ),
+    Strategy(
+        name="Strong Center",
+        description=(
+            "Place multiple hammer units in the centre of the board with "
+            "progressively weaker units on the flanks.  Basic units deploy "
+            "in front of the hammers as shields and charge redirectors.  "
+            "Fast units hunt enemy war machines or sweep flanks.  Shooting "
+            "goes on the flanks to pick off fast threats.  The centre "
+            "advances together and charges when in range; flanking units "
+            "threaten the sides of anything that attacks the centre.  "
+            "Works best when terrain funnels the fight into a narrow area."
+        ),
+        requires={'hammer': 1, 'basic': 1},
+        strengths=(
+            "Hammer units win most fights even without charging.  The "
+            "centre is nearly impossible to break head-on.  Basic screens "
+            "redirect enemy charges so your hammers always strike on their "
+            "terms.  Flanking superior units punish anything that engages "
+            "the centre."
+        ),
+        weaknesses=(
+            "Flanks are vulnerable to fast cavalry or flyers.  Enemy war "
+            "machines can pound the slow-moving centre.  If the enemy "
+            "refuses to engage the centre and picks off the flanks, the "
+            "strategy collapses."
+        ),
+    ),
 ]
 
 
@@ -390,6 +447,306 @@ class StrategyAdvisor:
         # ── BASIC: advance toward the nearest enemy ──
         nearest = self._nearest_enemy(unit, living_enemies)
         return ('ADVANCE', nearest, 'Basic unit — advance to combat')
+
+    # ── Cavalry Charge strategy: override roles for cavalry army ──────
+
+    def assign_cavalry_charge_roles(
+        self, my_units: list, enemy_units: list,
+        current_round: int = 0, max_rounds: int = 6
+    ) -> dict:
+        """Specialised role assignment for the Cavalry Charge strategy.
+
+        Sub-tactic selection:
+          * If the majority of enemy units are shooting / war-machine, use
+            **charge_middle** — close the distance ASAP to escape the
+            kill zone, favouring double/multi-charges.
+          * If enemy has few shooters and the game still has 3+ turns
+            remaining, use **delayed_game** — hang back, send fast units
+            to hunt shooters, then deliver a devastating late charge.
+          * Otherwise, use **flank_charge** — concentrate on the weak
+            side with strongest units on the outside.
+
+        Roles produced:
+          CHARGE, DOUBLE_CHARGE, FLANK, DELAYED_CHARGE,
+          HUNT_WARMACHINES, BAIT, SHOOT, RALLY, FIGHT, ADVANCE
+        """
+        my_comp = self.classifier.classify_army(my_units, from_dict=True)
+        enemy_comp = self.classifier.classify_army(enemy_units, from_dict=True)
+        living_enemies = [e for e in enemy_units if e.get('nmodels', 0) > 0]
+
+        # Count enemy shooting / fast threats
+        enemy_shooters = sum(
+            1 for _, (_, sr) in enemy_comp.items()
+            if sr == SupportRole.SHOOTING
+        )
+        enemy_fast = sum(
+            1 for _, (_, sr) in enemy_comp.items()
+            if sr == SupportRole.FAST
+        )
+        turns_remaining = max(0, max_rounds - current_round)
+
+        # ── Pick sub-tactic ───────────────────────────────────────────
+        if enemy_shooters >= 2:
+            sub_tactic = 'charge_middle'
+        elif turns_remaining >= 3 and enemy_fast < 2:
+            sub_tactic = 'delayed_game'
+        else:
+            sub_tactic = 'flank_charge'
+
+        assignments = {}
+        for unit in my_units:
+            if unit.get('nmodels', 0) <= 0:
+                continue
+            name = unit.get('name', 'unknown')
+            main_type, support_role = my_comp.get(
+                name, (UnitType.BASIC, SupportRole.NONE))
+
+            role, target, reason = self._cavalry_role(
+                unit, main_type, support_role,
+                living_enemies, enemy_comp,
+                sub_tactic, turns_remaining)
+
+            assignments[name] = {
+                'role': role,
+                'target': target,
+                'reason': reason,
+                'unit_type': main_type.value,
+                'support_role': support_role.value,
+                'sub_tactic': sub_tactic,
+            }
+        return assignments
+
+    def _cavalry_role(self, unit, main_type, support_role,
+                      living_enemies, enemy_comp,
+                      sub_tactic, turns_remaining):
+        """Decide a single unit's role under the Cavalry Charge strategy."""
+
+        if unit.get('state') == 'IsFleeing':
+            return ('RALLY', None, 'Fleeing — rally and reposition for another charge')
+        if unit.get('isInCombat'):
+            target = (unit.get('isInCombatWith', [None]) or [None])[0]
+            return ('FIGHT', target, 'Already engaged — fight through')
+        if not living_enemies:
+            return ('ADVANCE', None, 'No enemies remaining')
+
+        # ── Shooting support: strip rank bonuses ──────────────────────
+        if support_role == SupportRole.SHOOTING:
+            ranked = self._best_ranked_target(living_enemies)
+            return ('SHOOT', ranked,
+                    'Shooting support — strip rank bonuses before the charge')
+
+        # ── Fast redirectors / cannon fodder: hunt war machines ───────
+        if (main_type == UnitType.CANNON_FODDER
+                or (support_role == SupportRole.FAST
+                    and main_type not in (UnitType.HAMMER, UnitType.SUPERIOR))):
+            shooter = self._find_enemy_shooter(living_enemies, enemy_comp)
+            if shooter:
+                return ('HUNT_WARMACHINES', shooter,
+                        'Fast chaff — eliminate enemy shooting before it thins us')
+            # No shooters left: act as bait / redirector
+            hammer = self._find_enemy_type(
+                living_enemies, enemy_comp, UnitType.HAMMER)
+            if hammer:
+                return ('BAIT', hammer,
+                        'Redirect enemy hammer into a bad position or sacrifice')
+            return ('ADVANCE', self._nearest_enemy(unit, living_enemies),
+                    'No shooters or hammers to hunt — advance')
+
+        # ── Sub-tactic behaviour for hammer / superior cavalry ────────
+        if sub_tactic == 'charge_middle':
+            # Double-charge: if a friendly hammer is also targeting the
+            # same unit, mark it as DOUBLE_CHARGE
+            best = self._best_charge_target(
+                unit, living_enemies, enemy_comp, main_type)
+            return ('DOUBLE_CHARGE', best,
+                    'Charge middle — multi-charge to overwhelm ranked infantry')
+
+        if sub_tactic == 'delayed_game':
+            if turns_remaining > 2:
+                weak = self._weakest_enemy(living_enemies, enemy_comp)
+                if weak:
+                    return ('DELAYED_CHARGE', weak,
+                            'Delayed game — pick off weak units now, big charge later')
+                return ('DELAYED_CHARGE', None,
+                        'Delayed game — hold back and wait for the decisive moment')
+            else:
+                best = self._best_charge_target(
+                    unit, living_enemies, enemy_comp, main_type)
+                return ('CHARGE', best,
+                        'Final turns — deliver the devastating charge!')
+
+        # sub_tactic == 'flank_charge'
+        best = self._best_flank_target(unit, living_enemies, enemy_comp)
+        return ('FLANK', best,
+                'Flank charge — concentrate on the weak side')
+
+    # ── Strong Center strategy: override roles ────────────────────────
+
+    def assign_strong_center_roles(
+        self, my_units: list, enemy_units: list,
+    ) -> dict:
+        """Specialised role assignment for the Strong Center strategy.
+
+        Hammers hold the centre and charge when they can win.
+        Basic/cannon-fodder units screen the hammers and redirect enemy
+        charges.  Superior units guard the flanks and threaten the sides
+        of anything that engages the centre.  Fast units hunt enemy
+        shooting/war machines.  Own shooting units deploy on the flanks
+        to eliminate fast threats first.
+        """
+        my_comp = self.classifier.classify_army(my_units, from_dict=True)
+        enemy_comp = self.classifier.classify_army(enemy_units, from_dict=True)
+        living_enemies = [e for e in enemy_units if e.get('nmodels', 0) > 0]
+
+        assignments = {}
+        for unit in my_units:
+            if unit.get('nmodels', 0) <= 0:
+                continue
+            name = unit.get('name', 'unknown')
+            main_type, support_role = my_comp.get(
+                name, (UnitType.BASIC, SupportRole.NONE))
+
+            role, target, reason = self._strong_center_role(
+                unit, main_type, support_role,
+                living_enemies, enemy_comp, my_units, my_comp)
+
+            assignments[name] = {
+                'role': role,
+                'target': target,
+                'reason': reason,
+                'unit_type': main_type.value,
+                'support_role': support_role.value,
+            }
+        return assignments
+
+    def _strong_center_role(self, unit, main_type, support_role,
+                            living_enemies, enemy_comp,
+                            my_units, my_comp):
+        """Decide a single unit's role under the Strong Center strategy."""
+
+        if unit.get('state') == 'IsFleeing':
+            return ('RALLY', None, 'Fleeing — rally')
+        if unit.get('isInCombat'):
+            target = (unit.get('isInCombatWith', [None]) or [None])[0]
+            return ('FIGHT', target, 'Already engaged — fight')
+        if not living_enemies:
+            return ('ADVANCE', None, 'No enemies remaining')
+
+        # ── Shooting: deploy on flanks, prioritise enemy fast units ───
+        if support_role == SupportRole.SHOOTING:
+            # Prioritise fast enemies that threaten our flanks
+            fast_enemy = self._find_enemy_fast(living_enemies, enemy_comp)
+            if fast_enemy:
+                return ('SHOOT', fast_enemy,
+                        'Shooting — eliminate fast flankers first')
+            ranked = self._best_ranked_target(living_enemies)
+            return ('SHOOT', ranked,
+                    'Shooting — strip ranks from targets the centre will hit')
+
+        # ── Fast units: hunt enemy war machines / shooting ────────────
+        if (support_role == SupportRole.FAST
+                and main_type not in (UnitType.HAMMER, UnitType.SUPERIOR)):
+            shooter = self._find_enemy_shooter(living_enemies, enemy_comp)
+            if shooter:
+                return ('HUNT_WARMACHINES', shooter,
+                        'Fast unit — destroy enemy shooting before it grinds the centre')
+            # No shooters left — swing around a flank
+            best = self._best_flank_target(unit, living_enemies, enemy_comp)
+            return ('FLANK', best, 'Fast unit — flank sweep')
+
+        # ── Hammer: centre charge ─────────────────────────────────────
+        if main_type == UnitType.HAMMER:
+            best = self._best_charge_target(
+                unit, living_enemies, enemy_comp, main_type)
+            return ('CENTER_CHARGE', best,
+                    'Hammer — advance in the centre and charge when ready')
+
+        # ── Anvil: hold centre alongside hammers ─────────────────────
+        if main_type == UnitType.ANVIL:
+            enemy_hammer = self._find_enemy_type(
+                living_enemies, enemy_comp, UnitType.HAMMER)
+            if enemy_hammer:
+                return ('BLOCK', enemy_hammer,
+                        'Anvil — intercept enemy hammer to protect our centre')
+            return ('HOLD', None, 'Anvil — hold the centre line')
+
+        # ── Superior: flank guard ─────────────────────────────────────
+        if main_type == UnitType.SUPERIOR:
+            # Threaten the flank of anything engaging the centre
+            best = self._best_flank_target(unit, living_enemies, enemy_comp)
+            return ('FLANK_GUARD', best,
+                    'Superior — guard flank and threaten sides of enemy engaging centre')
+
+        # ── Cannon fodder: redirect enemy charges ─────────────────────
+        if main_type == UnitType.CANNON_FODDER:
+            enemy_hammer = self._find_enemy_type(
+                living_enemies, enemy_comp, UnitType.HAMMER)
+            if enemy_hammer:
+                return ('REDIRECT', enemy_hammer,
+                        'Cannon fodder — redirect enemy hammer away from our centre')
+            return ('SCREEN', None, 'Cannon fodder — screen the centre hammers')
+
+        # ── Basic: shield / screen in front of centre ─────────────────
+        enemy_hammer = self._find_enemy_type(
+            living_enemies, enemy_comp, UnitType.HAMMER)
+        if enemy_hammer:
+            return ('REDIRECT', enemy_hammer,
+                    'Basic shield — redirect enemy charge away from our hammers')
+        nearest = self._nearest_enemy(unit, living_enemies)
+        return ('SCREEN', nearest,
+                'Basic shield — screen the centre hammers')
+
+    # ── Extra target-picking helpers ──────────────────────────────────
+
+    def _find_enemy_fast(self, enemies, enemy_comp):
+        """Find the nearest enemy with the FAST support role."""
+        for e in enemies:
+            e_name = e.get('name', '')
+            _, sr = enemy_comp.get(e_name, (UnitType.BASIC, SupportRole.NONE))
+            if sr == SupportRole.FAST:
+                return e_name
+        return None
+
+    def _best_ranked_target(self, enemies):
+        """Shooting should target units with the most ranks to strip."""
+        best_name = None
+        best_ranks = 0
+        for e in enemies:
+            ranks = e.get('ranks', 1)
+            if ranks > best_ranks:
+                best_ranks = ranks
+                best_name = e.get('name')
+        return best_name
+
+    def _find_enemy_shooter(self, enemies, enemy_comp):
+        """Find the nearest enemy with the SHOOTING support role."""
+        for e in enemies:
+            e_name = e.get('name', '')
+            _, sr = enemy_comp.get(e_name, (UnitType.BASIC, SupportRole.NONE))
+            if sr == SupportRole.SHOOTING:
+                return e_name
+        return None
+
+    def _weakest_enemy(self, enemies, enemy_comp):
+        """Find the weakest (lowest-type) enemy for early pickoffs."""
+        priority = {
+            UnitType.CANNON_FODDER: 0,
+            UnitType.BASIC: 1,
+            UnitType.SUPERIOR: 2,
+            UnitType.ANVIL: 3,
+            UnitType.HAMMER: 4,
+        }
+        best_name = None
+        best_prio = 999
+        for e in enemies:
+            e_name = e.get('name', '')
+            e_type, _ = enemy_comp.get(
+                e_name, (UnitType.BASIC, SupportRole.NONE))
+            p = priority.get(e_type, 5)
+            if p < best_prio:
+                best_prio = p
+                best_name = e_name
+        return best_name
 
     # ── Target-picking helpers ─────────────────────────────────────────
 
