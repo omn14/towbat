@@ -945,6 +945,8 @@ class MyApp(ShowBase):
                         unit_name = node_name.replace('UnitCollision-', '')
                         # Set the active unit based on which was clicked
                         for unit in self.units:
+                            if not unit.text_node.isHidden():
+                                unit.text_node.hide()
                             if unit_name == unit.unitName:
                                 hovered_unit = unit
                                 #print(f"Hovered unit: {unit.unitName}")

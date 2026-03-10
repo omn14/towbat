@@ -1,9 +1,9 @@
 {
-  "current_phase": "CombatPhase",
-  "current_phase_index": 3,
+  "current_phase": "MovementPhase",
+  "current_phase_index": 1,
   "current_round": [
-    3,
-    2
+    1,
+    0
   ],
   "current_player": 2,
   "max_rounds": 16,
@@ -12,11 +12,11 @@
     {
       "name": "P1_GrailKnight0",
       "position": [
-        -30.843778610229492,
-        -1.0306320190429688,
+        -21.407371520996094,
+        -1.6596965789794922,
         0.0
       ],
-      "heading": -5.625,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -57,11 +57,11 @@
     {
       "name": "P1_PegasusKnight1",
       "position": [
-        -26.61557388305664,
-        -5.041738510131836,
+        -10.22087287902832,
+        -1.5190355777740479,
         0.0
       ],
-      "heading": 77.625,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -101,11 +101,11 @@
     {
       "name": "P1_ColdOneRider2",
       "position": [
-        -1.7466187477111816,
-        -8.458874702453613,
+        -32.62998580932617,
+        -1.6798608303070068,
         0.0
       ],
-      "heading": 23.625,
+      "heading": -2.25,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -146,22 +146,22 @@
     {
       "name": "P1_OrcBoarBoy3",
       "position": [
-        -9.6423978805542,
-        5.972285270690918,
-        -1.7763563100046584e-15
+        -27.299335479736328,
+        -0.8595873117446899,
+        0.0
       ],
-      "heading": -18.936264038085938,
-      "pitch": 3.2457831588466116e-14,
-      "roll": -7.58303336760881e-22,
-      "state": "InCombat",
+      "heading": 0.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
       "color": [
         1,
         0,
         0,
         1
       ],
-      "isInCombat": true,
-      "hasMovedThisTurn": true,
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -184,24 +184,18 @@
       "armor_save": 7,
       "charging": false,
       "player": 1,
-      "isInCombatWith": [
-        "P2_JadeWarrior3",
-        "P2_JadeWarrior3"
-      ],
-      "isInCombatFlank": [
-        "front",
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "P1_GoblinWolfRider4",
       "position": [
-        -3.3560941219329834,
-        -2.5261669158935547,
+        -15.492475509643555,
+        2.6816258430480957,
         0.0
       ],
-      "heading": 90.0,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -242,11 +236,11 @@
     {
       "name": "P1_DireWolf5",
       "position": [
-        12.471923828125,
-        -0.08717381954193115,
+        -5.016345024108887,
+        -6.520954132080078,
         0.0
       ],
-      "heading": -3.375,
+      "heading": 0.0,
       "pitch": 0.0,
       "roll": 0.0,
       "state": "Idle",
@@ -287,8 +281,8 @@
     {
       "name": "P1_PeasantBowman6",
       "position": [
-        27.23370361328125,
-        -16.50039291381836,
+        5.1938652992248535,
+        -7.358312606811523,
         0.0
       ],
       "heading": 0.0,
@@ -331,14 +325,14 @@
     {
       "name": "P2_BlackOrc0",
       "position": [
-        23.210289001464844,
-        -0.06691718101501465,
+        -11.665389060974121,
+        13.755810737609863,
         0.0
       ],
-      "heading": 194.625,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -346,7 +340,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -375,14 +369,14 @@
     {
       "name": "P2_TempleGuard1",
       "position": [
-        -23.1077823638916,
-        10.67658805847168,
+        7.477019786834717,
+        14.189905166625977,
         0.0
       ],
-      "heading": 246.375,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -390,7 +384,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -420,14 +414,14 @@
     {
       "name": "P2_OrcBoy2",
       "position": [
-        16.549720764160156,
-        -2.8506150245666504,
+        28.587509155273438,
+        15.792689323425293,
         0.0
       ],
-      "heading": 160.875,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -435,7 +429,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -464,26 +458,26 @@
     {
       "name": "P2_JadeWarrior3",
       "position": [
-        -8.785493850708008,
-        8.469938278198242,
+        -20.428075790405273,
+        16.52739906311035,
         0.0
       ],
-      "heading": 161.06373596191406,
-      "pitch": 3.245782142407075e-14,
-      "roll": -7.58303336760881e-22,
-      "state": "InCombat",
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
       "color": [
         0,
         0,
         1,
         1
       ],
-      "isInCombat": true,
-      "hasMovedThisTurn": true,
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
-      "nmodels": 6,
+      "nmodels": 15,
       "files": 5,
       "ranks": 3,
       "characteristics": {
@@ -501,25 +495,21 @@
       "armor_save": 7,
       "charging": false,
       "player": 2,
-      "isInCombatWith": [
-        "P1_OrcBoarBoy3"
-      ],
-      "isInCombatFlank": [
-        "front"
-      ],
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
       "equipped_weapon": "hand weapon"
     },
     {
       "name": "P2_GraveGuard4",
       "position": [
-        -1.8649792671203613,
-        6.669730186462402,
+        17.911069869995117,
+        15.895768165588379,
         0.0
       ],
-      "heading": 214.875,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -527,7 +517,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -557,14 +547,14 @@
     {
       "name": "P2_SaurusWarrior5",
       "position": [
-        -19.45089340209961,
-        15.429855346679688,
+        -5.972576141357422,
+        15.159760475158691,
         0.0
       ],
-      "heading": 204.75,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -572,7 +562,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -601,14 +591,14 @@
     {
       "name": "P2_GoblinWolfRider6",
       "position": [
-        5.346564769744873,
-        6.264736175537109,
+        -27.389225006103516,
+        15.677178382873535,
         0.0
       ],
-      "heading": 249.75,
+      "heading": 180.0,
       "pitch": 0.0,
       "roll": 0.0,
-      "state": "Moved",
+      "state": "Idle",
       "color": [
         0,
         0,
@@ -616,7 +606,7 @@
         1
       ],
       "isInCombat": false,
-      "hasMovedThisTurn": true,
+      "hasMovedThisTurn": false,
       "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
@@ -646,8 +636,8 @@
     {
       "name": "P2_PeasantBowman7",
       "position": [
-        13.906638145446777,
-        16.524885177612305,
+        -19.315372467041016,
+        13.629518508911133,
         0.0
       ],
       "heading": 180.0,
@@ -662,7 +652,7 @@
       ],
       "isInCombat": false,
       "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": true,
+      "hasAttackedThisTurn": false,
       "attemptedRallyThisTurn": false,
       "isDeployed": true,
       "nmodels": 10,

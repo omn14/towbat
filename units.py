@@ -1,7 +1,7 @@
 from models import *
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
-from panda3d.core import Point3, TextNode, BitMask32
+from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -91,10 +91,23 @@ class unitGraphics(FSM):
             mayChange=True
         ) """
         self.text = TextNode('node name')
+        mono_font = loader.loadFont('cmtt12')
+        if mono_font:
+            self.text.setFont(mono_font)
+        # Register inline colour properties (done once per process via global manager)
+        _tpm = TextPropertiesManager.getGlobalPtr()
+        if not _tpm.hasProperties('stat_low'):
+            _tp_low = TextProperties()
+            _tp_low.setTextColor(1.0, 0.25, 0.25, 1.0)   # red for below-average
+            _tpm.setProperties('stat_low', _tp_low)
+        if not _tpm.hasProperties('stat_high'):
+            _tp_high = TextProperties()
+            _tp_high.setTextColor(0.4, 1.0, 0.4, 1.0)    # green for above-average
+            _tpm.setProperties('stat_high', _tp_high)
         self.text.setText(text)
         #self.text_node = self.model.attachNewNode(self.text)
         self.text_node = self.bodyNP.attachNewNode(self.text)
-        self.text_node.setPos(self.unitWidth/3, self.unitHeight, 5)
+        self.text_node.setPos(self.unitWidth/3, self.unitHeight*2, 5)
         self.text_node.setScale(0.1)
         self.text_node.setBillboardPointEye(-5, fixed_depth=True)
         self.text_node.setBin("fixed", 0)
@@ -103,19 +116,117 @@ class unitGraphics(FSM):
         self.text_node.hide()
 
         
+    # Average human-level baseline for above-average detection
+    _STAT_AVERAGE = {'M': 4, 'WS': 3, 'BS': 3, 'S': 3, 'T': 3, 'W': 1, 'I': 3, 'A': 1, 'Ld': 7}
+    _STAT_KEYS    = ['M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld']
+    _COL_W        = 4   # fixed column width for monospace alignment
+
+    def _stat_table(self, label: str, ch: dict) -> str:
+        """Return a two-line stat table (header + values) for the given characteristics dict.
+        Stats above average are marked '+' in green; below average are marked '-' in red.
+        """
+        cw = self._COL_W
+        header = f"{label}\n"
+        hdr_row = "".join(f"{k:^{cw}}" for k in self._STAT_KEYS)
+        val_parts = []
+        for k in self._STAT_KEYS:
+            raw = ch.get(k, '-')
+            try:
+                val = int(raw)
+                avg = self._STAT_AVERAGE.get(k, 99)
+                if val > avg:
+                    visible = str(raw) + '+'
+                    cell = f"\x01stat_high\x01{visible}\x02"
+                elif val < avg:
+                    visible = str(raw) + '-'
+                    cell = f"\x01stat_low\x01{visible}\x02"
+                else:
+                    visible = str(raw)
+                    cell = visible
+            except (ValueError, TypeError):
+                visible = str(raw)
+                cell = visible
+            # Centre-pad using the visible text length (markup bytes have no display width)
+            padding = max(0, cw - len(visible))
+            lpad = padding // 2
+            rpad = padding - lpad
+            val_parts.append(' ' * lpad + cell + ' ' * rpad)
+        val_row = "".join(val_parts)
+        return header + hdr_row + "\n" + val_row + "\n"
+
     def updateTextNode(self):
-        text=f"In Combat: {self.isInCombat}\nMoved This Turn: {self.hasMovedThisTurn}\nAttacked This Turn: {self.hasAttackedThisTurn}"
-        row=f"Unit: {self.unitName}\n"
-        row += f"In Combat: {self.isInCombat}\n"
-        row += f"Moved This Turn: {self.hasMovedThisTurn}\n"
-        row += f"Attacked This Turn: {self.hasAttackedThisTurn}"
-        row += f"\nEngaged With: {[unit.unitName for unit in self.isInCombatWith]}"
-        row += f"\nFlanks: {self.isInCombatFlank}"
-        row += f"\nState: {self.state}"
+        sep = "-" * (self._COL_W * len(self._STAT_KEYS))
+        row = f"[ {self.unitName} ]\n"
+        row += sep + "\n"
+
+        if self.unit and self.unit.model and self.unit.model.characteristics:
+            m = self.unit.model
+            row += self._stat_table(m.name, m.characteristics)
+
+            # Mount section — found via special_rules tag 'mount'
+            mount_rule = next(
+                (r for r in m.special_rules if r.get('tag') == 'mount' and r.get('mountUnit')),
+                None
+            )
+            if mount_rule:
+                mount_obj = mount_rule['mountUnit']
+                # mountUnit may be a model (has .characteristics) or a unit (has .model)
+                if hasattr(mount_obj, 'characteristics'):
+                    mount_name = mount_obj.name
+                    mount_ch   = mount_obj.characteristics
+                elif hasattr(mount_obj, 'model') and mount_obj.model:
+                    mount_name = mount_obj.name
+                    mount_ch   = mount_obj.model.characteristics
+                else:
+                    mount_name, mount_ch = None, None
+                if mount_ch:
+                    row += sep + "\n"
+                    row += self._stat_table(mount_name, mount_ch)
+
+            # Special rules — all non-mount entries, comma-separated, word-wrapped
+            special_names = [
+                r['name'] for r in m.special_rules
+                if r.get('name') and r.get('tag') != 'mount'
+            ]
+            if special_names:
+                row += sep + "\n"
+                line = ", ".join(special_names)
+                table_w = self._COL_W * len(self._STAT_KEYS)
+                # Word-wrap to table width
+                words = line.split(", ")
+                wrapped, cur = "", ""
+                for word in words:
+                    candidate = (cur + ", " + word) if cur else word
+                    if len(candidate) <= table_w:
+                        cur = candidate
+                    else:
+                        wrapped += cur + "\n"
+                        cur = word
+                if cur:
+                    wrapped += cur + "\n"
+                row += wrapped
+
+        row += sep + "\n"
+
+        # Combat state
+        combat_str   = "Yes" if self.isInCombat          else "No"
+        moved_str    = "Yes" if self.hasMovedThisTurn     else "No"
+        attacked_str = "Yes" if self.hasAttackedThisTurn  else "No"
+        row += f"State  : {self.state}\n"
+        row += f"Combat : {combat_str:<3}  Moved : {moved_str:<3}  Atk : {attacked_str}\n"
+
+        if self.isInCombatWith:
+            names = ", ".join(u.unitName for u in self.isInCombatWith)
+            row += f"Vs     : {names}\n"
+        if self.isInCombatFlank:
+            row += f"Flanks : {self.isInCombatFlank}\n"
+
         if self.tacticalRole:
-            row += f"\nRole: {self.tacticalRole['role']}"
+            role_str = self.tacticalRole['role']
             if self.tacticalRole.get('target'):
-                row += f" -> {self.tacticalRole['target']}"
+                role_str += f" -> {self.tacticalRole['target']}"
+            row += f"Role   : {role_str}\n"
+
         self.text.setText(row)
 
     def setUpCollisions(self):
