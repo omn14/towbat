@@ -14,6 +14,16 @@ All methods operate on the game instance passed during construction.
 import math
 
 from panda3d.core import Vec2, Vec3, NodePath
+
+
+def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
+    """Safely read a numeric stat from a characteristics dict.
+    Returns *default* if the value is missing or non-numeric (e.g. '-')."""
+    try:
+        return int(characteristics[key])
+    except (KeyError, ValueError, TypeError):
+        return default
+
 from panda3d.bullet import BulletBoxShape
 from panda3d.core import LRotationf
 from direct.interval.LerpInterval import LerpPosHprInterval
@@ -185,10 +195,10 @@ class CombatResolver:
             cdistance = self.game.moveArceDistance - wdistance
             print("Calculated distance to move forward:", cdistance, wdistance, width * 2)
 
-        chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = int(rule['mountUnit'].model.characteristics['M']) + max(chdice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
         fldist = sum(fldice)
         print("Charge distance:", chdist)
         print("Flee distance:", fldist)
@@ -285,11 +295,11 @@ class CombatResolver:
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
-        maxmove = int(unit.unit.model.characteristics['M'])
+        maxmove = _stat_int(unit.unit.model.characteristics, 'M')
         durIntConst = 1.0
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                maxmove = int(rule['mountUnit'].model.characteristics['M'])
+                maxmove = _stat_int(rule['mountUnit'].model.characteristics, 'M')
         if unit.state == "IsPursuing":
             maxmove = 0
         self.game.diceInfoText.setText(f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
@@ -376,10 +386,10 @@ class CombatResolver:
             cdistance = self.game.moveArceDistance - wdistance
             print("Calculated distance to move forward:", cdistance, wdistance, width * 2)
 
-        chdist = int(unit.unit.model.characteristics['M']) + max(chdice)
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = int(rule['mountUnit'].model.characteristics['M']) + max(chdice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
         print("Charge distance:", chdist)
