@@ -938,8 +938,14 @@ class MovementSystem:
         world_center = unit.model.getPos(render) + center
         return world_center
         
-    def removeModelsFromUnit(self, unit,models_to_remove):
-        #unit.unit.nmodels = max(0, unit.nmodels - num_models)
+    def removeModelsFromUnit(self, unit, models_to_remove):
+        # Unit may have already been fully removed by another simultaneous combat
+        if unit not in self.game.units:
+            print(f"removeModelsFromUnit: {unit.unitName} is no longer in game, skipping.")
+            return
+        if unit.model.isEmpty() or unit.bodyNP.isEmpty():
+            print(f"removeModelsFromUnit: {unit.unitName} NodePath already empty, skipping.")
+            return
         cildren = unit.model.getChildren()
         models_to_remove = min(len(cildren), models_to_remove)
         #unit.model.ls()
@@ -977,6 +983,8 @@ class MovementSystem:
         self.game.world.removeRigidBody(unit.bodyNP.node())
         for shape in unit.bodyNP.node().shapes:
             unit.bodyNP.node().removeShape(shape)
+        if unit.model.isEmpty():
+            return
         bounds = unit.model.getTightBounds()
         box_size = bounds[1] - bounds[0]
         shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
