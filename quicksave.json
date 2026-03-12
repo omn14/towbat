@@ -1,9 +1,9 @@
 {
-  "current_phase": "StrategyPhase",
-  "current_phase_index": 0,
+  "current_phase": "MovementPhase",
+  "current_phase_index": 1,
   "current_round": [
-    1,
-    1
+    0,
+    0
   ],
   "current_player": 1,
   "max_rounds": 16,
@@ -12,8 +12,8 @@
     {
       "name": "P1_GrailKnight0",
       "position": [
-        -21.407371520996094,
-        -1.6596965789794922,
+        -23.987266540527344,
+        -16.473480224609375,
         0.0
       ],
       "heading": 0.0,
@@ -34,6 +34,7 @@
       "nmodels": 8,
       "files": 4,
       "ranks": 2,
+      "points_cost": 232,
       "characteristics": {
         "Model": "Grail Knight",
         "M": "0",
@@ -45,7 +46,8 @@
         "I": "5",
         "A": "2",
         "Ld": "8",
-        "Type": "Cavalry"
+        "Type": "Cavalry",
+        "Points": 29
       },
       "armor_save": 7,
       "charging": false,
@@ -57,8 +59,8 @@
     {
       "name": "P1_PegasusKnight1",
       "position": [
-        -10.22087287902832,
-        -1.5190355777740479,
+        -17.8687686920166,
+        -17.381511688232422,
         0.0
       ],
       "heading": 0.0,
@@ -79,6 +81,7 @@
       "nmodels": 6,
       "files": 3,
       "ranks": 2,
+      "points_cost": 360,
       "characteristics": {
         "Model": "Pegasus Knight",
         "M": "-",
@@ -89,7 +92,8 @@
         "W": "2",
         "I": "3",
         "A": "1",
-        "Ld": "8"
+        "Ld": "8",
+        "Points": 60
       },
       "armor_save": 7,
       "charging": false,
@@ -101,8 +105,8 @@
     {
       "name": "P1_ColdOneRider2",
       "position": [
-        -33.10220718383789,
-        -1.60343599319458,
+        -9.442146301269531,
+        -16.072608947753906,
         0.0
       ],
       "heading": 0.0,
@@ -123,6 +127,7 @@
       "nmodels": 8,
       "files": 4,
       "ranks": 2,
+      "points_cost": 272,
       "characteristics": {
         "Model": "Cold One Rider",
         "M": "4",
@@ -134,7 +139,8 @@
         "I": "1",
         "A": "1",
         "Ld": "8",
-        "Type": "Cavalry"
+        "Type": "Cavalry",
+        "Points": 34
       },
       "armor_save": 7,
       "charging": false,
@@ -146,8 +152,8 @@
     {
       "name": "P1_OrcBoarBoy3",
       "position": [
-        -27.299335479736328,
-        -0.8595873117446899,
+        8.237207412719727,
+        -15.376251220703125,
         0.0
       ],
       "heading": 0.0,
@@ -168,6 +174,7 @@
       "nmodels": 10,
       "files": 5,
       "ranks": 2,
+      "points_cost": 180,
       "characteristics": {
         "Model": "Orc Boar Boy",
         "M": "4",
@@ -179,7 +186,8 @@
         "I": "2",
         "A": "1",
         "Ld": "7",
-        "Type": "Cavalry"
+        "Type": "Cavalry",
+        "Points": 18
       },
       "armor_save": 7,
       "charging": false,
@@ -191,8 +199,8 @@
     {
       "name": "P1_GoblinWolfRider4",
       "position": [
-        -15.492475509643555,
-        2.6816258430480957,
+        16.65134620666504,
+        -15.507259368896484,
         0.0
       ],
       "heading": 0.0,
@@ -213,6 +221,7 @@
       "nmodels": 10,
       "files": 5,
       "ranks": 2,
+      "points_cost": 110,
       "characteristics": {
         "Model": "Goblin Wolf Rider",
         "M": "4",
@@ -224,7 +233,8 @@
         "I": "2",
         "A": "1",
         "Ld": "6",
-        "Type": "Cavalry (Goblin)"
+        "Type": "Cavalry (Goblin)",
+        "Points": 11
       },
       "armor_save": 7,
       "charging": false,
@@ -236,8 +246,8 @@
     {
       "name": "P1_DireWolf5",
       "position": [
-        -5.016345024108887,
-        -6.520954132080078,
+        -3.611309289932251,
+        -15.516853332519531,
         0.0
       ],
       "heading": 0.0,
@@ -258,6 +268,7 @@
       "nmodels": 10,
       "files": 5,
       "ranks": 2,
+      "points_cost": 140,
       "characteristics": {
         "Model": "Dire Wolf",
         "M": "9",
@@ -269,7 +280,8 @@
         "I": "3",
         "A": "1",
         "Ld": "3",
-        "Type": "War Beast"
+        "Type": "War Beast",
+        "Points": 14
       },
       "armor_save": 7,
       "charging": false,
@@ -281,8 +293,8 @@
     {
       "name": "P1_PeasantBowman6",
       "position": [
-        5.1938652992248535,
-        -7.358312606811523,
+        24.514493942260742,
+        -16.174076080322266,
         0.0
       ],
       "heading": 0.0,
@@ -303,6 +315,7 @@
       "nmodels": 10,
       "files": 5,
       "ranks": 2,
+      "points_cost": 50,
       "characteristics": {
         "Model": "Peasant Bowman",
         "M": "4",
@@ -313,7 +326,8 @@
         "W": "1",
         "I": "3",
         "A": "1",
-        "Ld": "5"
+        "Ld": "5",
+        "Points": 5
       },
       "armor_save": 7,
       "charging": false,
@@ -325,319 +339,8 @@
     {
       "name": "P2_BlackOrc0",
       "position": [
-        -8.002086639404297,
-        8.651803970336914,
-        0.0
-      ],
-      "heading": 227.25,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Black Orc",
-        "M": "4",
-        "WS": "4",
-        "BS": "3",
-        "S": "4",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "8"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_TempleGuard1",
-      "position": [
-        6.723118305206299,
-        6.905616283416748,
-        0.0
-      ],
-      "heading": 173.25,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Temple Guard",
-        "M": "4",
-        "WS": "4",
-        "BS": "0",
-        "S": "4",
-        "T": "4",
-        "W": "1",
-        "I": "1",
-        "A": "2",
-        "Ld": "8",
-        "Type": "Monstrous Infantry"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_OrcBoy2",
-      "position": [
-        25.0230655670166,
-        11.310531616210938,
-        0.0
-      ],
-      "heading": 121.5,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 15,
-      "files": 5,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Orc Boy",
-        "M": "4",
-        "WS": "3",
-        "BS": "3",
-        "S": "3",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_JadeWarrior3",
-      "position": [
-        -20.721906661987305,
-        16.066802978515625,
-        0.0
-      ],
-      "heading": 192.375,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 15,
-      "files": 5,
-      "ranks": 3,
-      "characteristics": {
-        "Model": "Jade Warrior",
-        "M": "4",
-        "WS": "4",
-        "BS": "3",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "8"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_GraveGuard4",
-      "position": [
-        15.647176742553711,
-        10.376855850219727,
-        0.0
-      ],
-      "heading": 133.875,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Grave Guard",
-        "M": "4",
-        "WS": "3",
-        "BS": "0",
-        "S": "4",
-        "T": "4",
-        "W": "1",
-        "I": "3",
-        "A": "1",
-        "Ld": "6",
-        "Type": "Undead"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_SaurusWarrior5",
-      "position": [
-        -5.320046901702881,
-        12.924379348754883,
-        0.0
-      ],
-      "heading": 212.625,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 12,
-      "files": 6,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Saurus Warrior",
-        "M": "4",
-        "WS": "3",
-        "BS": "0",
-        "S": "4",
-        "T": "4",
-        "W": "1",
-        "I": "1",
-        "A": "2",
-        "Ld": "8"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_GoblinWolfRider6",
-      "position": [
-        -25.832990646362305,
-        9.556028366088867,
-        0.0
-      ],
-      "heading": 202.5,
-      "pitch": 0.0,
-      "roll": 0.0,
-      "state": "Idle",
-      "color": [
-        0,
-        0,
-        1,
-        1
-      ],
-      "isInCombat": false,
-      "hasMovedThisTurn": false,
-      "hasAttackedThisTurn": false,
-      "attemptedRallyThisTurn": false,
-      "isDeployed": true,
-      "nmodels": 10,
-      "files": 5,
-      "ranks": 2,
-      "characteristics": {
-        "Model": "Goblin Wolf Rider",
-        "M": "4",
-        "WS": "2",
-        "BS": "3",
-        "S": "3",
-        "T": "3",
-        "W": "1",
-        "I": "2",
-        "A": "1",
-        "Ld": "6",
-        "Type": "Cavalry (Goblin)"
-      },
-      "armor_save": 7,
-      "charging": false,
-      "player": 2,
-      "isInCombatWith": [],
-      "isInCombatFlank": [],
-      "equipped_weapon": "hand weapon"
-    },
-    {
-      "name": "P2_PeasantBowman7",
-      "position": [
-        -19.31537437438965,
-        13.583982467651367,
+        0.3412925899028778,
+        13.707837104797363,
         0.0
       ],
       "heading": 180.0,
@@ -658,6 +361,332 @@
       "nmodels": 10,
       "files": 5,
       "ranks": 2,
+      "points_cost": 140,
+      "characteristics": {
+        "Model": "Black Orc",
+        "M": "4",
+        "WS": "4",
+        "BS": "3",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8",
+        "Points": 14
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_TempleGuard1",
+      "position": [
+        -26.465463638305664,
+        16.6236572265625,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "points_cost": 190,
+      "characteristics": {
+        "Model": "Temple Guard",
+        "M": "4",
+        "WS": "4",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "1",
+        "A": "2",
+        "Ld": "8",
+        "Type": "Monstrous Infantry",
+        "Points": 19
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_OrcBoy2",
+      "position": [
+        5.792932987213135,
+        16.80241584777832,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
+      "points_cost": 120,
+      "characteristics": {
+        "Model": "Orc Boy",
+        "M": "4",
+        "WS": "3",
+        "BS": "3",
+        "S": "3",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "6",
+        "Points": 8
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_JadeWarrior3",
+      "position": [
+        -23.051546096801758,
+        14.038548469543457,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 15,
+      "files": 5,
+      "ranks": 3,
+      "points_cost": 105,
+      "characteristics": {
+        "Model": "Jade Warrior",
+        "M": "4",
+        "WS": "4",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "8",
+        "Points": 7
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_GraveGuard4",
+      "position": [
+        -7.285175800323486,
+        15.488685607910156,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "points_cost": 130,
+      "characteristics": {
+        "Model": "Grave Guard",
+        "M": "4",
+        "WS": "3",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "3",
+        "A": "1",
+        "Ld": "6",
+        "Type": "Undead",
+        "Points": 13
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_SaurusWarrior5",
+      "position": [
+        19.419158935546875,
+        14.398089408874512,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 12,
+      "files": 6,
+      "ranks": 2,
+      "points_cost": 168,
+      "characteristics": {
+        "Model": "Saurus Warrior",
+        "M": "4",
+        "WS": "3",
+        "BS": "0",
+        "S": "4",
+        "T": "4",
+        "W": "1",
+        "I": "1",
+        "A": "2",
+        "Ld": "8",
+        "Points": 14
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_GoblinWolfRider6",
+      "position": [
+        28.693435668945312,
+        16.485950469970703,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "points_cost": 110,
+      "characteristics": {
+        "Model": "Goblin Wolf Rider",
+        "M": "4",
+        "WS": "2",
+        "BS": "3",
+        "S": "3",
+        "T": "3",
+        "W": "1",
+        "I": "2",
+        "A": "1",
+        "Ld": "6",
+        "Type": "Cavalry (Goblin)",
+        "Points": 11
+      },
+      "armor_save": 7,
+      "charging": false,
+      "player": 2,
+      "isInCombatWith": [],
+      "isInCombatFlank": [],
+      "equipped_weapon": "hand weapon"
+    },
+    {
+      "name": "P2_PeasantBowman7",
+      "position": [
+        -31.855789184570312,
+        16.270963668823242,
+        0.0
+      ],
+      "heading": 180.0,
+      "pitch": 0.0,
+      "roll": 0.0,
+      "state": "Idle",
+      "color": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "isInCombat": false,
+      "hasMovedThisTurn": false,
+      "hasAttackedThisTurn": false,
+      "attemptedRallyThisTurn": false,
+      "isDeployed": true,
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2,
+      "points_cost": 50,
       "characteristics": {
         "Model": "Peasant Bowman",
         "M": "4",
@@ -668,7 +697,8 @@
         "W": "1",
         "I": "3",
         "A": "1",
-        "Ld": "5"
+        "Ld": "5",
+        "Points": 5
       },
       "armor_save": 7,
       "charging": false,

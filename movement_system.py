@@ -591,6 +591,15 @@ class MovementSystem:
                 if rule.get('mountUnit'):
                     mountmove= int(rule['mountUnit'].model.characteristics['M'])+6
                     move = max(move, mountmove)
+
+            # ── Terrain penalty ──
+            if hasattr(self.game, 'terrain_manager'):
+                terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
+                if terrain_mult < 1.0:
+                    terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
+                    print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
+                    move = int(move * terrain_mult)
+
             print("Unit move:", move)
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
@@ -676,6 +685,14 @@ class MovementSystem:
                     move = max(move, mountmove)
             if unit.state == "IsPursuing":
                 move = 21
+
+            # ── Terrain penalty ──
+            if hasattr(self.game, 'terrain_manager'):
+                terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
+                if terrain_mult < 1.0:
+                    terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
+                    print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
+                    move = int(move * terrain_mult)
             
             
             print("Modified unit move:", move)

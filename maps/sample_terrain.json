@@ -1,0 +1,22 @@
+{
+  "terrain": [
+    {
+      "type": "forest",
+      "center": [10, 5, 0],
+      "width": 14,
+      "height": 10
+    },
+    {
+      "type": "hill",
+      "center": [-20, -5, 0],
+      "width": 12,
+      "height": 8
+    },
+    {
+      "type": "river",
+      "center": [0, 0, 0],
+      "width": 60,
+      "height": 3
+    }
+  ]
+}
