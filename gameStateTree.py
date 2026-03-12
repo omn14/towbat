@@ -63,6 +63,7 @@ class GameState:
                 'T': int(unit.unit.model.characteristics.get('T', 3)),
                 'A': int(unit.unit.model.characteristics.get('A', 1)),
                 'Ld': int(unit.unit.model.characteristics.get('Ld', 7)),
+                'Points': int(unit.unit.model.characteristics.get('Points', 0)),
                 'armor_save': unit.unit.model.armor_save,
                 'charging': unit.unit.model.charging,
                 'ranged' : any(unit.unit.model.weapons.get(weapon).get('tag') == 'ranged' for weapon in unit.unit.model.weapons),
@@ -663,8 +664,10 @@ class MinimaxTree:
         }
 
         def _unit_value(u):
-            """Value a single unit incorporating its type."""
-            base = u['nmodels'] * u['A'] * u['S']
+            """Value a single unit incorporating its type and point cost."""
+            pts = u.get('Points', 0)
+            # Use Points per model as the base value; fall back to A*S if unset
+            base = u['nmodels'] * (pts if pts > 0 else u['A'] * u['S'])
             type_mult = TYPE_VALUE.get(u.get('unit_type', 'basic'), 1.0)
             return base * type_mult
 
