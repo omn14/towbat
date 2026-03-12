@@ -1,23 +1,77 @@
-[
-    {
-        "name": "Black Orc",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "black_orc_characteristics.json"
-    },
-    {
-        "name": "Dire Wolf",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "dire_wolf_characteristics.json"
-    },
-    {
-        "name": "Orc Boy",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "orc_boyz_characteristics.json"
-    }
-]
+{
+    "budget": 2000,
+    "units": [
+        {
+            "name": "Grail Knight",
+            "faction": "bretonnia",
+            "role": "hammer_cavalry",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/bretonnia/grail_knight_characteristics.json"
+        },
+        {
+            "name": "Pegasus Knight",
+            "faction": "bretonnia",
+            "role": "hammer_cavalry_fast",
+            "nmodels": 6,
+            "files": 3,
+            "ranks": 2,
+            "json_file": "army_units/bretonnia/pegasus_knight_characteristics.json"
+        },
+        {
+            "name": "Cold One Rider",
+            "faction": "lizardmen",
+            "role": "hammer_cavalry",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/lizardmen/cold_one_rider_characteristics.json"
+        },
+        {
+            "name": "Orc Boar Boy",
+            "faction": "orc_and_goblin_tribes",
+            "role": "hammer_cavalry",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/orc_boar_boy_characteristics.json"
+        },
+        {
+            "name": "Goblin Wolf Rider",
+            "faction": "orc_and_goblin_tribes",
+            "role": "fast_hunter",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json"
+        },
+        {
+            "name": "Dire Wolf",
+            "faction": "vampire_counts",
+            "role": "fast_hunter",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/vampire_counts/dire_wolf_characteristics.json"
+        },
+        {
+            "name": "Peasant Bowman",
+            "faction": "bretonnia",
+            "role": "shooting_rank_strip",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/bretonnia/peasant_bowman_characteristics.json"
+        },
+        {
+            "name": "Grave Guard",
+            "faction": "Vampire Counts",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 130,
+            "json_file": "c:\\Users\\OEd\\OneDrive - NGI\\Documents\\wh\\army_units\\vampire_counts\\grave_guard_characteristics.json"
+        }
+    ]
+}

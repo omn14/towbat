@@ -1,56 +1,65 @@
-[
-    {
-        "name": "Pegasus Knight",
-        "faction": "bretonnia",
-        "role": "fast_hammer",
-        "nmodels": 6,
-        "files": 3,
-        "ranks": 2,
-        "json_file": "army_units/bretonnia/pegasus_knight_characteristics.json"
-    },
-    {
-        "name": "Grail Knight",
-        "faction": "bretonnia",
-        "role": "fast_hammer",
-        "nmodels": 8,
-        "files": 4,
-        "ranks": 2,
-        "json_file": "army_units/bretonnia/grail_knight_characteristics.json"
-    },
-    {
-        "name": "Black Knight",
-        "faction": "vampire_counts",
-        "role": "fast_hammer",
-        "nmodels": 8,
-        "files": 4,
-        "ranks": 2,
-        "json_file": "army_units/vampire_counts/black_knight_characteristics.json"
-    },
-    {
-        "name": "Dire Wolf",
-        "faction": "vampire_counts",
-        "role": "fast_redirector",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/vampire_counts/dire_wolf_characteristics.json"
-    },
-    {
-        "name": "Goblin Wolf Rider",
-        "faction": "orc_and_goblin_tribes",
-        "role": "fast_redirector",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json"
-    },
-    {
-        "name": "Cold One Rider",
-        "faction": "lizardmen",
-        "role": "fast_hammer",
-        "nmodels": 8,
-        "files": 4,
-        "ranks": 2,
-        "json_file": "army_units/lizardmen/cold_one_rider_characteristics.json"
-    }
-]
+{
+    "budget": 1322,
+    "units": [
+        {
+            "name": "Pegasus Knight",
+            "faction": "bretonnia",
+            "role": "fast_hammer",
+            "nmodels": 6,
+            "files": 3,
+            "ranks": 2,
+            "json_file": "army_units/bretonnia/pegasus_knight_characteristics.json",
+            "points_cost": 360
+        },
+        {
+            "name": "Grail Knight",
+            "faction": "bretonnia",
+            "role": "fast_hammer",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/bretonnia/grail_knight_characteristics.json",
+            "points_cost": 232
+        },
+        {
+            "name": "Black Knight",
+            "faction": "vampire_counts",
+            "role": "fast_hammer",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/vampire_counts/black_knight_characteristics.json",
+            "points_cost": 208
+        },
+        {
+            "name": "Dire Wolf",
+            "faction": "vampire_counts",
+            "role": "fast_redirector",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/vampire_counts/dire_wolf_characteristics.json",
+            "points_cost": 140
+        },
+        {
+            "name": "Goblin Wolf Rider",
+            "faction": "orc_and_goblin_tribes",
+            "role": "fast_redirector",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json",
+            "points_cost": 110
+        },
+        {
+            "name": "Cold One Rider",
+            "faction": "lizardmen",
+            "role": "fast_hammer",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/lizardmen/cold_one_rider_characteristics.json",
+            "points_cost": 272
+        }
+    ]
+}

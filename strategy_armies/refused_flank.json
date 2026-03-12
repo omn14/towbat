@@ -1,56 +1,65 @@
-[
-    {
-        "name": "Orc Boar Boy",
-        "faction": "orc_and_goblin_tribes",
-        "role": "hammer",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/orc_boar_boy_characteristics.json"
-    },
-    {
-        "name": "Black Knight",
-        "faction": "vampire_counts",
-        "role": "hammer",
-        "nmodels": 8,
-        "files": 4,
-        "ranks": 2,
-        "json_file": "army_units/vampire_counts/black_knight_characteristics.json"
-    },
-    {
-        "name": "Goblin Wolf Rider",
-        "faction": "orc_and_goblin_tribes",
-        "role": "fast_redirector",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json"
-    },
-    {
-        "name": "Night Goblin",
-        "faction": "orc_and_goblin_tribes",
-        "role": "delay_screen",
-        "nmodels": 20,
-        "files": 10,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/night_goblin_characteristics.json"
-    },
-    {
-        "name": "Black Orc",
-        "faction": "orc_and_goblin_tribes",
-        "role": "superior_strike",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json"
-    },
-    {
-        "name": "Orc Boy",
-        "faction": "orc_and_goblin_tribes",
-        "role": "basic_support",
-        "nmodels": 15,
-        "files": 5,
-        "ranks": 3,
-        "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json"
-    }
-]
+{
+    "budget": 818,
+    "units": [
+        {
+            "name": "Orc Boar Boy",
+            "faction": "orc_and_goblin_tribes",
+            "role": "hammer",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/orc_boar_boy_characteristics.json",
+            "points_cost": 180
+        },
+        {
+            "name": "Black Knight",
+            "faction": "vampire_counts",
+            "role": "hammer",
+            "nmodels": 8,
+            "files": 4,
+            "ranks": 2,
+            "json_file": "army_units/vampire_counts/black_knight_characteristics.json",
+            "points_cost": 208
+        },
+        {
+            "name": "Goblin Wolf Rider",
+            "faction": "orc_and_goblin_tribes",
+            "role": "fast_redirector",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/goblin_wolf_rider_characteristics.json",
+            "points_cost": 110
+        },
+        {
+            "name": "Night Goblin",
+            "faction": "orc_and_goblin_tribes",
+            "role": "delay_screen",
+            "nmodels": 20,
+            "files": 10,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/night_goblin_characteristics.json",
+            "points_cost": 60
+        },
+        {
+            "name": "Black Orc",
+            "faction": "orc_and_goblin_tribes",
+            "role": "superior_strike",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json",
+            "points_cost": 140
+        },
+        {
+            "name": "Orc Boy",
+            "faction": "orc_and_goblin_tribes",
+            "role": "basic_support",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "json_file": "army_units/orc_and_goblin_tribes/orc_boy_characteristics.json",
+            "points_cost": 120
+        }
+    ]
+}

@@ -189,7 +189,8 @@ class MyApp(ShowBase):
         #self.load_player2_army("strategy_armies/horde_rush.json")
 
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
-        self.load_player1_army("strategy_armies/cavalry_charge.json")
+        self.p1army="strategy_armies/cavalry_charge.json"
+        self.load_player1_army(self.p1army)
         self.load_player2_army("strategy_armies/strong_center.json")
 
 
@@ -329,13 +330,19 @@ class MyApp(ShowBase):
         # Load the JSON file
         try:
             with open(filename, 'r') as f:
-                army_data = json.load(f)
+                raw = json.load(f)
         except FileNotFoundError:
             print(f"Error: File {filename} not found!")
             return []
         except json.JSONDecodeError:
             print(f"Error: Invalid JSON in {filename}!")
             return []
+
+        # Support list-builder format: {"budget": N, "units": [...]}
+        if isinstance(raw, dict) and 'units' in raw:
+            army_data = raw['units']
+        else:
+            army_data = raw
         
         created_units = []
         current_x = start_pos.x
@@ -645,7 +652,7 @@ class MyApp(ShowBase):
         return
 
     async def rallyUnit(self, unit):
-        # Placeholder for rallying logic
+        # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
         Ld=int(unit.unit.model.characteristics['Ld'])
         print("losing unit original LD:", Ld)
         terningerLd=[]
@@ -945,8 +952,6 @@ class MyApp(ShowBase):
                         unit_name = node_name.replace('UnitCollision-', '')
                         # Set the active unit based on which was clicked
                         for unit in self.units:
-                            if not unit.text_node.isHidden():
-                                unit.text_node.hide()
                             if unit_name == unit.unitName:
                                 hovered_unit = unit
                                 #print(f"Hovered unit: {unit.unitName}")
@@ -1567,6 +1572,10 @@ class MyApp(ShowBase):
                 self.list_builder = ArmyListBuilderGUI(self)
             else:
                 self.list_builder.show()
+            # Populate the list builder with the current player 1 army file
+            if hasattr(self, 'p1army') and self.p1army:
+                self.list_builder.load_from_file(self.p1army)
+                self.list_builder.show_main_menu()
             self.list_builder_active = True
         else:
             self.list_builder.hide()

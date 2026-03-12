@@ -1,65 +1,75 @@
-[
-    {
-        "name": "Temple Guard",
-        "faction": "lizardmen",
-        "role": "anvil",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/lizardmen/temple_guard_characteristics.json"
-    },
-    {
-        "name": "Troll",
-        "faction": "orc_and_goblin_tribes",
-        "role": "anvil",
-        "nmodels": 6,
-        "files": 3,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/troll_characteristics.json"
-    },
-    {
-        "name": "Battle Pilgrim",
-        "faction": "bretonnia",
-        "role": "anvil",
-        "nmodels": 15,
-        "files": 5,
-        "ranks": 3,
-        "json_file": "army_units/bretonnia/battle_pilgrim_characteristics.json"
-    },
-    {
-        "name": "Black Orc",
-        "faction": "orc_and_goblin_tribes",
-        "role": "superior",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json"
-    },
-    {
-        "name": "Grave Guard",
-        "faction": "vampire_counts",
-        "role": "superior",
-        "nmodels": 10,
-        "files": 5,
-        "ranks": 2,
-        "json_file": "army_units/vampire_counts/grave_guard_characteristics.json"
-    },
-    {
-        "name": "Saurus Warrior",
-        "faction": "lizardmen",
-        "role": "superior",
-        "nmodels": 12,
-        "files": 6,
-        "ranks": 2,
-        "json_file": "army_units/lizardmen/saurus_warrior_characteristics.json"
-    },
-    {
-        "name": "Jade Warrior",
-        "faction": "grand_cathay",
-        "role": "superior",
-        "nmodels": 12,
-        "files": 6,
-        "ranks": 2,
-        "json_file": "army_units/grand_cathay/jade_warrior_characteristics.json"
-    }
-]
+{
+    "budget": 1012,
+    "units": [
+        {
+            "name": "Temple Guard",
+            "faction": "lizardmen",
+            "role": "anvil",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/lizardmen/temple_guard_characteristics.json",
+            "points_cost": 190
+        },
+        {
+            "name": "Troll",
+            "faction": "orc_and_goblin_tribes",
+            "role": "anvil",
+            "nmodels": 6,
+            "files": 3,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/troll_characteristics.json",
+            "points_cost": 240
+        },
+        {
+            "name": "Battle Pilgrim",
+            "faction": "bretonnia",
+            "role": "anvil",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "json_file": "army_units/bretonnia/battle_pilgrim_characteristics.json",
+            "points_cost": 60
+        },
+        {
+            "name": "Black Orc",
+            "faction": "orc_and_goblin_tribes",
+            "role": "superior",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/orc_and_goblin_tribes/black_orc_characteristics.json",
+            "points_cost": 140
+        },
+        {
+            "name": "Grave Guard",
+            "faction": "vampire_counts",
+            "role": "superior",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "json_file": "army_units/vampire_counts/grave_guard_characteristics.json",
+            "points_cost": 130
+        },
+        {
+            "name": "Saurus Warrior",
+            "faction": "lizardmen",
+            "role": "superior",
+            "nmodels": 12,
+            "files": 6,
+            "ranks": 2,
+            "json_file": "army_units/lizardmen/saurus_warrior_characteristics.json",
+            "points_cost": 168
+        },
+        {
+            "name": "Jade Warrior",
+            "faction": "grand_cathay",
+            "role": "superior",
+            "nmodels": 12,
+            "files": 6,
+            "ranks": 2,
+            "json_file": "army_units/grand_cathay/jade_warrior_characteristics.json",
+            "points_cost": 84
+        }
+    ]
+}

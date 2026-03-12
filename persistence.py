@@ -51,6 +51,7 @@ def save_game_state(game, filename=None):
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
             'ranks': unit.unit.ranks,
+            'points_cost': unit.unit.model.characteristics.get('Points', 0) * unit.unit.nmodels,
             'characteristics': unit.unit.model.characteristics,
             'armor_save': unit.unit.model.armor_save,
             'charging': unit.unit.model.charging,
