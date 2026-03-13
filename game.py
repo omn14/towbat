@@ -48,6 +48,7 @@ from deployPhase import *
 from gameStateAnalyzer import *
 from listBuilderGUI import ArmyListBuilderGUI
 from campaignMap import CampaignMap, CountryFSM
+from collision_masks import CollisionMask as CM
 
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
 from game_fsm import GamePhaseFSM
@@ -760,10 +761,12 @@ class MyApp(ShowBase):
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
                                                        radius=self.unitToMove.unit.model.equipedWeapon.get('range',18)*3/100)
+        self.checkArrowsTerrain()
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.ground.setShaderInput("isActive", True)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
+        
         self.checkArrows()
         return task.done
     
@@ -878,6 +881,41 @@ class MyApp(ShowBase):
             localPoints.append(Point3(point.x, point.y, 0))
         return localPoints
 
+    def checkArrowsTerrain(self,mask=BitMask32.bit(3)):
+        hit = False
+        for n,point in enumerate(self.shootingArcPoints):
+            point = point * 2
+            point -= Vec2(1,1)
+            point = point * 50
+            pFrom = Point3(self.unitToMove.bodyNP.getX(), self.unitToMove.bodyNP.getY(), 0.5)
+            pTo = Point3(point.x, point.y, 0.5)
+
+            result = self.world.rayTestClosest(pFrom, pTo, CM.TERRAIN_FOREST)
+            print(f"Ray test from {pFrom} to {pTo} hit terrain: {result.hasHit()}")
+            if result.hasHit():
+                """ print(result.hasHit())
+                print(result.getHitPos())
+                print(result.getHitNormal())
+                print(result.getHitFraction())
+                print(result.getNode().getChildren())
+                for c in result.getNode().getChildren():
+                    print(c.getName())
+                    if "Model" in c.getName():
+                        np = NodePath.anyPath(c)
+                        np.setColor(1,0,1,1)
+                        NodePath.anyPath(result.getNode()).setCollideMask(mask)
+                        #self.toCleanup.append(np)
+                        hit = True """
+                hxy=self.coordsToLocal([Vec2(result.getHitPos().x, result.getHitPos().y)])[0]
+                self.shootingArcPoints[n] = Vec2(hxy.x, hxy.y)
+        
+                
+        """ if not hit:
+            print(f"no targets in shooting arc for unit {self.unitToMove.unit.name}")
+            #self.ground.setShaderInput("isActive", False)
+            if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
+                taskMgr.remove("taskShootingTrajectoryDrawLine") """
+    
     def checkArrows(self,mask=BitMask32.bit(3)):
         hit = False
         for point in self.shootingArcPoints:

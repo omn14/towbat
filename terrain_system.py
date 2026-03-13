@@ -14,7 +14,10 @@ from panda3d.core import (
     Point3, Vec3, Vec4, BitMask32,
     TransparencyAttrib, NodePath, LineSegs,
 )
-from panda3d.bullet import BulletGhostNode, BulletBoxShape
+from panda3d.bullet import (
+    BulletGhostNode, BulletBoxShape,
+    BulletTriangleMesh, BulletTriangleMeshShape, BulletRigidBodyNode,
+)
 
 
 # ── Terrain rule definitions ──────────────────────────────────────────────────
@@ -69,6 +72,13 @@ _TERRAIN_COLLISION_MASK = {
     'marsh':  BitMask32.bit(23),
 }
 
+_TERRAIN_MODEL_PATHS = {
+    'forest': "models/hills.bam",
+    'hill':   "models/hills.bam",
+    'river':  "models/hills.bam",
+    'marsh':  "models/hills.bam",
+}
+
 
 # ── TerrainPiece ──────────────────────────────────────────────────────────────
 
@@ -89,19 +99,21 @@ class TerrainPiece:
         self.height = height
         self.game = game
 
-        #self._create_visual()
+        self._create_visual()
         self._create_outline()
-        self._create_collision()
+        #self._create_collision()
+        self._create_collision_from_mesh()
 
     # ── Visual: translucent box on the ground ───────────────────────
 
     def _create_visual(self):
         box_height = 1.0  # how tall the terrain box appears
-        self.visual = loader.loadModel("models/box")
+        model_path = _TERRAIN_MODEL_PATHS.get(self.terrain_type, "models/hills.bam")
+        self.visual = loader.loadModel(model_path)
         self.visual.reparentTo(render)
         # The built-in box is a 2×2×2 cube centred at origin.
         # Scale it to match terrain width/height and desired box_height.
-        self.visual.setScale(self.width , self.height , box_height )
+        """ self.visual.setScale(self.width , self.height , box_height )
         self.visual.setPos(self.center.x-self.width/2, self.center.y-self.height/2, box_height / 2)
         color = _TERRAIN_COLORS.get(
             self.terrain_type, Vec4(0.5, 0.5, 0.5, 0.4)
@@ -109,7 +121,10 @@ class TerrainPiece:
         self.visual.setColor(color)
         self.visual.setTransparency(TransparencyAttrib.MAlpha)
         self.visual.setDepthWrite(False)
-        self.visual.setBin('fixed', 0)  # render after opaque units but before UI
+        self.visual.setBin('fixed', 0)  # render after opaque units but before UI """
+        self.visual.setScale(self.width/2, self.height/2, box_height*10)
+        self.visual.flattenStrong()
+        self.visual.setPos(self.center.x, self.center.y, box_height / 2)
 
     # ── Outline rectangle drawn with LineSegs ─────────────────────────
 
@@ -151,6 +166,40 @@ class TerrainPiece:
         self.ghost_np.setCollideMask(mask)
         self.game.world.attachGhost(self.ghost)
 
+    # ── Bullet ghost for overlap / sensor queries ─────────────────────
+
+    def _create_collision_from_mesh(self):
+        """Create a static rigid body whose collision shape matches the
+        visual mesh.  Uses BulletTriangleMeshShape (static, mass-0) so
+        the shape can be concave / non-box."""
+
+        # Work on a *copy* so flattenStrong doesn't destroy the visual.
+        collision_copy = self.visual.copyTo(render)
+        collision_copy.flattenStrong()
+
+        mesh = BulletTriangleMesh()
+        for geom_np in collision_copy.findAllMatches('**/+GeomNode'):
+            geom_node = geom_np.node()
+            ts = geom_np.getTransform(collision_copy)
+            for geom in geom_node.getGeoms():
+                mesh.addGeom(geom, ts=ts)
+
+        collision_copy.removeNode()  # no longer needed
+
+        shape = BulletTriangleMeshShape(mesh, dynamic=False)
+
+        body = BulletRigidBodyNode(f"terrain_body_{self.terrain_type}")
+        body.addShape(shape)
+        body.setMass(0)  # static — won't move
+
+        self.ghost_np = render.attachNewNode(body)
+        # No extra setPos needed — geometry is already in world space
+        # after flattenStrong().
+
+        mask = _TERRAIN_COLLISION_MASK.get(self.terrain_type, BitMask32.bit(20))
+        self.ghost_np.setCollideMask(mask)
+        self.game.world.attachRigidBody(body)
+
     # ── Queries ───────────────────────────────────────────────────────
 
     def contains(self, pos) -> bool:
@@ -183,7 +232,13 @@ class TerrainPiece:
     def destroy(self):
         self.visual.removeNode()
         self.outline.removeNode()
-        self.game.world.removeGhost(self.ghost)
+        body = self.ghost_np.node()
+        if hasattr(body, 'getMass'):
+            # It's a rigid body (from _create_collision_from_mesh)
+            self.game.world.removeRigidBody(body)
+        else:
+            # It's a ghost (from _create_collision)
+            self.game.world.removeGhost(body)
         self.ghost_np.removeNode()
 
 
