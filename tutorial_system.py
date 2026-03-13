@@ -30,29 +30,29 @@ from panda3d.core import Point3, Vec4, TextNode, TransparencyAttrib, Texture as 
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectButton, DirectFrame, DirectLabel, DGG
 from direct.gui.OnscreenImage import OnscreenImage
+import gui_theme as T
 
-# ── Medieval theme colours ────────────────────────────────────────────────────
-_PARCHMENT       = (0.85, 0.75, 0.55, 0.92)   # warm parchment background
-_PARCHMENT_DARK  = (0.55, 0.45, 0.30, 0.95)   # darker border / accent
-_GOLD            = (0.90, 0.75, 0.20, 1.0)    # gold headings
-_INK             = (0.15, 0.10, 0.05, 1.0)    # dark ink for body text
-_INK_FADED       = (0.35, 0.28, 0.18, 1.0)    # faded ink for secondary text
-_RED_WAX         = (0.65, 0.12, 0.12, 1.0)    # wax-seal red for accents
-_GREEN_BANNER    = (0.18, 0.38, 0.15, 0.95)   # banner green for buttons
-_HINT_BG         = (0.12, 0.10, 0.08, 0.80)   # dark vellum behind hints
-_HINT_FG         = (0.95, 0.88, 0.65, 1.0)    # warm cream hint text
-_SHADOW          = (0.05, 0.03, 0.02, 0.7)    # text shadow
-_FONT_PATH       = 'fonts/MedievalSharp.ttf'
+# ── Re-export theme constants under private names for backward compat ────────
+_PARCHMENT       = T.PARCHMENT
+_PARCHMENT_DARK  = T.PARCHMENT_DARK
+_GOLD            = T.GOLD
+_INK             = T.INK
+_INK_FADED       = T.INK_FADED
+_RED_WAX         = T.RED_WAX
+_GREEN_BANNER    = T.GREEN_BANNER
+_HINT_BG         = T.HINT_BG
+_HINT_FG         = T.HINT_FG
+_SHADOW          = T.SHADOW
+_FONT_PATH       = T.FONT_PATH
 
-# ── Texture paths ────────────────────────────────────────────────────────
-_TEX_DIR         = 'assets/textures/tutorial/'
-_TEX_PARCHMENT   = _TEX_DIR + 'parchment.png'
-_TEX_VELLUM      = _TEX_DIR + 'vellum.png'
-_TEX_BORDER      = _TEX_DIR + 'border.png'
-_TEX_BUTTON      = _TEX_DIR + 'button.png'
-_TEX_BUTTON_HOVER = _TEX_DIR + 'button_hover.png'
-_TEX_BUTTON_RED  = _TEX_DIR + 'button_red.png'
-_TEX_VICTORY     = _TEX_DIR + 'victory_panel.png'
+_TEX_DIR         = T.TEX_DIR
+_TEX_PARCHMENT   = T.TEX_PARCHMENT
+_TEX_VELLUM      = T.TEX_VELLUM
+_TEX_BORDER      = T.TEX_BORDER
+_TEX_BUTTON      = T.TEX_BUTTON
+_TEX_BUTTON_HOVER = T.TEX_BUTTON_HOVER
+_TEX_BUTTON_RED  = T.TEX_BUTTON_RED
+_TEX_VICTORY     = T.TEX_VICTORY
 
 
 def _tex_frame(image_path, parent=None, pos=(0, 0, 0), scale=(1, 1, 1)):
@@ -74,7 +74,7 @@ def _tex_button(text, font, pos, command, parent=None,
     btn = DirectButton(
         text=text,
         text_font=font,
-        text_fg=(1, 1, 1, 1),
+        text_fg=T.BTN_TEXT,
         scale=scale,
         pos=pos,
         command=command,
@@ -467,6 +467,8 @@ class TutorialManager:
             frameSize=(-0.48, 0.48, -0.38, 0.02),
             pos=(0, 0, 0.95),
             frameTexture=_TEX_PARCHMENT,
+            relief=DGG.RAISED,
+            borderWidth=(0.012, 0.012),
         )
         self._obj_frame.setTransparency(TransparencyAttrib.MAlpha)
 
@@ -500,6 +502,8 @@ class TutorialManager:
             frameSize=(-0.65, 0.65, -0.18, 0.05),
             pos=(0, 0, -0.65),
             frameTexture=_TEX_VELLUM,
+            relief=DGG.RAISED,
+            borderWidth=(0.01, 0.01),
         )
         self._hint_frame.setTransparency(TransparencyAttrib.MAlpha)
 
@@ -576,6 +580,8 @@ class TutorialManager:
             frameSize=(-0.85, 0.85, -0.4, 0.4),
             pos=(0, 0, 0),
             frameTexture=_TEX_VICTORY,
+            relief=DGG.RAISED,
+            borderWidth=(0.015, 0.015),
         )
         self._transition_frame.setTransparency(TransparencyAttrib.MAlpha)
 
@@ -619,6 +625,8 @@ class TutorialManager:
             frameSize=(-0.95, 0.95, -0.45, 0.45),
             pos=(0, 0, 0),
             frameTexture=_TEX_VICTORY,
+            relief=DGG.RAISED,
+            borderWidth=(0.015, 0.015),
         )
         self._transition_frame.setTransparency(TransparencyAttrib.MAlpha)
 

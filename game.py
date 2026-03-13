@@ -58,6 +58,7 @@ from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
 from tutorial_system import TutorialManager
+import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 loadPrcFileData('', 'show-frame-rate-meter true')
@@ -150,14 +151,14 @@ class MyApp(ShowBase):
 
         self.awaitingChoice = False
         self.resolvingCombat = False
-        self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=(1, 1, 0, 1))
+        self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=gui_theme.HINT_FG)
         self.debugTextUnit.setText("Debug Info test")
 
-        self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=(1, 1, 0, 1))
+        self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=gui_theme.HINT_FG)
         self.moveArceDistance = 0
         self.debugTextInfo.setText("Debug Arch test")
 
-        self.diceInfoText = self.setup_text_node(text="Dice Info", pos=(-0.7, 0.55), scale=0.05, color=(1, 1, 0, 1))
+        self.diceInfoText = self.setup_text_node(text="Dice Info", pos=(-0.7, 0.55), scale=0.05, color=gui_theme.GOLD)
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
@@ -208,7 +209,7 @@ class MyApp(ShowBase):
         #self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,16)
 
-        self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=(1, 1, 0, 1))
+        self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=gui_theme.CREAM)
         self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         """ self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
@@ -251,8 +252,9 @@ class MyApp(ShowBase):
         self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
 
-        self.z2= loader.loadModel("models/zup-axis")
-        self.z2.reparentTo(render)
+        #self.z2= loader.loadModel("models/zup-axis")
+        #self.z2.reparentTo(render)
+        
         #self.z2.setPos(oposUnit)
 
         self.taskMgr.add(self.mouseHoverUnit, "mouseHoverUnit")
@@ -1180,6 +1182,7 @@ class MyApp(ShowBase):
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
         """
         Creates and returns a text node for displaying text on screen.
+        Uses the shared medieval theme font and shadow.
         
         Args:
             text: The text to display
@@ -1190,16 +1193,10 @@ class MyApp(ShowBase):
         Returns:
             TextNode object that can be updated with .setText()
         """
-        
-        text_node = OnscreenText(
-            text=text,
-            pos=pos,
-            scale=scale,
-            fg=color,
-            align=0,  # Center alignment
-            mayChange=True
+        return gui_theme.styled_text(
+            text=text, pos=pos, scale=scale, fg=color,
+            align=TextNode.ACenter,
         )
-        return text_node
 
     # ─── Campaign Map ─────────────────────────────────────────────────────
 
@@ -1377,7 +1374,8 @@ class MyApp(ShowBase):
         self.debugNP = render.attachNewNode(debugNode)
         
         self.world.setDebugNode(self.debugNP.node())
-        self.debugNP.show()
+        #self.debugNP.show()
+
         """ # Add simple Bullet collision geometry (sphere) to smiley_copy
 
         # Estimate radius from bounding box

@@ -1,58 +1,95 @@
 """Generate medieval-themed textures for the tutorial UI.
 
+v2 -- much grittier: heavy stains, ink splatters, cracked edges,
+embossed 3-D bevels, fibrous grain, and burnt corners.
+
 Run once to produce PNG files in assets/textures/tutorial/.
 """
 
 import os
 import random
 import math
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        'assets', 'textures', 'tutorial')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
+# ── Low-level helpers ────────────────────────────────────────────────
+
 def _noise(w, h, base_color, variance=18, seed=42):
-    """Return an Image with per-pixel noise around *base_color*."""
+    """Per-pixel colour noise around *base_color*."""
     rng = random.Random(seed)
     img = Image.new('RGBA', (w, h))
-    pixels = img.load()
+    px = img.load()
     for y in range(h):
         for x in range(w):
             r = max(0, min(255, base_color[0] + rng.randint(-variance, variance)))
             g = max(0, min(255, base_color[1] + rng.randint(-variance, variance)))
             b = max(0, min(255, base_color[2] + rng.randint(-variance, variance)))
-            pixels[x, y] = (r, g, b, base_color[3] if len(base_color) > 3 else 255)
+            px[x, y] = (r, g, b, base_color[3] if len(base_color) > 3 else 255)
     return img
 
 
-def _stain(img, n=5, seed=99):
-    """Add random translucent stain blobs to simulate aged parchment."""
+def _fiber_grain(img, seed=55, density=0.12, alpha=15):
+    """Add subtle horizontal fiber streaks (like real parchment grain)."""
+    rng = random.Random(seed)
+    w, h = img.size
+    overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for _ in range(int(h * density)):
+        y = rng.randint(0, h - 1)
+        x0 = rng.randint(0, w // 3)
+        x1 = rng.randint(w // 2, w)
+        c = rng.choice([(80, 60, 30, alpha), (60, 45, 20, alpha),
+                        (100, 80, 50, alpha)])
+        draw.line([(x0, y), (x1, y)], fill=c, width=1)
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.8))
+    return Image.alpha_composite(img, overlay)
+
+
+def _stain(img, n=8, seed=99, min_alpha=10, max_alpha=35):
+    """Heavy overlapping stain blobs -- coffee rings, water damage, age spots."""
     rng = random.Random(seed)
     overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     w, h = img.size
     for _ in range(n):
-        cx = rng.randint(0, w)
-        cy = rng.randint(0, h)
-        rx = rng.randint(20, w // 3)
-        ry = rng.randint(20, h // 3)
-        alpha = rng.randint(8, 25)
+        cx, cy = rng.randint(0, w), rng.randint(0, h)
+        rx = rng.randint(15, w // 2)
+        ry = rng.randint(15, h // 2)
+        alpha = rng.randint(min_alpha, max_alpha)
         color = rng.choice([
-            (120, 90, 50, alpha),
-            (100, 70, 30, alpha),
-            (80, 60, 40, alpha),
+            (110, 80, 40, alpha), (90, 60, 25, alpha),
+            (70, 50, 30, alpha),  (130, 95, 50, alpha),
+            (50, 35, 20, alpha),
         ])
         draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=color)
-    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=12))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=10))
     return Image.alpha_composite(img, overlay)
 
 
-def _edge_darken(img, border=16, strength=40):
-    """Darken edges to create a vignette / burned edge look."""
+def _ink_splatter(img, n=12, seed=123):
+    """Tiny dark ink dots and splatters."""
+    rng = random.Random(seed)
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
     w, h = img.size
-    pixels = img.load()
+    for _ in range(n):
+        cx, cy = rng.randint(0, w), rng.randint(0, h)
+        r = rng.randint(1, 5)
+        alpha = rng.randint(20, 60)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r],
+                     fill=(30, 20, 10, alpha))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.5))
+    return Image.alpha_composite(img, overlay)
+
+
+def _edge_darken(img, border=20, strength=55):
+    """Heavy vignette -- burnt / charred edge effect."""
+    w, h = img.size
+    px = img.load()
     for y in range(h):
         for x in range(w):
             dx = min(x, w - 1 - x)
@@ -60,152 +97,238 @@ def _edge_darken(img, border=16, strength=40):
             d = min(dx, dy)
             if d < border:
                 factor = 1.0 - (strength / 255.0) * (1.0 - d / border)
-                r, g, b, a = pixels[x, y]
-                pixels[x, y] = (int(r * factor), int(g * factor), int(b * factor), a)
+                r, g, b, a = px[x, y]
+                px[x, y] = (int(r * factor), int(g * factor),
+                            int(b * factor), a)
+    return img
+
+
+def _corner_burn(img, radius=60, strength=70, seed=200):
+    """Extra darkening in corners (fire damage)."""
+    rng = random.Random(seed)
+    w, h = img.size
+    overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    corners = [(0, 0), (w, 0), (0, h), (w, h)]
+    for cx, cy in corners:
+        r = radius + rng.randint(-10, 20)
+        a = strength + rng.randint(-10, 10)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r],
+                     fill=(20, 12, 5, a))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=radius * 0.6))
+    return Image.alpha_composite(img, overlay)
+
+
+def _bevel(img, light=35, dark=50, width=4):
+    """3-D raised bevel: top/left lighter, bottom/right darker."""
+    w, h = img.size
+    px = img.load()
+    for i in range(width):
+        t = 1.0 - i / width  # taper
+        l_add = int(light * t)
+        d_sub = int(dark * t)
+        # Top edge
+        for x in range(i, w - i):
+            r, g, b, a = px[x, i]
+            if a > 0:
+                px[x, i] = (min(255, r + l_add), min(255, g + l_add),
+                            min(255, b + l_add), a)
+        # Left edge
+        for y in range(i, h - i):
+            r, g, b, a = px[i, y]
+            if a > 0:
+                px[i, y] = (min(255, r + l_add), min(255, g + l_add),
+                            min(255, b + l_add), a)
+        # Bottom edge
+        for x in range(i, w - i):
+            r, g, b, a = px[x, h - 1 - i]
+            if a > 0:
+                px[x, h - 1 - i] = (max(0, r - d_sub), max(0, g - d_sub),
+                                    max(0, b - d_sub), a)
+        # Right edge
+        for y in range(i, h - i):
+            r, g, b, a = px[w - 1 - i, y]
+            if a > 0:
+                px[w - 1 - i, y] = (max(0, r - d_sub), max(0, g - d_sub),
+                                    max(0, b - d_sub), a)
     return img
 
 
 def _ornament_line(draw, y, w, color, thickness=2):
-    """Draw a horizontal ornamental line with small diamond accents."""
+    """Horizontal ornamental line with diamond accents."""
     draw.line([(0, y), (w, y)], fill=color, width=thickness)
-    spacing = 40
-    diamond_size = 4
-    for cx in range(spacing, w, spacing):
-        pts = [(cx, y - diamond_size), (cx + diamond_size, y),
-               (cx, y + diamond_size), (cx - diamond_size, y)]
+    spacing = 32
+    ds = 4
+    for cx in range(spacing // 2, w, spacing):
+        pts = [(cx, y - ds), (cx + ds, y), (cx, y + ds), (cx - ds, y)]
         draw.polygon(pts, fill=color)
 
 
-# ── 1. Parchment (objectives panel background) ──────────────────────
+def _embossed_border(draw, w, h, inset=6, color_light=(220, 200, 140, 200),
+                     color_dark=(80, 60, 30, 200), thickness=2):
+    """Draw an inner embossed rectangular border for a framed look."""
+    # Outer dark
+    draw.rectangle([inset, inset, w - inset - 1, h - inset - 1],
+                   outline=color_dark, width=thickness)
+    # Inner light (offset gives 3-D ridge)
+    i2 = inset + thickness + 1
+    draw.rectangle([i2, i2, w - i2 - 1, h - i2 - 1],
+                   outline=color_light, width=1)
+
+
+# ── 1. Parchment (objectives / main panels) ─────────────────────────
 
 def make_parchment(w=512, h=512):
-    img = _noise(w, h, (215, 195, 155, 240), variance=12, seed=42)
-    img = _stain(img, n=6, seed=77)
-    img = _edge_darken(img, border=24, strength=35)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = _noise(w, h, (210, 188, 148, 240), variance=15, seed=42)
+    img = _fiber_grain(img, seed=55, density=0.15, alpha=18)
+    img = _stain(img, n=10, seed=77, min_alpha=12, max_alpha=40)
+    img = _ink_splatter(img, n=15, seed=111)
+    img = _edge_darken(img, border=30, strength=55)
+    img = _corner_burn(img, radius=80, strength=60)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
+    img = _bevel(img, light=40, dark=55, width=5)
     draw = ImageDraw.Draw(img)
-    # Top & bottom ornamental lines
-    _ornament_line(draw, 6, w, (150, 120, 70, 200), thickness=2)
-    _ornament_line(draw, h - 7, w, (150, 120, 70, 200), thickness=2)
+    _embossed_border(draw, w, h, inset=8,
+                     color_light=(190, 165, 100, 180),
+                     color_dark=(90, 65, 30, 200))
+    _ornament_line(draw, 18, w, (145, 115, 60, 200), thickness=2)
+    _ornament_line(draw, h - 19, w, (145, 115, 60, 200), thickness=2)
     path = os.path.join(OUT_DIR, 'parchment.png')
     img.save(path)
     print(f'  Saved {path}')
     return path
 
 
-# ── 2. Dark vellum (hint scroll background) ─────────────────────────
+# ── 2. Dark vellum (hint scroll) ────────────────────────────────────
 
-def make_vellum(w=512, h=128):
-    img = _noise(w, h, (35, 30, 25, 210), variance=8, seed=101)
-    img = _stain(img, n=3, seed=202)
-    img = _edge_darken(img, border=12, strength=20)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+def make_vellum(w=512, h=160):
+    img = _noise(w, h, (32, 26, 20, 215), variance=10, seed=101)
+    img = _fiber_grain(img, seed=66, density=0.1, alpha=12)
+    img = _stain(img, n=5, seed=202, min_alpha=8, max_alpha=25)
+    img = _ink_splatter(img, n=8, seed=333)
+    img = _edge_darken(img, border=14, strength=30)
+    img = _corner_burn(img, radius=40, strength=45, seed=210)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+    img = _bevel(img, light=22, dark=40, width=4)
     draw = ImageDraw.Draw(img)
-    # Gold-ish trim lines
-    gold = (200, 170, 60, 180)
-    draw.line([(0, 2), (w, 2)], fill=gold, width=2)
-    draw.line([(0, h - 3), (w, h - 3)], fill=gold, width=2)
+    gold = (195, 165, 55, 190)
+    dark = (80, 60, 25, 160)
+    draw.line([(0, 3), (w, 3)], fill=gold, width=2)
+    draw.line([(0, 5), (w, 5)], fill=dark, width=1)
+    draw.line([(0, h - 4), (w, h - 4)], fill=gold, width=2)
+    draw.line([(0, h - 6), (w, h - 6)], fill=dark, width=1)
     path = os.path.join(OUT_DIR, 'vellum.png')
     img.save(path)
     print(f'  Saved {path}')
     return path
 
 
-# ── 3. Ornamental border strip (horizontal trim) ────────────────────
+# ── 3. Ornamental border strip ──────────────────────────────────────
 
 def make_border(w=512, h=32):
     img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Base bar
-    draw.rectangle([0, 8, w, h - 8], fill=(140, 105, 55, 230))
-    # Inner highlight
-    draw.rectangle([0, 10, w, h - 10], fill=(180, 150, 80, 220))
-    # Diamond pattern
-    gold = (210, 180, 60, 255)
-    dark = (100, 75, 35, 255)
-    spacing = 24
+    draw.rectangle([0, 6, w, h - 6], fill=(130, 98, 48, 235))
+    draw.rectangle([0, 8, w, h - 8], fill=(175, 145, 75, 225))
+    # Noise overlay for metallic texture
+    tex = _noise(w, h - 16, (170, 140, 70, 40), variance=20, seed=444)
+    base_strip = img.crop((0, 8, w, h - 8))
+    img.paste(Image.alpha_composite(base_strip, tex), (0, 8))
+    draw = ImageDraw.Draw(img)
+    gold = (210, 180, 55, 255)
+    dark = (90, 65, 30, 255)
+    spacing = 20
     for cx in range(spacing // 2, w, spacing):
         cy = h // 2
         s = 5
         pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
         draw.polygon(pts, fill=gold, outline=dark)
-    # Edge lines
-    draw.line([(0, 8), (w, 8)], fill=dark, width=1)
-    draw.line([(0, h - 9), (w, h - 9)], fill=dark, width=1)
+    draw.line([(0, 6), (w, 6)], fill=dark, width=1)
+    draw.line([(0, h - 7), (w, h - 7)], fill=dark, width=1)
     path = os.path.join(OUT_DIR, 'border.png')
     img.save(path)
     print(f'  Saved {path}')
     return path
 
 
-# ── 4. Button texture ───────────────────────────────────────────────
+# ── 4. Button textures ──────────────────────────────────────────────
 
-def make_button(w=256, h=64):
-    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    # Rounded rectangle body
+def _make_btn(w, h, body_color, outline_color, highlight_color, seed, name):
+    """Gritty, beveled button with leather/metal texture."""
+    img = _noise(w, h, body_color, variance=12, seed=seed)
+    img = _stain(img, n=3, seed=seed + 10, min_alpha=6, max_alpha=20)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+    # Mask to rounded rectangle
+    mask = Image.new('L', (w, h), 0)
+    md = ImageDraw.Draw(mask)
     r = 8
+    md.rounded_rectangle([2, 2, w - 3, h - 3], radius=r, fill=255)
+    img.putalpha(mask)
+    # Bevel for 3-D
+    img = _bevel(img, light=30, dark=45, width=3)
+    draw = ImageDraw.Draw(img)
+    # Outline
     draw.rounded_rectangle([2, 2, w - 3, h - 3], radius=r,
-                           fill=(55, 95, 45, 240),
-                           outline=(180, 150, 60, 255), width=2)
-    # Inner subtle highlight
-    draw.rounded_rectangle([4, 4, w - 5, h // 2], radius=r,
-                           fill=(70, 120, 55, 60))
-    path = os.path.join(OUT_DIR, 'button.png')
+                           outline=outline_color, width=2)
+    # Top highlight gradient
+    for yy in range(4, h // 3):
+        a = int(highlight_color[3] * (1.0 - yy / (h / 3)))
+        draw.line([(4, yy), (w - 5, yy)],
+                  fill=(highlight_color[0], highlight_color[1],
+                        highlight_color[2], a), width=1)
+    path = os.path.join(OUT_DIR, f'{name}.png')
     img.save(path)
     print(f'  Saved {path}')
     return path
+
+
+def make_button(w=256, h=64):
+    return _make_btn(w, h,
+                     body_color=(50, 88, 40, 240),
+                     outline_color=(170, 140, 50, 255),
+                     highlight_color=(120, 160, 100, 50),
+                     seed=500, name='button')
 
 
 def make_button_hover(w=256, h=64):
-    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    r = 8
-    draw.rounded_rectangle([2, 2, w - 3, h - 3], radius=r,
-                           fill=(70, 120, 55, 245),
-                           outline=(220, 190, 70, 255), width=2)
-    draw.rounded_rectangle([4, 4, w - 5, h // 2], radius=r,
-                           fill=(90, 145, 70, 70))
-    path = os.path.join(OUT_DIR, 'button_hover.png')
-    img.save(path)
-    print(f'  Saved {path}')
-    return path
+    return _make_btn(w, h,
+                     body_color=(65, 115, 50, 245),
+                     outline_color=(215, 185, 65, 255),
+                     highlight_color=(145, 190, 120, 60),
+                     seed=510, name='button_hover')
 
 
 def make_button_red(w=256, h=64):
-    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    r = 8
-    draw.rounded_rectangle([2, 2, w - 3, h - 3], radius=r,
-                           fill=(140, 35, 30, 240),
-                           outline=(180, 150, 60, 255), width=2)
-    draw.rounded_rectangle([4, 4, w - 5, h // 2], radius=r,
-                           fill=(170, 55, 45, 60))
-    path = os.path.join(OUT_DIR, 'button_red.png')
-    img.save(path)
-    print(f'  Saved {path}')
-    return path
+    return _make_btn(w, h,
+                     body_color=(130, 30, 25, 240),
+                     outline_color=(170, 140, 50, 255),
+                     highlight_color=(180, 60, 50, 50),
+                     seed=520, name='button_red')
 
 
 # ── 5. Victory panel background ─────────────────────────────────────
 
 def make_victory_panel(w=512, h=400):
-    img = _noise(w, h, (205, 185, 145, 245), variance=10, seed=303)
-    img = _stain(img, n=4, seed=404)
-    img = _edge_darken(img, border=30, strength=45)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = _noise(w, h, (200, 180, 140, 245), variance=14, seed=303)
+    img = _fiber_grain(img, seed=77, density=0.12, alpha=16)
+    img = _stain(img, n=8, seed=404, min_alpha=14, max_alpha=38)
+    img = _ink_splatter(img, n=10, seed=505)
+    img = _edge_darken(img, border=35, strength=55)
+    img = _corner_burn(img, radius=70, strength=65, seed=606)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
+    img = _bevel(img, light=35, dark=50, width=5)
     draw = ImageDraw.Draw(img)
-    gold = (180, 150, 60, 220)
-    dark = (100, 75, 35, 200)
-    # Top ornamental border
-    _ornament_line(draw, 8, w, gold)
-    _ornament_line(draw, 14, w, dark, thickness=1)
-    # Bottom ornamental border
-    _ornament_line(draw, h - 9, w, gold)
-    _ornament_line(draw, h - 15, w, dark, thickness=1)
-    # Side lines
-    draw.line([(6, 8), (6, h - 9)], fill=gold, width=2)
-    draw.line([(w - 7, 8), (w - 7, h - 9)], fill=gold, width=2)
+    _embossed_border(draw, w, h, inset=8,
+                     color_light=(185, 155, 90, 190),
+                     color_dark=(85, 60, 28, 210))
+    gold = (175, 145, 55, 220)
+    dark = (95, 70, 30, 200)
+    _ornament_line(draw, 18, w, gold)
+    _ornament_line(draw, 24, w, dark, thickness=1)
+    _ornament_line(draw, h - 19, w, gold)
+    _ornament_line(draw, h - 25, w, dark, thickness=1)
+    draw.line([(10, 18), (10, h - 19)], fill=gold, width=2)
+    draw.line([(w - 11, 18), (w - 11, h - 19)], fill=gold, width=2)
     path = os.path.join(OUT_DIR, 'victory_panel.png')
     img.save(path)
     print(f'  Saved {path}')
@@ -215,7 +338,7 @@ def make_victory_panel(w=512, h=400):
 # ── Generate all ─────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    print('Generating tutorial textures...')
+    print('Generating tutorial textures (v2 -- gritty)...')
     make_parchment()
     make_vellum()
     make_border()

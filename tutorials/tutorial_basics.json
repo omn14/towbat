@@ -75,11 +75,11 @@
             ],
             "hints": [
                 {"phase": "DeployPhase",   "text": "Welcome! Click on a unit and drag it into the deployment zone to place it. When done, click the phase cube (top-right) to start."},
-                {"phase": "StrategyPhase", "text": "This is the Strategy Phase — use it to plan your moves. Click the phase cube (top-right) to advance to the Movement Phase."},
+                {"phase": "StrategyPhase", "text": "This is the Strategy Phase  -  use it to plan your moves. Click the phase cube (top-right) to advance to the Movement Phase."},
                 {"phase": "MovementPhase", "text": "Click a unit, then right-click where you want it to move. The arc shows its movement range."},
                 {"phase": "MovementPhase", "text": "After moving all units, click the phase cube to advance to the Shooting Phase."},
-                {"phase": "ShootingPhase", "text": "No ranged units this battle — click the phase cube to skip to Combat."},
-                {"phase": "CombatPhase",   "text": "No units in combat yet — click the phase cube to end the turn. The turn order is: Strategy → Movement → Shooting → Combat."}
+                {"phase": "ShootingPhase", "text": "No ranged units this battle  -  click the phase cube to skip to Combat."},
+                {"phase": "CombatPhase",   "text": "No units in combat yet  -  click the phase cube to end the turn. The turn order is: Strategy > Movement > Shooting > Combat."}
             ],
             "player1_army": {
                 "budget": 400,
@@ -137,7 +137,7 @@
             ],
             "hints": [
                 {"phase": "DeployPhase",   "text": "Deploy your bowmen inside the white zone, then click the phase cube to begin."},
-                {"phase": "StrategyPhase", "text": "Click the phase cube to advance through phases. The order is: Strategy → Movement → Shooting → Combat."},
+                {"phase": "StrategyPhase", "text": "Click the phase cube to advance through phases. The order is: Strategy > Movement > Shooting > Combat."},
                 {"phase": "MovementPhase", "text": "You can move your bowmen into position, or skip ahead. Click the phase cube to go to the Shooting Phase."},
                 {"phase": "ShootingPhase", "text": "Select your Bowmen, then click an enemy unit within range to fire. The arc shows the trajectory."},
                 {"phase": "ShootingPhase", "text": "After shooting, click the phase cube to advance to Combat, then click again to end the turn and shoot again next round."},
@@ -186,7 +186,7 @@
         {
             "id": "combat_basics",
             "name": "Close Combat",
-            "description": "Learn how melee combat works — charges, to-hit rolls, wound rolls, and combat resolution.",
+            "description": "Learn how melee combat works  -  charges, to-hit rolls, wound rolls, and combat resolution.",
             "win_conditions": [
                 {
                     "text": "Deploy all your units",
@@ -203,7 +203,7 @@
             ],
             "hints": [
                 {"phase": "DeployPhase",   "text": "Deploy your units, then click the phase cube to start the battle."},
-                {"phase": "StrategyPhase", "text": "Plan your approach — knights get a charge bonus! Click the phase cube to advance to Movement."},
+                {"phase": "StrategyPhase", "text": "Plan your approach  -  knights get a charge bonus! Click the phase cube to advance to Movement."},
                 {"phase": "MovementPhase", "text": "Move your Knights close enough to charge the enemy. A charge happens when you end movement in contact."},
                 {"phase": "MovementPhase", "text": "After moving, click the phase cube to advance. Skip Shooting and reach the Combat Phase."},
                 {"phase": "ShootingPhase", "text": "No ranged units in this battle. Click the phase cube to advance to the Combat Phase."},
@@ -349,7 +349,7 @@
             ],
             "hints": [
                 {"phase": "DeployPhase",   "text": "Deploy your army and click the phase cube to begin the final battle."},
-                {"phase": "StrategyPhase", "text": "This is the final test. Combine movement, shooting, and combat to win. Click the phase cube to advance: Strategy → Movement → Shooting → Combat."},
+                {"phase": "StrategyPhase", "text": "This is the final test. Combine movement, shooting, and combat to win. Click the phase cube to advance: Strategy > Movement > Shooting > Combat."},
                 {"phase": "MovementPhase", "text": "Position your units carefully. Click the phase cube when done to move to Shooting."},
                 {"phase": "ShootingPhase", "text": "Fire your ranged units, then click the phase cube to advance to Combat."},
                 {"phase": "CombatPhase",   "text": "Resolve melee fights, then click the phase cube to end the turn. Good luck, General!"}

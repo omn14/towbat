@@ -1,6 +1,7 @@
 from direct.fsm.FSM import FSM
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, BitMask32
+import gui_theme
 
 
 class RoundCounter(FSM):
@@ -68,11 +69,10 @@ class RoundCounter(FSM):
         # Create round info text
         round_info = f"Player {self.current_player} | Round {self.currentRoundPlayer[self.current_player-1] + 1}/{self.max_rounds}"
         
-        self.round_text = OnscreenText(
+        self.round_text = gui_theme.styled_text(
             text=round_info,
-            pos=(1.3, 0.9),  # Top right corner
+            pos=(1.3, 0.9),
             scale=0.07,
-            fg=(1, 1, 1, 1),  # White text
+            fg=gui_theme.GOLD,
             align=TextNode.ARight,
-            mayChange=True
         )

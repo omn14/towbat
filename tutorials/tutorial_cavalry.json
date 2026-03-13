@@ -1,6 +1,6 @@
 {
     "name": "Cavalry Tactics",
-    "description": "Learn how to effectively use cavalry units — charges, flanking, and pursuit.",
+    "description": "Learn how to effectively use cavalry units  -  charges, flanking, and pursuit.",
     "battles": [
         {
             "id": "the_charge",
@@ -69,7 +69,7 @@
             ],
             "hints": [
                 {"phase": "StrategyPhase",  "text": "Pin the enemy with infantry, then swing your Pegasus Knights around to hit their flank."},
-                {"phase": "MovementPhase",  "text": "Flanking gives a big advantage — the enemy can't use rank bonuses when attacked from the side."},
+                {"phase": "MovementPhase",  "text": "Flanking gives a big advantage  -  the enemy can't use rank bonuses when attacked from the side."},
                 {"phase": "CombatPhase",    "text": "A flank charge removes the enemy's rank bonus. Combined with a frontal fight, this is devastating."}
             ],
             "player1_army": {

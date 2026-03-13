@@ -10,6 +10,7 @@ import os
 import json
 from models import model
 from units import unit
+import gui_theme as T
 
 
 class ArmyListBuilderGUI:
@@ -27,15 +28,8 @@ class ArmyListBuilderGUI:
         self._right_panel_elements = []
         self._popup_elements = []
 
-        # Load medieval font
-        font_path = os.path.join(self.base_dir, 'fonts', 'MedievalSharp.ttf')
-        self.font = self.base.loader.loadFont(font_path)
-        self.font.setPixelsPerUnit(256)
-        self.font.setPageSize(1024, 1024)
-        self.font.setMinfilter(SamplerState.FT_linear_mipmap_linear)
-        self.font.setMagfilter(SamplerState.FT_linear)
-        self.font.setAnisotropicDegree(4)
-        #self.font.setOutline((0, 0, 0, 0.3), 0.5, 0.2)
+        # Use shared medieval font from gui_theme
+        self.font = T.get_font()
 
         self.load_available_units()
         self.current_screen = None
@@ -116,8 +110,10 @@ class ArmyListBuilderGUI:
 
         bg_frame = DirectFrame(
             frameSize=(-1.2, 1.2, -0.95, 0.95),
-            frameColor=(0.05, 0.05, 0.1, 0.9),
-            pos=(0, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.01, 0.01))
+            frameColor=(1, 1, 1, 1),
+            pos=(0, 0, 0), relief=DGG.FLAT,
+            frameTexture=T.TEX_PARCHMENT)
+        bg_frame.setTransparency(TransparencyAttrib.MAlpha)
         self.gui_elements.append(bg_frame)
 
         title_shadow = OnscreenText(
@@ -129,23 +125,23 @@ class ArmyListBuilderGUI:
         title = OnscreenText(
             font=self.font,
             text="ARMY LIST BUILDER", pos=(0, 0.85), scale=0.13,
-            fg=(1, 0.85, 0.2, 1), align=TextNode.ACenter, mayChange=False)
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False)
         self.gui_elements.append(title)
 
         line_frame = DirectFrame(
             frameSize=(-0.8, 0.8, -0.005, 0.005),
-            frameColor=(0.8, 0.6, 0.1, 1), pos=(0, 0, 0.65))
+            frameColor=T.SEPARATOR, pos=(0, 0, 0.65))
         self.gui_elements.append(line_frame)
 
         subtitle = OnscreenText(
             font=self.font,
             text="Build Your Warhammer Army", pos=(0, 0.55), scale=0.06,
-            fg=(0.7, 0.7, 0.8, 1), align=TextNode.ACenter, mayChange=False)
+            fg=T.INK_FADED, align=TextNode.ACenter, mayChange=False)
         self.gui_elements.append(subtitle)
 
         spent = self._army_total_pts()
         remaining = self.points_budget - spent
-        budget_color = (0.2, 1, 0.2, 1) if remaining >= 0 else (1, 0.3, 0.3, 1)
+        budget_color = T.GREEN_BANNER if remaining >= 0 else T.RED_WAX
         budget_info = OnscreenText(
             font=self.font,
             text=f"Budget: {spent} / {self.points_budget} pts  ({remaining} remaining)",
@@ -154,19 +150,19 @@ class ArmyListBuilderGUI:
         self.gui_elements.append(budget_info)
 
         button_data = [
-            ("Build Army",         self.show_army_builder,  0.22, (0.2, 0.4, 0.3, 1)),
-            ("Set Points Budget",  self.show_budget_screen, 0.04, (0.45, 0.35, 0.05, 1)),
-            ("Save Army List",     self.show_save_screen,  -0.14, (0.3, 0.4, 0.5, 1)),
-            ("Load Army List",     self.show_load_screen,  -0.32, (0.5, 0.4, 0.2, 1)),
-            ("Exit List Builder",  self.exit_builder,      -0.50, (0.5, 0.2, 0.2, 1)),
+            ("Build Army",         self.show_army_builder,  0.22, T.BTN_GREEN),
+            ("Set Points Budget",  self.show_budget_screen, 0.04, T.BTN_NEUTRAL),
+            ("Save Army List",     self.show_save_screen,  -0.14, T.BTN_NEUTRAL),
+            ("Load Army List",     self.show_load_screen,  -0.32, T.BTN_NEUTRAL),
+            ("Exit List Builder",  self.exit_builder,      -0.50, T.BTN_RED),
         ]
 
         for text, command, y_pos, color in button_data:
             btn = DirectButton(
                 text=text, text_font=self.font, text_scale=0.9, scale=0.075,
                 pos=(0, 0, y_pos), command=command,
-                frameSize=(-4.2, 4.2, -0.6, 1.1), text_fg=(1, 1, 1, 1),
-                frameColor=color, relief=DGG.RAISED, borderWidth=(0.015, 0.015))
+                frameSize=(-4.2, 4.2, -0.6, 1.1), text_fg=T.BTN_TEXT,
+                frameColor=color, relief=DGG.FLAT, borderWidth=(0.015, 0.015))
             self.gui_elements.append(btn)
 
     # ─── Three-Panel Army Builder ─────────────────────────────────────
@@ -180,25 +176,25 @@ class ArmyListBuilderGUI:
         # Full background
         bg = DirectFrame(
             frameSize=(-1.8, 1.8, -1.0, 1.0),
-            frameColor=(0.06, 0.06, 0.10, 1.0), pos=(0, 0, 0))
+            frameColor=T.DARK_BG, pos=(0, 0, 0))
         self.gui_elements.append(bg)
 
         # ── Top bar ──
         top_bar = DirectFrame(
             frameSize=(-1.8, 1.8, -0.005, 0.12),
-            frameColor=(0.12, 0.10, 0.18, 1), pos=(0, 0, 0.88))
+            frameColor=T.PARCHMENT_DARK, pos=(0, 0, 0.88))
         self.gui_elements.append(top_bar)
 
         title = OnscreenText(
             font=self.font,
             text="ARMY BUILDER", pos=(-1.55, 0.90), scale=0.065,
-            fg=(1, 0.85, 0.2, 1), align=TextNode.ALeft, mayChange=False)
+            fg=T.GOLD, align=TextNode.ALeft, mayChange=False)
         self.gui_elements.append(title)
 
         self._pts_label = OnscreenText(
             font=self.font,
             text="", pos=(0, 0.90), scale=0.055,
-            fg=(0.3, 1, 0.4, 1), align=TextNode.ACenter, mayChange=True)
+            fg=T.GREEN_BANNER, align=TextNode.ACenter, mayChange=True)
         self.gui_elements.append(self._pts_label)
         self._refresh_pts_label()
 
@@ -206,8 +202,8 @@ class ArmyListBuilderGUI:
             text_font=self.font,
             text="< Menu", text_scale=0.9, scale=0.055,
             pos=(1.45, 0, 0.90), command=self.show_main_menu,
-            frameSize=(-2.0, 2.0, -0.6, 1.1), frameColor=(0.35, 0.25, 0.25, 1),
-            text_fg=(1, 1, 1, 1), relief=DGG.RAISED, borderWidth=(0.01, 0.01))
+            frameSize=(-2.0, 2.0, -0.6, 1.1), frameColor=T.BTN_RED,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT, borderWidth=(0.01, 0.01))
         self.gui_elements.append(back_btn)
 
         # ── Column headers ──
@@ -215,13 +211,13 @@ class ArmyListBuilderGUI:
             lbl = OnscreenText(
                 font=self.font,
                 text=text, pos=(x, 0.82), scale=0.048,
-                fg=(0.85, 0.75, 0.5, 1), align=TextNode.ACenter, mayChange=False)
+                fg=T.GOLD, align=TextNode.ACenter, mayChange=False)
             self.gui_elements.append(lbl)
 
         for x_center in [-1.10, 0.0, 1.10]:
             sep = DirectFrame(
                 frameSize=(-0.45, 0.45, -0.002, 0.002),
-                frameColor=(0.5, 0.4, 0.2, 0.6), pos=(x_center, 0, 0.79))
+                frameColor=T.SEPARATOR, pos=(x_center, 0, 0.79))
             self.gui_elements.append(sep)
 
         # Build the three panels
@@ -233,7 +229,7 @@ class ArmyListBuilderGUI:
         """Update the points budget label on the builder top bar."""
         spent = self._army_total_pts()
         remaining = self.points_budget - spent
-        color = (0.3, 1, 0.4, 1) if remaining >= 0 else (1, 0.4, 0.4, 1)
+        color = T.GREEN_BANNER if remaining >= 0 else T.RED_WAX
         self._pts_label.setText(
             f"{spent} / {self.points_budget} pts  ({remaining} remaining)")
         self._pts_label['fg'] = color
@@ -244,7 +240,7 @@ class ArmyListBuilderGUI:
         """Scrollable list of all available units grouped by faction."""
         panel_bg = DirectFrame(
             frameSize=(-0.55, 0.55, -0.88, 0.78),
-            frameColor=(0.08, 0.08, 0.13, 0.9),
+            frameColor=T.PANEL_BG,
             pos=(-1.10, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.008, 0.008))
         self.gui_elements.append(panel_bg)
 
@@ -262,9 +258,9 @@ class ArmyListBuilderGUI:
             pos=(-1.10, 0, 0),
             scrollBarWidth=0.03, frameColor=(0, 0, 0, 0),
             verticalScroll_scrollSize=0.06,
-            verticalScroll_thumb_frameColor=(0.4, 0.35, 0.2, 0.8),
-            verticalScroll_incButton_frameColor=(0.3, 0.25, 0.15, 0.8),
-            verticalScroll_decButton_frameColor=(0.3, 0.25, 0.15, 0.8))
+            verticalScroll_thumb_frameColor=T.BTN_NEUTRAL,
+            verticalScroll_incButton_frameColor=T.PARCHMENT_DARK,
+            verticalScroll_decButton_frameColor=T.PARCHMENT_DARK)
         self.gui_elements.append(scroll)
 
         canvas = scroll.getCanvas()
@@ -274,13 +270,13 @@ class ArmyListBuilderGUI:
             # Faction header
             DirectFrame(
                 frameSize=(-0.49, 0.45, -0.035, 0.035),
-                frameColor=(0.22, 0.18, 0.08, 0.9),
+                frameColor=T.PARCHMENT_DARK,
                 pos=(0, 0, y), parent=canvas)
             DirectLabel(
                 text_font=self.font,
                 text=f"  {faction}", text_scale=0.042, text_align=TextNode.ALeft,
                 pos=(-0.48, 0, y - 0.012), frameColor=(0, 0, 0, 0),
-                text_fg=(1, 0.85, 0.3, 1), parent=canvas)
+                text_fg=T.GOLD, parent=canvas)
             y -= row_h
 
             for unit_name in self.factions[faction]:
@@ -289,7 +285,7 @@ class ArmyListBuilderGUI:
 
                 DirectFrame(
                     frameSize=(-0.49, 0.45, -0.035, 0.035),
-                    frameColor=(0.12, 0.12, 0.17, 0.5),
+                    frameColor=(0.12, 0.10, 0.08, 0.5),
                     pos=(0, 0, y), parent=canvas)
 
                 btn = DirectButton(
@@ -300,7 +296,7 @@ class ArmyListBuilderGUI:
                     pos=(0, 0, y),
                     command=self._show_add_popup, extraArgs=[unit_name],
                     frameSize=(-0.49, 0.33, -0.035, 0.035),
-                    frameColor=(0, 0, 0, 0), text_fg=(0.8, 0.85, 0.9, 1),
+                    frameColor=(0, 0, 0, 0), text_fg=T.BTN_TEXT,
                     relief=DGG.FLAT, parent=canvas)
                 btn.bind(DGG.ENTER, lambda evt, b=btn: b.setColorScale(1.3, 1.3, 1.0, 1))
                 btn.bind(DGG.EXIT,  lambda evt, b=btn: b.setColorScale(1, 1, 1, 1))
@@ -311,8 +307,8 @@ class ArmyListBuilderGUI:
                     pos=(0.39, 0, y),
                     command=self._show_add_popup, extraArgs=[unit_name],
                     frameSize=(-0.04, 0.04, -0.03, 0.03),
-                    frameColor=(0.2, 0.55, 0.2, 1), text_fg=(1, 1, 1, 1),
-                    relief=DGG.RAISED, borderWidth=(0.003, 0.003), parent=canvas)
+                    frameColor=T.BTN_GREEN, text_fg=T.BTN_TEXT,
+                    relief=DGG.FLAT, borderWidth=(0.003, 0.003), parent=canvas)
 
                 y -= row_h
 
@@ -326,7 +322,7 @@ class ArmyListBuilderGUI:
 
         panel_bg = DirectFrame(
             frameSize=(-0.45, 0.45, -0.88, 0.78),
-            frameColor=(0.08, 0.07, 0.12, 0.9),
+            frameColor=T.PANEL_BG,
             pos=(0, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.008, 0.008))
         self.gui_elements.append(panel_bg)
         self._middle_panel_elements.append(panel_bg)
@@ -335,7 +331,7 @@ class ArmyListBuilderGUI:
             empty_lbl = OnscreenText(
                 font=self.font,
                 text="No units yet.\nAdd units from\nthe left panel.",
-                pos=(0, 0.2), scale=0.05, fg=(0.5, 0.5, 0.55, 1),
+                pos=(0, 0.2), scale=0.05, fg=T.INK_FADED,
                 align=TextNode.ACenter, mayChange=False)
             self.gui_elements.append(empty_lbl)
             self._middle_panel_elements.append(empty_lbl)
@@ -350,9 +346,9 @@ class ArmyListBuilderGUI:
             pos=(0, 0, 0),
             scrollBarWidth=0.03, frameColor=(0, 0, 0, 0),
             verticalScroll_scrollSize=0.06,
-            verticalScroll_thumb_frameColor=(0.35, 0.25, 0.45, 0.8),
-            verticalScroll_incButton_frameColor=(0.25, 0.2, 0.35, 0.8),
-            verticalScroll_decButton_frameColor=(0.25, 0.2, 0.35, 0.8))
+            verticalScroll_thumb_frameColor=T.BTN_NEUTRAL,
+            verticalScroll_incButton_frameColor=T.PARCHMENT_DARK,
+            verticalScroll_decButton_frameColor=T.PARCHMENT_DARK)
         self.gui_elements.append(scroll)
         self._middle_panel_elements.append(scroll)
 
@@ -361,8 +357,8 @@ class ArmyListBuilderGUI:
 
         for idx, army_unit in enumerate(self.army_list):
             is_selected = (idx == self.selected_army_idx)
-            bg_color = (0.28, 0.22, 0.42, 0.85) if is_selected else (
-                (0.14, 0.12, 0.20, 0.6) if idx % 2 == 0 else (0.11, 0.10, 0.17, 0.6))
+            bg_color = T.PARCHMENT_DARK if is_selected else (
+                (0.14, 0.12, 0.08, 0.6) if idx % 2 == 0 else (0.11, 0.10, 0.07, 0.6))
 
             DirectFrame(
                 frameSize=(-0.41, 0.37, -0.045, 0.045),
@@ -378,7 +374,7 @@ class ArmyListBuilderGUI:
                 command=self._select_army_unit, extraArgs=[idx],
                 frameSize=(-0.41, 0.27, -0.045, 0.045),
                 frameColor=(0, 0, 0, 0),
-                text_fg=(0.95, 0.85, 1, 1) if is_selected else (0.8, 0.75, 0.9, 1),
+                text_fg=T.BTN_TEXT if is_selected else T.HINT_FG,
                 relief=DGG.FLAT, parent=canvas)
             row_btn.bind(DGG.ENTER, lambda evt, b=row_btn: b.setColorScale(1.2, 1.2, 1.0, 1))
             row_btn.bind(DGG.EXIT,  lambda evt, b=row_btn: b.setColorScale(1, 1, 1, 1))
@@ -388,7 +384,7 @@ class ArmyListBuilderGUI:
                 text_font=self.font,
                 text=sub, text_scale=0.028, text_align=TextNode.ALeft,
                 pos=(-0.38, 0, y - 0.028), frameColor=(0, 0, 0, 0),
-                text_fg=(0.55, 0.6, 0.7, 1), parent=canvas)
+                text_fg=T.INK_FADED, parent=canvas)
 
             rem_btn = DirectButton(
                 text_font=self.font,
@@ -396,8 +392,8 @@ class ArmyListBuilderGUI:
                 pos=(0.33, 0, y),
                 command=self._remove_army_unit, extraArgs=[idx],
                 frameSize=(-0.03, 0.03, -0.025, 0.025),
-                frameColor=(0.6, 0.15, 0.15, 1), text_fg=(1, 1, 1, 1),
-                relief=DGG.RAISED, borderWidth=(0.003, 0.003), parent=canvas)
+                frameColor=T.BTN_RED, text_fg=T.BTN_TEXT,
+                relief=DGG.FLAT, borderWidth=(0.003, 0.003), parent=canvas)
 
             y -= row_h
 
@@ -406,7 +402,7 @@ class ArmyListBuilderGUI:
         summary_lbl = OnscreenText(
             font=self.font,
             text=f"{len(self.army_list)} units | {total_models} models",
-            pos=(0, -0.91), scale=0.04, fg=(0.6, 0.65, 0.75, 1),
+            pos=(0, -0.91), scale=0.04, fg=T.INK_FADED,
             align=TextNode.ACenter, mayChange=False)
         self.gui_elements.append(summary_lbl)
         self._middle_panel_elements.append(summary_lbl)
@@ -442,7 +438,7 @@ class ArmyListBuilderGUI:
 
         panel_bg = DirectFrame(
             frameSize=(-0.45, 0.55, -0.88, 0.78),
-            frameColor=(0.08, 0.08, 0.12, 0.9),
+            frameColor=T.PANEL_BG,
             pos=(1.10, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.008, 0.008))
         self.gui_elements.append(panel_bg)
         self._right_panel_elements.append(panel_bg)
@@ -450,7 +446,7 @@ class ArmyListBuilderGUI:
         placeholder = OnscreenText(
             font=self.font,
             text="Select a unit in\nyour army to view\nits details here.",
-            pos=(1.10, 0.1), scale=0.05, fg=(0.45, 0.45, 0.5, 1),
+            pos=(1.10, 0.1), scale=0.05, fg=T.INK_FADED,
             align=TextNode.ACenter, mayChange=False)
         self.gui_elements.append(placeholder)
         self._right_panel_elements.append(placeholder)
@@ -471,7 +467,7 @@ class ArmyListBuilderGUI:
         # Panel background
         panel_bg = DirectFrame(
             frameSize=(-0.45, 0.55, -0.88, 0.78),
-            frameColor=(0.08, 0.08, 0.12, 0.9),
+            frameColor=T.PANEL_BG,
             pos=(1.10, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.008, 0.008))
         self.gui_elements.append(panel_bg)
         self._right_panel_elements.append(panel_bg)
@@ -484,24 +480,24 @@ class ArmyListBuilderGUI:
         _add(OnscreenText(
             font=self.font,
             text=unit_name, pos=(1.10, 0.70), scale=0.058,
-            fg=(1, 0.88, 0.3, 1), align=TextNode.ACenter, mayChange=False))
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False))
 
         # Faction
         _add(OnscreenText(
             font=self.font,
             text=army_unit.get('faction', ''), pos=(1.10, 0.63), scale=0.04,
-            fg=(0.6, 0.65, 0.7, 1), align=TextNode.ACenter, mayChange=False))
+            fg=T.INK_FADED, align=TextNode.ACenter, mayChange=False))
 
         _add(DirectFrame(
             frameSize=(-0.38, 0.38, -0.002, 0.002),
-            frameColor=(0.5, 0.4, 0.2, 0.5), pos=(1.10, 0, 0.59)))
+            frameColor=T.SEPARATOR, pos=(1.10, 0, 0.59)))
 
         # Type
         unit_type = stats.get('Type', 'Unknown')
         _add(OnscreenText(
             font=self.font,
             text=f"Type: {unit_type}", pos=(0.72, 0.53), scale=0.04,
-            fg=(0.7, 0.8, 0.9, 1), align=TextNode.ALeft, mayChange=False))
+            fg=T.HINT_FG, align=TextNode.ALeft, mayChange=False))
 
         # Stats table - use positioned columns for alignment
         stat_keys = ['M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld']
@@ -512,22 +508,22 @@ class ArmyListBuilderGUI:
             _add(OnscreenText(
                 font=self.font,
                 text=key, pos=(x, 0.44), scale=0.036,
-                fg=(0.85, 0.75, 0.5, 1), align=TextNode.ACenter, mayChange=False))
+                fg=T.GOLD, align=TextNode.ACenter, mayChange=False))
             val = str(stats.get(key, '?'))
             _add(OnscreenText(
                 font=self.font,
                 text=val, pos=(x, 0.39), scale=0.038,
-                fg=(0.9, 0.95, 1, 1), align=TextNode.ACenter, mayChange=False))
+                fg=T.CREAM, align=TextNode.ACenter, mayChange=False))
 
         # ── Configuration display ──
         _add(DirectFrame(
             frameSize=(-0.38, 0.38, -0.002, 0.002),
-            frameColor=(0.5, 0.4, 0.2, 0.3), pos=(1.10, 0, 0.33)))
+            frameColor=T.SEPARATOR, pos=(1.10, 0, 0.33)))
 
         _add(OnscreenText(
             font=self.font,
             text="CONFIGURATION", pos=(1.10, 0.27), scale=0.042,
-            fg=(0.85, 0.75, 0.5, 1), align=TextNode.ACenter, mayChange=False))
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False))
 
         for label_text, value, yp in [
             ("Models:", str(army_unit['nmodels']), 0.19),
@@ -537,16 +533,16 @@ class ArmyListBuilderGUI:
             _add(OnscreenText(
                 font=self.font,
                 text=label_text, pos=(0.72, yp), scale=0.04,
-                fg=(0.75, 0.8, 0.85, 1), align=TextNode.ALeft, mayChange=False))
+                fg=T.HINT_FG, align=TextNode.ALeft, mayChange=False))
             _add(OnscreenText(
                 font=self.font,
                 text=value, pos=(1.42, yp), scale=0.042,
-                fg=(1, 1, 1, 1), align=TextNode.ARight, mayChange=False))
+                fg=T.CREAM, align=TextNode.ARight, mayChange=False))
 
         # Points
         _add(DirectFrame(
             frameSize=(-0.38, 0.38, -0.002, 0.002),
-            frameColor=(0.5, 0.4, 0.2, 0.3), pos=(1.10, 0, -0.03)))
+            frameColor=T.SEPARATOR, pos=(1.10, 0, -0.03)))
 
         pts_per = self._unit_pts(unit_name)
         total_cost = army_unit.get('points_cost', 0)
@@ -554,21 +550,21 @@ class ArmyListBuilderGUI:
         _add(OnscreenText(
             font=self.font,
             text=f"Points/model: {pts_per}", pos=(0.72, -0.09), scale=0.04,
-            fg=(0.7, 0.8, 0.7, 1), align=TextNode.ALeft, mayChange=False))
+            fg=T.HINT_FG, align=TextNode.ALeft, mayChange=False))
         _add(OnscreenText(
             font=self.font,
             text=f"Total cost: {total_cost} pts", pos=(0.72, -0.16), scale=0.045,
-            fg=(0.4, 1, 0.5, 1), align=TextNode.ALeft, mayChange=False))
+            fg=T.GREEN_BANNER, align=TextNode.ALeft, mayChange=False))
 
         # ── Edit controls ──
         _add(DirectFrame(
             frameSize=(-0.38, 0.38, -0.002, 0.002),
-            frameColor=(0.5, 0.4, 0.2, 0.3), pos=(1.10, 0, -0.25)))
+            frameColor=T.SEPARATOR, pos=(1.10, 0, -0.25)))
 
         _add(OnscreenText(
             font=self.font,
             text="EDIT UNIT", pos=(1.10, -0.31), scale=0.042,
-            fg=(0.85, 0.75, 0.5, 1), align=TextNode.ACenter, mayChange=False))
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False))
 
         self._edit_entries = {}
         for label_text, default_val, yp in [
@@ -579,12 +575,12 @@ class ArmyListBuilderGUI:
             _add(OnscreenText(
                 font=self.font,
                 text=label_text, pos=(0.72, yp), scale=0.04,
-                fg=(0.75, 0.8, 0.85, 1), align=TextNode.ALeft, mayChange=False))
+                fg=T.HINT_FG, align=TextNode.ALeft, mayChange=False))
             entry = DirectEntry(
                 text_font=self.font,
                 text="", scale=0.045, pos=(1.15, 0, yp),
                 initialText=str(default_val), numLines=1, width=4,
-                frameColor=(0.18, 0.22, 0.18, 1), text_fg=(1, 1, 1, 1))
+                frameColor=T.ENTRY_BG, text_fg=T.ENTRY_FG)
             _add(entry)
             self._edit_entries[label_text] = entry
 
@@ -594,8 +590,8 @@ class ArmyListBuilderGUI:
             pos=(1.10, 0, -0.73),
             command=self._apply_unit_edits, extraArgs=[idx],
             frameSize=(-3.5, 3.5, -0.7, 1.2),
-            frameColor=(0.2, 0.55, 0.25, 1), text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED, borderWidth=(0.01, 0.01))
+            frameColor=T.BTN_GREEN, text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT, borderWidth=(0.01, 0.01))
         _add(apply_btn)
 
         rem_btn = DirectButton(
@@ -604,8 +600,8 @@ class ArmyListBuilderGUI:
             pos=(1.10, 0, -0.82),
             command=self._remove_army_unit, extraArgs=[idx],
             frameSize=(-3.5, 3.5, -0.7, 1.2),
-            frameColor=(0.55, 0.15, 0.15, 1), text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED, borderWidth=(0.01, 0.01))
+            frameColor=T.BTN_RED, text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT, borderWidth=(0.01, 0.01))
         _add(rem_btn)
 
     def _apply_unit_edits(self, idx):
@@ -654,16 +650,18 @@ class ArmyListBuilderGUI:
 
         popup = DirectFrame(
             frameSize=(-0.55, 0.55, -0.50, 0.50),
-            frameColor=(0.10, 0.12, 0.18, 0.97),
-            pos=(0, 0, 0.05), relief=DGG.RAISED,
-            borderWidth=(0.012, 0.012), sortOrder=51)
+            frameColor=(1, 1, 1, 1),
+            pos=(0, 0, 0.05), relief=DGG.FLAT,
+            borderWidth=(0.012, 0.012), sortOrder=51,
+            frameTexture=T.TEX_PARCHMENT)
+        popup.setTransparency(TransparencyAttrib.MAlpha)
         self._popup_elements.append(popup)
         self.gui_elements.append(popup)
 
         OnscreenText(
             font=self.font,
             text=f"Add: {unit_name}", pos=(0, 0.42), scale=0.06,
-            fg=(1, 0.88, 0.3, 1), align=TextNode.ACenter, mayChange=False,
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False,
             parent=popup)
 
         pts = self._unit_pts(unit_name)
@@ -671,7 +669,7 @@ class ArmyListBuilderGUI:
             font=self.font,
             text=f"{pts} pts/model" if pts else "Free",
             pos=(0, 0.34), scale=0.042,
-            fg=(0.6, 0.8, 0.6, 1), align=TextNode.ACenter, mayChange=False,
+            fg=T.GREEN_BANNER, align=TextNode.ACenter, mayChange=False,
             parent=popup)
 
         entries = {}
@@ -683,13 +681,13 @@ class ArmyListBuilderGUI:
             OnscreenText(
                 font=self.font,
                 text=label_text, pos=(-0.45, yp), scale=0.045,
-                fg=(0.85, 0.9, 0.85, 1), align=TextNode.ALeft,
+                fg=T.INK, align=TextNode.ALeft,
                 mayChange=False, parent=popup)
             ent = DirectEntry(
                 text_font=self.font,
                 text="", scale=0.055, pos=(0.18, 0, yp),
                 initialText=default, numLines=1, width=5,
-                frameColor=(0.18, 0.25, 0.18, 1), text_fg=(1, 1, 1, 1),
+                frameColor=T.ENTRY_BG, text_fg=T.ENTRY_FG,
                 parent=popup)
             entries[label_text] = ent
 
@@ -699,8 +697,8 @@ class ArmyListBuilderGUI:
             pos=(0, 0, -0.28), parent=popup,
             command=self._confirm_add_unit, extraArgs=[unit_name, entries],
             frameSize=(-3.2, 3.2, -0.7, 1.2),
-            frameColor=(0.2, 0.6, 0.25, 1), text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED, borderWidth=(0.012, 0.012))
+            frameColor=T.BTN_GREEN, text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT, borderWidth=(0.012, 0.012))
 
         DirectButton(
             text_font=self.font,
@@ -708,8 +706,8 @@ class ArmyListBuilderGUI:
             pos=(0, 0, -0.42), parent=popup,
             command=self._clear_popup,
             frameSize=(-2.5, 2.5, -0.7, 1.2),
-            frameColor=(0.4, 0.25, 0.25, 1), text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED, borderWidth=(0.01, 0.01))
+            frameColor=T.BTN_RED, text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT, borderWidth=(0.01, 0.01))
 
     def _confirm_add_unit(self, unit_name, entries):
         """Validate inputs and add the unit to the army."""
@@ -759,16 +757,18 @@ class ArmyListBuilderGUI:
 
         msg_frame = DirectFrame(
             frameSize=(-0.6, 0.6, -0.25, 0.25),
-            frameColor=(0.12, 0.10, 0.18, 0.97),
-            pos=(0, 0, 0), relief=DGG.RAISED,
-            borderWidth=(0.012, 0.012), sortOrder=51)
+            frameColor=(1, 1, 1, 1),
+            pos=(0, 0, 0), relief=DGG.FLAT,
+            borderWidth=(0.012, 0.012), sortOrder=51,
+            frameTexture=T.TEX_PARCHMENT)
+        msg_frame.setTransparency(TransparencyAttrib.MAlpha)
         self._popup_elements.append(msg_frame)
         self.gui_elements.append(msg_frame)
 
         OnscreenText(
             font=self.font,
             text=text, pos=(0, 0.05), scale=0.05,
-            fg=(1, 0.8, 0.3, 1), align=TextNode.ACenter, mayChange=False,
+            fg=T.INK, align=TextNode.ACenter, mayChange=False,
             wordwrap=20, parent=msg_frame)
 
         DirectButton(
@@ -777,8 +777,8 @@ class ArmyListBuilderGUI:
             pos=(0, 0, -0.16), parent=msg_frame,
             command=self._clear_popup,
             frameSize=(-2, 2, -0.7, 1.2),
-            frameColor=(0.3, 0.3, 0.4, 1), text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED, borderWidth=(0.01, 0.01))
+            frameColor=T.BTN_NEUTRAL, text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT, borderWidth=(0.01, 0.01))
     
     def show_save_screen(self):
         """Show screen for saving army list"""
@@ -795,7 +795,7 @@ class ArmyListBuilderGUI:
             text="SAVE ARMY LIST",
             pos=(0, 0.7),
             scale=0.1,
-            fg=(1, 1, 0, 1),
+            fg=T.GOLD,
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
@@ -806,7 +806,7 @@ class ArmyListBuilderGUI:
             text="Enter filename:",
             pos=(0, 0.4),
             scale=0.07,
-            fg=(1, 1, 1, 1),
+            fg=T.CREAM,
             align=TextNode.ACenter
         )
         self.gui_elements.append(filename_label)
@@ -819,7 +819,8 @@ class ArmyListBuilderGUI:
             initialText="my_army",
             numLines=1,
             width=10,
-            frameColor=(0.3, 0.3, 0.3, 1)
+            frameColor=T.ENTRY_BG,
+            text_fg=T.ENTRY_FG
         )
         self.gui_elements.append(filename_entry)
         
@@ -832,7 +833,9 @@ class ArmyListBuilderGUI:
             command=self.save_army_list,
             extraArgs=[filename_entry],
             frameSize=(-2, 2, -0.5, 1),
-            frameColor=(0, 0.6, 0, 1)
+            frameColor=T.BTN_GREEN,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT
         )
         self.gui_elements.append(save_btn)
         
@@ -843,7 +846,10 @@ class ArmyListBuilderGUI:
             scale=0.07,
             pos=(0, 0, -0.4),
             command=self.show_main_menu,
-            frameSize=(-2, 2, -0.5, 1)
+            frameSize=(-2, 2, -0.5, 1),
+            frameColor=T.BTN_RED,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT
         )
         self.gui_elements.append(cancel_btn)
     
@@ -875,7 +881,7 @@ class ArmyListBuilderGUI:
             text="LOAD ARMY LIST",
             pos=(0, 0.7),
             scale=0.1,
-            fg=(1, 1, 0, 1),
+            fg=T.GOLD,
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
@@ -886,7 +892,7 @@ class ArmyListBuilderGUI:
             text="Enter filename:",
             pos=(0, 0.4),
             scale=0.07,
-            fg=(1, 1, 1, 1),
+            fg=T.CREAM,
             align=TextNode.ACenter
         )
         self.gui_elements.append(filename_label)
@@ -899,7 +905,8 @@ class ArmyListBuilderGUI:
             initialText="my_army",
             numLines=1,
             width=10,
-            frameColor=(0.3, 0.3, 0.3, 1)
+            frameColor=T.ENTRY_BG,
+            text_fg=T.ENTRY_FG
         )
         self.gui_elements.append(filename_entry)
         
@@ -912,7 +919,9 @@ class ArmyListBuilderGUI:
             command=self.load_army_list_file,
             extraArgs=[filename_entry],
             frameSize=(-2, 2, -0.5, 1),
-            frameColor=(0, 0.6, 0, 1)
+            frameColor=T.BTN_GREEN,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT
         )
         self.gui_elements.append(load_btn)
         
@@ -923,7 +932,10 @@ class ArmyListBuilderGUI:
             scale=0.07,
             pos=(0, 0, -0.4),
             command=self.show_main_menu,
-            frameSize=(-2, 2, -0.5, 1)
+            frameSize=(-2, 2, -0.5, 1),
+            frameColor=T.BTN_RED,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT
         )
         self.gui_elements.append(cancel_btn)
     
@@ -977,11 +989,12 @@ class ArmyListBuilderGUI:
 
         bg_frame = DirectFrame(
             frameSize=(-1.0, 1.0, -0.72, 0.72),
-            frameColor=(0.05, 0.08, 0.05, 0.95),
+            frameColor=(1, 1, 1, 1),
             pos=(0, 0, 0),
-            relief=DGG.SUNKEN,
-            borderWidth=(0.01, 0.01)
+            relief=DGG.FLAT,
+            frameTexture=T.TEX_PARCHMENT
         )
+        bg_frame.setTransparency(TransparencyAttrib.MAlpha)
         self.gui_elements.append(bg_frame)
 
         title = OnscreenText(
@@ -989,14 +1002,14 @@ class ArmyListBuilderGUI:
             text="SET POINTS BUDGET",
             pos=(0, 0.62),
             scale=0.1,
-            fg=(1, 0.85, 0.2, 1),
+            fg=T.GOLD,
             align=TextNode.ACenter
         )
         self.gui_elements.append(title)
 
         line = DirectFrame(
             frameSize=(-0.7, 0.7, -0.003, 0.003),
-            frameColor=(0.8, 0.6, 0.1, 1),
+            frameColor=T.SEPARATOR,
             pos=(0, 0, 0.53)
         )
         self.gui_elements.append(line)
@@ -1006,7 +1019,7 @@ class ArmyListBuilderGUI:
             text="Both players agree on a shared limit.\nRecruit units with your allotted points — spend wisely!",
             pos=(0, 0.40),
             scale=0.055,
-            fg=(0.8, 0.85, 0.8, 1),
+            fg=T.INK,
             align=TextNode.ACenter
         )
         self.gui_elements.append(info)
@@ -1016,7 +1029,7 @@ class ArmyListBuilderGUI:
             text=f"Current budget: {self.points_budget} pts  |  Spent: {self._army_total_pts()} pts",
             pos=(0, 0.22),
             scale=0.062,
-            fg=(0.4, 1, 0.55, 1),
+            fg=T.GREEN_BANNER,
             align=TextNode.ACenter
         )
         self.gui_elements.append(current_label)
@@ -1026,7 +1039,7 @@ class ArmyListBuilderGUI:
             text="New budget:",
             pos=(-0.42, 0.05),
             scale=0.06,
-            fg=(0.9, 0.9, 0.9, 1),
+            fg=T.INK,
             align=TextNode.ALeft
         )
         self.gui_elements.append(entry_label)
@@ -1039,8 +1052,8 @@ class ArmyListBuilderGUI:
             initialText=str(self.points_budget),
             numLines=1,
             width=7,
-            frameColor=(0.2, 0.3, 0.2, 1),
-            text_fg=(1, 1, 1, 1)
+            frameColor=T.ENTRY_BG,
+            text_fg=T.ENTRY_FG
         )
         self.gui_elements.append(budget_entry)
 
@@ -1049,7 +1062,7 @@ class ArmyListBuilderGUI:
             text="Quick presets:",
             pos=(-0.42, -0.12),
             scale=0.052,
-            fg=(0.75, 0.75, 0.75, 1),
+            fg=T.INK_FADED,
             align=TextNode.ALeft
         )
         self.gui_elements.append(preset_label)
@@ -1064,9 +1077,9 @@ class ArmyListBuilderGUI:
                 command=budget_entry.set,
                 extraArgs=[str(pts)],
                 frameSize=(-2.2, 2.2, -0.6, 1.1),
-                frameColor=(0.25, 0.35, 0.25, 1),
-                text_fg=(0.9, 1, 0.9, 1),
-                relief=DGG.RAISED,
+                frameColor=T.BTN_NEUTRAL,
+                text_fg=T.BTN_TEXT,
+                relief=DGG.FLAT,
                 borderWidth=(0.01, 0.01)
             )
             self.gui_elements.append(preset_btn)
@@ -1080,9 +1093,9 @@ class ArmyListBuilderGUI:
             command=self._apply_budget,
             extraArgs=[budget_entry],
             frameSize=(-3.0, 3.0, -0.6, 1.1),
-            frameColor=(0.2, 0.6, 0.2, 1),
-            text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED,
+            frameColor=T.BTN_GREEN,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT,
             borderWidth=(0.015, 0.015)
         )
         self.gui_elements.append(confirm_btn)
@@ -1095,9 +1108,9 @@ class ArmyListBuilderGUI:
             pos=(0, 0, -0.62),
             command=self.show_main_menu,
             frameSize=(-2.5, 2.5, -0.6, 1.1),
-            frameColor=(0.3, 0.3, 0.4, 1),
-            text_fg=(1, 1, 1, 1),
-            relief=DGG.RAISED,
+            frameColor=T.BTN_NEUTRAL,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT,
             borderWidth=(0.01, 0.01)
         )
         self.gui_elements.append(back_btn)
@@ -1124,7 +1137,7 @@ class ArmyListBuilderGUI:
             text=message,
             pos=(0, 0.2),
             scale=0.08,
-            fg=(1, 1, 1, 1),
+            fg=T.GOLD,
             align=TextNode.ACenter,
             wordwrap=20
         )
@@ -1137,7 +1150,10 @@ class ArmyListBuilderGUI:
             scale=0.08,
             pos=(0, 0, -0.2),
             command=next_command if next_command else self.show_main_menu,
-            frameSize=(-2, 2, -0.5, 1)
+            frameSize=(-2, 2, -0.5, 1),
+            frameColor=T.BTN_NEUTRAL,
+            text_fg=T.BTN_TEXT,
+            relief=DGG.FLAT
         )
         self.gui_elements.append(ok_btn)
     
@@ -1150,12 +1166,20 @@ class ArmyListBuilderGUI:
     def hide(self):
         """Hide all GUI elements without destroying them"""
         for element in self.gui_elements:
-            element.hide()
+            try:
+                if not element.isEmpty():
+                    element.hide()
+            except Exception:
+                pass
     
     def show(self):
         """Show all GUI elements"""
         for element in self.gui_elements:
-            element.show()
+            try:
+                if not element.isEmpty():
+                    element.show()
+            except Exception:
+                pass
 
 
 # Standalone test application

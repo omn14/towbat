@@ -8,6 +8,9 @@ Shooting, Combat, Spell, Campaign, and MakeChoice.
 from direct.fsm.FSM import FSM
 from panda3d.core import Point3, Vec3, BitMask32, TransformState
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
+from direct.interval.LerpInterval import LerpHprInterval
+from direct.interval.IntervalGlobal import Sequence
+from direct.interval.FunctionInterval import Func
 
 
 class GamePhaseFSM(FSM):
@@ -20,6 +23,7 @@ class GamePhaseFSM(FSM):
         self.game = game
 
         self.end_of_turn_spells = []
+        self._cube_cooldown = False
 
         self.end_phase_cube = self._create_menu_collision_cube(
             "endPhase", Point3(5, 20, 3)
@@ -101,11 +105,31 @@ class GamePhaseFSM(FSM):
         result = base.world.rayTestClosest(pFrom, pTo, BitMask32.bit(2))
 
         if result.hasHit():
-            """ self.current_phase_index = (
-                (self.current_phase_index + 1) % len(self.PHASES)
+            if self._cube_cooldown:
+                return
+            self._cube_cooldown = True
+
+            # Spin the cube for visual feedback
+            cube = self.end_phase_cube
+            start_hpr = cube.getHpr()
+            spin = LerpHprInterval(
+                cube,
+                duration=0.4,
+                hpr=start_hpr + Vec3(0, 0, 360),
+                startHpr=start_hpr,
+                blendType='easeInOut',
             )
-            self.request(self.PHASES[self.current_phase_index]) """
+            seq = Sequence(
+                spin,
+                Func(self._clear_cube_cooldown),
+            )
+            seq.start()
+
             self.nextPhase()
+
+    def _clear_cube_cooldown(self):
+        """Re-enable phase cube interaction after the spin animation."""
+        self._cube_cooldown = False
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
