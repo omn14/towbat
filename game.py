@@ -133,8 +133,8 @@ class MyApp(ShowBase):
 
         # ── Terrain ───────────────────────────────────────────────────────
         self.terrain_manager = TerrainManager(self)
-        self.terrain_manager.add_terrain('forest', Point3(10, 5, 0), 14, 10)
-        self.terrain_manager.add_terrain('hill',   Point3(-20, -5, 0), 12, 8)
+        self.terrain_manager.add_terrain('forest', Point3(10, 2, 0.1), 14, 10)
+        self.terrain_manager.add_terrain('hill',   Point3(-20, -5, 0.1), 12, 8)
 
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])

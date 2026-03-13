@@ -467,6 +467,51 @@ class MovementSystem:
 
     # ─── Movement & Pathfinding ───────────────────────────────────────────
 
+    def moveSweep(self,unit,mask):
+        p1 = (self.game.polygonpoints[self.game.numsPoints-3]*2-1)*50
+        p2 = (self.game.polygonpoints[self.game.numsPoints-2]*2-1)*50
+        p3 = (self.game.polygonpoints[0]*2-1)*50
+        p4 = (self.game.polygonpoints[self.game.numsPoints-1]*2-1)*50
+        #self.game.world.doPhysics(0.016)
+        closest_dist = float('inf')
+        closest_pos = None
+        
+        frac,closest_pos_frac,tsTo = self.sweepTestRot(unit,p3,self.game.arcPointRotation,mask)
+        if frac < 1.0:
+            self.game.arcPointRotation *= frac
+            closest_dist = 0
+            closest_pos = closest_pos_frac
+
+        else:
+            dire=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).normalized()
+            le=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).length()
+            #le=move/(2*abs(groundSizeboundingbox[0][1]))
+            #le-=math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
+            frac,closest_pos_frac = self.sweepTestDir(unit,tsTo,dire,le,mask)
+            if frac < 1.0:
+                closest_dist = le*frac
+                closest_pos = closest_pos_frac
+
+        
+
+
+        if closest_pos:
+            """ self.game.unitHitPos = closest_pos
+            self.game.playerNP.setPos(closest_pos)
+            #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
+
+            newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
+            print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.game.arcPointRotation)
+            self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
+                                            width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
+                                            movedistance=newmove/(2*abs(groundSizeboundingbox[0][1]))) """
+            
+            #lol
+            return 0.5
+
+        return 1
+
+
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():
             return
@@ -605,6 +650,15 @@ class MovementSystem:
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
+
+
+            terrainMod = self.moveSweep(unit,CM.TERRAIN_FOREST)
+            move = int(move * terrainMod)
+            print("Unit move terrain:", move)
+
+            self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
+                                               width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
+                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
             #self.game.polygonpoints = self.mirrorPointArc(self.game.polygonpoints)
 
             
@@ -695,7 +749,7 @@ class MovementSystem:
                     print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
                     move = int(move * terrain_mult)
             
-            
+            move = int(move * terrainMod)
             print("Modified unit move:", move)
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
@@ -1060,7 +1114,7 @@ class MovementSystem:
             return result.getHitFraction()
         return 1.0
     
-    def sweepTestRot(self, unit, point,angle):
+    def sweepTestRot(self, unit, point,angle,mask=BitMask32.bit(9)):
         startPos=unit.bodyNP.getPos()
         Hpr=unit.bodyNP.getHpr()
         shape = unit.bodyNP.node().getShape(0)
@@ -1085,7 +1139,7 @@ class MovementSystem:
         """ for u in unit.isInCombatWith:
             u.bodyNP.setCollideMask(BitMask32.bit(30)) """
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
@@ -1101,7 +1155,7 @@ class MovementSystem:
             return result.getHitFraction(),result.getHitPos(),tsTo
         return 1.0,None,tsTo
     
-    def sweepTestDir(self, unit, tsFrom, direction,length):
+    def sweepTestDir(self, unit, tsFrom, direction,length,mask=BitMask32.bit(9)):
         
         #tsFrom = TransformState.makePosHpr(startPos, nHpr)
         tsTo = TransformState.makePosHpr(tsFrom.getPos() + direction * length, tsFrom.getHpr())
@@ -1119,7 +1173,7 @@ class MovementSystem:
             u.bodyNP.setCollideMask(BitMask32.bit(30)) """
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
         #result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,CM.SWEEP_TARGET | CM.TERRAIN)
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])

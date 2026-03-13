@@ -52,7 +52,10 @@ class CollisionMask:
 
     # ── environment ─────────────────────────────────────────────
     BOUNDARY         = BitMask32.bit(11)  # table-edge boundary walls
-    TERRAIN          = BitMask32.bit(20)  # terrain ghost nodes (forest, hill…)
+    TERRAIN_FOREST          = BitMask32.bit(20)  # terrain ghost nodes (forest, hill…)
+    TERRAIN_HILL            = BitMask32.bit(21)  # terrain ghost nodes (hill)
+    TERRAIN_RIVER           = BitMask32.bit(22)  # terrain ghost nodes (river)
+    TERRAIN_MARSH           = BitMask32.bit(23)  # terrain ghost nodes (marsh)
     BOARD            = BitMask32.bit(1)   # the game board (shares bit 1 today)
 
     # ── convenience combos ──────────────────────────────────────
@@ -67,7 +70,7 @@ class CollisionMask:
     COMBAT_INTO      = COMBAT_ENGAGED                       # bit 4 only
 
     # What a *terrain piece* should be hittable by (terrain queries only):
-    TERRAIN_INTO     = TERRAIN                              # bit 20 only
+    TERRAIN_INTO     = TERRAIN_FOREST | TERRAIN_HILL | TERRAIN_RIVER | TERRAIN_MARSH  # bits 20-23
 
     # ── helpers ─────────────────────────────────────────────────
     @staticmethod
@@ -105,7 +108,10 @@ class CollisionMask:
             5:  "ARROW_ALT",
             9:  "SWEEP_TARGET",
             11: "BOUNDARY",
-            20: "TERRAIN",
+            20: "TERRAIN_FOREST",
+            21: "TERRAIN_HILL",
+            22: "TERRAIN_RIVER",
+            23: "TERRAIN_MARSH",
             30: "SWEEP_SELF",
         }
         active = []
