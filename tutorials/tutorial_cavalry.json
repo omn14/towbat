@@ -1,0 +1,126 @@
+{
+    "name": "Cavalry Tactics",
+    "description": "Learn how to effectively use cavalry units — charges, flanking, and pursuit.",
+    "battles": [
+        {
+            "id": "the_charge",
+            "name": "The Cavalry Charge",
+            "description": "Learn the devastating power of a well-timed cavalry charge.",
+            "win_conditions": [
+                {
+                    "text": "Deploy all your units",
+                    "condition": {"type": "all_units_deployed"}
+                },
+                {
+                    "text": "Charge your Grail Knights into the enemy infantry",
+                    "condition": {"type": "unit_charged"}
+                }
+            ],
+            "hints": [
+                {"phase": "StrategyPhase",  "text": "Cavalry units gain powerful charge bonuses. Position your knights for a head-on charge."},
+                {"phase": "MovementPhase",  "text": "Move your knights into contact with the enemy. Ending movement touching an enemy counts as a charge!"},
+                {"phase": "CombatPhase",    "text": "Your charging knights hit harder on the turn they charge. Watch the bonus attacks!"}
+            ],
+            "player1_army": {
+                "budget": 500,
+                "units": [
+                    {
+                        "name": "Grail Knight",
+                        "faction": "bretonnia",
+                        "role": "hammer_cavalry",
+                        "nmodels": 8,
+                        "files": 4,
+                        "ranks": 2
+                    }
+                ]
+            },
+            "player2_army": {
+                "budget": 200,
+                "units": [
+                    {
+                        "name": "Night Goblin",
+                        "faction": "orc_and_goblin_tribes",
+                        "role": "anvil_infantry",
+                        "nmodels": 10,
+                        "files": 5,
+                        "ranks": 2
+                    }
+                ]
+            },
+            "terrain": [],
+            "deployment": {
+                "player1_zone": {"x_min": -34, "x_max": 34, "y_min": -24, "y_max": -13},
+                "player2_zone": {"x_min": -34, "x_max": 34, "y_min": 13,  "y_max": 24}
+            }
+        },
+        {
+            "id": "flanking_maneuver",
+            "name": "The Flanking Maneuver",
+            "description": "Use fast cavalry to hit the enemy from the side while your infantry holds the line.",
+            "win_conditions": [
+                {
+                    "text": "Deploy all your units",
+                    "condition": {"type": "all_units_deployed"}
+                },
+                {
+                    "text": "Destroy all enemy units",
+                    "condition": {"type": "destroy_all_enemies"}
+                }
+            ],
+            "hints": [
+                {"phase": "StrategyPhase",  "text": "Pin the enemy with infantry, then swing your Pegasus Knights around to hit their flank."},
+                {"phase": "MovementPhase",  "text": "Flanking gives a big advantage — the enemy can't use rank bonuses when attacked from the side."},
+                {"phase": "CombatPhase",    "text": "A flank charge removes the enemy's rank bonus. Combined with a frontal fight, this is devastating."}
+            ],
+            "player1_army": {
+                "budget": 800,
+                "units": [
+                    {
+                        "name": "Man at Arms",
+                        "faction": "bretonnia",
+                        "role": "anvil_infantry",
+                        "nmodels": 10,
+                        "files": 5,
+                        "ranks": 2
+                    },
+                    {
+                        "name": "Pegasus Knight",
+                        "faction": "bretonnia",
+                        "role": "hammer_cavalry_fast",
+                        "nmodels": 6,
+                        "files": 3,
+                        "ranks": 2
+                    }
+                ]
+            },
+            "player2_army": {
+                "budget": 500,
+                "units": [
+                    {
+                        "name": "Orc Boyz",
+                        "faction": "orc_and_goblin_tribes",
+                        "role": "anvil_infantry",
+                        "nmodels": 10,
+                        "files": 5,
+                        "ranks": 2
+                    },
+                    {
+                        "name": "Black Orc",
+                        "faction": "orc_and_goblin_tribes",
+                        "role": "anvil_infantry",
+                        "nmodels": 10,
+                        "files": 5,
+                        "ranks": 2
+                    }
+                ]
+            },
+            "terrain": [
+                {"type": "hill", "x": 0, "y": -5, "width": 12, "depth": 8}
+            ],
+            "deployment": {
+                "player1_zone": {"x_min": -34, "x_max": 34, "y_min": -24, "y_max": -13},
+                "player2_zone": {"x_min": -34, "x_max": 34, "y_min": 13,  "y_max": 24}
+            }
+        }
+    ]
+}

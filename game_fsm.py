@@ -119,10 +119,13 @@ class GamePhaseFSM(FSM):
             (self.current_phase_index + 1) % len(self.PHASES)
         )
         self.request(self.PHASES[self.current_phase_index])
+        # Notify tutorial system of the phase change
+        messenger.send('tutorial-phase-change', [self.PHASES[self.current_phase_index]])
     # ─── Phase Enter/Exit Handlers ──────────────────────────────────
 
     def enterDeployPhase(self):
         print("Entering Deploy Phase")
+        messenger.send('tutorial-phase-change', ['DeployPhase'])
         self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
 
         dep_width = 72

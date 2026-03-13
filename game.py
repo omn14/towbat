@@ -57,6 +57,7 @@ from persistence import save_game_state, load_game_state
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
+from tutorial_system import TutorialManager
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 loadPrcFileData('', 'show-frame-rate-meter true')
@@ -117,10 +118,10 @@ class MyApp(ShowBase):
         
 
         # Make a copy of the smiley model and position it differently
-        self.smiley_copy = self.loader.loadModel('models/smiley')
+        """ self.smiley_copy = self.loader.loadModel('models/smiley')
         self.smiley_copy.reparentTo(self.render)
         self.smiley_copy.setPos(-50, 0, 0)
-        self.smiley_copy.setScale(2)
+        self.smiley_copy.setScale(2) """
 
         # Position the camera above the plane, looking straight down
         self.disableMouse()
@@ -241,7 +242,9 @@ class MyApp(ShowBase):
         self.fsm = GamePhaseFSM(self)
         self.combat = CombatResolver(self)
         self.movement = MovementSystem(self)
+        self.tutorial = TutorialManager(self)
         self.accept('c', self.toggle_campaign_map)
+        self.accept('t', self.start_tutorial)
 
         self.fsm.request("DeployPhase")
 
@@ -263,7 +266,7 @@ class MyApp(ShowBase):
         # load the ball model
         self.ball = loader.loadModel("smiley")
         self.ball.reparentTo(render)
-        self.ball.setPos(-15,0,0)
+        self.ball.setPos(-15,0,-100)
 
         # setup the projectile interval
         self.trajectory = ProjectileInterval(self.ball, duration=1,
@@ -1375,7 +1378,7 @@ class MyApp(ShowBase):
         
         self.world.setDebugNode(self.debugNP.node())
         self.debugNP.show()
-        # Add simple Bullet collision geometry (sphere) to smiley_copy
+        """ # Add simple Bullet collision geometry (sphere) to smiley_copy
 
         # Estimate radius from bounding box
         bounds = self.smiley_copy.getTightBounds()
@@ -1388,7 +1391,7 @@ class MyApp(ShowBase):
         smiley_copy_body.addShape(smiley_copy_shape)
         smiley_copy_np = self.smiley_copy.attachNewNode(smiley_copy_body)
         smiley_copy_np.setCollideMask(BitMask32.bit(1))
-        self.world.attachRigidBody(smiley_copy_body)
+        self.world.attachRigidBody(smiley_copy_body) """
         """ 
         # Add a simple Bullet character controller for the player
         height = .01
@@ -1644,6 +1647,12 @@ class MyApp(ShowBase):
             for unit in units:
                 unit.bodyNP.setH(180)
         return units
+
+    # ─── Tutorial ─────────────────────────────────────────────────────
+
+    def start_tutorial(self, filepath='tutorials/tutorial_basics.json'):
+        """Launch the tutorial scenario system."""
+        self.tutorial.start(filepath)
 
 app = MyApp()
 app.run()

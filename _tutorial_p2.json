@@ -1,0 +1,13 @@
+{
+  "budget": 200,
+  "units": [
+    {
+      "name": "Orc Boyz",
+      "faction": "orc_and_goblin_tribes",
+      "role": "anvil_infantry",
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2
+    }
+  ]
+}

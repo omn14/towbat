@@ -1,0 +1,21 @@
+{
+  "budget": 400,
+  "units": [
+    {
+      "name": "Man at Arms",
+      "faction": "bretonnia",
+      "role": "anvil_infantry",
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2
+    },
+    {
+      "name": "Peasant Bowman",
+      "faction": "bretonnia",
+      "role": "shooting_rank_strip",
+      "nmodels": 10,
+      "files": 5,
+      "ranks": 2
+    }
+  ]
+}

@@ -8,6 +8,11 @@ import os
 # Base directory for unit characteristic JSON files, organised by faction
 ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
 
+# Map display names to the canonical JSON filename stem when they differ
+_NAME_ALIASES = {
+    'orc_boyz': 'orc_boy',
+}
+
 
 def _find_json_file(filename: str) -> str:
     """Search army_units/ subfolders for a characteristics JSON file.
@@ -28,16 +33,22 @@ class model:
         self.characteristics = {}
         
         json_filename = self.name.replace(" ", "_").replace("-", "_").lower() + '_characteristics.json'
+        # Check for a name alias (e.g. "Orc Boyz" -> "orc_boy")
+        stem = json_filename.replace('_characteristics.json', '')
+        if stem in _NAME_ALIASES:
+            json_filename = _NAME_ALIASES[stem] + '_characteristics.json'
         self.json_file_path = _find_json_file(json_filename)
         if os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
-        else:
+        elif url:
             self.model_data = self.fetch_model_data(url)
             self.characteristics = self.get_characteristics_from_html(self.model_data)
             # Save into army_units/ root if no faction folder matched
             os.makedirs(ARMY_UNITS_DIR, exist_ok=True)
             self.json_file_path = os.path.join(ARMY_UNITS_DIR, json_filename)
             store_dict_to_file(self.characteristics, self.json_file_path)
+        else:
+            print(f"Warning: No characteristics file found for '{self.name}' and no URL provided.")
         self.armor_save = 7
         self.AP = 0  # Armor Penetration
         self.charging = False
