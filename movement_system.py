@@ -7,6 +7,7 @@ are used directly; all other game state is accessed via ``self.game``.
 """
 
 import math
+from collision_masks import CollisionMask as CM
 
 from panda3d.core import (
     Vec2, Vec3, Vec4, Point3,
@@ -1117,7 +1118,8 @@ class MovementSystem:
         """ for u in unit.isInCombatWith:
             u.bodyNP.setCollideMask(BitMask32.bit(30)) """
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        #result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,CM.SWEEP_TARGET | CM.TERRAIN)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
