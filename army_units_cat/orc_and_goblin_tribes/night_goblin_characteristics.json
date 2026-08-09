@@ -1,0 +1,23 @@
+{
+    "Model": "Night Goblin",
+    "M": "4",
+    "WS": "2",
+    "BS": "3",
+    "S": "3",
+    "T": "3",
+    "W": "1",
+    "I": "3",
+    "A": "1",
+    "Ld": "4",
+    "Points": 3,
+    "Unit": "Night Goblin Mobs",
+    "Troop Type": "Regular Infantry",
+    "Unit Size": "10+",
+    "Special Rules": [
+        "Close Order",
+        "Fear of Elves",
+        "Hatred",
+        "Warband",
+        "Horde"
+    ]
+}

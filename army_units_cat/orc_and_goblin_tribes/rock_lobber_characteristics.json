@@ -1,0 +1,20 @@
+{
+    "Model": "Rock Lobber",
+    "M": "-",
+    "WS": "-",
+    "BS": "-",
+    "S": "-",
+    "T": "6",
+    "W": "4",
+    "I": "-",
+    "A": "-",
+    "Ld": "-",
+    "Points": 75,
+    "Unit": "Goblin Rock Lobbers",
+    "Troop Type": "War Machine",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Fear of Elves",
+        "Skirmishers"
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "Model": "Orc Weirdnob",
+    "M": "4",
+    "WS": "4",
+    "BS": "2",
+    "S": "4",
+    "T": "5",
+    "W": "3",
+    "I": "4",
+    "A": "2",
+    "Ld": "8",
+    "Points": 140,
+    "Unit": "Orc Weirdnob",
+    "Troop Type": "Regular Infantry",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Choppas",
+        "Mob Rule",
+        "Ignore Goblin Panic",
+        "Lore of Gork",
+        "Warband"
+    ]
+}

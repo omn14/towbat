@@ -1,0 +1,23 @@
+{
+    "Model": "Orc Weirdboy",
+    "M": "4",
+    "WS": "3",
+    "BS": "2",
+    "S": "3",
+    "T": "4",
+    "W": "2",
+    "I": "3",
+    "A": "1",
+    "Ld": "7",
+    "Points": 65,
+    "Unit": "Orc Weirdboy",
+    "Troop Type": "Regular Infantry",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Choppas",
+        "Mob Rule",
+        "Ignore Goblin Panic",
+        "Lore of Gork",
+        "Warband"
+    ]
+}

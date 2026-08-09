@@ -1,0 +1,25 @@
+{
+    "Model": "Pump Wagon",
+    "M": "2D6",
+    "WS": "-",
+    "BS": "-",
+    "S": "4",
+    "T": "4",
+    "W": "3",
+    "I": "-",
+    "A": "-",
+    "Ld": "-",
+    "Points": 35,
+    "Unit": "Snotling Pump Wagons",
+    "Troop Type": "Light Chariot",
+    "Unit Size": "1-6",
+    "Special Rules": [
+        "Immune To Psychology",
+        "Loner",
+        "Impact Hits",
+        "Random Movement",
+        "Open Order",
+        "Armour Bane",
+        "Armour Value"
+    ]
+}

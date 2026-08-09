@@ -1,0 +1,26 @@
+{
+    "Model": "Spider Rider",
+    "M": "-",
+    "WS": "2",
+    "BS": "3",
+    "S": "3",
+    "T": "3",
+    "W": "1",
+    "I": "3",
+    "A": "1",
+    "Ld": "5",
+    "Points": 12,
+    "Unit": "Goblin Spider Rider Mobs",
+    "Troop Type": "Light Cavalry",
+    "Unit Size": "5+",
+    "Special Rules": [
+        "Fear of Elves",
+        "Move Through Cover",
+        "Impetuous",
+        "Warband",
+        "Fast Cavalry",
+        "Open Order",
+        "Poisoned Attacks",
+        "Swiftstride"
+    ]
+}

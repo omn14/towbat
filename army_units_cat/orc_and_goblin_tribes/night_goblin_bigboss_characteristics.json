@@ -1,0 +1,22 @@
+{
+    "Model": "Night Goblin Bigboss",
+    "M": "4",
+    "WS": "4",
+    "BS": "3",
+    "S": "4",
+    "T": "4",
+    "W": "2",
+    "I": "4",
+    "A": "3",
+    "Ld": "5",
+    "Points": 30,
+    "Unit": "Night Goblin Bigboss",
+    "Troop Type": "Regular Infantry",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Fear of Elves",
+        "Hatred",
+        "Rallying Cry",
+        "Warband"
+    ]
+}

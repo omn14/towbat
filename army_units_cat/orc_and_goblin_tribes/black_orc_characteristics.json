@@ -1,0 +1,25 @@
+{
+    "Model": "Black Orc",
+    "M": "4",
+    "WS": "4",
+    "BS": "3",
+    "S": "4",
+    "T": "4",
+    "W": "1",
+    "I": "3",
+    "A": "1",
+    "Ld": "8",
+    "Points": 12,
+    "Unit": "Black Orc Mobs",
+    "Troop Type": "Heavy Infantry",
+    "Unit Size": "5+",
+    "Special Rules": [
+        "Choppas",
+        "Close Order",
+        "Ignore Panic",
+        "Furious Charge",
+        "Da Boyz",
+        "Motley Crew",
+        "Quell Impetuosity"
+    ]
+}

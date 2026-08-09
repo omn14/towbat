@@ -1,0 +1,25 @@
+{
+    "Model": "Black Orc Bigboss",
+    "M": "4",
+    "WS": "6",
+    "BS": "3",
+    "S": "4",
+    "T": "5",
+    "W": "2",
+    "I": "5",
+    "A": "3",
+    "Ld": "8",
+    "Points": 75,
+    "Unit": "Black Orc Bigboss",
+    "Troop Type": "Heavy Infantry",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Choppas",
+        "Furious Charge",
+        "Da Boyz",
+        "Quell Impetuosity",
+        "Ignore Panic",
+        "Rallying Cry",
+        "Waaagh!"
+    ]
+}

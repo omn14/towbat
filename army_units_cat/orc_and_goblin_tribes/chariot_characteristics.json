@@ -1,0 +1,26 @@
+{
+    "Model": "Chariot",
+    "M": "-",
+    "WS": "-",
+    "BS": "-",
+    "S": "5",
+    "T": "5",
+    "W": "4",
+    "I": "-",
+    "A": "-",
+    "Ld": "-",
+    "Points": 130,
+    "Unit": "Black Orc Chariot",
+    "Troop Type": "Heavy Chariot",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Choppas",
+        "Close Order",
+        "First Charge",
+        "Furious Charge",
+        "Ignore Panic",
+        "Impact Hits",
+        "Tusker Charge",
+        "Armour Value"
+    ]
+}

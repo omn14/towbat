@@ -1,0 +1,22 @@
+{
+    "Model": "Night Goblin Oddnob",
+    "M": "4",
+    "WS": "4",
+    "BS": "3",
+    "S": "3",
+    "T": "4",
+    "W": "3",
+    "I": "4",
+    "A": "2",
+    "Ld": "6",
+    "Points": 130,
+    "Unit": "Night Goblin Oddnob",
+    "Troop Type": "Regular Infantry",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Fear of Elves",
+        "Warband",
+        "Lore of Mork",
+        "Hatred"
+    ]
+}

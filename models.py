@@ -3,15 +3,13 @@ from utilityFunctions import *
 from bs4 import BeautifulSoup
 import requests
 
+import copy
 import os
+
+from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
 
 # Base directory for unit characteristic JSON files, organised by faction
 ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
-
-# Map display names to the canonical JSON filename stem when they differ
-_NAME_ALIASES = {
-    'orc_boyz': 'orc_boy',
-}
 
 
 def _find_json_file(filename: str) -> str:
@@ -31,14 +29,25 @@ class model:
         self.name = name
         self.url = url
         self.characteristics = {}
-        
+        self.json_file_path = None
+        # Source of truth for reset_characteristics(): a pristine copy of the stats.
+        self._base_characteristics = None
+
+        # 1. Prefer the BattleScribe catalogue (all factions, official data).
+        catalogue_chars = get_catalogue().characteristics(self.name)
+        if catalogue_chars:
+            self.characteristics = catalogue_chars
+            self._base_characteristics = copy.deepcopy(catalogue_chars)
+
         json_filename = self.name.replace(" ", "_").replace("-", "_").lower() + '_characteristics.json'
         # Check for a name alias (e.g. "Orc Boyz" -> "orc_boy")
         stem = json_filename.replace('_characteristics.json', '')
         if stem in _NAME_ALIASES:
             json_filename = _NAME_ALIASES[stem] + '_characteristics.json'
-        self.json_file_path = _find_json_file(json_filename)
-        if os.path.isfile(self.json_file_path):
+        if self.characteristics:
+            pass  # already sourced from the catalogue
+        elif os.path.isfile(_find_json_file(json_filename)):
+            self.json_file_path = _find_json_file(json_filename)
             self.characteristics = load_dict_from_file(self.json_file_path)
         elif url:
             self.model_data = self.fetch_model_data(url)
@@ -63,9 +72,11 @@ class model:
         self.wound_roll = 0
 
     def reset_characteristics(self):
-        if os.path.isfile(self.json_file_path):
+        if self._base_characteristics is not None:
+            self.characteristics = copy.deepcopy(self._base_characteristics)
+        elif self.json_file_path and os.path.isfile(self.json_file_path):
             self.characteristics = load_dict_from_file(self.json_file_path)
-        
+
         self.AP = 0  # Armor Penetration
         self.charging = False
 

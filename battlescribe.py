@@ -1,0 +1,228 @@
+"""
+Runtime loader for BattleScribe catalogues (.cat).
+
+Parses the catalogues in `Warhammer-The-Old-World/` into an in-memory index so the
+game and list builder can source unit characteristics directly from the official
+data instead of the per-unit JSON files. The characteristics dict returned matches
+the shape the rest of the codebase already expects (Model, M..Ld, Points), with a
+few harmless extra keys (Unit, Troop Type, Unit Size, Special Rules).
+
+This module has no dependency on the rest of the project (stdlib only), so it is
+safe to import from models.py without creating an import cycle.
+"""
+
+from __future__ import annotations
+
+import copy
+import os
+import re
+import xml.etree.ElementTree as ET
+
+# Stat keys in the canonical order used throughout the codebase.
+STAT_KEYS = ["M", "WS", "BS", "S", "T", "W", "I", "A", "Ld"]
+
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_CAT_DIR = os.path.join(REPO_DIR, "Warhammer-The-Old-World")
+
+# The BattleScribe schema namespace; ElementTree prefixes every tag with it.
+NS = "{http://www.battlescribe.net/schema/catalogueSchema}"
+
+# Map display-name slugs to the canonical catalogue model slug when they differ.
+NAME_ALIASES = {
+    "orc_boyz": "orc_boy",
+}
+
+
+def _tag(elem: ET.Element) -> str:
+    """Return an element's local tag name without the namespace prefix."""
+    return elem.tag.split("}", 1)[-1]
+
+
+def slugify(name: str) -> str:
+    """Turn a display name into the filename-stem convention used by the game."""
+    name = name.replace("'", "").replace("\u2019", "")
+    name = name.replace("-", "_").replace(" ", "_").lower()
+    name = re.sub(r"[^a-z0-9_]", "", name)
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name
+
+
+def _index_model_profiles(root: ET.Element) -> dict:
+    """Map profile id -> {name, stats} for every Model-type stat profile."""
+    profiles: dict = {}
+    for profile in root.iter(f"{NS}profile"):
+        if profile.get("typeName") != "Model":
+            continue
+        stats = {}
+        for char in profile.iter(f"{NS}characteristic"):
+            key = char.get("name")
+            if key in STAT_KEYS:
+                stats[key] = (char.text or "").strip()
+        profiles[profile.get("id")] = {
+            "name": profile.get("name", "Unknown"),
+            "stats": stats,
+        }
+    return profiles
+
+
+def _direct_child(parent: ET.Element, local_name: str):
+    for child in parent:
+        if _tag(child) == local_name:
+            return child
+    return None
+
+
+def _model_points(model_entry: ET.Element):
+    """Read the direct per-model points cost from a model selectionEntry."""
+    costs = _direct_child(model_entry, "costs")
+    if costs is None:
+        return None
+    for cost in costs:
+        if cost.get("typeId") == "points":
+            try:
+                return int(float(cost.get("value", "0")))
+            except ValueError:
+                return None
+    return None
+
+
+def _first_model_profile_id(model_entry: ET.Element, profiles: dict):
+    """Find the stat-profile id this model entry links to via its infoLinks."""
+    info_links = _direct_child(model_entry, "infoLinks")
+    if info_links is None:
+        return None
+    for link in info_links:
+        if link.get("type") == "profile" and link.get("targetId") in profiles:
+            return link.get("targetId")
+    return None
+
+
+def _unit_context(unit: ET.Element) -> dict:
+    """Pull troop type, unit size and special-rule names from a unit entry."""
+    troop_type = unit_size = None
+    profiles = _direct_child(unit, "profiles")
+    if profiles is not None:
+        for profile in profiles:
+            if profile.get("typeName") != "Unit":
+                continue
+            for char in profile.iter(f"{NS}characteristic"):
+                if char.get("name") == "Troop Type":
+                    troop_type = (char.text or "").strip()
+                elif char.get("name") == "Unit Size":
+                    unit_size = (char.text or "").strip()
+
+    special_rules: list = []
+    info_groups = _direct_child(unit, "infoGroups")
+    if info_groups is not None:
+        for group in info_groups:
+            if group.get("name") != "Special Rules":
+                continue
+            links = _direct_child(group, "infoLinks")
+            if links is None:
+                continue
+            for link in links:
+                rule = link.get("name")
+                if rule and rule not in special_rules:
+                    special_rules.append(rule)
+
+    return {
+        "Troop Type": troop_type,
+        "Unit Size": unit_size,
+        "Special Rules": special_rules,
+    }
+
+
+def parse_catalogue(cat_path: str):
+    """Parse one catalogue into (faction_name, list_of_model_records)."""
+    tree = ET.parse(cat_path)
+    root = tree.getroot()
+
+    faction_name = root.get("name", os.path.splitext(os.path.basename(cat_path))[0])
+    profiles = _index_model_profiles(root)
+    records: list = []
+
+    for unit in root.iter(f"{NS}selectionEntry"):
+        if unit.get("type") != "unit":
+            continue
+        unit_name = unit.get("name", "Unknown")
+        context = _unit_context(unit)
+
+        for model_entry in unit.iter(f"{NS}selectionEntry"):
+            if model_entry.get("type") != "model":
+                continue
+            profile_id = _first_model_profile_id(model_entry, profiles)
+            if profile_id is None:
+                continue
+            prof = profiles[profile_id]
+            if not prof["stats"]:
+                continue
+
+            points = _model_points(model_entry)
+            record = {"Model": prof["name"]}
+            for key in STAT_KEYS:
+                record[key] = prof["stats"].get(key, "")
+            record["Points"] = points if points is not None else 0
+            record["Unit"] = unit_name
+            record["Troop Type"] = context["Troop Type"]
+            record["Unit Size"] = context["Unit Size"]
+            record["Special Rules"] = list(context["Special Rules"])
+            record["Faction"] = faction_name
+            records.append(record)
+
+    return faction_name, records
+
+
+class Catalogue:
+    """In-memory index of every model in every .cat under a directory."""
+
+    def __init__(self, cat_dir: str = DEFAULT_CAT_DIR):
+        self.cat_dir = cat_dir
+        self.by_slug: dict = {}
+        self.factions: dict = {}
+        self._load()
+
+    def _load(self):
+        if not os.path.isdir(self.cat_dir):
+            print(f"[battlescribe] catalogue directory not found: {self.cat_dir}")
+            return
+        for filename in sorted(os.listdir(self.cat_dir)):
+            if not filename.endswith(".cat"):
+                continue
+            path = os.path.join(self.cat_dir, filename)
+            try:
+                faction_name, records = parse_catalogue(path)
+            except ET.ParseError as exc:
+                print(f"[battlescribe] failed to parse {filename}: {exc}")
+                continue
+            for record in records:
+                slug = slugify(record["Model"])
+                # First occurrence wins; prefer an entry that has a points cost.
+                existing = self.by_slug.get(slug)
+                if existing is None or (not existing.get("Points") and record.get("Points")):
+                    self.by_slug[slug] = record
+                self.factions.setdefault(faction_name, set()).add(record["Model"])
+        print(f"[battlescribe] loaded {len(self.by_slug)} models "
+              f"across {len(self.factions)} factions")
+
+    def characteristics(self, name: str):
+        """Return a fresh characteristics dict for a display name, or None."""
+        slug = slugify(name)
+        slug = NAME_ALIASES.get(slug, slug)
+        record = self.by_slug.get(slug)
+        return copy.deepcopy(record) if record else None
+
+    def iter_models(self):
+        """Yield (model_name, faction, characteristics) for every model."""
+        for record in self.by_slug.values():
+            yield record["Model"], record.get("Faction", "Unknown"), copy.deepcopy(record)
+
+
+_catalogue: Catalogue | None = None
+
+
+def get_catalogue(cat_dir: str = DEFAULT_CAT_DIR) -> Catalogue:
+    """Return the shared Catalogue singleton, loading it on first use."""
+    global _catalogue
+    if _catalogue is None:
+        _catalogue = Catalogue(cat_dir)
+    return _catalogue

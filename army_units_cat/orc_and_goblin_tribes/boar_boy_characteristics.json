@@ -1,0 +1,28 @@
+{
+    "Model": "Boar Boy",
+    "M": "-",
+    "WS": "3",
+    "BS": "3",
+    "S": "3",
+    "T": "4",
+    "W": "1",
+    "I": "3",
+    "A": "1",
+    "Ld": "6",
+    "Points": 15,
+    "Unit": "Orc Boar Boy Mobs",
+    "Troop Type": "Heavy Cavalry",
+    "Unit Size": "4+",
+    "Special Rules": [
+        "Choppas",
+        "Close Order",
+        "Ignore Goblin Panic",
+        "Impetuous",
+        "Warband",
+        "Armoured Hide",
+        "Counter Charge",
+        "Furious Charge",
+        "Swiftstride",
+        "Tusker Charge"
+    ]
+}

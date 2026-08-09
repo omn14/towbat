@@ -1,0 +1,25 @@
+{
+    "Model": "Snotling",
+    "M": "5",
+    "WS": "2",
+    "BS": "2",
+    "S": "2",
+    "T": "2",
+    "W": "6",
+    "I": "3",
+    "A": "5",
+    "Ld": "4",
+    "Points": 35,
+    "Unit": "Snotling Mobs",
+    "Troop Type": "Swarms",
+    "Unit Size": "2+",
+    "Special Rules": [
+        "Immune To Psychology",
+        "Loner",
+        "Impetuous",
+        "Skirmishers",
+        "Open Order",
+        "Unbreakable",
+        "Vanguard"
+    ]
+}

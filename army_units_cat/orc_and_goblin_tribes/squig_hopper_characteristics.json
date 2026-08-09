@@ -1,0 +1,26 @@
+{
+    "Model": "Squig Hopper",
+    "M": "-",
+    "WS": "2",
+    "BS": "3",
+    "S": "3",
+    "T": "3",
+    "W": "1",
+    "I": "3",
+    "A": "1",
+    "Ld": "5",
+    "Points": 12,
+    "Unit": "Night Goblin Squig Hopper Mobs",
+    "Troop Type": "Light Cavalry",
+    "Unit Size": "5+",
+    "Special Rules": [
+        "Impact Hits",
+        "Skirmishers",
+        "Loner",
+        "Warband",
+        "Immune To Psychology",
+        "Open Order",
+        "Hatred",
+        "Random Movement"
+    ]
+}

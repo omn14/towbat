@@ -1,0 +1,25 @@
+{
+    "Model": "Common Troll",
+    "M": "6",
+    "WS": "3",
+    "BS": "1",
+    "S": "5",
+    "T": "4",
+    "W": "3",
+    "I": "2",
+    "A": "3",
+    "Ld": "6",
+    "Points": 39,
+    "Unit": "Common Troll Mobs",
+    "Troop Type": "Monstrous Infantry",
+    "Unit Size": "1-9",
+    "Special Rules": [
+        "Armour Bane",
+        "Fear",
+        "Close Order",
+        "Stupidity",
+        "Regeneration",
+        "Flammable",
+        "Motley Crew"
+    ]
+}

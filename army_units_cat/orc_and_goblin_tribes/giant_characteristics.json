@@ -1,0 +1,26 @@
+{
+    "Model": "Giant",
+    "M": "6",
+    "WS": "3",
+    "BS": "1",
+    "S": "6",
+    "T": "7",
+    "W": "6",
+    "I": "2",
+    "A": "*",
+    "Ld": "10",
+    "Points": 200,
+    "Unit": "Giants",
+    "Troop Type": "Behemoth",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Immune To Psychology",
+        "Large Target",
+        "Pick Up And...",
+        "Close Order",
+        "Stomp Attacks",
+        "Terror",
+        "Timmm-Berrr!",
+        "Unbreakable"
+    ]
+}

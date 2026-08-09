@@ -38,10 +38,24 @@ class ArmyListBuilderGUI:
         self.show_main_menu()
 
     def load_available_units(self):
-        """Load all available units from army_units/<faction>/ JSON files"""
+        """Load available units from the BattleScribe catalogue and army_units/ JSON files."""
         army_units_dir = os.path.join(self.base_dir, 'army_units')
         self.factions = {}
 
+        # Primary source: BattleScribe catalogues (all factions).
+        try:
+            from battlescribe import get_catalogue
+            for unit_name, faction, chars in get_catalogue().iter_models():
+                self.available_units[unit_name] = {
+                    'file': None,
+                    'faction': faction,
+                    'characteristics': chars,
+                }
+                self.factions.setdefault(faction, []).append(unit_name)
+        except Exception as e:
+            print(f"Error loading BattleScribe catalogue: {e}")
+
+        # Secondary source: legacy per-unit JSON files (do not overwrite catalogue).
         for root, _dirs, files in os.walk(army_units_dir):
             for json_file in sorted(files):
                 if not json_file.endswith('_characteristics.json'):
@@ -51,6 +65,8 @@ class ArmyListBuilderGUI:
                     with open(full_path, 'r') as f:
                         data = json.load(f)
                         unit_name = data.get('Model', 'Unknown')
+                        if unit_name in self.available_units:
+                            continue
                         faction = os.path.basename(root).replace('_', ' ').title()
                         self.available_units[unit_name] = {
                             'file': full_path,

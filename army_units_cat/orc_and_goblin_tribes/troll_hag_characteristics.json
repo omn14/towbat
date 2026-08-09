@@ -1,0 +1,31 @@
+{
+    "Model": "Troll Hag",
+    "M": "5",
+    "WS": "3",
+    "BS": "2",
+    "S": "6",
+    "T": "5",
+    "W": "6",
+    "I": "2",
+    "A": "3",
+    "Ld": "8",
+    "Points": 235,
+    "Unit": "Troll Hag",
+    "Troop Type": "Behemoth (character)",
+    "Unit Size": "1",
+    "Special Rules": [
+        "Close Order",
+        "Flammable",
+        "Immune To Psychology",
+        "Indiscriminate Hunger",
+        "Large Target",
+        "Motherly Love",
+        "Regeneration",
+        "Stupidity",
+        "Terror",
+        "Timmm-Berrr!",
+        "Unbreakable",
+        "Stomp Attacks",
+        "Slimy Shanks"
+    ]
+}
