@@ -10,6 +10,7 @@ import os
 import json
 from models import model
 from units import unit
+from battlescribe import slugify, ORG_CATEGORY_ORDER
 import gui_theme as T
 
 
@@ -22,6 +23,7 @@ class ArmyListBuilderGUI:
         self.points_budget = 2000
         self.gui_elements = []
         self.selected_army_idx = None
+        self.selected_faction = None
 
         # Sub-element lists for selective panel refresh
         self._middle_panel_elements = []
@@ -95,6 +97,20 @@ class ArmyListBuilderGUI:
         """Return remaining points in the budget."""
         return self.points_budget - self._army_total_pts()
 
+    def _infer_faction(self, army_list) -> str | None:
+        """Return the faction of a loaded army as a real faction key, or None."""
+        for u in army_list:
+            faction = u.get('faction')
+            if not faction:
+                continue
+            # Army files store the faction as a slug; map it to the display key.
+            target = slugify(faction)
+            for key in self.factions:
+                if slugify(key) == target:
+                    return key
+            return faction
+        return None
+
     def clear_screen(self):
         """Remove all GUI elements"""
         for element in self.gui_elements:
@@ -166,10 +182,11 @@ class ArmyListBuilderGUI:
         self.gui_elements.append(budget_info)
 
         button_data = [
-            ("Build Army",         self.show_army_builder,  0.22, T.BTN_GREEN),
-            ("Set Points Budget",  self.show_budget_screen, 0.04, T.BTN_NEUTRAL),
-            ("Save Army List",     self.show_save_screen,  -0.14, T.BTN_NEUTRAL),
-            ("Load Army List",     self.show_load_screen,  -0.32, T.BTN_NEUTRAL),
+            ("Create New Army",    self.create_new_army,    0.30, T.BTN_GREEN),
+            ("Edit Army",          self.edit_army,          0.14, T.BTN_NEUTRAL),
+            ("Set Points Budget",  self.show_budget_screen, -0.02, T.BTN_NEUTRAL),
+            ("Save Army List",     self.show_save_screen,  -0.18, T.BTN_NEUTRAL),
+            ("Load Army List",     self.show_load_screen,  -0.34, T.BTN_NEUTRAL),
             ("Exit List Builder",  self.exit_builder,      -0.50, T.BTN_RED),
         ]
 
@@ -181,10 +198,119 @@ class ArmyListBuilderGUI:
                 frameColor=color, relief=DGG.FLAT, borderWidth=(0.015, 0.015))
             self.gui_elements.append(btn)
 
+    # ─── Faction Selection ────────────────────────────────────────────
+
+    def create_new_army(self):
+        """Start a fresh army from scratch, choosing a faction first."""
+        self.army_list = []
+        self.selected_faction = None
+        self.selected_army_idx = None
+        self.show_faction_select()
+
+    def edit_army(self):
+        """Open the builder for the current army, skipping faction select."""
+        if not self.selected_faction:
+            self.selected_faction = self._infer_faction(self.army_list)
+        if not self.selected_faction:
+            # No faction context yet (empty army) — a faction must be chosen.
+            self.show_faction_select()
+            return
+        self.show_army_builder()
+
+    def show_faction_select(self):
+        """Choose which faction to build an army from before entering the builder."""
+        # Changing faction after units have been added would create a mixed
+        # list, so require an empty roster (or a matching faction) to proceed.
+        self.clear_screen()
+        self.current_screen = "faction_select"
+
+        bg_frame = DirectFrame(
+            frameSize=(-1.2, 1.2, -0.95, 0.95),
+            frameColor=(1, 1, 1, 1),
+            pos=(0, 0, 0), relief=DGG.FLAT,
+            frameTexture=T.TEX_PARCHMENT)
+        bg_frame.setTransparency(TransparencyAttrib.MAlpha)
+        self.gui_elements.append(bg_frame)
+
+        title = OnscreenText(
+            font=self.font,
+            text="CHOOSE A FACTION", pos=(0, 0.85), scale=0.11,
+            fg=T.GOLD, align=TextNode.ACenter, mayChange=False)
+        self.gui_elements.append(title)
+
+        line_frame = DirectFrame(
+            frameSize=(-0.8, 0.8, -0.005, 0.005),
+            frameColor=T.SEPARATOR, pos=(0, 0, 0.72))
+        self.gui_elements.append(line_frame)
+
+        if self.army_list:
+            hint = OnscreenText(
+                font=self.font,
+                text=f"Current army: {self.selected_faction or 'mixed'} "
+                     f"({len(self.army_list)} units)",
+                pos=(0, 0.63), scale=0.045, fg=T.INK_FADED,
+                align=TextNode.ACenter, mayChange=False)
+            self.gui_elements.append(hint)
+
+        factions = sorted(self.factions.keys())
+        row_h = 0.09
+        canvas_h = len(factions) * row_h + 0.1
+
+        scroll = DirectScrolledFrame(
+            canvasSize=(-0.7, 0.66, -canvas_h, 0),
+            frameSize=(-0.75, 0.75, -0.62, 0.55),
+            pos=(0, 0, 0),
+            scrollBarWidth=0.04, frameColor=(0, 0, 0, 0),
+            verticalScroll_scrollSize=0.08,
+            verticalScroll_thumb_frameColor=T.BTN_NEUTRAL,
+            verticalScroll_incButton_frameColor=T.PARCHMENT_DARK,
+            verticalScroll_decButton_frameColor=T.PARCHMENT_DARK)
+        self.gui_elements.append(scroll)
+
+        canvas = scroll.getCanvas()
+        y = -0.06
+        for faction in factions:
+            count = len(self.factions[faction])
+            btn = DirectButton(
+                text_font=self.font,
+                text=f"{faction}  ({count} units)", text_scale=0.05,
+                text_align=TextNode.ALeft, text_pos=(-0.66, -0.014),
+                pos=(0, 0, y),
+                command=self._select_faction, extraArgs=[faction],
+                frameSize=(-0.7, 0.66, -0.04, 0.04),
+                frameColor=T.BTN_NEUTRAL, text_fg=T.BTN_TEXT,
+                relief=DGG.FLAT, borderWidth=(0.004, 0.004), parent=canvas)
+            btn.bind(DGG.ENTER, lambda evt, b=btn: b.setColorScale(1.3, 1.3, 1.0, 1))
+            btn.bind(DGG.EXIT,  lambda evt, b=btn: b.setColorScale(1, 1, 1, 1))
+            y -= row_h
+
+        back_btn = DirectButton(
+            text_font=self.font,
+            text="< Menu", text_scale=0.9, scale=0.06,
+            pos=(0, 0, -0.75), command=self.show_main_menu,
+            frameSize=(-2.5, 2.5, -0.7, 1.2), frameColor=T.BTN_RED,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT, borderWidth=(0.012, 0.012))
+        self.gui_elements.append(back_btn)
+
+    def _select_faction(self, faction):
+        """Commit to a faction and open the builder."""
+        if (self.army_list and self.selected_faction
+                and slugify(faction) != slugify(self.selected_faction)):
+            self.show_message(
+                f"Your army already contains {self.selected_faction} units.\n"
+                f"Clear the army before switching to {faction}.",
+                next_command=self.show_faction_select)
+            return
+        self.selected_faction = faction
+        self.show_army_builder()
+
     # ─── Three-Panel Army Builder ─────────────────────────────────────
 
     def show_army_builder(self):
         """Main three-panel army builder screen."""
+        if not self.selected_faction:
+            self.show_faction_select()
+            return
         self.clear_screen()
         self.current_screen = "army_builder"
         self.selected_army_idx = None
@@ -203,7 +329,7 @@ class ArmyListBuilderGUI:
 
         title = OnscreenText(
             font=self.font,
-            text="ARMY BUILDER", pos=(-1.55, 0.90), scale=0.065,
+            text=f"ARMY BUILDER  \u2014  {self.selected_faction}", pos=(-1.55, 0.90), scale=0.055,
             fg=T.GOLD, align=TextNode.ALeft, mayChange=False)
         self.gui_elements.append(title)
 
@@ -253,18 +379,27 @@ class ArmyListBuilderGUI:
     # ── LEFT PANEL: available units ───────────────────────────────────
 
     def _build_left_panel(self):
-        """Scrollable list of all available units grouped by faction."""
+        """Scrollable list of the selected faction's available units."""
         panel_bg = DirectFrame(
             frameSize=(-0.55, 0.55, -0.88, 0.78),
             frameColor=T.PANEL_BG,
             pos=(-1.10, 0, 0), relief=DGG.SUNKEN, borderWidth=(0.008, 0.008))
         self.gui_elements.append(panel_bg)
 
-        # Calculate canvas height
-        total_rows = 0
-        for faction in sorted(self.factions.keys()):
-            total_rows += 1
-            total_rows += len(self.factions[faction])
+        # Only the chosen faction's units may be added to a list.
+        units = self.factions.get(self.selected_faction, [])
+
+        # Group units by army-organisation category (Characters/Core/Special/Rare...).
+        groups = {}
+        for unit_name in units:
+            cat = (self.available_units.get(unit_name, {})
+                   .get('characteristics', {}).get('Category') or 'Other')
+            groups.setdefault(cat, []).append(unit_name)
+        ordered_cats = [c for c in ORG_CATEGORY_ORDER if c in groups]
+        ordered_cats += [c for c in sorted(groups) if c not in ORG_CATEGORY_ORDER]
+
+        # Calculate canvas height (a header row per category + a row per unit)
+        total_rows = sum(1 + len(groups[c]) for c in ordered_cats)
         row_h = 0.08
         canvas_h = total_rows * row_h + 0.15
 
@@ -282,20 +417,20 @@ class ArmyListBuilderGUI:
         canvas = scroll.getCanvas()
         y = -0.04
 
-        for faction in sorted(self.factions.keys()):
-            # Faction header
+        for cat in ordered_cats:
+            # Category header
             DirectFrame(
                 frameSize=(-0.49, 0.45, -0.035, 0.035),
                 frameColor=T.PARCHMENT_DARK,
                 pos=(0, 0, y), parent=canvas)
             DirectLabel(
                 text_font=self.font,
-                text=f"  {faction}", text_scale=0.042, text_align=TextNode.ALeft,
+                text=f"  {cat}", text_scale=0.042, text_align=TextNode.ALeft,
                 pos=(-0.48, 0, y - 0.012), frameColor=(0, 0, 0, 0),
                 text_fg=T.GOLD, parent=canvas)
             y -= row_h
 
-            for unit_name in self.factions[faction]:
+            for unit_name in groups[cat]:
                 pts = self._unit_pts(unit_name)
                 pts_str = f" [{pts}pts]" if pts else ""
 
@@ -728,6 +863,13 @@ class ArmyListBuilderGUI:
     def _confirm_add_unit(self, unit_name, entries):
         """Validate inputs and add the unit to the army."""
         try:
+            unit_faction = self.available_units.get(unit_name, {}).get('faction', '')
+            if self.selected_faction and slugify(unit_faction) != slugify(self.selected_faction):
+                self._show_builder_message(
+                    f"{unit_name} is not a {self.selected_faction} unit.\n"
+                    f"Only {self.selected_faction} units may be added.")
+                return
+
             nmodels = int(entries["Number of Models:"].get())
             files = int(entries["Files (Width):"].get())
             ranks = int(entries["Ranks (Depth):"].get())
@@ -977,6 +1119,7 @@ class ArmyListBuilderGUI:
                 self.army_list = data['units']
             else:
                 self.army_list = data
+            self.selected_faction = self._infer_faction(self.army_list)
             self.show_message(f"Army list loaded from {filename}.json!", self.show_main_menu)
         except Exception as e:
             self.show_message(f"Error loading: {e}")
@@ -994,6 +1137,7 @@ class ArmyListBuilderGUI:
                 self.army_list = data['units']
             else:
                 self.army_list = data
+            self.selected_faction = self._infer_faction(self.army_list)
             print(f"[ListBuilder] Loaded {len(self.army_list)} units from {filepath}")
         except Exception as e:
             print(f"[ListBuilder] Error loading {filepath}: {e}")

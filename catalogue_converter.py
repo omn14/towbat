@@ -44,7 +44,7 @@ def convert_catalogue(cat_path: str, out_dir: str) -> None:
         for key in STAT_KEYS:
             out[key] = record.get(key, "")
         out["Points"] = record.get("Points", 0)
-        for extra in ("Unit", "Troop Type", "Unit Size", "Special Rules"):
+        for extra in ("Unit", "Troop Type", "Unit Size", "Special Rules", "Category"):
             out[extra] = record.get(extra)
         with open(os.path.join(faction_dir, filename), "w", encoding="utf-8") as f:
             json.dump(out, f, indent=4, ensure_ascii=False)

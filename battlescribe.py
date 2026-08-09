@@ -32,6 +32,18 @@ NAME_ALIASES = {
     "orc_boyz": "orc_boy",
 }
 
+# Army-organisation category ids, defined once in the .gst and shared by all
+# factions. Units are assigned one via a primary categoryLink.
+ORG_CATEGORY_BY_ID = {
+    "3ba8-a41e-b6ae-d4ba": "Characters",   # Named Characters
+    "a4cc-15c9-cfae-1b3b": "Characters",
+    "f0e3-2e32-8866-ea32": "Core",
+    "633f-f67a-1b6a-d203": "Special",
+    "2bfe-5863-46fe-d284": "Rare",
+    "5b84-2c3c-869d-3522": "Mercenaries",
+}
+ORG_CATEGORY_ORDER = ["Characters", "Core", "Special", "Rare", "Mercenaries", "Other"]
+
 
 def _tag(elem: ET.Element) -> str:
     """Return an element's local tag name without the namespace prefix."""
@@ -97,6 +109,36 @@ def _first_model_profile_id(model_entry: ET.Element, profiles: dict):
     return None
 
 
+def _index_org_categories(root: ET.Element) -> dict:
+    """Map unit id -> org category via the root entryLinks that assign one."""
+    mapping: dict = {}
+    for link in root.iter(f"{NS}entryLink"):
+        target = link.get("targetId")
+        if not target:
+            continue
+        cats = _direct_child(link, "categoryLinks")
+        if cats is None:
+            continue
+        for cat in cats:
+            cid = cat.get("targetId")
+            if cat.get("primary") == "true" and cid in ORG_CATEGORY_BY_ID:
+                mapping[target] = ORG_CATEGORY_BY_ID[cid]
+                break
+    return mapping
+
+
+def _unit_org_category(unit: ET.Element, org_map: dict) -> str:
+    """Determine a unit's org category from the entryLink map or its own links."""
+    cat = org_map.get(unit.get("id"))
+    if cat:
+        return cat
+    for cat_link in unit.iter(f"{NS}categoryLink"):
+        cid = cat_link.get("targetId")
+        if cat_link.get("primary") == "true" and cid in ORG_CATEGORY_BY_ID:
+            return ORG_CATEGORY_BY_ID[cid]
+    return "Other"
+
+
 def _unit_context(unit: ET.Element) -> dict:
     """Pull troop type, unit size and special-rule names from a unit entry."""
     troop_type = unit_size = None
@@ -139,6 +181,7 @@ def parse_catalogue(cat_path: str):
 
     faction_name = root.get("name", os.path.splitext(os.path.basename(cat_path))[0])
     profiles = _index_model_profiles(root)
+    org_map = _index_org_categories(root)
     records: list = []
 
     for unit in root.iter(f"{NS}selectionEntry"):
@@ -146,6 +189,7 @@ def parse_catalogue(cat_path: str):
             continue
         unit_name = unit.get("name", "Unknown")
         context = _unit_context(unit)
+        category = _unit_org_category(unit, org_map)
 
         for model_entry in unit.iter(f"{NS}selectionEntry"):
             if model_entry.get("type") != "model":
@@ -166,6 +210,7 @@ def parse_catalogue(cat_path: str):
             record["Troop Type"] = context["Troop Type"]
             record["Unit Size"] = context["Unit Size"]
             record["Special Rules"] = list(context["Special Rules"])
+            record["Category"] = category
             record["Faction"] = faction_name
             records.append(record)
 

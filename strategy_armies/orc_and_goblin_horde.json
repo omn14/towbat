@@ -1,0 +1,50 @@
+{
+    "budget": 500,
+    "units": [
+        {
+            "name": "Black Orc",
+            "faction": "orc_and_goblin_tribes",
+            "role": "center_hammer",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 120
+        },
+        {
+            "name": "Orc Boyz",
+            "faction": "orc_and_goblin_tribes",
+            "role": "center_line",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "points_cost": 75
+        },
+        {
+            "name": "Orc Boyz",
+            "faction": "orc_and_goblin_tribes",
+            "role": "center_line",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "points_cost": 75
+        },
+        {
+            "name": "Night Goblin",
+            "faction": "orc_and_goblin_tribes",
+            "role": "screen",
+            "nmodels": 20,
+            "files": 5,
+            "ranks": 4,
+            "points_cost": 60
+        },
+        {
+            "name": "Night Goblin",
+            "faction": "orc_and_goblin_tribes",
+            "role": "screen",
+            "nmodels": 20,
+            "files": 5,
+            "ranks": 4,
+            "points_cost": 60
+        }
+    ]
+}

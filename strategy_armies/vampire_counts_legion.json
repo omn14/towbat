@@ -1,0 +1,59 @@
+{
+    "budget": 500,
+    "units": [
+        {
+            "name": "Grave Guard",
+            "faction": "vampire_counts",
+            "role": "elite_infantry",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 110
+        },
+        {
+            "name": "Skeleton Warrior",
+            "faction": "vampire_counts",
+            "role": "line_infantry",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "points_cost": 60
+        },
+        {
+            "name": "Skeleton Warrior",
+            "faction": "vampire_counts",
+            "role": "line_infantry",
+            "nmodels": 15,
+            "files": 5,
+            "ranks": 3,
+            "points_cost": 60
+        },
+        {
+            "name": "Crypt Ghoul",
+            "faction": "vampire_counts",
+            "role": "flank_infantry",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 90
+        },
+        {
+            "name": "Dire Wolf",
+            "faction": "vampire_counts",
+            "role": "fast_hunter",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 80
+        },
+        {
+            "name": "Zombie",
+            "faction": "vampire_counts",
+            "role": "screen",
+            "nmodels": 20,
+            "files": 5,
+            "ranks": 4,
+            "points_cost": 60
+        }
+    ]
+}
