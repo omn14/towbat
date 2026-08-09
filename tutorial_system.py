@@ -523,7 +523,7 @@ class TutorialManager:
             command=self._on_next_hint_click,
             parent=base.aspect2d,
             scale=0.04,
-            pad=(0.5, 0.25),
+            pad=(2.0, 0.6),
         )
         self._next_hint_btn.hide()
         self._hint_queue: list[str] = []
