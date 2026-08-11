@@ -7,6 +7,7 @@ import math
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
 from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole, MATCHUP_TABLE, FLANK_BONUS, REAR_BONUS
+from models import stat_int
 
 # Module-level classifier singleton (caches classifications across calls)
 _classifier = UnitTypeClassifier()
@@ -58,12 +59,12 @@ class GameState:
                 'ranks': unit.unit.ranks,
                 
                 # Key characteristics (for evaluation)
-                'WS': int(unit.unit.model.characteristics.get('WS', 3)),
-                'S': int(unit.unit.model.characteristics.get('S', 3)),
-                'T': int(unit.unit.model.characteristics.get('T', 3)),
-                'A': int(unit.unit.model.characteristics.get('A', 1)),
-                'Ld': int(unit.unit.model.characteristics.get('Ld', 7)),
-                'Points': int(unit.unit.model.characteristics.get('Points', 0)),
+                'WS': stat_int(unit.unit.model.characteristics, 'WS', 3),
+                'S': stat_int(unit.unit.model.characteristics, 'S', 3),
+                'T': stat_int(unit.unit.model.characteristics, 'T', 3),
+                'A': stat_int(unit.unit.model.characteristics, 'A', 1),
+                'Ld': stat_int(unit.unit.model.characteristics, 'Ld', 7),
+                'Points': stat_int(unit.unit.model.characteristics, 'Points', 0),
                 'armor_save': unit.unit.model.armor_save,
                 'charging': unit.unit.model.charging,
                 'ranged' : any(unit.unit.model.weapons.get(weapon).get('tag') == 'ranged' for weapon in unit.unit.model.weapons),
@@ -75,8 +76,8 @@ class GameState:
                 'has_mount': any(r.get('tag') == 'mount' for r in unit.unit.model.special_rules if isinstance(r, dict)),
                 'is_flying': any('fly' in r.get('name', '').lower() for r in unit.unit.model.special_rules if isinstance(r, dict)),
                 'has_charge_bonus': any(r.get('charge') for r in unit.unit.model.special_rules if isinstance(r, dict)),
-                'M': int(unit.unit.model.characteristics.get('M', 4)) if unit.unit.model.characteristics.get('M', '4') not in ('-', '0', '') else 4,
-                'W': int(unit.unit.model.characteristics.get('W', 1)),
+                'M': stat_int(unit.unit.model.characteristics, 'M', 4) or 4,
+                'W': stat_int(unit.unit.model.characteristics, 'W', 1),
                     
                 # Combat relationships (store indices instead of references)
                 'isInCombatWith': [u.unitName for u in unit.isInCombatWith],

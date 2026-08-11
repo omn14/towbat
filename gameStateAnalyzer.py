@@ -1,5 +1,6 @@
 from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
 from strategyAdvisor import StrategyAdvisor
+from models import stat_int
 
 
 class GameStateAnalyzer:
@@ -25,10 +26,10 @@ class GameStateAnalyzer:
             model_strength = unit.unit.nmodels
             
             # Multiply by combat effectiveness (WS, S, T, A)
-            ws = int(unit.unit.model.characteristics.get('WS', 3))
-            strength = int(unit.unit.model.characteristics.get('S', 3))
-            toughness = int(unit.unit.model.characteristics.get('T', 3))
-            attacks = int(unit.unit.model.characteristics.get('A', 1))
+            ws = stat_int(unit.unit.model.characteristics, 'WS', 3)
+            strength = stat_int(unit.unit.model.characteristics, 'S', 3)
+            toughness = stat_int(unit.unit.model.characteristics, 'T', 3)
+            attacks = stat_int(unit.unit.model.characteristics, 'A', 1)
             
             combat_multiplier = (ws + strength + toughness + attacks) / 10.0
             
@@ -37,7 +38,7 @@ class GameStateAnalyzer:
             armor_multiplier = 1 + (7 - armor) * 0.1 if armor < 7 else 1.0
             
             # Leadership factor for staying power
-            leadership = int(unit.unit.model.characteristics.get('Ld', 7))
+            leadership = stat_int(unit.unit.model.characteristics, 'Ld', 7)
             ld_multiplier = leadership / 7.0
             
             unit_strength = model_strength * combat_multiplier * armor_multiplier * ld_multiplier
@@ -135,9 +136,9 @@ class GameStateAnalyzer:
             if unit.bodyNP.isEmpty():
                 continue
             
-            attacks = int(unit.unit.model.characteristics.get('A', 1))
-            strength = int(unit.unit.model.characteristics.get('S', 3))
-            ws = int(unit.unit.model.characteristics.get('WS', 3))
+            attacks = stat_int(unit.unit.model.characteristics, 'A', 1)
+            strength = stat_int(unit.unit.model.characteristics, 'S', 3)
+            ws = stat_int(unit.unit.model.characteristics, 'WS', 3)
             
             # Base combat value
             unit_combat = unit.unit.nmodels * attacks * (ws / 3.0) * (strength / 3.0)
