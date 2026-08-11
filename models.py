@@ -186,6 +186,15 @@ class model:
         """Toughness value; mounted units always use the rider's own Toughness."""
         return stat_int(self.characteristics, 'T', default)
 
+    def give_weapon(self, name: str):
+        """Add a weapon by name, resolving its stats from the catalogue."""
+        w = get_catalogue().weapon(name)
+        if w:
+            if w.get('tag') == 'ranged' and not w.get('ranged_strength'):
+                w['ranged_strength'] = stat_int(self.characteristics, 'S', 3)
+            self.weapons[w['name']] = w
+        return w
+
 class BlackOrc(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)

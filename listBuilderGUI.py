@@ -182,12 +182,13 @@ class ArmyListBuilderGUI:
         self.gui_elements.append(budget_info)
 
         button_data = [
-            ("Create New Army",    self.create_new_army,    0.30, T.BTN_GREEN),
-            ("Edit Army",          self.edit_army,          0.14, T.BTN_NEUTRAL),
-            ("Set Points Budget",  self.show_budget_screen, -0.02, T.BTN_NEUTRAL),
-            ("Save Army List",     self.show_save_screen,  -0.18, T.BTN_NEUTRAL),
-            ("Load Army List",     self.show_load_screen,  -0.34, T.BTN_NEUTRAL),
-            ("Exit List Builder",  self.exit_builder,      -0.50, T.BTN_RED),
+            ("Create New Army",    self.create_new_army,    0.36, T.BTN_GREEN),
+            ("Edit Army",          self.edit_army,          0.22, T.BTN_NEUTRAL),
+            ("Set Points Budget",  self.show_budget_screen, 0.08, T.BTN_NEUTRAL),
+            ("Save Army List",     self.show_save_screen,  -0.06, T.BTN_NEUTRAL),
+            ("Load Army List",     self.show_load_screen,  -0.20, T.BTN_NEUTRAL),
+            ("Import Roster",      self.show_import_screen,-0.34, T.BTN_NEUTRAL),
+            ("Exit List Builder",  self.exit_builder,      -0.48, T.BTN_RED),
         ]
 
         for text, command, y_pos, color in button_data:
@@ -197,6 +198,16 @@ class ArmyListBuilderGUI:
                 frameSize=(-4.2, 4.2, -0.6, 1.1), text_fg=T.BTN_TEXT,
                 frameColor=color, relief=DGG.FLAT, borderWidth=(0.015, 0.015))
             self.gui_elements.append(btn)
+
+        # Assign the current army to a player in the running game.
+        for label, pnum, x, color in [("Set P1 Army", 1, -0.42, T.BTN_GREEN),
+                                       ("Set P2 Army", 2, 0.42, T.BTN_NEUTRAL)]:
+            side_btn = DirectButton(
+                text=label, text_font=self.font, text_scale=0.8, scale=0.06,
+                pos=(x, 0, -0.66), command=self._set_army_for_player, extraArgs=[pnum],
+                frameSize=(-3.0, 3.0, -0.6, 1.1), text_fg=T.BTN_TEXT,
+                frameColor=color, relief=DGG.FLAT, borderWidth=(0.012, 0.012))
+            self.gui_elements.append(side_btn)
 
     # ─── Faction Selection ────────────────────────────────────────────
 
@@ -339,6 +350,22 @@ class ArmyListBuilderGUI:
             fg=T.GREEN_BANNER, align=TextNode.ACenter, mayChange=True)
         self.gui_elements.append(self._pts_label)
         self._refresh_pts_label()
+
+        set_p1_btn = DirectButton(
+            text_font=self.font,
+            text="Set P1", text_scale=0.9, scale=0.05,
+            pos=(0.72, 0, 0.90), command=self._set_army_for_player, extraArgs=[1],
+            frameSize=(-2.2, 2.2, -0.6, 1.1), frameColor=T.BTN_GREEN,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT, borderWidth=(0.01, 0.01))
+        self.gui_elements.append(set_p1_btn)
+
+        set_p2_btn = DirectButton(
+            text_font=self.font,
+            text="Set P2", text_scale=0.9, scale=0.05,
+            pos=(1.02, 0, 0.90), command=self._set_army_for_player, extraArgs=[2],
+            frameSize=(-2.2, 2.2, -0.6, 1.1), frameColor=T.BTN_NEUTRAL,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT, borderWidth=(0.01, 0.01))
+        self.gui_elements.append(set_p2_btn)
 
         back_btn = DirectButton(
             text_font=self.font,
@@ -902,6 +929,23 @@ class ArmyListBuilderGUI:
         except ValueError:
             pass
 
+    def _set_army_for_player(self, player_num):
+        """Assign the current army to a player in the running game."""
+        if not self.army_list:
+            self._show_builder_message("Army is empty — add units first.")
+            return
+        game = self.base
+        if not hasattr(game, 'set_player_army'):
+            self._show_builder_message("Game unavailable to set army.")
+            return
+        try:
+            game.set_player_army(list(self.army_list), player_num, budget=self.points_budget)
+        except Exception as e:
+            self._show_builder_message(f"Failed to set P{player_num} army:\n{e}")
+            return
+        self._show_builder_message(
+            f"Player {player_num} army set ({len(self.army_list)} units).")
+
     def _show_builder_message(self, text):
         """Show a brief message overlay on top of the builder screen."""
         self._clear_popup()
@@ -1096,7 +1140,86 @@ class ArmyListBuilderGUI:
             relief=DGG.FLAT
         )
         self.gui_elements.append(cancel_btn)
-    
+
+    def show_import_screen(self):
+        """Show screen for importing a NewRecruit/BattleScribe roster export."""
+        self.clear_screen()
+        self.current_screen = "import"
+
+        title = OnscreenText(
+            font=self.font,
+            text="IMPORT ROSTER", pos=(0, 0.7), scale=0.1,
+            fg=T.GOLD, align=TextNode.ACenter)
+        self.gui_elements.append(title)
+
+        hint = OnscreenText(
+            font=self.font,
+            text="Import a NewRecruit / BattleScribe roster (.json)",
+            pos=(0, 0.52), scale=0.045, fg=T.INK_FADED, align=TextNode.ACenter)
+        self.gui_elements.append(hint)
+
+        filename_label = OnscreenText(
+            font=self.font,
+            text="Roster filename:", pos=(0, 0.35), scale=0.06,
+            fg=T.CREAM, align=TextNode.ACenter)
+        self.gui_elements.append(filename_label)
+
+        filename_entry = DirectEntry(
+            text_font=self.font,
+            text="", scale=0.07, pos=(-0.45, 0, 0.18),
+            initialText="strategy_armies/Bm.json", numLines=1, width=13,
+            frameColor=T.ENTRY_BG, text_fg=T.ENTRY_FG)
+        self.gui_elements.append(filename_entry)
+
+        import_btn = DirectButton(
+            text_font=self.font,
+            text="Import", scale=0.08, pos=(0, 0, -0.1),
+            command=self.import_roster_file, extraArgs=[filename_entry],
+            frameSize=(-2, 2, -0.5, 1), frameColor=T.BTN_GREEN,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT)
+        self.gui_elements.append(import_btn)
+
+        cancel_btn = DirectButton(
+            text_font=self.font,
+            text="Cancel", scale=0.07, pos=(0, 0, -0.4),
+            command=self.show_main_menu,
+            frameSize=(-2, 2, -0.5, 1), frameColor=T.BTN_RED,
+            text_fg=T.BTN_TEXT, relief=DGG.FLAT)
+        self.gui_elements.append(cancel_btn)
+
+    def import_roster_file(self, filename_entry):
+        """Convert a roster export into the current army list."""
+        name = filename_entry.get().strip()
+        if not name:
+            self.show_message("Please enter a filename!")
+            return
+
+        candidates = [
+            name, f"{name}.json",
+            os.path.join(self.base_dir, name), os.path.join(self.base_dir, f"{name}.json"),
+            os.path.join(self.base_dir, "strategy_armies", name),
+            os.path.join(self.base_dir, "strategy_armies", f"{name}.json"),
+        ]
+        path = next((p for p in candidates if os.path.isfile(p)), None)
+        if not path:
+            self.show_message(f"Roster '{name}' not found!")
+            return
+
+        try:
+            from roster_importer import import_roster
+            army = import_roster(path)
+        except Exception as e:
+            self.show_message(f"Import failed: {e}")
+            return
+
+        self.army_list = army.get("units", [])
+        self.points_budget = army.get("budget", self.points_budget)
+        self.selected_faction = self._infer_faction(self.army_list)
+        self.show_message(
+            f"Imported {len(self.army_list)} units "
+            f"({self.selected_faction or army.get('faction', '')}).",
+            self.show_main_menu)
+
     def load_army_list_file(self, filename_entry):
         """Load an army list from a file"""
         filename = filename_entry.get().strip()

@@ -176,8 +176,52 @@ def _unit_context(unit: ET.Element) -> dict:
     }
 
 
+def weapon_from_profile(name: str, chars: dict) -> dict:
+    """Convert a BattleScribe Weapon profile (R/S/AP/Special Rules) into the
+    game's weapon dict. Ranged weapons get range/strength/AP/shots/volley."""
+    rng = (chars.get("R") or "").strip()
+    strength = (chars.get("S") or "").strip()
+    ap = (chars.get("AP") or "").strip()
+    rules_txt = (chars.get("Special Rules") or "").strip()
+    rules = [r.strip() for r in rules_txt.split(",") if r.strip() and r.strip() != "-"]
+
+    is_ranged = rng.lower() not in ("combat", "", "-")
+    weapon = {"name": name, "tag": "ranged" if is_ranged else "combat", "special_rules": rules}
+    if is_ranged:
+        m = re.search(r"\d+", rng)
+        weapon["ranged_range"] = int(m.group()) if m else 0
+        # Numeric Strength, else None meaning 'use the wielder's Strength'.
+        weapon["ranged_strength"] = int(strength) if strength.isdigit() else None
+        # Catalogue AP is a save modifier ('-1'); game penetration is its negation.
+        ap_m = re.search(r"-?\d+", ap)
+        weapon["ranged_AP"] = -int(ap_m.group()) if ap_m else 0
+        shots = 1
+        for r in rules:
+            sm = re.search(r"multiple shots.*?(\d+)", r, re.I)
+            if sm:
+                shots = int(sm.group(1))
+        weapon["ranged_shots"] = shots
+        weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
+    return weapon
+
+
+def _weapon_profiles(root: ET.Element) -> list:
+    """Return game weapon dicts for every Weapon profile (namespace-agnostic,
+    so it works for both .cat catalogues and the .gst game system)."""
+    out: list = []
+    for profile in root.iter():
+        if _tag(profile) != "profile" or profile.get("typeName") != "Weapon":
+            continue
+        chars = {}
+        for c in profile.iter():
+            if _tag(c) == "characteristic":
+                chars[c.get("name")] = (c.text or "").strip()
+        out.append(weapon_from_profile(profile.get("name", "Weapon"), chars))
+    return out
+
+
 def parse_catalogue_full(cat_path: str):
-    """Parse one catalogue into (faction, unit_records, standalone_profile_records)."""
+    """Parse one catalogue into (faction, unit_records, profile_records, weapons)."""
     tree = ET.parse(cat_path)
     root = tree.getroot()
 
@@ -234,12 +278,19 @@ def parse_catalogue_full(cat_path: str):
         rec["Faction"] = faction_name
         profile_records.append(rec)
 
-    return faction_name, records, profile_records
+    weapons = _weapon_profiles(root)
+    return faction_name, records, profile_records, weapons
+
+
+def parse_weapons(cat_path: str) -> list:
+    """Parse a .cat or .gst file and return its game weapon dicts."""
+    root = ET.parse(cat_path).getroot()
+    return _weapon_profiles(root)
 
 
 def parse_catalogue(cat_path: str):
     """Parse one catalogue into (faction_name, list_of_unit_model_records)."""
-    faction_name, records, _profiles = parse_catalogue_full(cat_path)
+    faction_name, records, _profiles, _weapons = parse_catalogue_full(cat_path)
     return faction_name, records
 
 
@@ -251,6 +302,8 @@ class Catalogue:
         self.by_slug: dict = {}
         # Fallback index of every model profile (includes mounts) by slug.
         self.all_by_slug: dict = {}
+        # Weapon profiles (from every .cat and the .gst) by slug.
+        self.weapons_by_slug: dict = {}
         self.factions: dict = {}
         self._load()
 
@@ -259,11 +312,19 @@ class Catalogue:
             print(f"[battlescribe] catalogue directory not found: {self.cat_dir}")
             return
         for filename in sorted(os.listdir(self.cat_dir)):
+            path = os.path.join(self.cat_dir, filename)
+            if filename.endswith(".gst"):
+                # Game system holds the common (shared) weapons.
+                try:
+                    for w in parse_weapons(path):
+                        self.weapons_by_slug.setdefault(slugify(w["name"]), w)
+                except ET.ParseError as exc:
+                    print(f"[battlescribe] failed to parse {filename}: {exc}")
+                continue
             if not filename.endswith(".cat"):
                 continue
-            path = os.path.join(self.cat_dir, filename)
             try:
-                faction_name, records, profile_records = parse_catalogue_full(path)
+                faction_name, records, profile_records, weapons = parse_catalogue_full(path)
             except ET.ParseError as exc:
                 print(f"[battlescribe] failed to parse {filename}: {exc}")
                 continue
@@ -276,14 +337,21 @@ class Catalogue:
                 self.factions.setdefault(faction_name, set()).add(record["Model"])
             for record in profile_records:
                 self.all_by_slug.setdefault(slugify(record["Model"]), record)
-        print(f"[battlescribe] loaded {len(self.by_slug)} models "
-              f"across {len(self.factions)} factions")
+            for w in weapons:
+                self.weapons_by_slug.setdefault(slugify(w["name"]), w)
+        print(f"[battlescribe] loaded {len(self.by_slug)} models, "
+              f"{len(self.weapons_by_slug)} weapons across {len(self.factions)} factions")
 
     def characteristics(self, name: str):
         """Return a fresh characteristics dict for a display name, or None."""
         slug = slugify(name)
         slug = NAME_ALIASES.get(slug, slug)
         record = self.by_slug.get(slug) or self.all_by_slug.get(slug)
+        return copy.deepcopy(record) if record else None
+
+    def weapon(self, name: str):
+        """Return a fresh game weapon dict for a weapon name, or None."""
+        record = self.weapons_by_slug.get(slugify(name))
         return copy.deepcopy(record) if record else None
 
     def iter_models(self):

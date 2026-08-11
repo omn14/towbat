@@ -410,7 +410,17 @@ class MyApp(ShowBase):
                 # Attach a data-driven mount to any unit that didn't already get one.
                 if mount_unit is not None and not model_instance.is_mounted():
                     model_instance.attach_mount(mount_unit)
-                
+
+                # Equip data-driven weapons from the army list (e.g. imported rosters).
+                for w in army_unit_data.get('weapons', []):
+                    wdict = dict(w)
+                    if wdict.get('tag') == 'ranged' and not wdict.get('ranged_strength'):
+                        try:
+                            wdict['ranged_strength'] = int(model_instance.characteristics.get('S'))
+                        except (TypeError, ValueError):
+                            wdict['ranged_strength'] = 3
+                    model_instance.weapons[wdict.get('name', 'weapon')] = wdict
+
                 model_instance.armor_save = 7  # Default armor save
                 
                 # Create unit instance
@@ -774,7 +784,7 @@ class MyApp(ShowBase):
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
-                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('range',18)*3/100)
+                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100)
         self.checkArrowsTerrain()
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.ground.setShaderInput("isActive", True)
@@ -1654,6 +1664,43 @@ class MyApp(ShowBase):
             for unit in units:
                 unit.bodyNP.setH(180)
         return units
+
+    def set_player_army(self, army_list, player_num, budget=2000):
+        """Replace a player's on-table army with a new list (from the list builder)."""
+        path = f"strategy_armies/player{player_num}_army.json"
+        with open(path, 'w') as f:
+            json.dump({'budget': budget, 'units': army_list}, f, indent=4)
+
+        # Tear down existing units for this player. Mutate the list in place so
+        # references held elsewhere (e.g. the AI) stay valid.
+        player_units = self.player1Units if player_num == 1 else self.player2Units
+        for u in list(player_units):
+            try:
+                self.world.removeRigidBody(u.bodyNP.node())
+            except Exception:
+                pass
+            try:
+                u.model.removeNode()
+                u.bodyNP.removeNode()
+            except Exception:
+                pass
+            if u in self.units:
+                self.units.remove(u)
+        player_units.clear()
+
+        # Load the new army (load_army_from_json appends in place).
+        if player_num == 1:
+            self.p1army = path
+            self.load_player1_army(path)
+        else:
+            self.p2army = path
+            self.load_player2_army(path)
+
+        # Keep the active unit and its binding valid.
+        if self.player1Units:
+            self.unitToMove = self.player1Units[0]
+            self.accept('mouse3', self.moveUnit, [self.unitToMove])
+        return len(player_units)
 
     # ─── Tutorial ─────────────────────────────────────────────────────
 

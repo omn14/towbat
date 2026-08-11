@@ -11,7 +11,21 @@
             "points_cost": 126,
             "category": "Characters",
             "mounted": true,
-            "mount": "Demigryph"
+            "mount": "Demigryph",
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                },
+                {
+                    "name": "Lance",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)"
+                    ]
+                }
+            ]
         },
         {
             "name": "Master Mage",
@@ -22,7 +36,14 @@
             "points_cost": 120,
             "category": "Characters",
             "mounted": false,
-            "mount": null
+            "mount": null,
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                }
+            ]
         },
         {
             "name": "State Missile Trooper",
@@ -33,7 +54,27 @@
             "points_cost": 64,
             "category": "Core",
             "mounted": false,
-            "mount": null
+            "mount": null,
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                },
+                {
+                    "name": "Handgun",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Ponderous"
+                    ],
+                    "ranged_range": 24,
+                    "ranged_strength": 4,
+                    "ranged_AP": 1,
+                    "ranged_shots": 1,
+                    "volley_fire": false
+                }
+            ]
         },
         {
             "name": "State Trooper",
@@ -44,7 +85,22 @@
             "points_cost": 130,
             "category": "Core",
             "mounted": false,
-            "mount": null
+            "mount": null,
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                },
+                {
+                    "name": "Halberd",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Requires Two Hands"
+                    ]
+                }
+            ]
         },
         {
             "name": "Demigryph Knight",
@@ -55,7 +111,21 @@
             "points_cost": 169,
             "category": "Special",
             "mounted": true,
-            "mount": "Demigryph"
+            "mount": "Demigryph",
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                },
+                {
+                    "name": "Lance",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)"
+                    ]
+                }
+            ]
         },
         {
             "name": "War Wagon",
@@ -66,7 +136,78 @@
             "points_cost": 140,
             "category": "Rare",
             "mounted": true,
-            "mount": "Barded Warhorse"
+            "mount": "Barded Warhorse",
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": []
+                },
+                {
+                    "name": "Blunderbuss",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Multiple Shots (D3)",
+                        "Volley Fire"
+                    ],
+                    "ranged_range": 12,
+                    "ranged_strength": 3,
+                    "ranged_AP": 1,
+                    "ranged_shots": 3,
+                    "volley_fire": true
+                },
+                {
+                    "name": "Ball & chain",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Requires Two Hands",
+                        "Strikes Last"
+                    ]
+                },
+                {
+                    "name": "Long rifle",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Cumbersome"
+                    ],
+                    "ranged_range": 36,
+                    "ranged_strength": 4,
+                    "ranged_AP": 1,
+                    "ranged_shots": 1,
+                    "volley_fire": false
+                },
+                {
+                    "name": "Hooked halberd",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (2)",
+                        "Requires Two Hands"
+                    ]
+                },
+                {
+                    "name": "Repeating rifle",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Multiple Shots (3)"
+                    ],
+                    "ranged_range": 24,
+                    "ranged_strength": 4,
+                    "ranged_AP": 1,
+                    "ranged_shots": 3,
+                    "volley_fire": false
+                },
+                {
+                    "name": "Man-catcher",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Killing Blow",
+                        "Requires Two Hands"
+                    ]
+                }
+            ]
         }
     ]
 }

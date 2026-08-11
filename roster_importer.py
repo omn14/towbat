@@ -18,7 +18,7 @@ import json
 import math
 import os
 
-from battlescribe import slugify
+from battlescribe import slugify, weapon_from_profile
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FILES = 5  # default frontage when the roster has no formation info
@@ -75,6 +75,19 @@ def _mount_name(selection: dict):
     return None
 
 
+def _collect_weapons(selection: dict, out: list) -> None:
+    """Gather weapon upgrades from a unit, skipping mount subtrees."""
+    for sub in selection.get("selections", []):
+        if sub.get("type") == "mount":
+            continue
+        for p in sub.get("profiles", []):
+            if p.get("typeName") == "Weapon":
+                chars = {c["name"]: c.get("$text", "") for c in p.get("characteristics", [])}
+                out.append(weapon_from_profile(sub.get("name", "Weapon"), chars))
+                break
+        _collect_weapons(sub, out)
+
+
 def _primary_category(unit: dict):
     for cat in unit.get("categories", []):
         if cat.get("primary"):
@@ -103,6 +116,11 @@ def import_roster(path: str) -> dict:
             files = min(DEFAULT_FILES, nmodels)
             ranks = math.ceil(nmodels / files)
             mount = _mount_name(unit)
+            weapons: list = []
+            _collect_weapons(unit, weapons)
+            # De-duplicate by weapon name (keep first occurrence).
+            seen: set = set()
+            weapons = [w for w in weapons if not (w["name"] in seen or seen.add(w["name"]))]
             units.append({
                 "name": _primary_model_name(unit),
                 "faction": faction_slug,
@@ -113,6 +131,7 @@ def import_roster(path: str) -> dict:
                 "category": _primary_category(unit),
                 "mounted": bool(mount),
                 "mount": mount,
+                "weapons": weapons,
             })
 
     return {"budget": limit or total, "faction": faction_slug, "units": units}
