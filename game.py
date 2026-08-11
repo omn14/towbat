@@ -317,6 +317,8 @@ class MyApp(ShowBase):
             'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
             'Black Orc':                    {'path': 'models/goblin_archers.bam',   'class': BlackOrc,               'color': (0, 1, 0, 1)},
             'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
+            'Boar Boy':                     {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
+            'Wolf Rider':                   {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
             'Troll':                        {'path': 'models/goblin_archers.bam',   'class': Troll,                  'color': (0, 1, 0, 1)},
             # ── Vampire Counts ─────────────────────────────────────────
             'Black Knight':                 {'path': 'models/black_knights.bam',    'class': BlackKnight,            'color': (0, 0, 1, 1)},
@@ -388,10 +390,12 @@ class MyApp(ShowBase):
                         'Jade Lancer':                 'Cathayan Warhorse',
                         'Mounted Knight of the Realm': 'Bretonnian Warhorse',
                         'Goblin Wolf Rider':           'Giant Wolf',
+                        'Wolf Rider':                  'Giant Wolf',
                         'Black Knight':                'Skeletal Steed',
                         'Pegasus Knight':              'Barded Pegasus',
                         'Grail Knight':                'Bretonnian Warhorse',
                         'Orc Boar Boy':                'War Boar',
+                        'Boar Boy':                    'War Boar',
                         'Cold One Rider':              'Cold One',
                     }
                     mount_name = mount_name_map.get(unit_name, f"{unit_name} Mount")

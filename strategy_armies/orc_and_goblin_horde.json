@@ -45,6 +45,15 @@
             "files": 5,
             "ranks": 4,
             "points_cost": 60
+        },
+        {
+            "name": "Wolf Rider",
+            "faction": "Orc and Goblin Tribes",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 100,
+            "json_file": null
         }
     ]
 }
