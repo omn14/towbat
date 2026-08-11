@@ -187,6 +187,11 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
 
     is_ranged = rng.lower() not in ("combat", "", "-")
     weapon = {"name": name, "tag": "ranged" if is_ranged else "combat", "special_rules": rules}
+    # Raw profile values for display (S like 'S+2', AP like '-2').
+    if strength and strength != "S":
+        weapon["strength"] = strength
+    if ap and ap != "-":
+        weapon["ap"] = ap
     if is_ranged:
         m = re.search(r"\d+", rng)
         weapon["ranged_range"] = int(m.group()) if m else 0

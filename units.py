@@ -108,7 +108,7 @@ class unitGraphics(FSM):
         #self.text_node = self.model.attachNewNode(self.text)
         self.text_node = self.bodyNP.attachNewNode(self.text)
         self.text_node.setPos(self.unitWidth/3, self.unitHeight*2, 5)
-        self.text_node.setScale(0.1)
+        self.text_node.setScale(0.06)
         self.text_node.setBillboardPointEye(-5, fixed_depth=True)
         self.text_node.setBin("fixed", 0)
         self.text_node.setDepthWrite(False)
@@ -154,6 +154,39 @@ class unitGraphics(FSM):
         val_row = "".join(val_parts)
         return header + hdr_row + "\n" + val_row + "\n"
 
+    def _weapon_desc(self, w: dict) -> str:
+        """One-line weapon summary: name + stats (+ weapon special rules)."""
+        name = w.get('name', 'weapon')
+        if w.get('tag') == 'ranged':
+            stats = (f"R{w.get('ranged_range', '-')} S{w.get('ranged_strength', '-')} "
+                     f"AP{w.get('ranged_AP', 0)} x{w.get('ranged_shots', 1)}")
+        else:
+            parts = []
+            if w.get('strength'):
+                parts.append(f"S:{w['strength']}")
+            if w.get('ap'):
+                parts.append(f"AP:{w['ap']}")
+            stats = " ".join(parts) if parts else "Combat"
+        rules = w.get('special_rules') or []
+        if rules:
+            stats += " [" + ", ".join(rules) + "]"
+        return f"  {name}: {stats}"
+
+    def _wrap(self, items, width: int) -> str:
+        """Comma-join items and word-wrap to the given display width."""
+        words = ", ".join(items).split(", ")
+        wrapped, cur = "", ""
+        for word in words:
+            candidate = (cur + ", " + word) if cur else word
+            if len(candidate) <= width:
+                cur = candidate
+            else:
+                wrapped += cur + "\n"
+                cur = word
+        if cur:
+            wrapped += cur + "\n"
+        return wrapped
+
     def updateTextNode(self):
         sep = "-" * (self._COL_W * len(self._STAT_KEYS))
         row = f"[ {self.unitName} ]\n"
@@ -183,28 +216,33 @@ class unitGraphics(FSM):
                     row += sep + "\n"
                     row += self._stat_table(mount_name, mount_ch)
 
-            # Special rules — all non-mount entries, comma-separated, word-wrapped
-            special_names = [
-                r['name'] for r in m.special_rules
-                if r.get('name') and r.get('tag') != 'mount'
-            ]
-            if special_names:
+            # Weapons — each weapon with its stats and weapon special rules.
+            weapon_ids = {id(w) for w in m.weapons.values()}
+            weapon_lines, seen_w = [], set()
+            for w in m.weapons.values():
+                key = (w.get('name') or '').lower()
+                if key in seen_w:
+                    continue
+                seen_w.add(key)
+                weapon_lines.append(self._weapon_desc(w))
+            if weapon_lines:
                 row += sep + "\n"
-                line = ", ".join(special_names)
-                table_w = self._COL_W * len(self._STAT_KEYS)
-                # Word-wrap to table width
-                words = line.split(", ")
-                wrapped, cur = "", ""
-                for word in words:
-                    candidate = (cur + ", " + word) if cur else word
-                    if len(candidate) <= table_w:
-                        cur = candidate
-                    else:
-                        wrapped += cur + "\n"
-                        cur = word
-                if cur:
-                    wrapped += cur + "\n"
-                row += wrapped
+                row += "Weapons:\n"
+                row += "\n".join(weapon_lines) + "\n"
+
+            # Special rules — unit rules from the catalogue plus any coded rules,
+            # excluding the weapons (listed above) and the mount.
+            rule_names = list(m.characteristics.get('Special Rules', []) or [])
+            for r in m.special_rules:
+                if not isinstance(r, dict) or id(r) in weapon_ids or r.get('tag') == 'mount':
+                    continue
+                name = r.get('name')
+                if name and name not in rule_names:
+                    rule_names.append(name)
+            if rule_names:
+                row += sep + "\n"
+                row += "Special Rules:\n"
+                row += self._wrap(rule_names, self._COL_W * len(self._STAT_KEYS))
 
         row += sep + "\n"
 

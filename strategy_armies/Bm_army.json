@@ -23,7 +23,9 @@
                     "tag": "combat",
                     "special_rules": [
                         "Armour Bane (1)"
-                    ]
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2"
                 }
             ]
         },
@@ -68,6 +70,8 @@
                         "Armour Bane (1)",
                         "Ponderous"
                     ],
+                    "strength": "4",
+                    "ap": "-1",
                     "ranged_range": 24,
                     "ranged_strength": 4,
                     "ranged_AP": 1,
@@ -98,7 +102,9 @@
                     "special_rules": [
                         "Armour Bane (1)",
                         "Requires Two Hands"
-                    ]
+                    ],
+                    "strength": "S+1",
+                    "ap": "-1 (-2)"
                 }
             ]
         },
@@ -123,7 +129,9 @@
                     "tag": "combat",
                     "special_rules": [
                         "Armour Bane (1)"
-                    ]
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2"
                 }
             ]
         },
@@ -150,6 +158,8 @@
                         "Multiple Shots (D3)",
                         "Volley Fire"
                     ],
+                    "strength": "3",
+                    "ap": "-1",
                     "ranged_range": 12,
                     "ranged_strength": 3,
                     "ranged_AP": 1,
@@ -163,7 +173,9 @@
                         "Armour Bane (1)",
                         "Requires Two Hands",
                         "Strikes Last"
-                    ]
+                    ],
+                    "strength": "S+3",
+                    "ap": "-2"
                 },
                 {
                     "name": "Long rifle",
@@ -172,6 +184,8 @@
                         "Armour Bane (1)",
                         "Cumbersome"
                     ],
+                    "strength": "4",
+                    "ap": "-1",
                     "ranged_range": 36,
                     "ranged_strength": 4,
                     "ranged_AP": 1,
@@ -184,7 +198,9 @@
                     "special_rules": [
                         "Armour Bane (2)",
                         "Requires Two Hands"
-                    ]
+                    ],
+                    "strength": "S+1",
+                    "ap": "-2"
                 },
                 {
                     "name": "Repeating rifle",
@@ -193,6 +209,8 @@
                         "Armour Bane (1)",
                         "Multiple Shots (3)"
                     ],
+                    "strength": "4",
+                    "ap": "-1",
                     "ranged_range": 24,
                     "ranged_strength": 4,
                     "ranged_AP": 1,
@@ -205,7 +223,8 @@
                     "special_rules": [
                         "Killing Blow",
                         "Requires Two Hands"
-                    ]
+                    ],
+                    "ap": "-1"
                 }
             ]
         }
