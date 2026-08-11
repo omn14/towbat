@@ -16,7 +16,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 },
                 {
                     "name": "Lance",
@@ -26,6 +27,7 @@
                     ],
                     "strength": "S+2",
                     "ap": "-2",
+                    "notes": "Models whose troop type is 'cavalry' or 'monster' only. A lance can only be used during a turn in which the wielder charged, and its Strength and Armour Piercing modifiers apply only against enemy models the wielder charged that turn.",
                     "strength_bonus": 2,
                     "ap_penetration": 2,
                     "charge_only": true
@@ -46,7 +48,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 }
             ]
         },
@@ -64,7 +67,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 },
                 {
                     "name": "Handgun",
@@ -75,6 +79,7 @@
                     ],
                     "strength": "4",
                     "ap": "-1",
+                    "notes": "-",
                     "ranged_range": 24,
                     "ranged_strength": 4,
                     "ranged_AP": 1,
@@ -97,7 +102,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 },
                 {
                     "name": "Halberd",
@@ -108,8 +114,10 @@
                     ],
                     "strength": "S+1",
                     "ap": "-1 (-2)",
+                    "notes": "A halberd has an AP of -2 against enemy models the wielder charged this turn.",
                     "strength_bonus": 1,
-                    "ap_penetration": 1
+                    "ap_penetration": 1,
+                    "ap_penetration_charge": 2
                 }
             ]
         },
@@ -127,7 +135,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 },
                 {
                     "name": "Lance",
@@ -137,6 +146,7 @@
                     ],
                     "strength": "S+2",
                     "ap": "-2",
+                    "notes": "Models whose troop type is 'cavalry' or 'monster' only. A lance can only be used during a turn in which the wielder charged, and its Strength and Armour Piercing modifiers apply only against enemy models the wielder charged that turn.",
                     "strength_bonus": 2,
                     "ap_penetration": 2,
                     "charge_only": true
@@ -157,7 +167,8 @@
                 {
                     "name": "Hand Weapon",
                     "tag": "combat",
-                    "special_rules": []
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 },
                 {
                     "name": "Blunderbuss",
@@ -168,6 +179,7 @@
                     ],
                     "strength": "3",
                     "ap": "-1",
+                    "notes": "A model armed with a blunderbuss suffers no negative modifiers for firing at long range, for using the Multiple Shots (D3) special rule, or whilst making a Stand & Shoot charge reaction.",
                     "ranged_range": 12,
                     "ranged_strength": 3,
                     "ranged_AP": 1,
@@ -196,6 +208,7 @@
                     ],
                     "strength": "4",
                     "ap": "-1",
+                    "notes": "A model armed with a long rifle can target a specific model within its target unit, such as a champion or a character.",
                     "ranged_range": 36,
                     "ranged_strength": 4,
                     "ranged_AP": 1,

@@ -193,6 +193,9 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         weapon["strength"] = strength
     if ap and ap != "-":
         weapon["ap"] = ap
+    # Notes often carry the actual rule (e.g. charge-only modifiers) — keep them.
+    if notes:
+        weapon["notes"] = notes
     if not is_ranged:
         # Combat modifiers: 'S+2' -> +2 Strength; '-2' -> AP 2 penetration.
         sb = re.search(r"S\s*\+\s*(\d+)", strength)
@@ -201,6 +204,10 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         apb = re.search(r"-\s*(\d+)", ap)
         if apb:
             weapon["ap_penetration"] = int(apb.group(1))
+        # A parenthetical AP (e.g. '-1 (-2)') is the value on the charge.
+        apc = re.search(r"\(\s*-\s*(\d+)\s*\)", ap)
+        if apc:
+            weapon["ap_penetration_charge"] = int(apc.group(1))
         # Lance-style weapons apply their modifiers only on the charge.
         low = notes.lower()
         if "charged" in low and "only" in low:

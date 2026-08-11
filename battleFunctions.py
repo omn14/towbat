@@ -4,6 +4,7 @@ from toHitAndToWound import *
 def simulate_attack(model1,model2):
     model1.attack_roll = random.randint(1, 6)
     model1.wound_roll = random.randint(1, 6)
+    natural_wound = model1.wound_roll
     for rule in model1.special_rules:
         if rule.get('to_wound'):
             model1.wound_roll = rule['to_wound'](model1.wound_roll,model1)
@@ -17,6 +18,7 @@ def simulate_attack(model1,model2):
     #print(f"Weapon is ranged: {weaponIsRanged}")
     if not weaponIsRanged: # for to hit modifications
         to_hit_target_roll = to_hit(model1,model2)
+        model1.AP = model1.melee_ap()
         if model1.attack_roll >= to_hit_target_roll:
             hit = True
         else:
@@ -35,6 +37,9 @@ def simulate_attack(model1,model2):
         wound = True
     else:
         wound = False
+    # Armour Bane (X): a natural 6 to wound improves this attack's AP by X.
+    bane = model1.armour_bane_for_attack() if (wound and natural_wound == 6) else 0
+    model1.attack_AP = model1.AP + bane
     return hit, wound
 
 
@@ -55,9 +60,10 @@ def simulate_battle(unit1, unit2,charge: bool):
     # how many attacks
     print(unit1.name, "has", unit1.nmodels, "models", unit1.files, "files,", unit1.ranks, "ranks")
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
+    # Apply the active melee weapon's always-on/charge Strength bonus once.
+    unit1.model.charging = bool(charge)
+    unit1.model.apply_melee_strength()
     if charge:
-        unit1.model.charging = True
-        unit1.model.apply_charge_weapon_bonuses()
         for rule in unit1.model.special_rules:
             if rule.get('charge'):
                 rule['charge'](unit1.model)
@@ -113,7 +119,7 @@ def simulate_battle(unit1, unit2,charge: bool):
             suffered_wounds += 1
         if wound:
             print(unit1.model.AP)
-            if check_armor_save(unit2.model,unit2.model.armor_save, unit1.model.AP):
+            if check_armor_save(unit2.model,unit2.model.armor_save, getattr(unit1.model, 'attack_AP', unit1.model.AP)):
                 saves_made += 1
                 total_wounds -= 1
             else:

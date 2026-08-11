@@ -5,6 +5,7 @@ import requests
 
 import copy
 import os
+import re
 
 from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
 
@@ -30,6 +31,15 @@ def stat_int(characteristics: dict, key: str, default: int = 0) -> int:
         return int(characteristics.get(key))
     except (KeyError, TypeError, ValueError):
         return default
+
+
+def armour_bane_x(rules) -> int:
+    """Return the X from an 'Armour Bane (X)' entry in a rules list, else 0."""
+    for r in rules or []:
+        m = re.search(r"armou?r bane\s*\(?\s*(\d+)", str(r), re.I)
+        if m:
+            return int(m.group(1))
+    return 0
 
 
 class model:
@@ -195,19 +205,54 @@ class model:
             self.weapons[w['name']] = w
         return w
 
-    def apply_charge_weapon_bonuses(self):
-        """On a charge, apply charge-only melee weapon modifiers (e.g. Lance S+2/AP-2).
-        Reset by reset_characteristics() after combat. Returns the weapons applied."""
-        applied = []
+    def melee_strength_bonus(self) -> int:
+        """Strength bonus of the active melee weapon. Charge-only weapons (Lance)
+        count only while charging; others (Halberd, Great Weapon) are always on."""
+        best = 0
         for w in self.weapons.values():
-            if w.get('tag') == 'ranged' or not w.get('charge_only'):
+            if w.get('tag') == 'ranged':
                 continue
-            bonus = w.get('strength_bonus', 0)
-            if bonus:
-                self.characteristics['S'] = str(stat_int(self.characteristics, 'S', 3) + bonus)
-            self.AP += w.get('ap_penetration', 0)
-            applied.append(w.get('name'))
-        return applied
+            if w.get('charge_only') and not self.charging:
+                continue
+            best = max(best, w.get('strength_bonus', 0))
+        return best
+
+    def apply_melee_strength(self):
+        """Add the active melee weapon's Strength bonus once per combat.
+        Reset by reset_characteristics() afterwards."""
+        bonus = self.melee_strength_bonus()
+        if bonus:
+            self.characteristics['S'] = str(stat_int(self.characteristics, 'S', 3) + bonus)
+        return bonus
+
+    def melee_ap(self) -> int:
+        """AP penetration of the active melee weapon; charge value while charging."""
+        best = 0
+        for w in self.weapons.values():
+            if w.get('tag') == 'ranged':
+                continue
+            if w.get('charge_only') and not self.charging:
+                continue
+            ap = w.get('ap_penetration', 0)
+            if self.charging and w.get('ap_penetration_charge') is not None:
+                ap = w['ap_penetration_charge']
+            best = max(best, ap)
+        return best
+
+    def armour_bane_for_attack(self) -> int:
+        """Armour Bane (X) of the weapon used for the current attack.
+        Ranged uses the equipped weapon; melee uses the best applicable weapon
+        (charge-only weapons count only while charging)."""
+        if self.equipedWeapon and self.equipedWeapon.get('tag') == 'ranged':
+            return armour_bane_x(self.equipedWeapon.get('special_rules', []))
+        best = 0
+        for w in self.weapons.values():
+            if w.get('tag') == 'ranged':
+                continue
+            if w.get('charge_only') and not self.charging:
+                continue
+            best = max(best, armour_bane_x(w.get('special_rules', [])))
+        return best
 
 class BlackOrc(model):
     def __init__(self, name: str, url: str):
