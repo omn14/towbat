@@ -1,0 +1,72 @@
+{
+    "budget": 750,
+    "faction": "the_empire_of_man",
+    "units": [
+        {
+            "name": "Captain of the Empire",
+            "faction": "the_empire_of_man",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 126,
+            "category": "Characters",
+            "mounted": true,
+            "mount": "Demigryph"
+        },
+        {
+            "name": "Master Mage",
+            "faction": "the_empire_of_man",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 120,
+            "category": "Characters",
+            "mounted": false,
+            "mount": null
+        },
+        {
+            "name": "State Missile Trooper",
+            "faction": "the_empire_of_man",
+            "nmodels": 8,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 64,
+            "category": "Core",
+            "mounted": false,
+            "mount": null
+        },
+        {
+            "name": "State Trooper",
+            "faction": "the_empire_of_man",
+            "nmodels": 20,
+            "files": 5,
+            "ranks": 4,
+            "points_cost": 130,
+            "category": "Core",
+            "mounted": false,
+            "mount": null
+        },
+        {
+            "name": "Demigryph Knight",
+            "faction": "the_empire_of_man",
+            "nmodels": 2,
+            "files": 2,
+            "ranks": 1,
+            "points_cost": 169,
+            "category": "Special",
+            "mounted": true,
+            "mount": "Demigryph"
+        },
+        {
+            "name": "War Wagon",
+            "faction": "the_empire_of_man",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 140,
+            "category": "Rare",
+            "mounted": true,
+            "mount": "Barded Warhorse"
+        }
+    ]
+}

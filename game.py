@@ -199,7 +199,8 @@ class MyApp(ShowBase):
         #self.load_player2_army("strategy_armies/horde_rush.json")
 
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
-        self.p1army="strategy_armies/orc_and_goblin_horde.json"
+        #self.p1army="strategy_armies/orc_and_goblin_horde.json"
+        self.p1army="strategy_armies/Bm_army.json"
         self.load_player1_army(self.p1army)
         self.load_player2_army("strategy_armies/vampire_counts_legion.json")
 
@@ -361,7 +362,24 @@ class MyApp(ShowBase):
         
         created_units = []
         current_x = start_pos.x
-        
+
+        # Default mount per rider name, used only when the army data doesn't
+        # explicitly name a mount (the roster importer records the chosen one).
+        mount_name_map = {
+            'Jade Lancer':                 'Cathayan Warhorse',
+            'Mounted Knight of the Realm': 'Bretonnian Warhorse',
+            'Goblin Wolf Rider':           'Giant Wolf',
+            'Wolf Rider':                  'Giant Wolf',
+            'Black Knight':                'Skeletal Steed',
+            'Pegasus Knight':              'Barded Pegasus',
+            'Grail Knight':                'Bretonnian Warhorse',
+            'Orc Boar Boy':                'War Boar',
+            'Boar Boy':                    'War Boar',
+            'Cold One Rider':              'Cold One',
+        }
+        mounted_classes = [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
+                           PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]
+
         for idx, army_unit_data in enumerate(army_data):
             unit_name = army_unit_data['name']
             nmodels = army_unit_data['nmodels']
@@ -376,35 +394,22 @@ class MyApp(ShowBase):
             })
             
             try:
-                # Create model instance
                 model_class = model_info['class']
-                if model_class == model:
-                    # Basic model
-                    model_instance = model(unit_name, "")
-                elif model_class in [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
-                                      PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]:
-                    # Mounted units need mount units
-                    # Map rider name to correct mount name so the right
-                    # characteristics JSON is found in army_units/.
-                    mount_name_map = {
-                        'Jade Lancer':                 'Cathayan Warhorse',
-                        'Mounted Knight of the Realm': 'Bretonnian Warhorse',
-                        'Goblin Wolf Rider':           'Giant Wolf',
-                        'Wolf Rider':                  'Giant Wolf',
-                        'Black Knight':                'Skeletal Steed',
-                        'Pegasus Knight':              'Barded Pegasus',
-                        'Grail Knight':                'Bretonnian Warhorse',
-                        'Orc Boar Boy':                'War Boar',
-                        'Boar Boy':                    'War Boar',
-                        'Cold One Rider':              'Cold One',
-                    }
-                    mount_name = mount_name_map.get(unit_name, f"{unit_name} Mount")
+                # Prefer the mount named in the army data; fall back to the default map.
+                mount_name = army_unit_data.get('mount') or mount_name_map.get(unit_name)
+                mount_unit = None
+                if mount_name:
                     mount_model = model(mount_name, "")
                     mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
+
+                if model_class in mounted_classes:
                     model_instance = model_class(unit_name, "", mountUnit=mount_unit)
                 else:
-                    # Other special classes
                     model_instance = model_class(unit_name, "")
+
+                # Attach a data-driven mount to any unit that didn't already get one.
+                if mount_unit is not None and not model_instance.is_mounted():
+                    model_instance.attach_mount(mount_unit)
                 
                 model_instance.armor_save = 7  # Default armor save
                 

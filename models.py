@@ -163,6 +163,15 @@ class model:
                 return getattr(mount, 'model', mount)
         return None
 
+    def attach_mount(self, mount_unit):
+        """Attach (or replace) a mount so this model counts as mounted."""
+        self.special_rules = [r for r in self.special_rules
+                              if not (isinstance(r, dict) and r.get('tag') == 'mount')]
+        self.special_rules.append({'name': 'Mounted',
+                                   'description': 'This model is mounted.',
+                                   'tag': 'mount',
+                                   'mountUnit': mount_unit})
+
     def is_mounted(self) -> bool:
         return self.get_mount() is not None
 

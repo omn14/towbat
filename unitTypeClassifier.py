@@ -30,6 +30,14 @@ from enum import Enum
 from typing import Dict, Any, Optional, Tuple, List
 
 
+def _stat_int(chars, key, default: int = 0) -> int:
+    """Read a numeric stat, returning *default* for missing/non-numeric (e.g. '-')."""
+    try:
+        return int(chars.get(key))
+    except (KeyError, TypeError, ValueError):
+        return default
+
+
 class UnitType(Enum):
     """Main strategic unit archetypes"""
     BASIC = "basic"
@@ -108,17 +116,20 @@ class UnitTypeClassifier:
 
         chars = model_obj.characteristics
         stats = {
-            'WS': int(chars.get('WS', 3)),
-            'BS': int(chars.get('BS', 0)) if chars.get('BS', '0') not in ('-', '') else 0,
-            'S': int(chars.get('S', 3)),
-            'T': int(chars.get('T', 3)),
-            'W': int(chars.get('W', 1)),
-            'I': int(chars.get('I', 3)),
-            'A': int(chars.get('A', 1)),
-            'Ld': int(chars.get('Ld', 7)),
-            'M': int(chars.get('M', 4)) if chars.get('M', '4') not in ('-', '0') else 4,
+            'WS': _stat_int(chars, 'WS', 3),
+            'BS': _stat_int(chars, 'BS', 0),
+            'S': _stat_int(chars, 'S', 3),
+            'T': _stat_int(chars, 'T', 3),
+            'W': _stat_int(chars, 'W', 1),
+            'I': _stat_int(chars, 'I', 3),
+            'A': _stat_int(chars, 'A', 1),
+            'Ld': _stat_int(chars, 'Ld', 7),
+            # Mounted units classify by their mount's Movement.
+            'M': model_obj.get_movement(default=4) if hasattr(model_obj, 'get_movement') else _stat_int(chars, 'M', 4),
             'armor_save': getattr(model_obj, 'armor_save', 7),
         }
+        if stats['M'] <= 0:
+            stats['M'] = 4
 
         # Gather special rule flags
         rules = getattr(model_obj, 'special_rules', [])
@@ -158,15 +169,17 @@ class UnitTypeClassifier:
             return self._cache[name]
 
         stats = {
-            'WS': unit_data.get('WS', 3),
-            'S': unit_data.get('S', 3),
-            'T': unit_data.get('T', 3),
-            'A': unit_data.get('A', 1),
-            'Ld': unit_data.get('Ld', 7),
-            'armor_save': unit_data.get('armor_save', 7),
-            'M': unit_data.get('M', 4),
-            'W': unit_data.get('W', 1),
+            'WS': _stat_int(unit_data, 'WS', 3),
+            'S': _stat_int(unit_data, 'S', 3),
+            'T': _stat_int(unit_data, 'T', 3),
+            'A': _stat_int(unit_data, 'A', 1),
+            'Ld': _stat_int(unit_data, 'Ld', 7),
+            'armor_save': _stat_int(unit_data, 'armor_save', 7),
+            'M': _stat_int(unit_data, 'M', 4),
+            'W': _stat_int(unit_data, 'W', 1),
         }
+        if stats['M'] <= 0:
+            stats['M'] = 4
 
         # Read flags stored on the unit dict (set during GameState.from_game)
         has_unbreakable = unit_data.get('is_unbreakable', False)
