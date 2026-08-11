@@ -196,6 +196,18 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
     # Notes often carry the actual rule (e.g. charge-only modifiers) — keep them.
     if notes:
         weapon["notes"] = notes
+        # Some weapons (e.g. Blunderbuss) ignore certain To Hit penalties.
+        low = notes.lower()
+        if "no negative modifier" in low or "no penalt" in low:
+            ignore = []
+            if "long range" in low:
+                ignore.append("long_range")
+            if "multiple shots" in low:
+                ignore.append("multiple_shots")
+            if "stand & shoot" in low or "stand and shoot" in low:
+                ignore.append("stand_and_shoot")
+            if ignore:
+                weapon["ignore_to_hit_penalties"] = ignore
     if not is_ranged:
         # Combat modifiers: 'S+2' -> +2 Strength; '-2' -> AP 2 penetration.
         sb = re.search(r"S\s*\+\s*(\d+)", strength)
@@ -220,12 +232,16 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         # Catalogue AP is a save modifier ('-1'); game penetration is its negation.
         ap_m = re.search(r"-?\d+", ap)
         weapon["ranged_AP"] = -int(ap_m.group()) if ap_m else 0
-        shots = 1
+        weapon["ranged_shots"] = 1
         for r in rules:
-            sm = re.search(r"multiple shots.*?(\d+)", r, re.I)
-            if sm:
-                shots = int(sm.group(1))
-        weapon["ranged_shots"] = shots
+            ms = re.search(r"multiple shots\s*\(([^)]+)\)", r, re.I)
+            if ms:
+                expr = ms.group(1).strip().upper().replace(" ", "")
+                if expr.isdigit():
+                    weapon["ranged_shots"] = int(expr)
+                else:
+                    # Random count (e.g. 'D3', 'D6', 'D3+1') rolled when firing.
+                    weapon["ranged_shots_dice"] = expr
         weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
     return weapon
 

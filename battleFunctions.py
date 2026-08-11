@@ -24,7 +24,7 @@ def simulate_attack(model1,model2):
         else:
             hit = False
     else:
-        hit = to_hit_ranged(model1,long_range=False)
+        hit = to_hit_ranged(model1,long_range=False,multiple_shots=getattr(model1,'firing_multiple',False))
         model1.characteristics['S'] = model1.equipedWeapon.get('ranged_strength')
         model1.AP = model1.equipedWeapon.get('ranged_AP', model1.AP)
         #print(model1.characteristics['S'])
@@ -82,18 +82,15 @@ def simulate_battle(unit1, unit2,charge: bool):
             attacks += unit1.files # full second rank
     
     if unit1.model.equipedWeapon.get('tag') == 'ranged':
-        attacks = unit1.model.equipedWeapon.get('ranged_shots') * unit1.files #front rank attacks
-        if attacks >= unit1.model.equipedWeapon.get('ranged_shots') * unit1.nmodels: 
-            attacks = unit1.model.equipedWeapon.get('ranged_shots') * unit1.nmodels # cannot attack more than you have models in front rank
-
-        for rule in unit1.model.special_rules:
-            if rule.get('volley_fire'):
-                
-                if unit1.nmodels % unit1.files > 0: # incomplete second rank
-                    attacks += int(((unit1.nmodels % unit1.files) + 1) / 2)  # only one attack if not in base contact
-                else:
-                    attacks += int((unit1.files + 1) / 2)  # half attacks from second rank
-                    print("Volly fire rule applied",unit1.files,attacks)
+        w = unit1.model.equipedWeapon
+        # Multiple Shots: fire multiple by default (-1 To Hit); dice count is
+        # rolled separately for each firing model.
+        unit1.model.firing_multiple = bool(w.get('ranged_shots_dice')) or (w.get('ranged_shots') or 1) > 1
+        firing_models = min(unit1.files, unit1.nmodels)  # front rank
+        if any(r.get('volley_fire') for r in unit1.model.special_rules):
+            second_rank = min(unit1.files, max(0, unit1.nmodels - firing_models))
+            firing_models += (second_rank + 1) // 2  # half of the second rank
+        attacks = sum(unit1.model.roll_ranged_shots() for _ in range(firing_models))
 
     for rule in unit1.model.special_rules:
         if rule.get('to_modify_stat'):

@@ -52,7 +52,7 @@ def to_wound(model1,model2):
     
     return f"could not calculate to wound"
 
-def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False):
+def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False):
     bs1 = model1.characteristics.get('BS')
 
     if bs1 is None:
@@ -66,16 +66,20 @@ def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,part
     #hit_roll = random.randint(1, 6)
     hit_roll = model1.attack_roll
     #print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
+    # Some weapons (e.g. Blunderbuss) ignore certain To Hit penalties.
+    ignore = set((getattr(model1, 'equipedWeapon', None) or {}).get('ignore_to_hit_penalties', []))
     if moved:
         bs1 -= 1
-    if long_range:
+    if long_range and 'long_range' not in ignore:
         bs1 -= 1
-    if stand_and_shoot:
+    if stand_and_shoot and 'stand_and_shoot' not in ignore:
         bs1 -= 1
     if partial_cover:
         bs1 -= 1
     if full_cover:
         bs1 -= 2
+    if multiple_shots and 'multiple_shots' not in ignore:
+        bs1 -= 1
     
     if bs1 == 1 and hit_roll >= 6:
         return True

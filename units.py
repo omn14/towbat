@@ -158,8 +158,9 @@ class unitGraphics(FSM):
         """One-line weapon summary: name + stats (+ weapon special rules)."""
         name = w.get('name', 'weapon')
         if w.get('tag') == 'ranged':
+            shots = w.get('ranged_shots_dice') or w.get('ranged_shots', 1)
             stats = (f"R{w.get('ranged_range', '-')} S{w.get('ranged_strength', '-')} "
-                     f"AP{w.get('ranged_AP', 0)} x{w.get('ranged_shots', 1)}")
+                     f"AP{w.get('ranged_AP', 0)} x{shots}")
         else:
             parts = []
             if w.get('strength'):

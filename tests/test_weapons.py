@@ -86,6 +86,60 @@ class WeaponMapperTests(unittest.TestCase):
         self.assertEqual(w["ranged_shots"], 3)
         self.assertTrue(w["volley_fire"])
 
+    def test_multiple_shots_dice(self):
+        w = weapon_from_profile("Doom Diver", {
+            "R": '48"', "S": "3", "AP": "-", "Special Rules": "Multiple Shots (D3)"})
+        self.assertEqual(w.get("ranged_shots_dice"), "D3")
+        self.assertEqual(w["ranged_shots"], 1)  # single-shot fallback
+
+
+class DiceExprTests(unittest.TestCase):
+    def test_fixed(self):
+        from models import roll_dice_expr
+        self.assertEqual(roll_dice_expr("2"), 2)
+
+    def test_dice_ranges(self):
+        from models import roll_dice_expr
+        for _ in range(200):
+            self.assertIn(roll_dice_expr("D3"), (1, 2, 3))
+            self.assertIn(roll_dice_expr("D6"), range(1, 7))
+            self.assertIn(roll_dice_expr("D3+1"), (2, 3, 4))
+
+    def test_roll_ranged_shots(self):
+        m = model("State Missile Trooper", "")
+        m.give_weapon("Handgun"); m.equip_weapon("Handgun")
+        self.assertEqual(m.roll_ranged_shots(), 1)  # Handgun = single shot
+        # A weapon with a dice count rolls in range.
+        m.weapons["Dicey"] = {"name": "Dicey", "tag": "ranged", "ranged_shots_dice": "D3"}
+        m.equip_weapon("Dicey")
+        for _ in range(100):
+            self.assertIn(m.roll_ranged_shots(), (1, 2, 3))
+
+
+class MultipleShotsCombatTests(unittest.TestCase):
+    def test_multiple_shots_apply_minus_one_to_hit(self):
+        # Firing multiple shots imposes -1 To Hit on each shot.
+        import toHitAndToWound
+        m = model("State Trooper", "")
+        m.weapons["Gun"] = {"name": "Gun", "tag": "ranged", "ranged_strength": 4,
+                            "ranged_AP": 0, "ranged_shots": 2}
+        m.equip_weapon("Gun")
+        m.characteristics["BS"] = "3"; m.attack_roll = 4  # BS3 hits on 4+
+        self.assertTrue(toHitAndToWound.to_hit_ranged(m, multiple_shots=False))
+        # With -1, BS3 now needs 5+, so a roll of 4 misses.
+        self.assertFalse(toHitAndToWound.to_hit_ranged(m, multiple_shots=True))
+
+    def test_per_model_rolls_scale_with_files(self):
+        # Fixed Multiple Shots (2): 5 front-rank models -> 10 shots.
+        with quiet():
+            m = model("State Trooper", "")
+            m.weapons["Gun"] = {"name": "Gun", "tag": "ranged", "ranged_strength": 4,
+                                "ranged_AP": 0, "ranged_shots": 2}
+            m.equip_weapon("Gun")
+            res = simulate_battle(mk_unit(m, 5, 5, 1), mk_unit(model("Zombie", ""), 10, 5, 2),
+                                  charge=False)
+        self.assertEqual(res[0], 10)  # attacks = shots(2) * front-rank models(5)
+
 
 class ArmourBaneParseTests(unittest.TestCase):
     def test_values(self):
@@ -178,6 +232,35 @@ class RangedCombatTests(unittest.TestCase):
             simulate_attack(m, model("State Trooper", ""))
         # ranged AP 1 + Armour Bane 1 on the natural 6
         self.assertEqual(m.attack_AP, 2)
+
+
+class BlunderbussTests(unittest.TestCase):
+    def test_parsed_flags(self):
+        w = get_catalogue().weapon("Blunderbuss")
+        self.assertEqual(w.get("ranged_shots_dice"), "D3")
+        self.assertTrue(w.get("volley_fire"))
+        ignore = w.get("ignore_to_hit_penalties", [])
+        self.assertIn("multiple_shots", ignore)
+        self.assertIn("long_range", ignore)
+        self.assertIn("stand_and_shoot", ignore)
+
+    def test_ignores_multiple_shots_penalty(self):
+        import toHitAndToWound
+        m = model("State Trooper", "")
+        m.weapons["Blunderbuss"] = get_catalogue().weapon("Blunderbuss")
+        m.equip_weapon("Blunderbuss")
+        m.characteristics["BS"] = "3"; m.attack_roll = 4  # BS3 hits on 4+
+        # Blunderbuss ignores the -1 for multiple shots -> a 4 still hits.
+        self.assertTrue(toHitAndToWound.to_hit_ranged(m, multiple_shots=True))
+
+    def test_normal_gun_suffers_penalty(self):
+        import toHitAndToWound
+        m = model("State Trooper", "")
+        m.weapons["Gun"] = {"name": "Gun", "tag": "ranged", "ranged_strength": 4,
+                            "ranged_AP": 0, "ranged_shots": 2}
+        m.equip_weapon("Gun")
+        m.characteristics["BS"] = "3"; m.attack_roll = 4
+        self.assertFalse(toHitAndToWound.to_hit_ranged(m, multiple_shots=True))
 
 
 class ChargeCombatIntegrationTests(unittest.TestCase):

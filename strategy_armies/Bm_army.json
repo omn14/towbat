@@ -180,10 +180,16 @@
                     "strength": "3",
                     "ap": "-1",
                     "notes": "A model armed with a blunderbuss suffers no negative modifiers for firing at long range, for using the Multiple Shots (D3) special rule, or whilst making a Stand & Shoot charge reaction.",
+                    "ignore_to_hit_penalties": [
+                        "long_range",
+                        "multiple_shots",
+                        "stand_and_shoot"
+                    ],
                     "ranged_range": 12,
                     "ranged_strength": 3,
                     "ranged_AP": 1,
-                    "ranged_shots": 3,
+                    "ranged_shots": 1,
+                    "ranged_shots_dice": "D3",
                     "volley_fire": true
                 },
                 {

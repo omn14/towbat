@@ -5,6 +5,7 @@ import requests
 
 import copy
 import os
+import random
 import re
 
 from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
@@ -40,6 +41,20 @@ def armour_bane_x(rules) -> int:
         if m:
             return int(m.group(1))
     return 0
+
+
+def roll_dice_expr(expr) -> int:
+    """Roll a shots/dice expression: '2', 'D3', 'D6', '2D6', 'D3+1'. Returns int >= 0."""
+    s = str(expr).upper().replace(" ", "")
+    if s.isdigit():
+        return int(s)
+    m = re.match(r"(\d*)D(\d+)([+-]\d+)?$", s)
+    if not m:
+        return 1
+    count = int(m.group(1)) if m.group(1) else 1
+    sides = int(m.group(2))
+    mod = int(m.group(3)) if m.group(3) else 0
+    return max(0, sum(random.randint(1, sides) for _ in range(count)) + mod)
 
 
 class model:
@@ -204,6 +219,13 @@ class model:
                 w['ranged_strength'] = stat_int(self.characteristics, 'S', 3)
             self.weapons[w['name']] = w
         return w
+
+    def roll_ranged_shots(self) -> int:
+        """Shots for one firing model from the equipped ranged weapon.
+        Rolls the dice (e.g. Multiple Shots (D3)) when the count is random."""
+        w = self.equipedWeapon or {}
+        dice = w.get('ranged_shots_dice')
+        return roll_dice_expr(dice) if dice else (w.get('ranged_shots') or 1)
 
     def melee_strength_bonus(self) -> int:
         """Strength bonus of the active melee weapon. Charge-only weapons (Lance)
