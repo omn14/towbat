@@ -263,6 +263,42 @@ class BlunderbussTests(unittest.TestCase):
         self.assertFalse(toHitAndToWound.to_hit_ranged(m, multiple_shots=True))
 
 
+class LongRangeTests(unittest.TestCase):
+    def test_long_range_penalty(self):
+        import toHitAndToWound
+        m = model("State Trooper", "")
+        m.weapons["Gun"] = {"name": "Gun", "tag": "ranged", "ranged_strength": 4,
+                            "ranged_AP": 0, "ranged_shots": 1}
+        m.equip_weapon("Gun")
+        m.characteristics["BS"] = "3"; m.attack_roll = 4  # BS3 hits on 4+
+        self.assertTrue(toHitAndToWound.to_hit_ranged(m, long_range=False))
+        # Long range -> -1, so BS3 needs 5+ and a 4 misses.
+        self.assertFalse(toHitAndToWound.to_hit_ranged(m, long_range=True))
+
+    def test_blunderbuss_ignores_long_range(self):
+        import toHitAndToWound
+        m = model("State Trooper", "")
+        m.weapons["Blunderbuss"] = get_catalogue().weapon("Blunderbuss")
+        m.equip_weapon("Blunderbuss")
+        m.characteristics["BS"] = "3"; m.attack_roll = 4
+        self.assertTrue(toHitAndToWound.to_hit_ranged(m, long_range=True))
+
+    def test_simulate_attack_passes_long_range_flag(self):
+        import battleFunctions
+        m = model("State Missile Trooper", ""); m.give_weapon("Handgun")
+        m.equip_weapon("Handgun")
+        m.at_long_range = True
+        captured = {}
+
+        def fake(model1, **kw):
+            captured.update(kw)
+            return True
+
+        with mock.patch.object(battleFunctions, "to_hit_ranged", fake), quiet():
+            battleFunctions.simulate_attack(m, model("State Trooper", ""))
+        self.assertTrue(captured.get("long_range"))
+
+
 class ChargeCombatIntegrationTests(unittest.TestCase):
     def test_charge_applies_then_resets(self):
         atk = model("Demigryph Knight", ""); atk.give_weapon("Lance")

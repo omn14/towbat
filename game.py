@@ -585,13 +585,13 @@ class MyApp(ShowBase):
 
     # ─── Projectiles & Visual Effects ────────────────────────────────────
 
-    def drawProjectileTrajectory(self,startPos,endPos,n=20):
+    def drawProjectileTrajectory(self,startPos,endPos,n=20,color=(1,0,0,1)):
         # Remove existing trajectory line if it exists
         if hasattr(self, 'trajectoryLine'):
             self.trajectoryLine.removeNode()
         
         line_segs = LineSegs()
-        line_segs.setColor(1, 0, 0, 1)  # Red color for the trajectory
+        line_segs.setColor(*color)  # trajectory colour (green short / red long range)
         line_segs.setThickness(2.0)
 
         for i in range(n + 1):
@@ -788,6 +788,9 @@ class MyApp(ShowBase):
         self.checkArrowsTerrain()
         self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
         self.ground.setShaderInput("isActive", True)
+        # Half-range boundary: inside = short range, outside = long range (-1).
+        half = self.unitToMove.unit.model.equipedWeapon.get('ranged_range', 18) * 1.5
+        self.drawRangeRing(self.unitToMove.bodyNP.getPos(), half)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
         
@@ -884,8 +887,34 @@ class MyApp(ShowBase):
 
     def taskShootingTrajectoryDrawLine(self, task):
         if self.checkIfInsidePolygon(self.mousePosOnGround, self.coordsToWorld(self.shootingArcPoints)):
-            self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), self.mousePosOnGround)
+            weapon = self.unitToMove.unit.model.equipedWeapon or {}
+            half = weapon.get('ranged_range', 0) * 1.5
+            dist = (self.unitToMove.bodyNP.getPos() - self.mousePosOnGround).length()
+            long_range = bool(half and dist > half)
+            color = (1, 0.35, 0.35, 1) if long_range else (0.35, 1, 0.35, 1)
+            self.trajectoryLine = self.drawProjectileTrajectory(
+                self.unitToMove.bodyNP.getPos(), self.mousePosOnGround, color=color)
+            self.debugTextInfo.setText("LONG RANGE  (-1 To Hit)" if long_range else "Short range")
         return task.cont
+
+    def drawRangeRing(self, center, radius, segments=64, color=(1, 1, 0, 0.8)):
+        """Draw the half-range boundary ring for the aiming unit."""
+        if getattr(self, 'rangeRing', None):
+            self.rangeRing.removeNode()
+        ls = LineSegs()
+        ls.setColor(*color)
+        ls.setThickness(2.0)
+        for i in range(segments + 1):
+            a = 2 * math.pi * i / segments
+            x = center.x + radius * math.cos(a)
+            y = center.y + radius * math.sin(a)
+            if i == 0:
+                ls.moveTo(x, y, center.z + 0.2)
+            else:
+                ls.drawTo(x, y, center.z + 0.2)
+        self.rangeRing = render.attachNewNode(ls.create())
+        self.rangeRing.setName("HalfRangeRing")
+        return self.rangeRing
     
     def coordsToWorld(self, points):
         worldPoints = []
@@ -1131,6 +1160,10 @@ class MyApp(ShowBase):
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         print(attacker.name, "shooting an arrow at",defender.name)
+        # Long range (beyond half the weapon's range) imposes -1 To Hit.
+        _half = attacker.model.equipedWeapon.get('ranged_range', 0) * 1.5
+        _dist = (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length()
+        attacker.model.at_long_range = bool(_half and _dist > _half)
         #attacker.model.equip_weapon('short bow')
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
         self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)

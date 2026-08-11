@@ -271,6 +271,9 @@ class GamePhaseFSM(FSM):
         self._cleanup_phase()
         self.game.ground.setShaderInput("isActive", False)
         taskMgr.remove("taskShootingTrajectoryDrawLine")
+        if getattr(self.game, 'rangeRing', None):
+            self.game.rangeRing.removeNode()
+            self.game.rangeRing = None
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
