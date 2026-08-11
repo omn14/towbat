@@ -25,7 +25,10 @@
                         "Armour Bane (1)"
                     ],
                     "strength": "S+2",
-                    "ap": "-2"
+                    "ap": "-2",
+                    "strength_bonus": 2,
+                    "ap_penetration": 2,
+                    "charge_only": true
                 }
             ]
         },
@@ -104,7 +107,9 @@
                         "Requires Two Hands"
                     ],
                     "strength": "S+1",
-                    "ap": "-1 (-2)"
+                    "ap": "-1 (-2)",
+                    "strength_bonus": 1,
+                    "ap_penetration": 1
                 }
             ]
         },
@@ -131,7 +136,10 @@
                         "Armour Bane (1)"
                     ],
                     "strength": "S+2",
-                    "ap": "-2"
+                    "ap": "-2",
+                    "strength_bonus": 2,
+                    "ap_penetration": 2,
+                    "charge_only": true
                 }
             ]
         },
@@ -175,7 +183,9 @@
                         "Strikes Last"
                     ],
                     "strength": "S+3",
-                    "ap": "-2"
+                    "ap": "-2",
+                    "strength_bonus": 3,
+                    "ap_penetration": 2
                 },
                 {
                     "name": "Long rifle",
@@ -200,7 +210,9 @@
                         "Requires Two Hands"
                     ],
                     "strength": "S+1",
-                    "ap": "-2"
+                    "ap": "-2",
+                    "strength_bonus": 1,
+                    "ap_penetration": 2
                 },
                 {
                     "name": "Repeating rifle",
@@ -224,7 +236,8 @@
                         "Killing Blow",
                         "Requires Two Hands"
                     ],
-                    "ap": "-1"
+                    "ap": "-1",
+                    "ap_penetration": 1
                 }
             ]
         }

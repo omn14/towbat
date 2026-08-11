@@ -195,6 +195,20 @@ class model:
             self.weapons[w['name']] = w
         return w
 
+    def apply_charge_weapon_bonuses(self):
+        """On a charge, apply charge-only melee weapon modifiers (e.g. Lance S+2/AP-2).
+        Reset by reset_characteristics() after combat. Returns the weapons applied."""
+        applied = []
+        for w in self.weapons.values():
+            if w.get('tag') == 'ranged' or not w.get('charge_only'):
+                continue
+            bonus = w.get('strength_bonus', 0)
+            if bonus:
+                self.characteristics['S'] = str(stat_int(self.characteristics, 'S', 3) + bonus)
+            self.AP += w.get('ap_penetration', 0)
+            applied.append(w.get('name'))
+        return applied
+
 class BlackOrc(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)

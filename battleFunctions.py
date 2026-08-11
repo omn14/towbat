@@ -57,6 +57,7 @@ def simulate_battle(unit1, unit2,charge: bool):
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
     if charge:
         unit1.model.charging = True
+        unit1.model.apply_charge_weapon_bonuses()
         for rule in unit1.model.special_rules:
             if rule.get('charge'):
                 rule['charge'](unit1.model)

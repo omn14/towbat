@@ -183,6 +183,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
     strength = (chars.get("S") or "").strip()
     ap = (chars.get("AP") or "").strip()
     rules_txt = (chars.get("Special Rules") or "").strip()
+    notes = (chars.get("Notes") or "").strip()
     rules = [r.strip() for r in rules_txt.split(",") if r.strip() and r.strip() != "-"]
 
     is_ranged = rng.lower() not in ("combat", "", "-")
@@ -192,6 +193,18 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         weapon["strength"] = strength
     if ap and ap != "-":
         weapon["ap"] = ap
+    if not is_ranged:
+        # Combat modifiers: 'S+2' -> +2 Strength; '-2' -> AP 2 penetration.
+        sb = re.search(r"S\s*\+\s*(\d+)", strength)
+        if sb:
+            weapon["strength_bonus"] = int(sb.group(1))
+        apb = re.search(r"-\s*(\d+)", ap)
+        if apb:
+            weapon["ap_penetration"] = int(apb.group(1))
+        # Lance-style weapons apply their modifiers only on the charge.
+        low = notes.lower()
+        if "charged" in low and "only" in low:
+            weapon["charge_only"] = True
     if is_ranged:
         m = re.search(r"\d+", rng)
         weapon["ranged_range"] = int(m.group()) if m else 0
