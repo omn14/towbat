@@ -623,20 +623,11 @@ class MovementSystem:
                 if rule.get('mountUnit'):
                     rule['mountUnit'].model.reset_characteristics() """
 
-            M=str(self.game.unitToMove.unit.model.characteristics['M'])
-            if M.isdigit():
-                M = int(M)
-            else:
-                print(f"Warning: M value '{M}' is not a number, defaulting to 1")
-                M = 0
+            # Mounted units always move using their mount's Movement.
+            M = self.game.unitToMove.unit.model.get_movement(default=0)
             move = M+6
             if unit.state == "IsPursuing":
                 move = 21
-
-            for rule in self.game.unitToMove.unit.model.special_rules:
-                if rule.get('mountUnit'):
-                    mountmove= int(rule['mountUnit'].model.characteristics['M'])+6
-                    move = max(move, mountmove)
 
             # ── Terrain penalty ──
             if hasattr(self.game, 'terrain_manager'):
@@ -706,7 +697,6 @@ class MovementSystem:
                 self.game.ground.setShaderInput("isActive", True)
                 return
 
-            M=str(self.game.unitToMove.unit.model.characteristics['M'])
             modifyer=1
             modifyerM=1
             for rule in self.game.unitToMove.unit.model.special_rules:
@@ -714,7 +704,7 @@ class MovementSystem:
                     #print("Unit is flatfooted, cannot move.")
                     modifyer=rule['move']
                     #M = str(int(int(M) * modifyer))
-            
+
             for rule in self.game.unitToMove.unit.model.special_rules:
                 if rule.get('mountUnit'):
                     for ruleM in rule['mountUnit'].model.special_rules:
@@ -722,22 +712,12 @@ class MovementSystem:
                             #ruleM['move'](rule['mountUnit'].model)
                             modifyerM=ruleM['move']
 
-
-            
-            if M.isdigit():
-                M = int(M)
-            else:
-                print(f"Warning: M value '{M}' is not a number, defaulting to 1")
-                M = 0
+            # Mounted units always move using their mount's Movement.
+            _model = self.game.unitToMove.unit.model
+            M = _model.get_movement(default=0)
             move = M*2
             print("Unit move:", move)
-            move = move * modifyer
-            
-
-            for rule in self.game.unitToMove.unit.model.special_rules:
-                if rule.get('mountUnit'):
-                    mountmove= modifyerM*int(rule['mountUnit'].model.characteristics['M'])*2
-                    move = max(move, mountmove)
+            move = move * (modifyerM if _model.is_mounted() else modifyer)
             if unit.state == "IsPursuing":
                 move = 21
 

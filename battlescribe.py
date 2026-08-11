@@ -30,6 +30,8 @@ NS = "{http://www.battlescribe.net/schema/catalogueSchema}"
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
+    "goblin_wolf_rider": "wolf_rider",
+    "orc_boar_boy": "boar_boy",
 }
 
 # Army-organisation category ids, defined once in the .gst and shared by all
@@ -174,8 +176,8 @@ def _unit_context(unit: ET.Element) -> dict:
     }
 
 
-def parse_catalogue(cat_path: str):
-    """Parse one catalogue into (faction_name, list_of_model_records)."""
+def parse_catalogue_full(cat_path: str):
+    """Parse one catalogue into (faction, unit_records, standalone_profile_records)."""
     tree = ET.parse(cat_path)
     root = tree.getroot()
 
@@ -214,6 +216,30 @@ def parse_catalogue(cat_path: str):
             record["Faction"] = faction_name
             records.append(record)
 
+    # Standalone model profiles (mounts, champion variants) that are not tied to
+    # their own 'model' selection entry, used only as a lookup fallback.
+    profile_records: list = []
+    for prof in profiles.values():
+        if not prof["stats"]:
+            continue
+        rec = {"Model": prof["name"]}
+        for key in STAT_KEYS:
+            rec[key] = prof["stats"].get(key, "")
+        rec["Points"] = 0
+        rec["Unit"] = None
+        rec["Troop Type"] = None
+        rec["Unit Size"] = None
+        rec["Special Rules"] = []
+        rec["Category"] = "Other"
+        rec["Faction"] = faction_name
+        profile_records.append(rec)
+
+    return faction_name, records, profile_records
+
+
+def parse_catalogue(cat_path: str):
+    """Parse one catalogue into (faction_name, list_of_unit_model_records)."""
+    faction_name, records, _profiles = parse_catalogue_full(cat_path)
     return faction_name, records
 
 
@@ -223,6 +249,8 @@ class Catalogue:
     def __init__(self, cat_dir: str = DEFAULT_CAT_DIR):
         self.cat_dir = cat_dir
         self.by_slug: dict = {}
+        # Fallback index of every model profile (includes mounts) by slug.
+        self.all_by_slug: dict = {}
         self.factions: dict = {}
         self._load()
 
@@ -235,7 +263,7 @@ class Catalogue:
                 continue
             path = os.path.join(self.cat_dir, filename)
             try:
-                faction_name, records = parse_catalogue(path)
+                faction_name, records, profile_records = parse_catalogue_full(path)
             except ET.ParseError as exc:
                 print(f"[battlescribe] failed to parse {filename}: {exc}")
                 continue
@@ -246,6 +274,8 @@ class Catalogue:
                 if existing is None or (not existing.get("Points") and record.get("Points")):
                     self.by_slug[slug] = record
                 self.factions.setdefault(faction_name, set()).add(record["Model"])
+            for record in profile_records:
+                self.all_by_slug.setdefault(slugify(record["Model"]), record)
         print(f"[battlescribe] loaded {len(self.by_slug)} models "
               f"across {len(self.factions)} factions")
 
@@ -253,7 +283,7 @@ class Catalogue:
         """Return a fresh characteristics dict for a display name, or None."""
         slug = slugify(name)
         slug = NAME_ALIASES.get(slug, slug)
-        record = self.by_slug.get(slug)
+        record = self.by_slug.get(slug) or self.all_by_slug.get(slug)
         return copy.deepcopy(record) if record else None
 
     def iter_models(self):

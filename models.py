@@ -24,6 +24,14 @@ def _find_json_file(filename: str) -> str:
     return filename  # fallback: will trigger fetch from URL
 
 
+def stat_int(characteristics: dict, key: str, default: int = 0) -> int:
+    """Read a numeric stat, returning *default* for missing/non-numeric (e.g. '-')."""
+    try:
+        return int(characteristics.get(key))
+    except (KeyError, TypeError, ValueError):
+        return default
+
+
 class model:
     def __init__(self, name: str, url: str):
         self.name = name
@@ -146,6 +154,28 @@ class model:
             self.special_rules.append(self.equipedWeapon)
         except Exception as e:
             print(f"Error equipping weapon '{weapon_name}' for {self.name}: {e}")
+
+    def get_mount(self):
+        """Return the mount's model if this unit is mounted, else None."""
+        for rule in self.special_rules:
+            if isinstance(rule, dict) and rule.get('tag') == 'mount' and rule.get('mountUnit'):
+                mount = rule['mountUnit']
+                return getattr(mount, 'model', mount)
+        return None
+
+    def is_mounted(self) -> bool:
+        return self.get_mount() is not None
+
+    def get_movement(self, default: int = 0) -> int:
+        """Movement value; mounted units always use their mount's Movement."""
+        mount = self.get_mount()
+        if mount is not None:
+            return stat_int(mount.characteristics, 'M', default)
+        return stat_int(self.characteristics, 'M', default)
+
+    def get_toughness(self, default: int = 4) -> int:
+        """Toughness value; mounted units always use the rider's own Toughness."""
+        return stat_int(self.characteristics, 'T', default)
 
 class BlackOrc(model):
     def __init__(self, name: str, url: str):

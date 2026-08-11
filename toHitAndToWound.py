@@ -25,16 +25,19 @@ def to_hit(model1,model2):
 def to_wound(model1,model2):
     str1 = model1.characteristics.get('S')
     print(f"Model 1 Strength: {str1}")
-    toughness2 = model2.characteristics.get('T')
-
-    if str1 is None or toughness2 is None:
+    if str1 is None:
         return f"One of the models does not have the characteristic 'S' or 'T'."
 
     try:
         str1 = int(str1)
-        toughness2 = int(toughness2)
     except ValueError:
         return f"Characteristic 'S' or 'T' is not a numeric value."
+
+    # Mounted defenders always use the rider's Toughness.
+    if hasattr(model2, 'get_toughness'):
+        toughness2 = model2.get_toughness()
+    else:
+        toughness2 = int(model2.characteristics.get('T', 4))
 
     if str1 == toughness2:
         return 4
