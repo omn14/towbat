@@ -58,6 +58,7 @@ from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
 from tutorial_system import TutorialManager
+from cannon_fire import CannonFire
 import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -245,6 +246,7 @@ class MyApp(ShowBase):
         self.combat = CombatResolver(self)
         self.movement = MovementSystem(self)
         self.tutorial = TutorialManager(self)
+        self.cannon = CannonFire(self)
         self.accept('c', self.toggle_campaign_map)
         self.accept('t', self.start_tutorial)
 
@@ -296,53 +298,6 @@ class MyApp(ShowBase):
         Returns:
             List of created unitGraphics objects
         """
-        # Create a mapping from unit names (from characteristics JSON) to model paths and classes
-        unit_model_mapping = {
-            # ── Bretonnia ──────────────────────────────────────────────
-            'Man at Arms':                  {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
-            'Man_at_Arm':                   {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
-            'Mounted Knight of the Realm':  {'path': 'models/bret_knight.bam',      'class': MountedKnightOfTheRealm,'color': (1, 0, 0, 1)},
-            'Pegasus Knight':               {'path': 'models/bret_knight.bam',      'class': PegasusKnight,          'color': (1, 0, 0, 1)},
-            'Grail Knight':                 {'path': 'models/bret_knight.bam',      'class': GrailKnight,            'color': (1, 0, 0, 1)},
-            'Peasant Bowman':               {'path': 'models/bret_bowmen.bam',      'class': PeasantBowman,          'color': (1, 0, 0, 1)},
-            'Battle Pilgrim':               {'path': 'models/bret_bowmen.bam',      'class': BattlePilgrim,          'color': (1, 0, 0, 1)},
-            # ── Grand Cathay ───────────────────────────────────────────
-            'Jade Warrior':                 {'path': 'models/jade_warrior.bam',     'class': JadeWarrior,            'color': (1, 1, 0, 1)},
-            'Jade Lancer':                  {'path': 'models/jade_lancer.bam',      'class': JadeLancer,             'color': (1, 1, 0, 1)},
-            'Peasant Spearman':             {'path': 'models/jade_warrior.bam',     'class': PeasantSpearman,        'color': (1, 1, 0, 1)},
-            'Iron Hail Gunner':             {'path': 'models/jade_warrior.bam',     'class': IronHailGunner,         'color': (1, 1, 0, 1)},
-            # ── Orc & Goblin Tribes ────────────────────────────────────
-            'Night Goblin':                 {'path': 'models/goblin_archers.bam',   'class': NightGoblin,            'color': (0, 1, 0, 1)},
-            'Goblin Wolf Rider':            {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
-            'Orc Boyz':                     {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
-            'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
-            'Black Orc':                    {'path': 'models/goblin_archers.bam',   'class': BlackOrc,               'color': (0, 1, 0, 1)},
-            'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
-            'Boar Boy':                     {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
-            'Wolf Rider':                   {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
-            'Troll':                        {'path': 'models/goblin_archers.bam',   'class': Troll,                  'color': (0, 1, 0, 1)},
-            # ── Vampire Counts ─────────────────────────────────────────
-            'Black Knight':                 {'path': 'models/black_knights.bam',    'class': BlackKnight,            'color': (0, 0, 1, 1)},
-            'Zombie':                       {'path': 'models/zombies.bam',          'class': Zombie,                 'color': (0, 0, 1, 1)},
-            'Dire Wolf':                    {'path': 'models/dire_wolves.bam',      'class': DireWolf,               'color': (0, 0, 1, 1)},
-            'Necromancer':                  {'path': 'models/zombies.bam',          'class': Necromancer,            'color': (0, 0, 1, 1)},
-            'Skeleton Warrior':             {'path': 'models/zombies.bam',          'class': SkeletonWarrior,        'color': (0, 0, 1, 1)},
-            'Crypt Ghoul':                  {'path': 'models/zombies.bam',          'class': CryptGhoul,             'color': (0, 0, 1, 1)},
-            'Grave Guard':                  {'path': 'models/black_knights.bam',    'class': GraveGuard,             'color': (0, 0, 1, 1)},
-            # ── Lizardmen ──────────────────────────────────────────────
-            'Saurus Warrior':               {'path': 'models/jade_warrior.bam',     'class': SaurusWarrior,          'color': (0, 1, 1, 1)},
-            'Skink':                        {'path': 'models/goblin_archers.bam',   'class': Skink,                  'color': (0, 1, 1, 1)},
-            'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'class': TempleGuard,            'color': (0, 1, 1, 1)},
-            'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'class': ColdOneRider,           'color': (0, 1, 1, 1)},
-        }
-
-        # Player color overrides – every unit in the same army shares one colour
-        player_colors = {
-            1: (1, 0, 0, 1),   # Player 1 → red
-            2: (0, 0, 1, 1),   # Player 2 → blue
-        }
-        player_color = player_colors.get(player_num, (0.5, 0.5, 0.5, 1))
-        
         # Load the JSON file
         try:
             with open(filename, 'r') as f:
@@ -359,110 +314,149 @@ class MyApp(ShowBase):
             army_data = raw['units']
         else:
             army_data = raw
-        
+
         created_units = []
         current_x = start_pos.x
-
-        # Default mount per rider name, used only when the army data doesn't
-        # explicitly name a mount (the roster importer records the chosen one).
-        mount_name_map = {
-            'Jade Lancer':                 'Cathayan Warhorse',
-            'Mounted Knight of the Realm': 'Bretonnian Warhorse',
-            'Goblin Wolf Rider':           'Giant Wolf',
-            'Wolf Rider':                  'Giant Wolf',
-            'Black Knight':                'Skeletal Steed',
-            'Pegasus Knight':              'Barded Pegasus',
-            'Grail Knight':                'Bretonnian Warhorse',
-            'Orc Boar Boy':                'War Boar',
-            'Boar Boy':                    'War Boar',
-            'Cold One Rider':              'Cold One',
-        }
-        mounted_classes = [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
-                           PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]
-
         for idx, army_unit_data in enumerate(army_data):
             unit_name = army_unit_data['name']
-            nmodels = army_unit_data['nmodels']
-            files = army_unit_data['files']
-            ranks = army_unit_data['ranks']
-            
-            # Get model info from mapping, default to generic if not found
-            model_info = unit_model_mapping.get(unit_name, {
-                'path': 'models/jade_warrior.bam',
-                'class': model,
-                'color': (0.5, 0.5, 0.5, 1)
-            })
-            
-            try:
-                model_class = model_info['class']
-                # Prefer the mount named in the army data; fall back to the default map.
-                mount_name = army_unit_data.get('mount') or mount_name_map.get(unit_name)
-                mount_unit = None
-                if mount_name:
-                    mount_model = model(mount_name, "")
-                    mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
-
-                if model_class in mounted_classes:
-                    model_instance = model_class(unit_name, "", mountUnit=mount_unit)
-                else:
-                    model_instance = model_class(unit_name, "")
-
-                # Attach a data-driven mount to any unit that didn't already get one.
-                if mount_unit is not None and not model_instance.is_mounted():
-                    model_instance.attach_mount(mount_unit)
-
-                # Equip data-driven weapons from the army list (e.g. imported rosters).
-                for w in army_unit_data.get('weapons', []):
-                    wdict = dict(w)
-                    if wdict.get('tag') == 'ranged' and not wdict.get('ranged_strength'):
-                        try:
-                            wdict['ranged_strength'] = int(model_instance.characteristics.get('S'))
-                        except (TypeError, ValueError):
-                            wdict['ranged_strength'] = 3
-                    model_instance.weapons[wdict.get('name', 'weapon')] = wdict
-
-                model_instance.armor_save = 7  # Default armor save
-                
-                # Create unit instance
-                unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
-                
-                # Create unit graphics
-                # Include player_num in the name so P1 and P2 units with the
-                # same model type get unique collision-node / lookup names.
-                graphics_name = f"P{player_num}_{unit_name.replace(' ', '')}{idx}"
-                unit_graphics = unitGraphics(
-                    self,
-                    graphics_name,
-                    model_info['path'],
-                    unit_instance,
-                    scale=1.0,
-                    BulletWorld=self.world,
-                    color=player_color
-                )
-                
-                # Position the unit
-                unit_graphics.bodyNP.setPos(current_x, start_pos.y, start_pos.z)
-                
-                # Add to appropriate lists
-                self.units.append(unit_graphics)
-                if player_num == 1:
-                    self.player1Units.append(unit_graphics)
-                else:
-                    self.player2Units.append(unit_graphics)
-                
-                created_units.append(unit_graphics)
-                
-                # Update position for next unit
-                current_x += spacing
-                
-                print(f"Loaded unit: {unit_name} ({nmodels} models, {files}x{ranks})")
-                
-            except Exception as e:
-                print(f"Error creating unit {unit_name}: {e}")
+            # Include player_num in the name so P1 and P2 units with the same
+            # model type get unique collision-node / lookup names.
+            graphics_name = f"P{player_num}_{unit_name.replace(' ', '')}{idx}"
+            unit_graphics = self._create_unit(army_unit_data, player_num, graphics_name)
+            if unit_graphics is None:
                 continue
-        
+            unit_graphics.bodyNP.setPos(current_x, start_pos.y, start_pos.z)
+            created_units.append(unit_graphics)
+            current_x += spacing
+            print(f"Loaded unit: {unit_name} ({army_unit_data['nmodels']} models, "
+                  f"{army_unit_data['files']}x{army_unit_data['ranks']})")
+
         print(f"Successfully loaded {len(created_units)} units from {filename}")
         return created_units
+
+    # ─── Unit Construction ────────────────────────────────────────────────
+
+    # Unit display name → model path, class and default colour.
+    UNIT_MODEL_MAPPING = {
+        # ── Bretonnia ──────────────────────────────────────────────
+        'Man at Arms':                  {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
+        'Man_at_Arm':                   {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
+        'Mounted Knight of the Realm':  {'path': 'models/bret_knight.bam',      'class': MountedKnightOfTheRealm,'color': (1, 0, 0, 1)},
+        'Pegasus Knight':               {'path': 'models/bret_knight.bam',      'class': PegasusKnight,          'color': (1, 0, 0, 1)},
+        'Grail Knight':                 {'path': 'models/bret_knight.bam',      'class': GrailKnight,            'color': (1, 0, 0, 1)},
+        'Peasant Bowman':               {'path': 'models/bret_bowmen.bam',      'class': PeasantBowman,          'color': (1, 0, 0, 1)},
+        'Battle Pilgrim':               {'path': 'models/bret_bowmen.bam',      'class': BattlePilgrim,          'color': (1, 0, 0, 1)},
+        # ── Grand Cathay ───────────────────────────────────────────
+        'Jade Warrior':                 {'path': 'models/jade_warrior.bam',     'class': JadeWarrior,            'color': (1, 1, 0, 1)},
+        'Jade Lancer':                  {'path': 'models/jade_lancer.bam',      'class': JadeLancer,             'color': (1, 1, 0, 1)},
+        'Peasant Spearman':             {'path': 'models/jade_warrior.bam',     'class': PeasantSpearman,        'color': (1, 1, 0, 1)},
+        'Iron Hail Gunner':             {'path': 'models/jade_warrior.bam',     'class': IronHailGunner,         'color': (1, 1, 0, 1)},
+        # ── Orc & Goblin Tribes ────────────────────────────────────
+        'Night Goblin':                 {'path': 'models/goblin_archers.bam',   'class': NightGoblin,            'color': (0, 1, 0, 1)},
+        'Goblin Wolf Rider':            {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
+        'Orc Boyz':                     {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
+        'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
+        'Black Orc':                    {'path': 'models/goblin_archers.bam',   'class': BlackOrc,               'color': (0, 1, 0, 1)},
+        'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
+        'Boar Boy':                     {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
+        'Wolf Rider':                   {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
+        'Troll':                        {'path': 'models/goblin_archers.bam',   'class': Troll,                  'color': (0, 1, 0, 1)},
+        # ── Vampire Counts ─────────────────────────────────────────
+        'Black Knight':                 {'path': 'models/black_knights.bam',    'class': BlackKnight,            'color': (0, 0, 1, 1)},
+        'Zombie':                       {'path': 'models/zombies.bam',          'class': Zombie,                 'color': (0, 0, 1, 1)},
+        'Dire Wolf':                    {'path': 'models/dire_wolves.bam',      'class': DireWolf,               'color': (0, 0, 1, 1)},
+        'Necromancer':                  {'path': 'models/zombies.bam',          'class': Necromancer,            'color': (0, 0, 1, 1)},
+        'Skeleton Warrior':             {'path': 'models/zombies.bam',          'class': SkeletonWarrior,        'color': (0, 0, 1, 1)},
+        'Crypt Ghoul':                  {'path': 'models/zombies.bam',          'class': CryptGhoul,             'color': (0, 0, 1, 1)},
+        'Grave Guard':                  {'path': 'models/black_knights.bam',    'class': GraveGuard,             'color': (0, 0, 1, 1)},
+        # ── Lizardmen ──────────────────────────────────────────────
+        'Saurus Warrior':               {'path': 'models/jade_warrior.bam',     'class': SaurusWarrior,          'color': (0, 1, 1, 1)},
+        'Skink':                        {'path': 'models/goblin_archers.bam',   'class': Skink,                  'color': (0, 1, 1, 1)},
+        'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'class': TempleGuard,            'color': (0, 1, 1, 1)},
+        'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'class': ColdOneRider,           'color': (0, 1, 1, 1)},
+    }
+
+    # Every unit in a player's army shares one colour.
+    PLAYER_COLORS = {1: (1, 0, 0, 1), 2: (0, 0, 1, 1)}
+
+    # Default mount per rider name, used when the army data names no mount.
+    MOUNT_NAME_MAP = {
+        'Jade Lancer':                 'Cathayan Warhorse',
+        'Mounted Knight of the Realm': 'Bretonnian Warhorse',
+        'Goblin Wolf Rider':           'Giant Wolf',
+        'Wolf Rider':                  'Giant Wolf',
+        'Black Knight':                'Skeletal Steed',
+        'Pegasus Knight':              'Barded Pegasus',
+        'Grail Knight':                'Bretonnian Warhorse',
+        'Orc Boar Boy':                'War Boar',
+        'Boar Boy':                    'War Boar',
+        'Cold One Rider':              'Cold One',
+    }
+
+    def _create_unit(self, army_unit_data, player_num, graphics_name):
+        """Build one unitGraphics from an army-list entry and add it to the scene.
+
+        Shared by the army loader and save-game restore. Returns the
+        unitGraphics, or None if creation failed.
+        """
+        mounted_classes = [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
+                           PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]
+        unit_name = army_unit_data['name']
+        nmodels = army_unit_data['nmodels']
+        files = army_unit_data['files']
+        ranks = army_unit_data['ranks']
+        model_info = self.UNIT_MODEL_MAPPING.get(unit_name, {
+            'path': 'models/jade_warrior.bam', 'class': model, 'color': (0.5, 0.5, 0.5, 1)})
+        player_color = self.PLAYER_COLORS.get(player_num, (0.5, 0.5, 0.5, 1))
+        try:
+            model_class = model_info['class']
+            # Prefer the mount named in the army data; fall back to the default map.
+            mount_name = army_unit_data.get('mount') or self.MOUNT_NAME_MAP.get(unit_name)
+            mount_unit = None
+            if mount_name:
+                mount_model = model(mount_name, "")
+                mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
+
+            if model_class in mounted_classes:
+                model_instance = model_class(unit_name, "", mountUnit=mount_unit)
+            else:
+                model_instance = model_class(unit_name, "")
+
+            # Attach a data-driven mount to any unit that didn't already get one.
+            if mount_unit is not None and not model_instance.is_mounted():
+                model_instance.attach_mount(mount_unit)
+
+            # Equip data-driven weapons from the army list (e.g. imported rosters).
+            for w in army_unit_data.get('weapons', []):
+                wdict = dict(w)
+                if wdict.get('tag') == 'ranged' and not wdict.get('ranged_strength'):
+                    try:
+                        wdict['ranged_strength'] = int(model_instance.characteristics.get('S'))
+                    except (TypeError, ValueError):
+                        wdict['ranged_strength'] = 3
+                name = wdict.get('name', 'weapon')
+                # Merge into a class-provided weapon so its coded rules survive.
+                if name in model_instance.weapons:
+                    model_instance.weapons[name].update(wdict)
+                else:
+                    model_instance.weapons[name] = wdict
+
+            model_instance.armor_save = 7  # Default armor save
+
+            unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
+            unit_graphics = unitGraphics(
+                self, graphics_name, model_info['path'], unit_instance,
+                scale=1.0, BulletWorld=self.world, color=player_color)
+
+            self.units.append(unit_graphics)
+            if player_num == 1:
+                self.player1Units.append(unit_graphics)
+            else:
+                self.player2Units.append(unit_graphics)
+            return unit_graphics
+        except Exception as e:
+            print(f"Error creating unit {unit_name}: {e}")
+            return None
 
     # ─── Texture Baking ──────────────────────────────────────────────────
 
@@ -762,6 +756,10 @@ class MyApp(ShowBase):
             unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
         if self.unitToMove.isInCombat:
             print("Unit is in combat, cant shoot.")
+            return task.done
+        # War-machine cannons use the dedicated Cannon Fire targeting flow.
+        if self.cannon.is_cannon(self.unitToMove):
+            self.cannon.begin_targeting(self.unitToMove)
             return task.done
         print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:

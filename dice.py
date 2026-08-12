@@ -115,3 +115,15 @@ class Dice:
         """Remove dice from world and scene."""
         world.removeRigidBody(self.node)
         self.np.removeNode()
+
+
+# Old World Artillery Dice faces: 2, 4, 6, 8, 10 and Misfire.
+ARTILLERY_FACES = {1: 'Misfire', 2: 2, 3: 4, 4: 6, 5: 8, 6: 10}
+
+
+class ArtilleryDice(Dice):
+    """A physics die whose settled d6 face maps to an Artillery Dice value."""
+
+    def artillery_value(self):
+        """Return the artillery result ('Misfire' or an int) after settling."""
+        return ARTILLERY_FACES.get(self.currentValue, 'Misfire')

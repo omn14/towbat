@@ -104,6 +104,10 @@ class model:
                                              'tag': 'combat'}})
         self.equipedWeapon = None
         self.equip_weapon('hand weapon')
+        # War machines carry their piece as a ranged weapon (e.g. Great Cannon),
+        # named the same as the model in the catalogue.
+        if str(self.characteristics.get('Troop Type', '')).lower() == 'war machine':
+            self.give_weapon(self.name)
         self.attack_roll = 0
         self.wound_roll = 0
 
