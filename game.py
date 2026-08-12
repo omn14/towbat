@@ -441,8 +441,6 @@ class MyApp(ShowBase):
                 else:
                     model_instance.weapons[name] = wdict
 
-            model_instance.armor_save = 7  # Default armor save
-
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
             unit_graphics = unitGraphics(
                 self, graphics_name, model_info['path'], unit_instance,

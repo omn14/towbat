@@ -1009,6 +1009,8 @@ class MovementSystem:
             cildren[-1].removeNode()
         
         cildren = unit.model.getChildren()
+        # Keep the logical model count in sync with the surviving models.
+        unit.unit.nmodels = len(cildren)
         if len(cildren) == 0:
             print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
             try:

@@ -141,16 +141,20 @@ class CannonFire:
         # Step 5 — wound and remove casualties (S/AP from the cannon weapon).
         strength = int(weapon.get('ranged_strength') or 10)
         ap = int(weapon.get('ranged_AP', 0))
-        total_hit = total_cas = 0
+        total_hit = total_wound = total_saved = total_cas = 0
         for unit, count in hits:
             total_hit += count
-            casualties = self._apply_wounds(unit, count, strength, ap)
-            total_cas += casualties
-            if casualties:
-                self.game.removeModelsFromUnit(unit, casualties)
+            slain, wounded, saved = self._apply_wounds(unit, count, strength, ap)
+            total_wound += wounded
+            total_saved += saved
+            total_cas += slain
+            if slain:
+                self.game.removeModelsFromUnit(unit, slain)
 
-        self.game.debugText.setText(
-            f"Cannon Fire hit {total_hit} model(s), {total_cas} slain.")
+        summary = (f"Cannon Fire: hit {total_hit}, wounded {total_wound}, "
+                   f"saved {total_saved}, slain {total_cas} (S{strength} AP-{ap})")
+        print(summary)
+        self.game.debugText.setText(summary)
         cannonUnit.hasAttackedThisTurn = True
 
     # ─── Hit determination ──────────────────────────────────────────
@@ -178,17 +182,25 @@ class CannonFire:
         return results
 
     def _apply_wounds(self, unit, hits, strength, ap):
-        """Roll To Wound then armour save for each hit; return casualties."""
+        """Roll To Wound then armour save for each hit.
+
+        Returns (slain, wounded, saved). Casualties are capped by the number of
+        models actually present (not the stored nmodels, which may be stale).
+        """
         model = unit.unit.model
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         target = wound_target(strength, toughness)
-        casualties = 0
+        wounded = saved = casualties = 0
         for _ in range(hits):
             if random.randint(1, 6) < target:
                 continue  # failed to wound
-            if not check_armor_save(model, model.armor_save, ap):
+            wounded += 1
+            if check_armor_save(model, model.armor_save, ap):
+                saved += 1
+            else:
                 casualties += 1
-        return min(casualties, unit.unit.nmodels)
+        present = len(unit.model.getChildren())
+        return min(casualties, present), wounded, saved
 
     # ─── Visuals ────────────────────────────────────────────────────
 
