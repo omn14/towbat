@@ -24,7 +24,6 @@ def to_hit(model1,model2):
 
 def to_wound(model1,model2):
     str1 = model1.characteristics.get('S')
-    print(f"Model 1 Strength: {str1}")
     if str1 is None:
         return f"One of the models does not have the characteristic 'S' or 'T'."
 

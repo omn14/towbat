@@ -600,12 +600,11 @@ class CombatResolver:
 
     def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits,
                            suffered_wounds, saves_made, total_wounds):
-        print(f"Battle results for {attackerUnit.unit.name} attacking with weapon "
-              f"{attackerUnit.unit.model.equipedWeapon.get('name')}:")
-        print(f"Total hits by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_hits}")
-        print(f"suffered wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {suffered_wounds}")
-        print(f"Saves made by {defenderUnit.unit.name}: {saves_made}")
-        print(f"Total wounds by {attackerUnit.unit.name} on {defenderUnit.unit.name}: {total_wounds}")
+        weapon = attackerUnit.unit.model.equipedWeapon or {}
+        verb = 'shots' if weapon.get('tag') == 'ranged' else 'attacks'
+        print(f"   {attacks} {verb} -> {total_hits} hit -> {suffered_wounds} wound "
+              f"-> {saves_made} saved -> {total_wounds} slain "
+              f"({defenderUnit.unit.name})")
 
     # ─── Battle Start & Resolution ────────────────────────────────────────
 

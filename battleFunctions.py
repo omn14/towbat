@@ -58,7 +58,6 @@ def check_armor_save(model, armor_save_value, AP):
 def simulate_battle(unit1, unit2,charge: bool):
 
     # how many attacks
-    print(unit1.name, "has", unit1.nmodels, "models", unit1.files, "files,", unit1.ranks, "ranks")
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
     # Apply the active melee weapon's always-on/charge Strength bonus once.
     unit1.model.charging = bool(charge)
@@ -102,7 +101,6 @@ def simulate_battle(unit1, unit2,charge: bool):
 
 
     attacks1 = attacks
-    print(f"Total attacks by {unit1.name} on {unit2.name}: {attacks1}")
     total_hits = 0
     total_wounds = 0
     suffered_wounds = 0
@@ -115,7 +113,6 @@ def simulate_battle(unit1, unit2,charge: bool):
             total_wounds += 1
             suffered_wounds += 1
         if wound:
-            print(unit1.model.AP)
             if check_armor_save(unit2.model,unit2.model.armor_save, getattr(unit1.model, 'attack_AP', unit1.model.AP)):
                 saves_made += 1
                 total_wounds -= 1

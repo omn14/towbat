@@ -764,19 +764,17 @@ class MyApp(ShowBase):
             print("Unit has no equiped weapon equipped, cant shoot.")
             return task.done
         r=False
-        print(self.unitToMove.unit.model.weapons)
         for weapon in self.unitToMove.unit.model.weapons:
-            print("checking weapon: ",self.unitToMove.unit.model.weapons.get(weapon))
             if self.unitToMove.unit.model.weapons.get(weapon).get('tag') == 'ranged':
                 r=True
                 self.unitToMove.unit.model.equip_weapon(weapon)
-                print("Equipping weapon: ",weapon)
         if not r:
-            print("Unit has no ranged weapon, cant shoot.")
+            print(f"[Shooting] {self.unitToMove.unit.name} has no ranged weapon.")
             return task.done
-            if not self.unitToMove.unit.model.equipedWeapon.get('tag') == 'ranged':
-                print("Unit has no ranged weapon equipped, cant shoot.")
-                return task.done
+        _rw = self.unitToMove.unit.model.equipedWeapon
+        print(f"[Shooting] {self.unitToMove.unit.name} ready with {_rw.get('name')} "
+              f"(R{_rw.get('ranged_range','?')} S{_rw.get('ranged_strength','?')} "
+              f"AP-{_rw.get('ranged_AP', 0)})")
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
@@ -940,7 +938,6 @@ class MyApp(ShowBase):
             pTo = Point3(point.x, point.y, 0.5)
 
             result = self.world.rayTestClosest(pFrom, pTo, CM.TERRAIN_FOREST)
-            print(f"Ray test from {pFrom} to {pTo} hit terrain: {result.hasHit()}")
             if result.hasHit():
                 """ print(result.hasHit())
                 print(result.getHitPos())
@@ -977,13 +974,7 @@ class MyApp(ShowBase):
             result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
             if result.hasHit():
-                print(result.hasHit())
-                print(result.getHitPos())
-                print(result.getHitNormal())
-                print(result.getHitFraction())
-                print(result.getNode().getChildren())
                 for c in result.getNode().getChildren():
-                    print(c.getName())
                     if "Model" in c.getName():
                         np = NodePath.anyPath(c)
                         np.setColor(1,0,1,1)
@@ -991,7 +982,7 @@ class MyApp(ShowBase):
                         #self.toCleanup.append(np)
                         hit = True
         if not hit:
-            print(f"no targets in shooting arc for unit {self.unitToMove.unit.name}")
+            print(f"[Shooting] no targets in {self.unitToMove.unit.name}'s arc.")
             #self.ground.setShaderInput("isActive", False)
             if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
                 taskMgr.remove("taskShootingTrajectoryDrawLine")
@@ -1149,22 +1140,18 @@ class MyApp(ShowBase):
                 self.fsm.request("StrategyPhase")
 
     def shootAt(self, attackerUnit, defenderUnit):
-        print(f"{attackerUnit.unit.name} shoots at {defenderUnit.unit.name}")
-        # Implement shooting logic here (e.g., calculate hits, wounds, etc.)
-        # For demonstration, we'll just print the action
-        # You can replace this with actual battle simulation logic
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
-        print(attacker.name, "shooting an arrow at",defender.name)
+        weapon = attacker.model.equipedWeapon or {}
         # Long range (beyond half the weapon's range) imposes -1 To Hit.
-        _half = attacker.model.equipedWeapon.get('ranged_range', 0) * 1.5
+        _half = weapon.get('ranged_range', 0) * 1.5
         _dist = (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length()
         attacker.model.at_long_range = bool(_half and _dist > _half)
-        #attacker.model.equip_weapon('short bow')
+        _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
+        print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
+              f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})")
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
         self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-        #unit.model.setColor(unit.color)
-        #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         attackerUnit.hasAttackedThisTurn = True
