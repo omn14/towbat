@@ -402,6 +402,9 @@ class Catalogue:
         self.by_slug: dict = {}
         # Fallback index of every model profile (includes mounts) by slug.
         self.all_by_slug: dict = {}
+        # Per-faction unit records (faction -> slug -> record); avoids dropping
+        # same-named units that exist in more than one faction (e.g. Mortar).
+        self.by_faction: dict = {}
         # Weapon profiles (from every .cat and the .gst) by slug.
         self.weapons_by_slug: dict = {}
         self.factions: dict = {}
@@ -435,6 +438,7 @@ class Catalogue:
                 if existing is None or (not existing.get("Points") and record.get("Points")):
                     self.by_slug[slug] = record
                 self.factions.setdefault(faction_name, set()).add(record["Model"])
+                self.by_faction.setdefault(faction_name, {}).setdefault(slug, record)
             for record in profile_records:
                 self.all_by_slug.setdefault(slugify(record["Model"]), record)
             for w in weapons:
@@ -466,9 +470,11 @@ class Catalogue:
         return None
 
     def iter_models(self):
-        """Yield (model_name, faction, characteristics) for every model."""
-        for record in self.by_slug.values():
-            yield record["Model"], record.get("Faction", "Unknown"), copy.deepcopy(record)
+        """Yield (model_name, faction, characteristics) for every faction's models,
+        so units that share a name across factions are all emitted."""
+        for faction, records in self.by_faction.items():
+            for record in records.values():
+                yield record["Model"], faction, copy.deepcopy(record)
 
 
 _catalogue: Catalogue | None = None

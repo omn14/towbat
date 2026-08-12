@@ -48,7 +48,7 @@ class ArmyListBuilderGUI:
         try:
             from battlescribe import get_catalogue
             for unit_name, faction, chars in get_catalogue().iter_models():
-                self.available_units[unit_name] = {
+                self.available_units[(faction, unit_name)] = {
                     'file': None,
                     'faction': faction,
                     'characteristics': chars,
@@ -58,6 +58,7 @@ class ArmyListBuilderGUI:
             print(f"Error loading BattleScribe catalogue: {e}")
 
         # Secondary source: legacy per-unit JSON files (do not overwrite catalogue).
+        catalogue_names = {name for (_f, name) in self.available_units}
         for root, _dirs, files in os.walk(army_units_dir):
             for json_file in sorted(files):
                 if not json_file.endswith('_characteristics.json'):
@@ -67,10 +68,13 @@ class ArmyListBuilderGUI:
                     with open(full_path, 'r') as f:
                         data = json.load(f)
                         unit_name = data.get('Model', 'Unknown')
-                        if unit_name in self.available_units:
+                        if unit_name in catalogue_names:
                             continue
                         faction = os.path.basename(root).replace('_', ' ').title()
-                        self.available_units[unit_name] = {
+                        key = (faction, unit_name)
+                        if key in self.available_units:
+                            continue
+                        self.available_units[key] = {
                             'file': full_path,
                             'faction': faction,
                             'characteristics': data
@@ -84,9 +88,21 @@ class ArmyListBuilderGUI:
 
         print(f"Loaded {len(self.available_units)} unit types across {len(self.factions)} factions")
 
+    def _unit_info(self, unit_name: str, faction: str = None) -> dict:
+        """Resolve a unit's catalogue record for a faction (defaults to the
+        selected faction), falling back to any faction that defines it."""
+        faction = faction or self.selected_faction
+        info = self.available_units.get((faction, unit_name))
+        if info is not None:
+            return info
+        for (_f, name), value in self.available_units.items():
+            if name == unit_name:
+                return value
+        return {}
+
     def _unit_pts(self, unit_name: str) -> int:
         """Return the points cost per model for a unit (0 if not defined)."""
-        info = self.available_units.get(unit_name, {})
+        info = self._unit_info(unit_name)
         return int(info.get('characteristics', {}).get('Points', 0) or 0)
 
     def _army_total_pts(self) -> int:
@@ -419,7 +435,7 @@ class ArmyListBuilderGUI:
         # Group units by army-organisation category (Characters/Core/Special/Rare...).
         groups = {}
         for unit_name in units:
-            cat = (self.available_units.get(unit_name, {})
+            cat = (self._unit_info(unit_name)
                    .get('characteristics', {}).get('Category') or 'Other')
             groups.setdefault(cat, []).append(unit_name)
         ordered_cats = [c for c in ORG_CATEGORY_ORDER if c in groups]
@@ -639,7 +655,7 @@ class ArmyListBuilderGUI:
 
         army_unit = self.army_list[idx]
         unit_name = army_unit['name']
-        info = self.available_units.get(unit_name, {})
+        info = self._unit_info(unit_name, army_unit.get('faction'))
         stats = info.get('characteristics', {})
 
         # Panel background
@@ -890,7 +906,7 @@ class ArmyListBuilderGUI:
     def _confirm_add_unit(self, unit_name, entries):
         """Validate inputs and add the unit to the army."""
         try:
-            unit_faction = self.available_units.get(unit_name, {}).get('faction', '')
+            unit_faction = self._unit_info(unit_name).get('faction', '')
             if self.selected_faction and slugify(unit_faction) != slugify(self.selected_faction):
                 self._show_builder_message(
                     f"{unit_name} is not a {self.selected_faction} unit.\n"
@@ -914,12 +930,12 @@ class ArmyListBuilderGUI:
 
             army_unit = {
                 'name': unit_name,
-                'faction': self.available_units[unit_name].get('faction', ''),
+                'faction': self._unit_info(unit_name).get('faction', ''),
                 'nmodels': nmodels,
                 'files': files,
                 'ranks': ranks,
                 'points_cost': cost,
-                'json_file': self.available_units[unit_name]['file']
+                'json_file': self._unit_info(unit_name).get('file')
             }
             self.army_list.append(army_unit)
 
