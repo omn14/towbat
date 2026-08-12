@@ -13,6 +13,9 @@ from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
 # Base directory for unit characteristic JSON files, organised by faction
 ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
 
+# Table scale: 1 game unit == 1 inch == 25.4 mm (a 6'x4' table is 72x48 units).
+MM_PER_UNIT = 25.4
+
 
 def _find_json_file(filename: str) -> str:
     """Search army_units/ subfolders for a characteristics JSON file.
@@ -210,6 +213,21 @@ class model:
     def get_toughness(self, default: int = 4) -> int:
         """Toughness value; mounted units always use the rider's own Toughness."""
         return stat_int(self.characteristics, 'T', default)
+
+    def get_base_size(self):
+        """Base size (width_mm, depth_mm) from the catalogue; mounted models use
+        their mount's base. Returns None when the database has no base data."""
+        mount = self.get_mount()
+        name = mount.name if mount is not None else self.name
+        size = get_catalogue().base_size(name)
+        if size:
+            return size
+        # Fall back to any base fields on the resolved model's characteristics.
+        chars = getattr(mount, 'characteristics', None) or self.characteristics
+        w, d = chars.get('base_width_mm'), chars.get('base_depth_mm')
+        if w and d:
+            return (float(w), float(d))
+        return None
 
     def give_weapon(self, name: str):
         """Add a weapon by name, resolving its stats from the catalogue."""

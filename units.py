@@ -47,6 +47,11 @@ class unitGraphics(FSM):
 
         self.modelWidth=abs(children[0].getTightBounds()[1][0]-children[0].getTightBounds()[0][0])
         self.modelHeight=abs(children[0].getTightBounds()[1][1]-children[0].getTightBounds()[0][1])
+        # Prefer the database base size (mounted models use their mount's base).
+        self.baseSize = self.unit.model.get_base_size() if self.unit and self.unit.model else None
+        if self.baseSize:
+            self.modelWidth = self.baseSize[0] / MM_PER_UNIT
+            self.modelHeight = self.baseSize[1] / MM_PER_UNIT
         print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")
 
         self.request('Idle')
@@ -281,6 +286,14 @@ class unitGraphics(FSM):
 
             # Create box shape from bounding box dimensions
             box_size = bounds[1] - bounds[0]
+            # When the database provides a base size, size the collision box from
+            # the base footprint (per-model base * formation) instead of the mesh.
+            if getattr(self, 'baseSize', None):
+                files = max(1, self.unit.files)
+                cols = min(files, self.unit.nmodels)
+                rows = (self.unit.nmodels + files - 1) // files
+                box_size.setX(self.modelWidth * cols)
+                box_size.setY(self.modelHeight * rows)
             shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
             body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
             body.addShape(shape)

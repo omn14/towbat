@@ -111,6 +111,61 @@ def _first_model_profile_id(model_entry: ET.Element, profiles: dict):
     return None
 
 
+def _parse_base_size(text: str):
+    """Parse a base-size string ('25x50', '50', '50x50 min...') into (width_mm, depth_mm)."""
+    if not text:
+        return None
+    m = re.search(r"(\d+)\s*[xX]\s*(\d+)", text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    m = re.search(r"(\d+)", text)
+    if m:
+        d = int(m.group(1))  # round base: same value both dimensions
+        return (d, d)
+    return None
+
+
+def _model_base_size(model_entry: ET.Element):
+    """Base size (width_mm, depth_mm) from a model entry's own 'Base (WxD)' infoLink."""
+    info_links = _direct_child(model_entry, "infoLinks")
+    if info_links is None:
+        return None
+    for link in info_links:
+        name = link.get("name") or ""
+        if name.startswith("Base"):
+            size = _parse_base_size(name)
+            if size:
+                return size
+    return None
+
+
+def _index_base_by_profile(root: ET.Element, profiles: dict) -> dict:
+    """Map model-profile id -> base size, so standalone profiles (mounts) get a base.
+    Mount-subtype entries win, so a mount's own base is preferred over, e.g., a
+    chariot that also references the same creature profile."""
+    mapping: dict = {}
+    for want_mount in (True, False):
+        for entry in root.iter(f"{NS}selectionEntry"):
+            if entry.get("type") != "model":
+                continue
+            if (entry.get("subType") == "mount") != want_mount:
+                continue
+            pid = _first_model_profile_id(entry, profiles)
+            size = _model_base_size(entry)
+            if pid and size:
+                mapping.setdefault(pid, size)
+    return mapping
+
+
+def _apply_base_size(record: dict, size) -> None:
+    """Store base dimensions on a record; leaves them unset when unknown."""
+    if not size:
+        return
+    record["Base Size"] = f"{size[0]}x{size[1]}"
+    record["base_width_mm"] = size[0]
+    record["base_depth_mm"] = size[1]
+
+
 def _index_org_categories(root: ET.Element) -> dict:
     """Map unit id -> org category via the root entryLinks that assign one."""
     mapping: dict = {}
@@ -269,6 +324,7 @@ def parse_catalogue_full(cat_path: str):
     faction_name = root.get("name", os.path.splitext(os.path.basename(cat_path))[0])
     profiles = _index_model_profiles(root)
     org_map = _index_org_categories(root)
+    base_by_profile = _index_base_by_profile(root, profiles)
     records: list = []
 
     for unit in root.iter(f"{NS}selectionEntry"):
@@ -293,6 +349,8 @@ def parse_catalogue_full(cat_path: str):
             for key in STAT_KEYS:
                 record[key] = prof["stats"].get(key, "")
             record["Points"] = points if points is not None else 0
+            base = _model_base_size(model_entry) or base_by_profile.get(profile_id)
+            _apply_base_size(record, base)
             record["Unit"] = unit_name
             record["Troop Type"] = context["Troop Type"]
             record["Unit Size"] = context["Unit Size"]
@@ -304,13 +362,14 @@ def parse_catalogue_full(cat_path: str):
     # Standalone model profiles (mounts, champion variants) that are not tied to
     # their own 'model' selection entry, used only as a lookup fallback.
     profile_records: list = []
-    for prof in profiles.values():
+    for pid, prof in profiles.items():
         if not prof["stats"]:
             continue
         rec = {"Model": prof["name"]}
         for key in STAT_KEYS:
             rec[key] = prof["stats"].get(key, "")
         rec["Points"] = 0
+        _apply_base_size(rec, base_by_profile.get(pid))
         rec["Unit"] = None
         rec["Troop Type"] = None
         rec["Unit Size"] = None
@@ -394,6 +453,17 @@ class Catalogue:
         """Return a fresh game weapon dict for a weapon name, or None."""
         record = self.weapons_by_slug.get(slugify(name))
         return copy.deepcopy(record) if record else None
+
+    def base_size(self, name: str):
+        """Base size (width_mm, depth_mm) for a model, or None. Prefers the
+        standalone/mount profile so a mount's true base isn't shadowed by a
+        chariot component that reuses the same creature name."""
+        slug = slugify(name)
+        slug = NAME_ALIASES.get(slug, slug)
+        for record in (self.all_by_slug.get(slug), self.by_slug.get(slug)):
+            if record and record.get("base_width_mm") and record.get("base_depth_mm"):
+                return (float(record["base_width_mm"]), float(record["base_depth_mm"]))
+        return None
 
     def iter_models(self):
         """Yield (model_name, faction, characteristics) for every model."""
