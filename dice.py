@@ -127,3 +127,15 @@ class ArtilleryDice(Dice):
     def artillery_value(self):
         """Return the artillery result ('Misfire' or an int) after settling."""
         return ARTILLERY_FACES.get(self.currentValue, 'Misfire')
+
+
+# Scatter Dice: four arrow faces and two 'Hit!' faces.
+SCATTER_FACES = {1: 'Hit!', 2: 'Hit!', 3: 'Arrow', 4: 'Arrow', 5: 'Arrow', 6: 'Arrow'}
+
+
+class ScatterDice(Dice):
+    """A physics die whose settled d6 face maps to a Scatter Dice result."""
+
+    def scatter_value(self):
+        """Return 'Hit!' or 'Arrow' after settling."""
+        return SCATTER_FACES.get(self.currentValue, 'Arrow')

@@ -273,6 +273,8 @@ class GamePhaseFSM(FSM):
         taskMgr.remove("taskShootingTrajectoryDrawLine")
         if getattr(self.game, 'cannon', None):
             self.game.cannon.cleanup()
+        if getattr(self.game, 'bombard', None):
+            self.game.bombard.cleanup()
         if getattr(self.game, 'rangeRing', None):
             self.game.rangeRing.removeNode()
             self.game.rangeRing = None

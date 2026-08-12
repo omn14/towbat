@@ -59,6 +59,7 @@ from movement_system import MovementSystem
 from terrain_system import TerrainManager
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
+from bombardment import Bombardment
 import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -247,6 +248,7 @@ class MyApp(ShowBase):
         self.movement = MovementSystem(self)
         self.tutorial = TutorialManager(self)
         self.cannon = CannonFire(self)
+        self.bombard = Bombardment(self)
         self.accept('c', self.toggle_campaign_map)
         self.accept('t', self.start_tutorial)
 
@@ -435,9 +437,12 @@ class MyApp(ShowBase):
                     except (TypeError, ValueError):
                         wdict['ranged_strength'] = 3
                 name = wdict.get('name', 'weapon')
-                # Merge into a class-provided weapon so its coded rules survive.
+                # A class/catalogue weapon (e.g. a war machine's piece) is the
+                # fresh source of truth; saved data only fills fields it lacks.
                 if name in model_instance.weapons:
-                    model_instance.weapons[name].update(wdict)
+                    existing = model_instance.weapons[name]
+                    for key, value in wdict.items():
+                        existing.setdefault(key, value)
                 else:
                     model_instance.weapons[name] = wdict
 
@@ -758,6 +763,10 @@ class MyApp(ShowBase):
         # War-machine cannons use the dedicated Cannon Fire targeting flow.
         if self.cannon.is_cannon(self.unitToMove):
             self.cannon.begin_targeting(self.unitToMove)
+            return task.done
+        # Bombardment war machines (Mortar, etc.) use the blast-template flow.
+        if self.bombard.is_bombardment(self.unitToMove):
+            self.bombard.begin_targeting(self.unitToMove)
             return task.done
         print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:

@@ -280,13 +280,28 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         if "charged" in low and "only" in low:
             weapon["charge_only"] = True
     if is_ranged:
-        m = re.search(r"\d+", rng)
-        weapon["ranged_range"] = int(m.group()) if m else 0
-        # Numeric Strength, else None meaning 'use the wielder's Strength'.
-        weapon["ranged_strength"] = int(strength) if strength.isdigit() else None
+        # Range may be a single value or a 'min-max' band (e.g. Mortar '12-48').
+        nums = re.findall(r"\d+", rng)
+        if len(nums) >= 2:
+            weapon["ranged_range_min"] = int(nums[0])
+            weapon["ranged_range"] = int(nums[1])
+        elif nums:
+            weapon["ranged_range"] = int(nums[0])
+        else:
+            weapon["ranged_range"] = 0
+        # Strength: leading number (handles '2 (6)'); a bracket gives the
+        # central-hole Strength used by Bombardment weapons.
+        sm = re.match(r"\s*(\d+)", strength)
+        weapon["ranged_strength"] = int(sm.group(1)) if sm else None
+        sc = re.search(r"\(\s*(\d+)\s*\)", strength)
+        if sc:
+            weapon["ranged_strength_central"] = int(sc.group(1))
         # Catalogue AP is a save modifier ('-1'); game penetration is its negation.
         ap_m = re.search(r"-?\d+", ap)
         weapon["ranged_AP"] = -int(ap_m.group()) if ap_m else 0
+        apc = re.search(r"\(\s*(-?\d+)\s*\)", ap)
+        if apc:
+            weapon["ranged_AP_central"] = -int(apc.group(1))
         weapon["ranged_shots"] = 1
         for r in rules:
             ms = re.search(r"multiple shots\s*\(([^)]+)\)", r, re.I)
@@ -297,7 +312,14 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
                 else:
                     # Random count (e.g. 'D3', 'D6', 'D3+1') rolled when firing.
                     weapon["ranged_shots_dice"] = expr
+            mw = re.search(r"multiple wounds\s*\(([^)]+)\)", r, re.I)
+            if mw:
+                weapon["multiple_wounds"] = mw.group(1).strip().upper().replace(" ", "")
         weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
+        # Blast template diameter (e.g. '5" blast template') from the Notes.
+        bm = re.search(r"(\d+)\s*[\"\u201d]?\s*blast", notes, re.I)
+        if bm:
+            weapon["blast_diameter"] = int(bm.group(1))
     return weapon
 
 
