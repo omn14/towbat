@@ -1093,7 +1093,7 @@ class MovementSystem:
             print(result.getHitNormal())
             print(result.getHitFraction())
             print(result.getNode())
-            self.game.z2.setPos(result.getHitPos())
+            #self.game.z2.setPos(result.getHitPos())
             print("sweep test topos:", result.getToPos())
             print(startPos + direction * length)
             return result.getHitFraction()
@@ -1212,7 +1212,7 @@ class MovementSystem:
                 """ if contact_unit in unit.isInCombatWith:
                     print("Contact with unit in combat, no fallback movement applied.")
                     continue """
-                self.game.z2.setPos(unit.bodyNP.getPos() + mpoint.getLocalPointA())
+                #self.game.z2.setPos(unit.bodyNP.getPos() + mpoint.getLocalPointA())
                 selected_unit = unit
                 """ if selected_unit.state == 'InCombat':
                     print("Unit in combat, cannot be moved in bounds again now!")
