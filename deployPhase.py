@@ -2,6 +2,7 @@ from panda3d.core import Point3, BitMask32
 import random
 from strategyAdvisor import StrategyAdvisor
 from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
+from characters import is_character, has_joined_character, same_player, join_unit
 
 
 # ── Strategy-aware deployment for AI ──────────────────────────────────
@@ -353,16 +354,29 @@ def taskMoveUnit(game,unit,task):
 
 def endMoveUnit(game,taskToEnd):
     print("Ending move unit task")
-    inContact = game.checkUnitContactSmall(game.unitToMove)
-    game.unitToMove.bodyNP.node().setTransformDirty()
-    inZone = is_shape_inside(base.world, game.unitToMove.bodyNP.node(), game.boundary_ghost)
+    held = game.unitToMove
+    inContact = game.checkUnitContactSmall(held)
+    held.bodyNP.node().setTransformDirty()
+    inZone = is_shape_inside(base.world, held.bodyNP.node(), game.boundary_ghost)
+
+    # Character dropped onto a friendly unit inside the zone: join its ranks
+    # instead of refusing (rather than stacking on top of it).
+    if inContact and inZone and is_character(held):
+        host = game.getSelectedUnit(inContact.getNode1())
+        if (host is not None and host is not held and not is_character(host)
+                and same_player(game, held, host) and not has_joined_character(host)):
+            print(f"{held.unitName} joins {host.unitName}.")
+            join_unit(game, held, host)
+            taskMgr.remove(taskToEnd)
+            _advance_after_deploy(game)
+            return
 
     if not inZone:
         # Dropped outside the deploy zone: cancel this pickup (leave it
         # undeployed) so the player can change their mind and pick another unit.
         print("Unit is out of bounds, cannot deploy here.")
-        game.unitToMove.model.setColor(.6,0.6,0.6,1)
-        game.unitToMove.isDeployed = False
+        held.model.setColor(.6,0.6,0.6,1)
+        held.isDeployed = False
         taskMgr.remove(taskToEnd)
         game.accept('mouse1', game.setActiveUnit,
                     [game.setActiveUnitTask, game.setActiveUnitTaskName])
@@ -372,12 +386,17 @@ def endMoveUnit(game,taskToEnd):
         # Inside the zone but overlapping another unit: refuse the drop and keep
         # holding so the player can reposition (never place on top of a unit).
         print("Unit is in contact with another unit, cannot deploy here.")
-        game.unitToMove.model.setColor(.6,0.6,0.6,1)
+        held.model.setColor(.6,0.6,0.6,1)
         return
 
-    game.unitToMove.model.setColor(game.unitToMove.color)
+    held.model.setColor(held.color)
     taskMgr.remove(taskToEnd)
-    game.unitToMove.isDeployed=True
+    held.isDeployed=True
+    _advance_after_deploy(game)
+
+
+def _advance_after_deploy(game):
+    """Rebind selection and advance the deploy turn/phase after a placement."""
     game.accept('mouse1', game.setActiveUnit,[game.setActiveUnitTask, game.setActiveUnitTaskName])
     depH=12
     if game.roundCounter.current_player == 2:

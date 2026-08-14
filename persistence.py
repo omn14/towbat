@@ -10,6 +10,8 @@ import os
 import shutil
 from datetime import datetime
 
+from characters import join_unit
+
 
 def _clean_weapon(weapon):
     """Return a JSON-safe copy of a weapon dict, dropping coded (callable) rules."""
@@ -72,7 +74,7 @@ def save_game_state(game, filename=None):
             'characteristics': unit.unit.model.characteristics,
             'armor_save': unit.unit.model.armor_save,
             'charging': unit.unit.model.charging,
-            'player': 1 if unit in game.player1Units else 2,
+            'player': getattr(unit, '_player', 1 if unit in game.player1Units else 2),
             'isInCombatWith': [u.unitName for u in unit.isInCombatWith],
             'isInCombatFlank': unit.isInCombatFlank,
             # Enough to reconstruct the unit on load if it is missing.
@@ -80,6 +82,9 @@ def save_game_state(game, filename=None):
             'weapons': [_clean_weapon(w) for w in unit.unit.model.weapons.values()],
             'mount': (unit.unit.model.get_mount().name
                       if unit.unit.model.is_mounted() else None),
+            # Character joined to this unit's front rank, if any.
+            'joined_character': (unit.joinedCharacter.unitName
+                                 if getattr(unit, 'joinedCharacter', None) else None),
         }
 
         if unit.unit.model.equipedWeapon:
@@ -261,6 +266,14 @@ def load_game_state(game, filename):
                 unit.isInCombatWith.append(unit_map[combat_unit_name])
         unit.isInCombatFlank = unit_data['isInCombatFlank']
         unit.updateTextNode()
+
+    # Third pass: re-join characters to their host units.
+    for unit_data in game_state['units']:
+        char_name = unit_data.get('joined_character')
+        host = unit_map.get(unit_data['name'])
+        character = unit_map.get(char_name) if char_name else None
+        if host is not None and character is not None:
+            join_unit(game, character, host)
 
     print(f"Game loaded from {filename}")
     game.debugTextUnit.setText(f"Loaded: {filename}")

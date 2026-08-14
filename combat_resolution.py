@@ -33,6 +33,7 @@ from direct.task.Task import Task
 
 from dice import Dice, checkDice
 from battleFunctions import simulate_battle
+from characters import JOIN_TAG
 
 
 class CombatResolver:
@@ -713,8 +714,17 @@ class CombatResolver:
             self.game.attackSequence.append(back_int)
             self.game.attackSequence.append(forward_int)
 
+            # A joined character occupies one front-rank slot: the unit fights
+            # with one fewer model of its own profile, the character adds its own
+            # attacks below.
+            joinedRule = next((r for r in defenderUnit.unit.model.special_rules
+                               if isinstance(r, dict) and r.get('tag') == JOIN_TAG), None)
+            origFiles = defenderUnit.unit.files
+            if joinedRule and origFiles > 1:
+                defenderUnit.unit.files -= 1
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                 defenderUnit.unit, attackerUnit.unit, charge=False)
+            defenderUnit.unit.files = origFiles
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                     suffered_wounds, saves_made, total_wounds)
             attackerUnit.unit.nmodels -= total_wounds
@@ -765,6 +775,22 @@ class CombatResolver:
                     else:
                         player2_score += total_wounds
                     combWounds += total_wounds
+            # A joined character fights with its own profile (single model).
+            if joinedRule:
+                charUnit = joinedRule['characterUnit']
+                cw = charUnit.model.equipedWeapon
+                if cw is None or cw.get('tag') == 'ranged':
+                    charUnit.model.equip_weapon('hand weapon')
+                attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
+                    charUnit, attackerUnit.unit, charge=False)
+                self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
+                                        suffered_wounds, saves_made, total_wounds)
+                attackerUnit.unit.nmodels -= total_wounds
+                if defenderUnit in self.game.player1Units:
+                    player1_score += total_wounds
+                else:
+                    player2_score += total_wounds
+                combWounds += total_wounds
             modRemoveSequence.append(
                 Func(self.game.removeModelsFromUnit, attackerUnit, combWounds))
 

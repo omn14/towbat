@@ -54,6 +54,7 @@ from collision_masks import CollisionMask as CM
 from game_fsm import GamePhaseFSM
 from spell_system import DevilsVisitSpell, RaiseDeadSpell
 from persistence import save_game_state, load_game_state
+from characters import JOIN_TAG
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
@@ -1159,8 +1160,26 @@ class MyApp(ShowBase):
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
               f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})")
+        # A joined character with a missile weapon replaces one unit shooter and
+        # fires with its own profile.
+        joinedRule = next((r for r in attacker.model.special_rules
+                           if isinstance(r, dict) and r.get('tag') == JOIN_TAG), None)
+        charShooter = None
+        if joinedRule:
+            cu = joinedRule['characterUnit']
+            cw = cu.model.equipedWeapon
+            if cw and cw.get('tag') == 'ranged':
+                charShooter = cu
+        origFiles = attacker.files
+        if charShooter and origFiles > 1:
+            attacker.files -= 1
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
+        attacker.files = origFiles
         self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+        if charShooter:
+            c_attacks, c_hits, c_suffered, c_saves, c_wounds = simulate_battle(charShooter, defender, charge=False)
+            self.printBattleResults(attackerUnit, defenderUnit, c_attacks, c_hits, c_suffered, c_saves, c_wounds)
+            total_wounds += c_wounds
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         attackerUnit.hasAttackedThisTurn = True

@@ -8,6 +8,7 @@ are used directly; all other game state is accessed via ``self.game``.
 
 import math
 from collision_masks import CollisionMask as CM
+from characters import on_host_removed
 
 from panda3d.core import (
     Vec2, Vec3, Vec4, Point3,
@@ -1024,6 +1025,7 @@ class MovementSystem:
             for u in unit.isInCombatWith:
                 u.request("Idle")
             #messenger.send('unit-move-complete')
+            on_host_removed(self.game, unit)
             self.game.world.removeRigidBody(unit.bodyNP.node())
             unit.bodyNP.removeNode()
             unit.model.removeNode()
