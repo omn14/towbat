@@ -47,11 +47,8 @@ class ClassAI:
         if not hasattr(task, '_wait_elapsed'):
             task._wait_elapsed = 0.0
         task._wait_elapsed += globalClock.getDt()
-        if task._wait_elapsed % 2.0 < globalClock.getDt():
-            print(f"Waiting for move complete for unit: {unit.unit.name} ({task._wait_elapsed:.1f}s)")
         if self._move_complete:
             self._move_complete = False
-            print(f"signal received for unit: {unit.unit.name}")
             return task.done
         # Safety timeout: if we've been waiting too long, force-advance
         if task._wait_elapsed > 30.0:

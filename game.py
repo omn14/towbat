@@ -514,7 +514,6 @@ class MyApp(ShowBase):
         if texture:
             width_pixels = texture.getXSize()
             height_pixels = texture.getYSize()
-            print(texture)
         else:
             width_pixels = texture_size
             height_pixels = texture_size
@@ -684,7 +683,6 @@ class MyApp(ShowBase):
     async def rallyUnit(self, unit):
         # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
         Ld=int(unit.unit.model.characteristics['Ld'])
-        print("losing unit original LD:", Ld)
         terningerLd=[]
         for i in range(2):
             terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
@@ -737,7 +735,6 @@ class MyApp(ShowBase):
             #return task.done
 
         if any(rule.get('wizard',False) for rule in self.unitToMove.unit.model.special_rules):
-            print("Wizard phase logic here.")
             self.fsm.request("SpellPhase")
 
         return task.done
@@ -769,7 +766,6 @@ class MyApp(ShowBase):
         if self.bombard.is_bombardment(self.unitToMove):
             self.bombard.begin_targeting(self.unitToMove)
             return task.done
-        print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
             print("Unit has no equiped weapon equipped, cant shoot.")
             return task.done
@@ -816,11 +812,9 @@ class MyApp(ShowBase):
             print("Unit has no equiped weapon equipped, cant shoot.")
             return task.done """
         r=False
-        print(self.unitToMove.unit.model.spells)
         spellChoices = []
         spellClasses = []
         for spell in self.unitToMove.unit.model.spells:
-            print("checking spells: ",self.unitToMove.unit.model.spells.get(spell))
             if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
                 spellChoices.append(spell)
                 spellClasses.append(self.unitToMove.unit.model.spells.get(spell).get('class'))
@@ -1077,7 +1071,6 @@ class MyApp(ShowBase):
             
             if result.hasHit():
                 hit_node = result.getNode()
-                print("Mouse click hit:",result.getHitPos())
 
                 """ self.terninger=[]
                 for i in range(5):
@@ -1097,7 +1090,6 @@ class MyApp(ShowBase):
                         for unit in self.units:
                             if unit_name == unit.unitName:
                                 self.unitToMove = unit
-                                print(f"Selected unit: {unit.unitName}")
                         """ if unit_name == self.bretBowmen.unitName:
                             self.unitToMove = self.bretBowmen
                             print(f"Selected unit: {self.bretBowmen.unitName}")
@@ -1232,7 +1224,6 @@ class MyApp(ShowBase):
                 for unit in self.units:
                     if unit_name == unit.unitName:
                         selected = unit
-                        print(f"Selected unit: {unit.unitName}")
                 """ if unit_name == self.bretBowmen.unitName:
                     selected = self.bretBowmen
                     print(f"Selected unit: {self.bretBowmen.unitName}")
@@ -1367,11 +1358,9 @@ class MyApp(ShowBase):
 
             if result.hasHit():
                 hit_node_name = result.getNode().getName()
-                print(f"Campaign hit: {hit_node_name} at {result.getHitPos()}")
                 country_name = hit_node_name.split("_")[0]
                 self.country_fsm.selectCountry(country_name)
             else:
-                print("No country hit")
                 self.country_fsm.deselectCountry()
 
     def campaign_deselect(self):
@@ -1530,7 +1519,6 @@ class MyApp(ShowBase):
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')
-        print("Waiting for choice...")
         if self.roundCounter.current_player in [1, 2] and self.AIplayer2.active:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
@@ -1545,10 +1533,8 @@ class MyApp(ShowBase):
         #self.accept('mouse1', self.setActiveUnit,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         self.awaitingChoice = False
         self.accept('mouse1', self.setActiveUnit,[self.setActiveUnitTask, self.setActiveUnitTaskName])
-        print("event received")
         cynchoice = cyn.choice
         
-        print('Event delivered with args:', cyn.choice)
         del cyn
         return cynchoice
     

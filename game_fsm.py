@@ -37,7 +37,6 @@ class GamePhaseFSM(FSM):
         self.request(self.PHASES[self.current_phase_index])
 
         self.menu_cubes = base.camera.findAllMatches("**/*MenuCube")
-        print(self.menu_cubes)
 
         self.accept('mouse1', self._on_menu_click)
 
@@ -215,7 +214,6 @@ class GamePhaseFSM(FSM):
             unit.updateTextNode()
 
     def exitStrategyPhase(self):
-        print("Exiting Strategy Phase")
         self.game.ignore('mouse1')
         if taskMgr.hasTaskNamed("taskLoopStrategy"):
             taskMgr.remove("taskLoopStrategy")
@@ -233,7 +231,6 @@ class GamePhaseFSM(FSM):
         )
 
     def exitMovementPhase(self):
-        print("Exiting Movement Phase")
         taskMgr.remove("taskLoopPathTowardsMouse")
         self._cleanup_phase()
         self.game.ignore('mouse1')
@@ -266,7 +263,6 @@ class GamePhaseFSM(FSM):
         )
 
     def exitShootingPhase(self):
-        print("Exiting Shooting Phase")
         self.game.ignore('mouse1')
         self._cleanup_phase()
         self.game.ground.setShaderInput("isActive", False)
@@ -296,7 +292,6 @@ class GamePhaseFSM(FSM):
                 unit.hasAttackedThisTurn = False
 
     def exitCombatPhase(self):
-        print("Exiting Combat Phase")
         self.game.ignore('mouse1')
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
@@ -313,7 +308,6 @@ class GamePhaseFSM(FSM):
         self.game.accept('mouse1', self.game.makeChoiceSelection)
 
     def exitMakeChoice(self):
-        print("Exiting Make Choice Phase")
         self.game.ignore('mouse1')
 
     def enterSpellPhase(self):
@@ -330,7 +324,6 @@ class GamePhaseFSM(FSM):
         )
 
     def exitSpellPhase(self):
-        print("Exiting Spell Phase")
         self.activeSpell = None
         self.spellFunctionToCast = None
         self.game.ignore('mouse1')
@@ -377,7 +370,6 @@ class GamePhaseFSM(FSM):
 
     def exitCampaignPhase(self):
         """Hide campaign map, restore battle scene."""
-        print("Exiting Campaign Phase")
         self.game.debugNP.show()
 
         self.game.campaign_map.hide()

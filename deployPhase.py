@@ -332,11 +332,9 @@ def taskMoveUnit(game,unit,task):
     outBounds = False
     c = game.checkUnitContactSmall(unit)
     if c:
-        print("Unit is in contact with another unit, cannot deploy here.")
         outBounds = True
     unit.bodyNP.node().setTransformDirty()
     if not is_shape_inside(base.world, unit.bodyNP.node(), game.boundary_ghost):
-        print("Unit is out of bounds, cannot deploy here.")
         outBounds = True
     if outBounds:
         unit.model.setColor(.6,0.6,0.6,1)
@@ -353,7 +351,6 @@ def taskMoveUnit(game,unit,task):
     return task.cont
 
 def endMoveUnit(game,taskToEnd):
-    print("Ending move unit task")
     held = game.unitToMove
     inContact = game.checkUnitContactSmall(held)
     held.bodyNP.node().setTransformDirty()

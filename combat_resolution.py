@@ -145,7 +145,6 @@ class CombatResolver:
             half_extents = shape.getHalfExtentsWithMargin()
             width = half_extents.x
             height = half_extents.y
-            print(f"Defender unit width: {width}")
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         unit.bodyNP.setPos(oposUnit)
@@ -170,7 +169,6 @@ class CombatResolver:
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
         # Rotate the new node smoothly to align with defender
-        print("rotate from to", newnode.getHpr(), contactRot)
         newnode_hpr = newnode.getHpr()
         positive_h = newnode_hpr.x % 360
         positive_p = newnode_hpr.y % 360
@@ -183,10 +181,7 @@ class CombatResolver:
             contactRot = Vec3(contactRot.x + 360, contactRot.y, contactRot.z)
         newnode.setHpr(positive_h, positive_p, positive_r)
 
-        print("rotate from to", newnode.getHpr(), contactRot)
-
         wheel1Angle = contactRot.x - orotUnit.x
-        print("wheel1Angle:", wheel1Angle)
         newnode.setHpr(contactRot)
         wheel1Pos = newnode.getPos(render)
 
@@ -194,15 +189,12 @@ class CombatResolver:
             direction = self.game.playerNP.getPos() - wheel1Pos
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
-            print("Calculated distance to move forward:", cdistance, wdistance, width * 2)
 
         chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
                 chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
         fldist = sum(fldice)
-        print("Charge distance:", chdist)
-        print("Flee distance:", fldist)
         if chdist < wdistance:
             angle = math.degrees(chdist / width)
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z) * wheel1Angle / abs(wheel1Angle)
@@ -227,8 +219,6 @@ class CombatResolver:
 
         angle = contactRot.x
         vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
-        print((contactPos - newnode.getPos()).normalized() * cdistance)
-        print(cdistance, "aplpied to vector:", Vec3(vector.x, vector.y, 0), wdistance, chdist)
         cmove = chdist - wdistance
         pos_interval = LerpPosHprInterval(
             newnode,
@@ -328,7 +318,6 @@ class CombatResolver:
             half_extents = shape.getHalfExtentsWithMargin()
             width = half_extents.x
             height = half_extents.y
-            print(f"Defender unit width: {width}")
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
         unit.bodyNP.setPos(oposUnit)
@@ -356,7 +345,6 @@ class CombatResolver:
 
         unit.bodyNP.setHpr(orotUnit)
         unit.bodyNP.wrtReparentTo(newnode)
-        print("rotate from to", newnode.getHpr(), contactRot)
         newnode_hpr = newnode.getHpr()
         positive_h = newnode_hpr.x % 360
         positive_p = newnode_hpr.y % 360
@@ -372,12 +360,10 @@ class CombatResolver:
             contactRot = Vec3(contactRot.x + 360, contactRot.y, contactRot.z)
 
         newnode.setHpr(positive_h, positive_p, positive_r)
-        print("rotate from to", newnode.getHpr(), contactRot)
 
         wheel1Angle = contactRot.x - orotUnit.x
         if wheel1Angle > 180:
             wheel1Angle -= 360
-        print("wheel1Angle:", wheel1Angle)
         newnode.setHpr(contactRot)
         wheel1Pos = newnode.getPos(render)
 
@@ -385,7 +371,6 @@ class CombatResolver:
             direction = self.game.playerNP.getPos() - wheel1Pos
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
-            print("Calculated distance to move forward:", cdistance, wdistance, width * 2)
 
         chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
         for rule in unit.unit.model.special_rules:
@@ -393,7 +378,6 @@ class CombatResolver:
                 chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
-        print("Charge distance:", chdist)
         if chdist < wdistance:
             angle = math.degrees(chdist / (width * 2))
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z) * wheel1Angle / abs(wheel1Angle)
@@ -413,7 +397,6 @@ class CombatResolver:
             if terninger:
                 for terning in terninger:
                     terning.remove(self.game.world)
-            print("Charge distance less than wheel distance, returning.")
             unit.request("Moved")
             return
         ocdistance = cdistance
@@ -422,7 +405,6 @@ class CombatResolver:
 
         angle = contactRot.x
         vector = Vec2(-math.sin(math.radians(angle)), math.cos(math.radians(angle)))
-        print((contactPos - newnode.getPos()).normalized() * cdistance)
         cmove = min(chdist, cdistance)
         pos_interval = LerpPosHprInterval(
             newnode,
@@ -437,8 +419,7 @@ class CombatResolver:
         if chdist < self.game.moveArceDistance:
             for terning in terninger:
                 terning.remove(self.game.world)
-            print("Charge distance less than total distance, returning.",
-                  chdist, wdistance, ocdistance, self.game.moveArceDistance)
+            print("Charge fell short \u2014 unit did not reach the enemy.")
             unit.request("Moved")
             return
 
@@ -474,9 +455,6 @@ class CombatResolver:
         unit.bodyNP.wrtReparentTo(newnode)
 
         finalHpr = (newnode.getH() + angleToRotate, newnode.getP(), newnode.getR())
-        print("Final HPR:", finalHpr)
-        print("Angle to rotate:", angleToRotate)
-        print("Current HPR before final rotation:", newnode.getHpr())
         rotation_interval = LerpPosHprInterval(
             newnode,
             duration=0.5 * durIntConst,
@@ -527,11 +505,9 @@ class CombatResolver:
 
     def getFlankFromContact(self, unit, contact):
         flank = "front"
-        print("Unit collision detected!")
         angleAttacker = unit.bodyNP.getH()
         defenderNP = render.find(f"**/{contact.getNode1().getName()}")
         angleDefender = defenderNP.getH()
-        print(f"contact position in defender coordsystem: {self.game.playerNP.getPos(defenderNP)}")
         hitloc = self.game.playerNP.getPos(defenderNP)
 
         shape = contact.getNode1().getShape(0)
@@ -539,62 +515,41 @@ class CombatResolver:
             half_extents = shape.getHalfExtentsWithMargin()
             width = half_extents.x * unit.bodyNP.getScale().x
             height = half_extents.y * unit.bodyNP.getScale().y
-            print(f"Defender unit width: {width}, height: {height}")
 
         angleToRotate = angleDefender - angleAttacker
-        print(f"Attacker angle: {angleAttacker}, Defender angle: {angleDefender}")
-        print(f"Rotating attacker by {angleToRotate} degrees to face defender.")
         angleToRotate = (angleToRotate) % 360
-        print(f"normalized {angleToRotate} degrees to face defender.")
-        print(f"Hit location in defender coords: {hitloc}")
         unitloc = unit.bodyNP.getPos(defenderNP)
-        print(f"Attacker unit center location in defender coords: {unitloc}")
         hitloc = unitloc
 
         angle_between = math.acos(Vec3(0, 1, 0).dot(hitloc.normalized())) * (180.0 / math.pi)
-        print("Angle between forward and hit location vector:", angle_between)
         frontArcAngle = 90 - math.atan2(height, width) * (180.0 / math.pi)
-        print("Front arc angle:", frontArcAngle)
 
         if angle_between > frontArcAngle + 90:
-            print("Hit rear side of defender")
             flank = "rear"
-            print(f"Initial angle to rotate: {angleToRotate}")
             if angleToRotate > 90:
                 angleToRotate = (360 - angleToRotate) * -1
 
         elif angle_between > frontArcAngle and hitloc.x < 0:
-            print("Hit on left side of defender")
             flank = "flank"
-            print(f"Initial angle to rotate: {angleToRotate}")
             if angleToRotate > 90:
                 angleToRotate -= 90
             else:
                 angleToRotate = 90 - angleToRotate
                 angleToRotate *= -1
-            print(f"Adjusted angle to rotate: {angleToRotate}")
 
         elif angle_between < frontArcAngle:
-            print("Hit front side of defender")
             flank = "front"
-            print(f"Initial angle to rotate: {angleToRotate}")
             if angleToRotate > 90:
                 angleToRotate -= 180
-            print(f"Adjusted angle to rotate: {angleToRotate}")
 
         elif angle_between > frontArcAngle and hitloc.x > 0:
-            print("Hit on right side of defender")
             flank = "flank"
-            print(f"Initial angle to rotate: {angleToRotate}")
             if angleToRotate < 0:
                 angleToRotate += 90
             if angleToRotate > 90:
                 angleToRotate = 360 - 90 - angleToRotate
                 angleToRotate *= -1
-            print(f"Adjusted angle to rotate: {angleToRotate}")
 
-        else:
-            print("Hit i dont know where")
         return flank, angleToRotate
 
     # ─── Battle Output ────────────────────────────────────────────────────
@@ -616,13 +571,11 @@ class CombatResolver:
         wepchoice = await taskMgr.add(self.game.makeChoiceNew(weps, Vec3(0, 0, 10)))
 
         self.game.unitToMove.unit.model.equip_weapon(wepchoice)
-        print('Event delivered with args:', wepchoice)
 
         await taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
 
     async def verySimpleBattle(self, task):
-        print("Starting very simple battle...")
         try:
             await self._verySimpleBattleInner(task)
         except Exception as e:
@@ -638,27 +591,20 @@ class CombatResolver:
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
         flank = self.game.unitToMove.isInCombatFlank[0]
         engagedWith = [x.unitName for x in self.game.unitToMove.isInCombatWith]
-        print("Attacker:", attacker.node().getName())
-        print("engaged in battle with:", engagedWith)
-        print("on flanks:", self.game.unitToMove.isInCombatFlank)
 
         selected_choice = await taskMgr.add(self.game.makeChoiceNew(engagedWith, Vec3(0, 0, 10)))
 
-        print(f"Selected choice: {selected_choice}")
         for unit in self.game.unitToMove.isInCombatWith:
             if unit.unitName == selected_choice:
                 defender = unit.bodyNP
                 break
-        print(f"{attacker.node().getName()} attacks {defender.node().getName()} in {flank}!")
         attackerUnit = self.game.getSelectedUnit(attacker.node())
         defenderUnit = self.game.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels
         print(f"{attackerUnit.unit.name} attacks {defenderUnit.unit.name} in {flank}!")
         if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-            print("attacker unit has ranged weapon equiped, switch to melee weapon for combat.")
             attackerUnit.unit.model.equip_weapon('hand weapon')
         if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-            print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
             defenderUnit.unit.model.equip_weapon('hand weapon')
 
         self.game.attackSequence = Sequence()
@@ -691,10 +637,8 @@ class CombatResolver:
             defenderUnit.hasAttackedThisTurn = True
             defenderUnit.updateTextNode()
             if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-                print("defender unit has ranged weapon equiped, switch to melee weapon for combat.")
                 defenderUnit.unit.model.equip_weapon('hand weapon')
             if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-                print("attacker unit has ranged weapon equiped, switch to melee weapon for combat.")
                 attackerUnit.unit.model.equip_weapon('hand weapon')
             apos = defender.getPos()
             back_int = LerpPosHprInterval(
@@ -797,8 +741,6 @@ class CombatResolver:
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
         print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
-        print(f"Player 2 flank bonus: {player2_flank_bonus}, Player 1 flank bonus: {player1_flank_bonus}")
-        print(f"Player 2 rank bonus: {player2_rank_bonus}, Player 1 rank bonus: {player1_rank_bonus}")
         await self.game.attackSequence
         await modRemoveSequence
 
@@ -830,9 +772,6 @@ class CombatResolver:
                                    extraArgs=[loserUnit], appendTask=False)
                 continue
 
-            print("losing unit original LD:", loserUnit.unit.model.characteristics['Ld'],
-                  "modified by combat diff:", diff,
-                  "final LD to beat:", int(loserUnit.unit.model.characteristics['Ld']) - diff)
             terningerLd = []
             for i in range(2):
                 terning = Dice(self.game.world, position=Vec3(20 + i * 2, 0, 10),
@@ -904,7 +843,6 @@ class CombatResolver:
             persuit_results = 2
             persuit_score = persuit_results
             print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
-            print("sweep test for fallback")
             crashFraction = self.game.sweepTest(unit, direction, persuit_score) * .95
             crashFractionMin = min(crashFraction, crashFractionMin)
 
@@ -1098,7 +1036,6 @@ class CombatResolver:
 
         for n, persuing in enumerate(persuingUnit):
             if taskMgr.hasTaskNamed("checkFleeCaughtTask" + str(n)):
-                print("removing task", "checkFleeCaughtTask" + str(n))
                 taskMgr.remove("checkFleeCaughtTask" + str(n))
 
         loserPos = loserUnit.bodyNP.getPos()

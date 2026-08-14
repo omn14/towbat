@@ -21,15 +21,12 @@ class unitGraphics(FSM):
         self.world=BulletWorld
         self.color=color
         self.bitmask=bitmask
-        print(f"Creating unit graphics for {self.unitName} with model {modelpath}")
         self.model = loader.loadModel(modelpath)
-        print(f"Model {modelpath} loaded for unit {self.unitName}")
         self.model.setScale(scale)
         self.model.setColor(self.color)
         self.model.reparentTo(render)
         self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
-        print(f"Unit Width: {self.unitWidth}, Unit Height: {self.unitHeight}")
         #self.model.ls()
         children = self.model.getChildren()
         #children.sort(key=lambda np: np.getName())
@@ -53,14 +50,12 @@ class unitGraphics(FSM):
         if self.baseSize:
             self.modelWidth = self.baseSize[0] / MM_PER_UNIT
             self.modelHeight = self.baseSize[1] / MM_PER_UNIT
-        print(f"Model Width: {self.modelWidth}, Model Height: {self.modelHeight}")
 
         self.request('Idle')
 
         for i, child in enumerate(children):
             row = i // files
             col = i % files
-            print(f"Positioning child {child.getName()} at row {row}, col {col}")
             p=Point3(col * (self.modelWidth ),-row * (self.modelHeight ), 0)
             pp=p-Point3(self.unitWidth*2, -self.modelHeight/2,0)
             child.setPos(p)
@@ -283,9 +278,7 @@ class unitGraphics(FSM):
             # Estimate radius from bounding box
             #self.model.clearBounds()
             #self.model.calcTightBounds(render)
-            print(f"Setting up collisions for unit: {self.unitName}")
             bounds = self.model.getTightBounds()
-            print(f"Unit {self.unitName} bounding box: {bounds}")
             
             
 
@@ -354,13 +347,11 @@ class unitGraphics(FSM):
         self.characterMarker.setDepthWrite(False)
 
     def enterIdle(self):
-        print(f"{self.unitName} is idle! state")
         #messenger.send('unit-move-complete')
         self.hasMovedThisTurn=False
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterMoved(self):
-        print(f"{self.unitName} is in moved state!")
         self.hasMovedThisTurn=True
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
@@ -369,7 +360,6 @@ class unitGraphics(FSM):
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[],appendTask=False)
 
     def enterInCombat(self):
-        print(f"{self.unitName} is in combat state!")
         self.isInCombat=True
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
@@ -378,19 +368,16 @@ class unitGraphics(FSM):
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
     
     def exitInCombat(self):
-        print(f"{self.unitName} is exiting combat state!")
         self.isInCombat=False
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
 
     def enterIsFleeing(self):
-        print(f"{self.unitName} is in fleeing state!")
         self.attemptedRallyThisTurn=False
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
         pass
 
     def enterIsPursuing(self):
-        print(f"{self.unitName} is in pursuing state!")
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
         pass

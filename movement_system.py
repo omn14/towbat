@@ -135,7 +135,6 @@ class MovementSystem:
         mesh = BulletTriangleMesh()
 
         for geomNP in self.game.mesh_drawer_node.findAllMatches('**/+GeomNode'):
-            print("fant node i mesh drawer")
             geomNode = geomNP.node()
             ts = geomNP.getTransform(self.game.mesh_drawer_node)
             #print(ts)
@@ -195,7 +194,6 @@ class MovementSystem:
         body_a = node_a.find("**/+BulletRigidBodyNode")
         body_b = node_b.find("**/+BulletRigidBodyNode")
         if body_a.isEmpty() or body_b.isEmpty():
-            print("One or both nodes do not have a BulletRigidBodyNode attached.")
             return False
 
         # Get Bullet shapes
@@ -204,8 +202,6 @@ class MovementSystem:
 
         # Use BulletWorld contactTestPair
         result = self.game.world.contactTestPair(bullet_node_a, bullet_node_b)
-        print("Collision check result:")
-        print(result.getNumContacts())
         return result.getNumContacts() > 0
 
     
@@ -244,29 +240,21 @@ class MovementSystem:
         midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
         maxMoveDistance=movedistance
         #movedistance = min(movedistance, midpoint_mouse_vector.length())
-        print(midpoint_unit_vector,midpoint_mouse_vector,midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()))
-        print("before mouse pos:", mouse_pos, "midpoint:", midpoint)
         filipped=False
         if midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()) > 0:
             #rotationangle += 180
-            print("flipped")
             filipped=True
             vinkel=rotationangle+90
             mouse_pos = self.mirrorPointArc([mouse_pos], mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)[0]
-            print("after mouse pos:", mouse_pos)
             #mouse_pos = self.rotatePoint(mouse_pos, 90, origo=midpoint)
 
         quarternion = LQuaterniond()
         quarternion.set_from_axis_angle(rotationangle, LVector3d(0,0,1))
-        print(quarternion.getForward())
         behind= quarternion.getForward().dot(LVector3d(midpoint_mouse_vector.normalized().x, midpoint_mouse_vector.normalized().y,0))
-        print(behind)
         nums=0
         if behind < 0 and abs(behind) > 0.8:
-            print("behind arc")
             if abs(behind) > 0.8:
                 angle = 0
-                print("right behind")
                 x = width * math.cos(0) 
                 y = width * math.sin(0)
                 points.append(origo+Vec2(x,y))
@@ -281,9 +269,7 @@ class MovementSystem:
 
                 #return points
         elif behind < 0 and abs(behind) < 0.8:
-            print("somewhat behind arc")
             angle = 0
-            print("right behind")
             x = width * math.cos(0) 
             y = width * math.sin(0)
             points.append(origo+Vec2(x,y))
@@ -292,30 +278,15 @@ class MovementSystem:
             points.append(points[-1]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*height)
             points.append(points[-1])
             points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*height)
-            #for i, p in enumerate(points):
-            print(points)
             for i in [2,3]:
                 points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*movedistance/4 
-                #points[i] -= Vec2(quarternion.getForward().x, quarternion.getForward().y)*height    
-            print(points)
             for i in [1,4]:
                 points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*(movedistance/4 -width)
-                #points[i] -= Vec2(quarternion.getForward().x, quarternion.getForward().y)*height    
-            print(points)
 
             for i in range(len(points)):
-                #points[i] = p-Vec2(quarternion.getRight().x, quarternion.getRight().y)*movedistance/4   
-                #   
-                #print(Vec2(quarternion.getForward().x, quarternion.getForward().y)*height/2)
-                #print(points[i])
                 points[i] = points[i]-Vec2(quarternion.getForward().x, quarternion.getForward().y)*height/2
-                #print(points[i])
-            print(points)
             points = [points[-1]] + points[:-1]
-            print(points)
-            
-            for i in [-1,-2]:
-                print(points[i])
+
             vinkel=rotationangle+90
             filipped = not filipped
             self.game.moveArceDistance = .9
@@ -342,19 +313,14 @@ class MovementSystem:
                     
                     break
                 if width * angle >= movedistance:
-                    print("break because width*angle >= movedistance:", width*angle, movedistance)
                     break
 
-            #if movedistance 
-            #if movedistance + angle * width/2 > maxMoveDistance:
-            print(movedistance, angle*width, vectormouse.length()+angle*width)
             movedistance = min(movedistance, vectormouse.length()+angle*width)
             if movedistance - angle*width > 0:
                 movedistance -= angle*width
             else:
                 movedistance = 0
 
-            print("final movedistance:", movedistance,movedistance*2*50,(movedistance+angle*width)*2*50)
             self.game.moveArceDistance = (movedistance+angle*width)*2*50
             self.game.debugTextInfo.setText(f"Arc distance: {(self.game.moveArceDistance):.1f} ")
             #movedistance = min(movedistance, angle*width)
@@ -537,8 +503,6 @@ class MovementSystem:
             #pTo = render.getRelativePoint(base.cam, pTo)
             
         if True:
-            print(f"pFrom: {pFrom}, pTo: {pTo}")
-            
             #print(x,y)
             #surface.set_shader_input("pos", Vec3(base.mouseWatcherNode.getMouseX(),0,base.mouseWatcherNode.getMouseY())*4)
             #pFrom = Point3(0, 0, 0)
@@ -549,18 +513,12 @@ class MovementSystem:
 
             result = self.game.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
-            print(result.hasHit())
-            print(result.getHitPos())
-            print(result.getHitNormal())
-            print(result.getHitFraction())
-            print(result.getNode())
             #surface.set_shader_input("pos", result.getHitPos())
 
             #self.game.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
             #self.game.move_node_smoothly(self.game.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
 
             groundSizeboundingbox=self.game.ground.getTightBounds()
-            print(groundSizeboundingbox)
             pos=result.getHitPos()/abs(groundSizeboundingbox[0][0])
             self.game.ground.set_shader_input("pos", pos)
             #self.game.polygonpoints = []
@@ -589,8 +547,6 @@ class MovementSystem:
 
             #pos.x = -math.cos(math.radians(unitrotation))*unitwidth*0.5
             #pos.y = -math.sin(math.radians(unitrotation))*unitwidth*0.5 
-
-            print(f"unitposxy: {unitposxy} smileypos: {unit.bodyNP.getPos()} groundbb: {groundSizeboundingbox}")
 
             """ for rule in self.game.unitToMove.unit.model.special_rules:
                 if rule.get('move'):
@@ -638,7 +594,6 @@ class MovementSystem:
                     print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
                     move = int(move * terrain_mult)
 
-            print("Unit move:", move)
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
@@ -646,7 +601,6 @@ class MovementSystem:
 
             terrainMod = self.moveSweep(unit,CM.TERRAIN_FOREST)
             move = int(move * terrainMod)
-            print("Unit move terrain:", move)
 
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
@@ -689,7 +643,6 @@ class MovementSystem:
                 #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
-                print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.game.arcPointRotation)
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
@@ -717,7 +670,6 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             M = _model.get_movement(default=0)
             move = M*2
-            print("Unit move:", move)
             move = move * (modifyerM if _model.is_mounted() else modifyer)
             if unit.state == "IsPursuing":
                 move = 21
@@ -731,7 +683,6 @@ class MovementSystem:
                     move = int(move * terrain_mult)
             
             move = int(move * terrainMod)
-            print("Modified unit move:", move)
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
             for rule in self.game.unitToMove.unit.model.special_rules:
@@ -778,7 +729,6 @@ class MovementSystem:
                 #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
-                print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.game.arcPointRotation)
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
@@ -849,7 +799,6 @@ class MovementSystem:
             taskMgr.remove("taskLoopPathTowardsMouse")
             
         if unit.state != "Idle":
-            print("Unit is not idle")
             if unit.state != "IsPursuing":
                 print("Unit is not pursuing, cannot move.")
                 return
@@ -861,18 +810,12 @@ class MovementSystem:
             print("Unit has already moved this turn.")
             return
         
-        print("Moving unit to arc point...")
         pos = self.game.arcPoint
-        print("Normalized position:", pos)
         pos=pos*2
-        print("Moving unit to arc point:", self.game.arcPoint)
         pos -= Vec2(1,1)
-        
-        print("Normalized position:", pos)
         #pos.x *= abs(self.game.ground.getTightBounds()[0][0])
         pos.x *= 50
         pos.y *= 50
-        print("Calculated position:", pos)
         oposUnit=unit.bodyNP.getPos()
         orotUnit=unit.bodyNP.getHpr()
         unit.bodyNP.setPos(pos.x , pos.y , 0)
@@ -934,9 +877,6 @@ class MovementSystem:
         pursuerUnit.bodyNP.node().setTransformDirty()
         fleeUnit.bodyNP.node().setTransformDirty()
         result = self.game.world.contactTestPair(fleeUnit.bodyNP.node(), pursuerUnit.bodyNP.node())
-        print("Checking flee contact between", fleeUnit.unit.name, "and", pursuerUnit.unit.name)
-        print(fleeUnit.bodyNP.node().pickDirtyFlag())
-        print(result.getNumContacts(), result.getContacts())
         for contact in result.getContacts():
             print("Contact detected between fleeing unit and pursuer!")
             self.game.world.removeRigidBody(fleeUnit.bodyNP.node())
@@ -1006,7 +946,6 @@ class MovementSystem:
         for i in range(models_to_remove):
             #cildren[-1*(i+1)].removeNode()
             cildren = unit.model.getChildren()
-            print(f"Removing model {cildren[-1].getName()} from unit {unit.unit.name}")
             cildren[-1].removeNode()
         
         cildren = unit.model.getChildren()
@@ -1016,9 +955,7 @@ class MovementSystem:
             print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
             try:
                 if self.game.attackSequence.isPlaying():
-                    print("Pausing attack sequence")
                     self.game.attackSequence.pause()
-                    print(self.game.attackSequence.isPlaying())
             except AttributeError:
                 pass
             #self.game.attackSequence.finish()
@@ -1088,14 +1025,6 @@ class MovementSystem:
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
         if result.hasHit():
-            print(result.hasHit())
-            print(result.getHitPos())
-            print(result.getHitNormal())
-            print(result.getHitFraction())
-            print(result.getNode())
-            #self.game.z2.setPos(result.getHitPos())
-            print("sweep test topos:", result.getToPos())
-            print(startPos + direction * length)
             return result.getHitFraction()
         return 1.0
     
@@ -1129,14 +1058,6 @@ class MovementSystem:
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
         if result.hasHit():
-            print(result.hasHit())
-            print(result.getHitPos())
-            print(result.getHitNormal())
-            print(result.getHitFraction())
-            print(result.getNode())
-            #self.game.z2.setPos(result.getHitPos())
-            print("sweep test topos:", result.getToPos())
-            
             return result.getHitFraction(),result.getHitPos(),tsTo
         return 1.0,None,tsTo
     
@@ -1163,14 +1084,6 @@ class MovementSystem:
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
         if result.hasHit():
-            print(result.hasHit())
-            print(result.getHitPos())
-            print(result.getHitNormal())
-            print(result.getHitFraction())
-            print(result.getNode())
-            #self.game.z2.setPos(result.getHitPos())
-            print("sweep test topos:", result.getToPos())
-            
             return result.getHitFraction(),result.getHitPos()
         return 1.0,None
 
@@ -1178,7 +1091,6 @@ class MovementSystem:
 
     def fallBackContactTest(self, unitNP,moveVec=Vec3(0,0,0)):
         unit = self.game.getSelectedUnit(unitNP.node())
-        print("fallBackContactTest called for unit:", unit.unit.name)
         #unit.bodyNP.setCollideMask(BitMask32.bit(1))
         for us in self.game.units:
             if not us.bodyNP.isEmpty():
@@ -1193,17 +1105,7 @@ class MovementSystem:
         for contact in result.getContacts():
             node_name = contact.getNode1().getName()
             if node_name.startswith('UnitCollision-') :
-                print(contact.getNode0())
-                print(contact.getNode1())
-
                 mpoint = contact.getManifoldPoint()
-                print(mpoint.getDistance())
-                print(mpoint.getAppliedImpulse())
-                print(mpoint.getPositionWorldOnA())
-                print(mpoint.getPositionWorldOnB())
-                
-                print(mpoint.getLocalPointA())
-                print(mpoint.getLocalPointB())
                 #np=render.find(f"**/{contact.getNode1().getName()}")
                 #selected_unit = self.game.getSelectedUnit(contact.getNode1())
 
@@ -1239,7 +1141,6 @@ class MovementSystem:
                     moveVec.normalize()
                     moveVec*=0.1
                     moveVec.z=0
-                print("Applying fallback movement:", moveVec)
                 np.setPos(cpos+moveVec)
                 return self.fallBackContactTest(unitNP,moveVec)
         
@@ -1483,7 +1384,6 @@ class MovementSystem:
             ray_to   = Point3(world_pos.x, world_pos.y, -50)
 
             result = self.game.world.rayTestClosest(ray_from, ray_to, CM.TERRAIN_HILL)
-            print("Raycast from", ray_from, "to", ray_to, "hit:", result.hasHit())
             if not result.hasHit():
                 continue
 
@@ -1516,4 +1416,3 @@ class MovementSystem:
             # Convert axis-angle to HPR via a quaternion
             quat = LRotationf(axis, angle_deg)
             child.setQuat(child.getParent(), quat)
-            print(f"[alignModelsToHillNormal] child={child.getName()} pos={child.getPos()} normal={hit_normal} axis={axis} angle={angle_deg:.2f}°")
