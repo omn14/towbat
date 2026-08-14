@@ -545,6 +545,9 @@ class TerrainPiece:
         # Rim level for the per-pixel edge discard (hill/forest); 0 = no cut.
         self.visual.setShaderInput(
             "edgeLevel", self._field_edge if self._field is not None else 0.0)
+        # Movement/shooting range overlay defaults (updated by TerrainManager).
+        self.visual.setShaderInput("moveActive", False)
+        self.visual.setShaderInput("movePoints", [Vec2(0, 0)])
 
     # ── Scattered trees for forests ───────────────────────────────────
 
@@ -760,6 +763,15 @@ class TerrainManager:
         for piece in self.terrain_pieces:
             piece.destroy()
         self.terrain_pieces.clear()
+
+    def set_move_overlay(self, active, points=None):
+        """Broadcast the movement/shooting range polygon to every terrain
+        piece so the indicator wraps over hills/forests/water, not just the
+        flat ground card."""
+        for piece in self.terrain_pieces:
+            if points is not None:
+                piece.visual.setShaderInput("movePoints", points)
+            piece.visual.setShaderInput("moveActive", active)
 
     # ── Debug ─────────────────────────────────────────────────────────
 

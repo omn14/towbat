@@ -6,6 +6,11 @@ uniform vec4 baseColor;
 uniform vec2 pieceSize;   // world-space width/height of this terrain piece
 uniform float edgeLevel;  // hill/forest: discard fragments below this field value
 
+// Movement/shooting range overlay (same SDF the ground card draws).
+#define MOVE_MAXPTS 83
+uniform vec2 movePoints[MOVE_MAXPTS];
+uniform bool moveActive;
+
 // Auto-bound by Panda3D; falls back to 0.0 if unavailable (shader stays static).
 uniform float osg_FrameTime;
 
@@ -40,6 +45,21 @@ float fbm(vec2 p) {
         a *= 0.5;
     }
     return v;
+}
+
+// Signed distance to the movement/shooting polygon (matches the ground card).
+float sdPolygon(in vec2 pt, in vec2[MOVE_MAXPTS] v) {
+    float d = dot(pt - v[0], pt - v[0]);
+    float s = 1.0;
+    for (int i = 0, j = MOVE_MAXPTS - 1; i < MOVE_MAXPTS; j = i, i++) {
+        vec2 e = v[j] - v[i];
+        vec2 w = pt - v[i];
+        vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        d = min(d, dot(b, b));
+        bvec3 cond = bvec3(pt.y >= v[i].y, pt.y < v[j].y, e.x * w.y > e.y * w.x);
+        if (all(cond) || all(not(cond))) s = -s;
+    }
+    return s * sqrt(d);
 }
 
 void main() {
@@ -126,6 +146,18 @@ void main() {
     // Nudge toward the configured base tint so gameplay colours stay readable.
     col = mix(col, baseColor.rgb, 0.15);
     col *= lambert;
+
+    // Movement/shooting range overlay wrapped over the terrain surface. The
+    // board card spans world -50..50, so map world XY into the same 0..1 space.
+    if (moveActive) {
+        vec2 ouv = worldPos.xy * 0.01 + 0.5;
+        float d = sdPolygon(ouv, movePoints);
+        vec3 o = (d > 0.0) ? col : vec3(0.65, 0.85, 1.0);
+        o *= 1.0 - exp(-24.0 * abs(d));
+        o = mix(o, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));
+        // Keep the indicator a little transparent so terrain shows through.
+        col = mix(col, o, 0.9);
+    }
 
     p3d_FragColor = vec4(col, alpha);
 }

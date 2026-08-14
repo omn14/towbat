@@ -93,11 +93,12 @@ void main() {
     if (isActive) {
         // Movement / shooting range overlay drawn on top of the grass.
         float d = sdPolygon(uv, polygonpoints);
-        vec3 col = (d > 0.0) ? ground : vec3(0.65, 0.85, 1.0);
-        col *= 1.0 - exp(-24.0 * abs(d));
+        vec3 o = (d > 0.0) ? ground : vec3(0.65, 0.85, 1.0);
+        o *= 1.0 - exp(-24.0 * abs(d));
         // Bright rim right on the boundary line.
-        col = mix(col, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));
-        p3d_FragColor = vec4(col, 1.0);
+        o = mix(o, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));
+        // Keep the indicator a little transparent so the ground shows through.
+        p3d_FragColor = vec4(mix(ground, o, 0.9), 1.0);
     } else {
         p3d_FragColor = vec4(ground, 1.0);
     }

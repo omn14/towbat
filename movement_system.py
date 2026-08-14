@@ -647,8 +647,7 @@ class MovementSystem:
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
-                self.game.ground.setShaderInput("polygonpoints", self.game.polygonpoints)
-                self.game.ground.setShaderInput("isActive", True)
+                self.game.setGroundOverlay(True, self.game.polygonpoints)
                 return
 
             modifyer=1
@@ -733,9 +732,8 @@ class MovementSystem:
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
 
-            self.game.ground.setShaderInput("polygonpoints", self.game.polygonpoints)
-            self.game.ground.setShaderInput("isActive", True)
-            
+            self.game.setGroundOverlay(True, self.game.polygonpoints)
+
             return
 
     def debug_ray(self, pFrom, pTo):

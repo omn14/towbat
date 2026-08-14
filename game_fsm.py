@@ -204,7 +204,7 @@ class GamePhaseFSM(FSM):
             [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName]
         )
         print("Entering Strategy Phase")
-        self.game.ground.setShaderInput("isActive", False)
+        self.game.setGroundOverlay(False)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
             if unit.state != "InCombat" and unit.state != "IsFleeing":
@@ -265,7 +265,7 @@ class GamePhaseFSM(FSM):
     def exitShootingPhase(self):
         self.game.ignore('mouse1')
         self._cleanup_phase()
-        self.game.ground.setShaderInput("isActive", False)
+        self.game.setGroundOverlay(False)
         taskMgr.remove("taskShootingTrajectoryDrawLine")
         if getattr(self.game, 'cannon', None):
             self.game.cannon.cleanup()
@@ -328,7 +328,7 @@ class GamePhaseFSM(FSM):
         self.spellFunctionToCast = None
         self.game.ignore('mouse1')
         self._cleanup_phase()
-        self.game.ground.setShaderInput("isActive", False)
+        self.game.setGroundOverlay(False)
         taskMgr.remove("taskMagicArcUpdate")
         taskMgr.remove("taskShootingTrajectoryDrawLine")
         self.game.trajectoryLine.removeNode()

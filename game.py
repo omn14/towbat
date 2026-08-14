@@ -793,8 +793,7 @@ class MyApp(ShowBase):
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
                                                        radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100)
         self.checkArrowsTerrain()
-        self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
-        self.ground.setShaderInput("isActive", True)
+        self.setGroundOverlay(True, self.shootingArcPoints)
         # Half-range boundary: inside = short range, outside = long range (-1).
         half = self.unitToMove.unit.model.equipedWeapon.get('ranged_range', 18) * 1.5
         self.drawRangeRing(self.unitToMove.bodyNP.getPos(), half)
@@ -847,8 +846,7 @@ class MyApp(ShowBase):
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius)
-        self.ground.setShaderInput("polygonpoints", self.shootingArcPoints)
-        self.ground.setShaderInput("isActive", True)
+        self.setGroundOverlay(True, self.shootingArcPoints)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
         self.checkArrows(BitMask32.bit(5))
@@ -1394,6 +1392,15 @@ class MyApp(ShowBase):
         surface.setShaderInput("polygonpoints", self.polygonpoints)
         surface.setShaderInput("isActive", False)
         self.polygonpoints = []
+
+    def setGroundOverlay(self, active, points=None):
+        """Set the movement/shooting range overlay on the ground card and
+        broadcast it to terrain so the indicator wraps over hills/water."""
+        if points is not None:
+            self.ground.setShaderInput("polygonpoints", points)
+        self.ground.setShaderInput("isActive", active)
+        if hasattr(self, 'terrain_manager'):
+            self.terrain_manager.set_move_overlay(active, points)
 
     def setup_bullet(self):
         self.world = BulletWorld()
