@@ -196,6 +196,29 @@ def _unit_org_category(unit: ET.Element, org_map: dict) -> str:
     return "Other"
 
 
+def _effective_link_name(link: ET.Element) -> str:
+    """Return an infoLink's display name after applying its <modifier> children.
+    Units carry a rule's parameter this way, e.g. name 'Regeneration' + an
+    append modifier '(5+)' -> 'Regeneration (5+)'."""
+    name = link.get("name") or ""
+    mods = _direct_child(link, "modifiers")
+    if mods is None:
+        return name
+    for mod in mods:
+        if _tag(mod) != "modifier" or mod.get("field") != "name":
+            continue
+        value = mod.get("value") or ""
+        mtype = mod.get("type")
+        if mtype == "append":
+            sep = " " if value.startswith("(") and not name.endswith(" ") else ""
+            name = f"{name}{sep}{value}"
+        elif mtype == "prepend":
+            name = f"{value}{name}"
+        elif mtype == "set":
+            name = value
+    return name
+
+
 def _unit_context(unit: ET.Element) -> dict:
     """Pull troop type, unit size and special-rule names from a unit entry."""
     troop_type = unit_size = None
@@ -220,7 +243,7 @@ def _unit_context(unit: ET.Element) -> dict:
             if links is None:
                 continue
             for link in links:
-                rule = link.get("name")
+                rule = _effective_link_name(link)
                 if rule and rule not in special_rules:
                     special_rules.append(rule)
 
@@ -388,6 +411,31 @@ def parse_weapons(cat_path: str) -> list:
     return _weapon_profiles(root)
 
 
+def _rule_descriptions(cat_path: str) -> dict:
+    """Map Special Rule name -> description text for a catalogue. Only
+    army-specific abilities are defined this way; core rulebook keywords
+    (Regeneration, Fear, ...) are referenced by name only and never appear here."""
+    try:
+        root = ET.parse(cat_path).getroot()
+    except ET.ParseError:
+        return {}
+    out: dict = {}
+    for prof in root.iter(f"{NS}profile"):
+        if prof.get("typeName") != "Special Rule":
+            continue
+        name = (prof.get("name") or "").strip()
+        if not name:
+            continue
+        desc = " ".join(
+            (c.text or "").strip()
+            for c in prof.iter(f"{NS}characteristic")
+            if c.text
+        ).strip()
+        if desc:
+            out.setdefault(name, desc)
+    return out
+
+
 def parse_catalogue(cat_path: str):
     """Parse one catalogue into (faction_name, list_of_unit_model_records)."""
     faction_name, records, _profiles, _weapons = parse_catalogue_full(cat_path)
@@ -404,6 +452,8 @@ class Catalogue:
         self.all_by_slug: dict = {}
         # Weapon profiles (from every .cat and the .gst) by slug.
         self.weapons_by_slug: dict = {}
+        # Special Rule profile descriptions by slug (army-specific abilities).
+        self.rule_desc_by_slug: dict = {}
         self.factions: dict = {}
         self._load()
 
@@ -439,6 +489,8 @@ class Catalogue:
                 self.all_by_slug.setdefault(slugify(record["Model"]), record)
             for w in weapons:
                 self.weapons_by_slug.setdefault(slugify(w["name"]), w)
+            for name, desc in _rule_descriptions(path).items():
+                self.rule_desc_by_slug.setdefault(slugify(name), desc)
         print(f"[battlescribe] loaded {len(self.by_slug)} models, "
               f"{len(self.weapons_by_slug)} weapons across {len(self.factions)} factions")
 
@@ -453,6 +505,12 @@ class Catalogue:
         """Return a fresh game weapon dict for a weapon name, or None."""
         record = self.weapons_by_slug.get(slugify(name))
         return copy.deepcopy(record) if record else None
+
+    def rule_description(self, name: str):
+        """Return the catalogue description for a Special Rule name, or None.
+        Only army-specific abilities are defined in the data; core rulebook
+        keywords (Regeneration, Fear, ...) are not and return None."""
+        return self.rule_desc_by_slug.get(slugify(name))
 
     def base_size(self, name: str):
         """Base size (width_mm, depth_mm) for a model, or None. Prefers the
