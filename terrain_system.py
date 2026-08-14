@@ -435,6 +435,7 @@ class TerrainPiece:
         flow_x = self.width >= self.height
         half_long = long_dim / 2.0
         half_w = band * 0.18            # water half-width
+        bank_scale = 1.5                # extra ribbon width for the banks
         amp = band * 0.28               # meander amplitude (stays inside band)
         segs = max(24, int(long_dim * 1.2))
 
@@ -472,13 +473,15 @@ class TerrainPiece:
             px, py = -ty / tl, tx / tl
             # Natural width variation so the banks aren't perfectly parallel.
             w = half_w * (0.7 + 0.5 * (0.5 + 0.5 * math.sin(s * tau * 2.3 + 1.1)))
-            vw.addData3(cx + px * w, cy + py * w, 0.0)   # left bank (v=0)
+            wf = w * bank_scale          # full ribbon incl. banks (mesh width)
+            vw.addData3(cx + px * wf, cy + py * wf, 0.0)   # left edge (v=0)
             nw.addData3(0.0, 0.0, 1.0)
             tw.addData2(s, 0.0)
-            vw.addData3(cx - px * w, cy - py * w, 0.0)   # right bank (v=1)
+            vw.addData3(cx - px * wf, cy - py * wf, 0.0)   # right edge (v=1)
             nw.addData3(0.0, 0.0, 1.0)
             tw.addData2(s, 1.0)
 
+            # Store the WATER half-width so gameplay/collision = water only.
             wx, wy = self.center.x + cx, self.center.y + cy
             self.river_centerline.append((wx, wy, w))
             left_pts.append((self.center.x + cx + px * w, self.center.y + cy + py * w))

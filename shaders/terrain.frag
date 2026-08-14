@@ -99,10 +99,11 @@ void main() {
         col = mix(grass, rock, smoothstep(0.3, 0.9, h));
         col *= mix(0.9, 1.15, fbm(p * 1.2));
     } else if (terrainType == 2) {
-        // River — a flowing ribbon; u runs downstream, v runs bank-to-bank.
+        // River — water body, foamy shoreline, wet/sandy banks, soft edge.
         float along  = texcoord.x;
-        float across = texcoord.y;                 // 0 = left bank, 1 = right
-        float d = abs(across - 0.5) * 2.0;         // 0 centre → 1 bank
+        float across = texcoord.y;
+        float d = abs(across - 0.5) * 2.0;         // 0 centre → 1 outer bank edge
+        float waterEdge = 0.667;                   // matches mesh bank_scale (1.5)
 
         float t = osg_FrameTime;
         float flow = t * 0.15;
@@ -113,23 +114,32 @@ void main() {
         float r2 = fbm(fp * vec2(20.0, 9.0) - vec2(flow * 3.0, flow));
         float ripple = r1 * 0.6 + r2 * 0.4;
 
-        // Darker/deeper toward the middle of the channel.
-        float depth = 1.0 - d;
+        // Water: deeper/darker toward the channel centre.
+        float wd = clamp(d / waterEdge, 0.0, 1.0);
         vec3 deep    = vec3(0.03, 0.16, 0.30);
         vec3 shallow = vec3(0.16, 0.44, 0.56);
-        vec3 water = mix(shallow, deep, depth);
-        water += vec3(0.10) * smoothstep(0.55, 0.95, ripple);          // sparkle
+        vec3 water = mix(shallow, deep, 1.0 - wd);
+        water += vec3(0.10) * smoothstep(0.55, 0.95, ripple);
         float glint = pow(smoothstep(0.72, 1.0, ripple), 6.0);
-        water += vec3(0.9, 0.95, 1.0) * glint * 0.5;                   // sun glint
+        water += vec3(0.9, 0.95, 1.0) * glint * 0.5;
 
-        // Foam churning against the banks.
-        float foam = smoothstep(0.6, 0.95, d)
+        // Wet-to-dry, noisy bank beyond the waterline.
+        float bt = smoothstep(waterEdge, 1.0, d);
+        vec3 bankWet = vec3(0.30, 0.25, 0.15);
+        vec3 bankDry = vec3(0.42, 0.38, 0.24);
+        vec3 bank = mix(bankWet, bankDry, bt);
+        bank *= 0.82 + 0.34 * fbm(fp * 18.0);
+
+        // Shoreline blend + foam right at the waterline.
+        float shore = smoothstep(waterEdge - 0.08, waterEdge + 0.05, d);
+        col = mix(water, bank, shore);
+        float foam = (1.0 - smoothstep(0.0, 0.11, abs(d - waterEdge)))
                    * (0.5 + 0.5 * fbm(fp * 40.0 + flow * 4.0));
-        water = mix(water, vec3(0.85, 0.90, 0.92), clamp(foam, 0.0, 1.0));
+        col = mix(col, vec3(0.85, 0.90, 0.92), clamp(foam * 0.8, 0.0, 1.0));
 
-        col = water;
-        // Soft edge so the ribbon melts into the ground, not a hard border.
-        alpha = 1.0 - smoothstep(0.85, 1.0, d);
+        // Irregular, soft fade into the surrounding grass.
+        float edgeN = (fbm(fp * 26.0) - 0.5) * 0.10;
+        alpha = 1.0 - smoothstep(0.80, 1.0, d + edgeN);
     } else {
         // Marsh — an irregular, soft-edged bog rather than a rectangle.
         float murk = fbm(p * 1.5 + osg_FrameTime * 0.03);
@@ -143,8 +153,11 @@ void main() {
         alpha = smoothstep(1.05, 0.55, rr + wob);
     }
 
-    // Nudge toward the configured base tint so gameplay colours stay readable.
-    col = mix(col, baseColor.rgb, 0.15);
+    // Nudge toward the configured base tint so gameplay colours stay readable
+    // (skipped for the river so its banks don't turn blue).
+    if (terrainType != 2) {
+        col = mix(col, baseColor.rgb, 0.15);
+    }
     col *= lambert;
 
     // Movement/shooting range overlay wrapped over the terrain surface. The
