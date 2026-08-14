@@ -1,6 +1,7 @@
 # ─── Standard Library ───────────────────────────────────────────────────────
 import math
 import json
+import os
 
 # ─── Panda3D Core ────────────────────────────────────────────────────────────
 from panda3d.core import (
@@ -139,8 +140,13 @@ class MyApp(ShowBase):
 
         # ── Terrain ───────────────────────────────────────────────────────
         self.terrain_manager = TerrainManager(self)
-        self.terrain_manager.add_terrain('forest', Point3(10, 2, 0.1), 14, 10)
-        self.terrain_manager.add_terrain('hill',   Point3(-20, -5, 0.1), 12, 8)
+        terrain_map = "maps/sample_terrain.json"
+        if os.path.exists(terrain_map):
+            self.terrain_manager.load_from_json(terrain_map)
+        else:
+            # Fallback layout if the map file is missing.
+            self.terrain_manager.add_terrain('forest', Point3(10, 2, 0.1), 14, 10)
+            self.terrain_manager.add_terrain('hill',   Point3(-20, -5, 0.1), 12, 8)
 
         self.accept('q-up', self.pathTowardsMouse)
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
@@ -148,6 +154,7 @@ class MyApp(ShowBase):
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
         self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
+        self.accept('f7', self.terrain_manager.toggle_debug)  # F7 toggles river water-detection band
         self.accept('wheel_up', self.zoomIn)  # Mouse wheel forward zooms in
         self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)

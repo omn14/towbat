@@ -2,21 +2,21 @@
   "terrain": [
     {
       "type": "forest",
-      "center": [10, 5, 0],
+      "center": [10, 16, 0],
       "width": 14,
       "height": 10
     },
     {
       "type": "hill",
-      "center": [-20, -5, 0],
+      "center": [-20, -16, 0],
       "width": 12,
       "height": 8
     },
     {
       "type": "river",
       "center": [0, 0, 0],
-      "width": 60,
-      "height": 3
+      "width": 100,
+      "height": 14
     }
   ]
 }

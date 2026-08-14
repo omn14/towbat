@@ -42,52 +42,64 @@ float sdPolygon( in vec2 p, in vec2[maxpoints] v )
 }
 
 
+// ── Procedural "classic Warhammer Fantasy" grass battle mat ────────────────
+float hashG(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float noiseG(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    float a = hashG(i);
+    float b = hashG(i + vec2(1.0, 0.0));
+    float c = hashG(i + vec2(0.0, 1.0));
+    float d = hashG(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbmG(vec2 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 5; i++) { v += a * noiseG(p); p *= 2.0; a *= 0.5; }
+    return v;
+}
+vec3 battleMat(vec2 uv) {
+    vec2 p = uv * 16.0;                          // detail scale across the board
+    // Two-tone grass patches — lighter, less-saturated tones.
+    float patch = fbmG(p * 0.5);
+    vec3 grassDark = vec3(0.22, 0.38, 0.16);
+    vec3 grassLite = vec3(0.48, 0.64, 0.34);
+    vec3 col = mix(grassDark, grassLite, patch);
+    // Worn earth / mud showing through in trampled areas.
+    float earth = smoothstep(0.55, 0.85, fbmG(p * 0.3 + 3.1));
+    vec3 dirt = vec3(0.46, 0.42, 0.26);
+    col = mix(col, dirt, earth * 0.35);
+    // Fine blade speckle.
+    float speckle = fbmG(p * 2.0);
+    col *= 0.90 + 0.20 * speckle;
+    // Occasional darker clumps of tall grass.
+    col *= 1.0 - 0.12 * smoothstep(0.60, 0.92, fbmG(p * 1.1 + 7.0));
+    // Pull saturation down toward luminance for a natural gaming-mat look.
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, 0.82);
+    // Boost contrast and lift overall brightness.
+    col = (col - 0.5) * 1.28 + 0.5 + 0.06;
+    return clamp(col, 0.0, 1.0);
+}
+
 void main() {
-    // Get normalized coordinates in [0,1]
-    //vec2 uv = gl_FragCoord.xy / vec2(textureSize(p3d_Texture0, 0));
     vec2 uv = texcoord;
-    // Center at (0.5, 0.5)
-    vec2 pos_uv = ((pos.xy)/1.0+vec2(1.0,1.0))*0.5;
-    //vec2 center = uv - vec2(0.5, 0.5);
-    vec2 center = uv - (pos_uv );
-    float dist = length(center);
 
-    
+    // Base surface is the procedural grass mat.
+    vec3 ground = battleMat(uv);
 
-    // Draw a circle with radius 0.4
-    float radius = 10.1;
-    //if (dist < radius) {
     if (isActive) {
-        //p3d_FragColor = color+vec4(0.5,0.5,0.5,0);
-        p3d_FragColor = texture(p3d_Texture0, texcoord)+vec4(0.5,0.5,0.5,0);
+        // Movement / shooting range overlay drawn on top of the grass.
         float d = sdPolygon(uv, polygonpoints);
-        //vec3 col = (d>0.0) ? vec3(0.9,0.6,0.3) : vec3(0.65,0.85,1.0);
-        //vec3 col = (d>0.0) ? vec3(0.9,0.6,0.3) : texture(p3d_Texture0, texcoord).rgb;
-
-        //vec3 col = (d>0.0) ? texture(p3d_Texture0, texcoord).rgb : vec3(0.65,0.85,1.0);
-        //vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, vec3(0.9,1.0,0.8), 0.8);
-        //vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
-        vec3 tex = mix( texture(bakedMap, texcoord).rgb, texture(bakedMap, texcoord).bgr, 0.5);
-        //tex = mix(tex, vec3(0.4, .7, 0.4), 0.6);
-
-        vec3 col = (d>0.0) ? tex : vec3(0.65,0.85,1.0);
-        col *= 1.0 - exp(-24.0*abs(d));
-        //col *= 0.8 + 0.2*cos(2*140.0*d);
-        //col *= 0.8 + 0.2*cos(2*140.0*d)*exp(-10.0*abs(d));
-        col = mix( col, vec3(1.0), 1.0-smoothstep(0.0,0.015,abs(d)+0.0075) );
-        //col = mix(col, vec3(0.7, 1.0, 0.7), 0.6);
-        p3d_FragColor = vec4(col,1.0);
-    } 
-    
-    else {
-        //discard;
-        //p3d_FragColor = texture(p3d_Texture0, texcoord);
-        //p3d_FragColor = texture(p3d_Texture0, texcoord);
-        //p3d_FragColor = color-texture(p3d_Texture0, texcoord)/2.0;
-        vec3 tex = mix( texture(p3d_Texture0, texcoord).rgb, texture(p3d_Texture0, texcoord).bgr, 0.5);
-        //vec3 tex = mix( texture(bakedMap, texcoord).rgb, texture(bakedMap, texcoord).bgr, 0.5);
-        //tex = mix(tex, vec3(0.4, .7, 0.4), 0.6);
-        p3d_FragColor = vec4(tex,1.0);
-
+        vec3 col = (d > 0.0) ? ground : vec3(0.65, 0.85, 1.0);
+        col *= 1.0 - exp(-24.0 * abs(d));
+        // Bright rim right on the boundary line.
+        col = mix(col, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));
+        p3d_FragColor = vec4(col, 1.0);
+    } else {
+        p3d_FragColor = vec4(ground, 1.0);
     }
 }
+
