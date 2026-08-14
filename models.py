@@ -9,6 +9,7 @@ import random
 import re
 
 from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
+from special_rules import build_special_rules
 
 # Base directory for unit characteristic JSON files, organised by faction
 ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
@@ -98,6 +99,10 @@ class model:
         self.AP = 0  # Armor Penetration
         self.charging = False
         self.special_rules = []
+        # Subclass-less units (e.g. Dwarfs) source their special rules from the
+        # catalogue; coded subclasses curate their own to avoid double effects.
+        if type(self) is model:
+            self.special_rules = build_special_rules(self)
         self.weapons = {}
         self.weapons.update({'hand weapon': {'name': 'hand weapon',
                                              'description': 'basic melee weapon',
