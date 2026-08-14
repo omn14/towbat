@@ -353,20 +353,29 @@ def taskMoveUnit(game,unit,task):
 
 def endMoveUnit(game,taskToEnd):
     print("Ending move unit task")
-    outBounds = False
-    c = game.checkUnitContactSmall(game.unitToMove)
-    if c:
-        print("Unit is in contact with another unit, cannot deploy here.")
-        outBounds = True
+    inContact = game.checkUnitContactSmall(game.unitToMove)
     game.unitToMove.bodyNP.node().setTransformDirty()
-    if not is_shape_inside(base.world, game.unitToMove.bodyNP.node(), game.boundary_ghost):
+    inZone = is_shape_inside(base.world, game.unitToMove.bodyNP.node(), game.boundary_ghost)
+
+    if not inZone:
+        # Dropped outside the deploy zone: cancel this pickup (leave it
+        # undeployed) so the player can change their mind and pick another unit.
         print("Unit is out of bounds, cannot deploy here.")
-        outBounds = True
-    if outBounds:
+        game.unitToMove.model.setColor(.6,0.6,0.6,1)
+        game.unitToMove.isDeployed = False
+        taskMgr.remove(taskToEnd)
+        game.accept('mouse1', game.setActiveUnit,
+                    [game.setActiveUnitTask, game.setActiveUnitTaskName])
+        return
+
+    if inContact:
+        # Inside the zone but overlapping another unit: refuse the drop and keep
+        # holding so the player can reposition (never place on top of a unit).
+        print("Unit is in contact with another unit, cannot deploy here.")
         game.unitToMove.model.setColor(.6,0.6,0.6,1)
         return
-    else:
-        game.unitToMove.model.setColor(game.unitToMove.color)
+
+    game.unitToMove.model.setColor(game.unitToMove.color)
     taskMgr.remove(taskToEnd)
     game.unitToMove.isDeployed=True
     game.accept('mouse1', game.setActiveUnit,[game.setActiveUnitTask, game.setActiveUnitTaskName])

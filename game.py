@@ -1030,7 +1030,7 @@ class MyApp(ShowBase):
             
 
             # Perform ray test
-            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.allOn())
+            result = self.world.rayTestClosest(pFrom, pTo, CM.HOVER_PICK)
             #self.debug_ray(pFrom, pTo)
             if result.hasHit():
                 hit_node = result.getNode()

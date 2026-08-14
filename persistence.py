@@ -41,7 +41,8 @@ def save_game_state(game, filename=None):
         filename = f"savegame_{timestamp}.json"
 
     game_state = {
-        'current_phase': game.fsm.phases[game.fsm.currentPhaseIndex],
+        'current_phase': (game.fsm.getCurrentOrNextState()
+                          or game.fsm.phases[game.fsm.currentPhaseIndex]),
         'current_phase_index': game.fsm.currentPhaseIndex,
         'current_round': game.roundCounter.currentRoundPlayer,
         'current_player': game.roundCounter.current_player,
@@ -166,6 +167,30 @@ def load_game_state(game, filename):
 
     # Restore AI settings
     game.AIplayer2.active = game_state['ai_player2_active']
+
+    # Remove any current units that aren't in the save (e.g. units destroyed
+    # after this save was taken) so a load reflects the saved roster exactly.
+    saved_names = {unit_data['name'] for unit_data in game_state['units']}
+    for unit in list(game.units):
+        if unit.unitName in saved_names:
+            continue
+        try:
+            game.world.removeRigidBody(unit.bodyNP.node())
+        except Exception:
+            pass
+        try:
+            unit.bodyNP.removeNode()
+        except Exception:
+            pass
+        try:
+            unit.model.removeNode()
+        except Exception:
+            pass
+        game.units.remove(unit)
+        if unit in game.player1Units:
+            game.player1Units.remove(unit)
+        if unit in game.player2Units:
+            game.player2Units.remove(unit)
 
     # Recreate any saved units that are missing from the current scene (e.g. a
     # cannon added after the initial army load) so a load fully restores them.

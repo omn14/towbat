@@ -45,6 +45,7 @@ class CollisionMask:
     ARROW_DEFAULT    = BitMask32.bit(3)   # projectile / arrow collision
     COMBAT_ENGAGED   = BitMask32.bit(4)   # units locked in melee
     ARROW_ALT        = BitMask32.bit(5)   # alternate arrow check pass
+    OPPONENT_UNIT    = BitMask32.bit(7)   # the non-active player's units
 
     # ── movement / sweep tests ──────────────────────────────────
     SWEEP_TARGET     = BitMask32.bit(9)   # "other units" during a sweep test
@@ -68,6 +69,10 @@ class CollisionMask:
 
     # What a *unit in combat* should be hittable by:
     COMBAT_INTO      = COMBAT_ENGAGED                       # bit 4 only
+
+    # What a mouse-hover pick ray should hit: any unit (active, opponent or in
+    # combat) but NOT deploy-zone cubes, boundary or terrain.
+    HOVER_PICK       = UNIT_DEFAULT | COMBAT_ENGAGED | OPPONENT_UNIT  # bits 1 + 4 + 7
 
     # What a *terrain piece* should be hittable by (terrain queries only):
     TERRAIN_INTO     = TERRAIN_FOREST | TERRAIN_HILL | TERRAIN_RIVER | TERRAIN_MARSH  # bits 20-23

@@ -1,7 +1,8 @@
+import math
 from models import *
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
-from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties
+from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -73,6 +74,10 @@ class unitGraphics(FSM):
 
         #self.model.setPos(35,0,0)
         self.setUpCollisions()
+
+        # Floating ring above the model to flag character units.
+        self.characterMarker = None
+        self._add_character_marker()
 
         #children[-1].removeNode()
 
@@ -320,6 +325,34 @@ class unitGraphics(FSM):
             self.model.setPos(-box_size.x/2+self.modelWidth/2, box_size.y/2-self.modelHeight/2,0)
             #self.model.flattenLight()
     
+    def _add_character_marker(self):
+        """Attach a small billboarded ring above the model for character units."""
+        ch = self.unit.model.characteristics if self.unit and self.unit.model else {}
+        if str(ch.get('Category', '')).strip().lower() != 'characters':
+            return
+
+        radius = max(self.modelWidth, self.modelHeight) * 0.4
+        segs = LineSegs()
+        segs.setColor(1.0, 0.85, 0.1, 1.0)   # gold
+        segs.setThickness(3.0)
+        steps = 32
+        for i in range(steps + 1):
+            a = (i / steps) * 2 * math.pi
+            x = radius * math.cos(a)
+            z = radius * math.sin(a)
+            (segs.moveTo if i == 0 else segs.drawTo)(x, 0, z)
+
+        self.characterMarker = self.bodyNP.attachNewNode(segs.create())
+        try:
+            top_z = self.model.getTightBounds(self.bodyNP)[1].z
+        except Exception:
+            top_z = self.unitHeight
+        self.characterMarker.setPos(0, 0, top_z + radius + 1)
+        self.characterMarker.setBillboardPointEye()
+        self.characterMarker.setLightOff()
+        self.characterMarker.setBin("fixed", 0)
+        self.characterMarker.setDepthWrite(False)
+
     def enterIdle(self):
         print(f"{self.unitName} is idle! state")
         #messenger.send('unit-move-complete')
