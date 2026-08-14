@@ -244,7 +244,7 @@ class TerrainPiece:
                 peak=min(self.width, self.height) * 0.11, seed=11.0)
         elif self.terrain_type == 'forest':
             self._create_heightfield_visual(
-                peak=min(self.width, self.height) * 0.10, seed=23.0)
+                peak=min(self.width, self.height) * 0.03, seed=23.0)
         else:
             self._create_mesh_visual()
         self._apply_shader()
@@ -449,8 +449,13 @@ class TerrainPiece:
         for i in range(segs + 1):
             s = i / segs
             l = -half_long + s * (2.0 * half_long)
-            off = amp * (math.sin(s * tau * 1.5 + 0.7) * 0.6 +
-                         math.sin(s * tau * 3.1 + 2.3) * 0.4)
+            # Taper the meander to zero over a straight approach at both ends
+            # so the river runs square into the board edges, winding in between.
+            t0 = max(0.0, min(1.0, s / 0.22))
+            t1 = max(0.0, min(1.0, (1.0 - s) / 0.22))
+            taper = (t0 * t0 * (3.0 - 2.0 * t0)) * (t1 * t1 * (3.0 - 2.0 * t1))
+            off = amp * taper * (math.sin(s * tau * 1.5 + 0.7) * 0.6 +
+                                 math.sin(s * tau * 3.1 + 2.3) * 0.4)
             cx, cy = (l, off) if flow_x else (off, l)
             centre.append((s, cx, cy))
 

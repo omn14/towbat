@@ -7,8 +7,14 @@
       "height": 10
     },
     {
+      "type": "forest",
+      "center": [22, -15, 0],
+      "width": 14,
+      "height": 10
+    },
+    {
       "type": "hill",
-      "center": [-22, -18, 0],
+      "center": [-22, -15, 0],
       "width": 20,
       "height": 13
     },
