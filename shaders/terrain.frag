@@ -4,6 +4,7 @@
 uniform int terrainType;
 uniform vec4 baseColor;
 uniform vec2 pieceSize;   // world-space width/height of this terrain piece
+uniform float edgeLevel;  // hill/forest: discard fragments below this field value
 
 // Auto-bound by Panda3D; falls back to 0.0 if unavailable (shader stays static).
 uniform float osg_FrameTime;
@@ -42,6 +43,12 @@ float fbm(vec2 p) {
 }
 
 void main() {
+    // Hill/forest carry the footprint field in texcoord.x; cut the rim per
+    // pixel so the silhouette is smooth regardless of mesh resolution.
+    if ((terrainType == 0 || terrainType == 1) && texcoord.x < edgeLevel) {
+        discard;
+    }
+
     // Guard against missing/zero normals in the source mesh.
     vec3 N = worldNormal;
     if (dot(N, N) < 0.0001) {

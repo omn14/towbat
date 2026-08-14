@@ -1365,54 +1365,32 @@ class MovementSystem:
         return terrain is not None and terrain.terrain_type == 'hill'
 
     def alignModelsToHillNormal(self, unit):
-        """For every individual model in *unit*, raycast straight down to
-        the hill terrain mesh, retrieve the surface normal at the hit
-        point, and orient the model so its local Z-up matches that normal.
-        Also snaps the model's Z position to the hill surface."""
-        """ if not self.unitOnHill(unit):
-            return """
+        """Sit every individual model of *unit* on the terrain topography:
+        snap its Z to the hill/forest surface height and tilt it to the
+        surface normal.  Uses the analytic terrain height (not a physics
+        raycast) so it works regardless of collision state."""
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return
 
-        # Hill collision bodies sit on bit 21
-        hill_mask = BitMask32.bit(21)
-
+        up = Vec3(0, 0, 1)
         for child in unit.model.getChildren():
-            # World-space position of this individual model
             world_pos = child.getPos(render)
 
-            # Cast a ray straight down from above the model
-            ray_from = Point3(world_pos.x, world_pos.y, 50)
-            ray_to   = Point3(world_pos.x, world_pos.y, -50)
+            # Snap the model's world Z onto the terrain surface.
+            surf = tm.get_surface_height(world_pos)
+            child.setPos(render, world_pos.x, world_pos.y, surf)
 
-            result = self.game.world.rayTestClosest(ray_from, ray_to, CM.TERRAIN_HILL)
-            if not result.hasHit():
-                continue
-
-            hit_pos    = result.getHitPos()
-            hit_normal = result.getHitNormal()
-
-            # Snap the model's Z to the terrain surface
-            local_hit = unit.model.getRelativePoint(render, hit_pos)
-            child_pos = child.getPos()
-            child.setPos(child_pos.x, child_pos.y, local_hit.z)
-
-            # Orient the model so its local Z axis aligns with the
-            # surface normal.  We build a rotation from the default
-            # up-vector (0,0,1) to the hit normal.
-            up = Vec3(0, 0, 1)
-            normal = Vec3(hit_normal).normalized()
-
+            # Tilt to match the surface normal (flat where there's no slope).
+            normal = tm.get_surface_normal(world_pos)
             if normal.almostEqual(up, 0.001):
-                # Surface is flat, reset any previous tilt
                 child.setP(0)
                 child.setR(0)
                 continue
 
-            # Rotation axis = up × normal, angle = acos(up · normal)
             axis = up.cross(normal)
             axis.normalize()
             dot = max(-1.0, min(1.0, up.dot(normal)))
             angle_deg = math.degrees(math.acos(dot))
-
-            # Convert axis-angle to HPR via a quaternion
             quat = LRotationf(axis, angle_deg)
             child.setQuat(child.getParent(), quat)

@@ -88,6 +88,9 @@ _TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3}
 # Water is drawn as a flat animated surface instead of a raised mesh.
 _WATER_TYPES = {'river', 'marsh'}
 
+# Small lift so raised terrain doesn't z-fight the ground plane.
+_HILL_LIFT = 0.02
+
 # Vertical scale per type — hills rise, forests sit low, water is nearly flat.
 _TERRAIN_HEIGHT = {'forest': 2.0, 'hill': 4.0, 'river': 0.3, 'marsh': 0.4}
 
@@ -167,6 +170,33 @@ def _get_tree_model():
     return _TREE_MODEL or None
 
 
+# ── Deterministic value noise for procedural terrain shapes ────────────────
+def _hash2(x, y, seed):
+    n = math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453
+    return n - math.floor(n)
+
+
+def _vnoise(x, y, seed):
+    x0, y0 = math.floor(x), math.floor(y)
+    fx, fy = x - x0, y - y0
+    a = _hash2(x0, y0, seed)
+    b = _hash2(x0 + 1, y0, seed)
+    c = _hash2(x0, y0 + 1, seed)
+    d = _hash2(x0 + 1, y0 + 1, seed)
+    ux = fx * fx * (3.0 - 2.0 * fx)
+    uy = fy * fy * (3.0 - 2.0 * fy)
+    return (a * (1.0 - ux) + b * ux) * (1.0 - uy) + (c * (1.0 - ux) + d * ux) * uy
+
+
+def _fbm2(x, y, seed, octaves=4):
+    v, amp, f = 0.0, 0.5, 1.0
+    for _ in range(octaves):
+        v += amp * _vnoise(x * f, y * f, seed)
+        f *= 2.0
+        amp *= 0.5
+    return v
+
+
 # ── TerrainPiece ──────────────────────────────────────────────────────────────
 
 class TerrainPiece:
@@ -188,11 +218,15 @@ class TerrainPiece:
 
         self.river_centerline = None   # populated for river pieces
         self.debug_np = None
+        self._hf = None                # surface height function (forest/hill)
+        self._field = None             # footprint field (forest/hill rim test)
+        self._field_edge = 0.0
 
         self._create_visual()
-        # Water reads as a natural shape; a rectangle outline would box it in.
+        # Water and field-shaped pieces read as natural shapes; a rectangle
+        # outline would misrepresent them.
         self.outline = None
-        if self.terrain_type not in _WATER_TYPES:
+        if self.terrain_type not in _WATER_TYPES and self.terrain_type not in ('hill', 'forest'):
             self._create_outline()
         #self._create_collision()
         self._create_collision_from_mesh()
@@ -205,6 +239,12 @@ class TerrainPiece:
             self._create_river_visual()
         elif self.terrain_type in _WATER_TYPES:
             self._create_water_visual()
+        elif self.terrain_type == 'hill':
+            self._create_heightfield_visual(
+                peak=min(self.width, self.height) * 0.11, seed=11.0)
+        elif self.terrain_type == 'forest':
+            self._create_heightfield_visual(
+                peak=min(self.width, self.height) * 0.10, seed=23.0)
         else:
             self._create_mesh_visual()
         self._apply_shader()
@@ -221,6 +261,133 @@ class TerrainPiece:
         self.visual.setScale(self.width / 2.0, self.height / 2.0, z_scale)
         self.visual.setPos(self.center.x, self.center.y, 0.0)
         self.visual.flattenStrong()
+
+    def _create_heightfield_visual(self, peak, seed):
+        """Organic kidney-shaped mound with a flat top for units to stand on.
+
+        A smooth metaball field defines the footprint (clean rim, no edge
+        spikes); the height plateaus in the centre and slopes to the rim.
+        The mesh is clipped to the rim and ``contains()`` uses the same field,
+        so both the silhouette and collision follow the visible shape.
+        """
+        hw = self.width / 2.0
+        hh = self.height / 2.0
+        N = 40
+        f_edge = 0.35      # rim iso-level (lower = wider, gentler slope toe)
+        f_top = 0.95       # plateau (flat top) begins here
+
+        def field(nx, ny):
+            g1 = math.exp(-((nx + 0.30) ** 2 + (ny - 0.05) ** 2) / (2 * 0.34 ** 2))
+            g2 = math.exp(-((nx - 0.30) ** 2 + (ny + 0.20) ** 2) / (2 * 0.34 ** 2))
+            g3 = math.exp(-((nx + 0.02) ** 2 + (ny - 0.28) ** 2) / (2 * 0.22 ** 2))
+            f = g1 + g2 + 0.6 * g3
+            # Low-frequency wobble only — keeps the rim organic but smooth.
+            f += 0.10 * (_fbm2(nx * 1.2 + seed, ny * 1.2 + seed, seed) - 0.5)
+            return f
+
+        def sstep(a, b, x):
+            t = max(0.0, min(1.0, (x - a) / (b - a)))
+            return t * t * (3.0 - 2.0 * t)
+
+        # Field-based containment (rim) + surface height for tree placement.
+        self._field = field
+        self._field_edge = f_edge
+        self._hf = lambda lx, ly: peak * sstep(f_edge, f_top, field(lx / hw, ly / hh))
+
+        dx = (2.0 * hw) / N
+        dy = (2.0 * hh) / N
+        F = [[0.0] * (N + 1) for _ in range(N + 1)]
+        H = [[0.0] * (N + 1) for _ in range(N + 1)]
+        for j in range(N + 1):
+            for i in range(N + 1):
+                fv = field((-hw + i * dx) / hw, (-hh + j * dy) / hh)
+                F[j][i] = fv
+                H[j][i] = peak * sstep(f_edge, f_top, fv)
+
+        fmt = GeomVertexFormat.getV3n3t2()
+        vdata = GeomVertexData(self.terrain_type, fmt, Geom.UHStatic)
+        vw = GeomVertexWriter(vdata, 'vertex')
+        nw = GeomVertexWriter(vdata, 'normal')
+        tw = GeomVertexWriter(vdata, 'texcoord')
+
+        for j in range(N + 1):
+            for i in range(N + 1):
+                vw.addData3(-hw + i * dx, -hh + j * dy, H[j][i])
+                il, ir = max(i - 1, 0), min(i + 1, N)
+                jd, ju = max(j - 1, 0), min(j + 1, N)
+                dhx = (H[j][ir] - H[j][il]) / ((ir - il) * dx)
+                dhy = (H[ju][i] - H[jd][i]) / ((ju - jd) * dy)
+                n = Vec3(-dhx, -dhy, 1.0)
+                n.normalize()
+                nw.addData3(n.x, n.y, n.z)
+                # Store the field value; the shader discards fragments below the
+                # rim, giving a smooth per-pixel edge (no stair-stepping).
+                tw.addData2(F[j][i], i / N)
+
+        tris = GeomTriangles(Geom.UHStatic)
+        row = N + 1
+        for j in range(N):
+            for i in range(N):
+                v00 = j * row + i
+                v10 = v00 + 1
+                v01 = v00 + row
+                v11 = v01 + 1
+                tris.addVertices(v00, v10, v11)
+                tris.addVertices(v00, v11, v01)
+        tris.closePrimitive()
+
+        geom = Geom(vdata)
+        geom.addPrimitive(tris)
+        node = GeomNode(f"terrain_{self.terrain_type}")
+        node.addGeom(geom)
+
+        self.visual = render.attachNewNode(node)
+        # Lift a hair so the rim doesn't z-fight the ground plane (no depth
+        # offset — that would let the hill draw over units standing in front).
+        self.visual.setPos(self.center.x, self.center.y, _HILL_LIFT)
+        self.visual.flattenStrong()
+
+        self._build_heightfield_debug(F, f_edge, f_top, dx, dy, N)
+
+    def _build_heightfield_debug(self, F, f_edge, f_top, dx, dy, N):
+        """Draw the collision rim (magenta) and plateau edge (yellow), hidden
+        until toggled with F7 — same idea as the river debug band."""
+        hw = self.width / 2.0
+        hh = self.height / 2.0
+        z = 0.25
+        ls = LineSegs("hill_debug")
+        ls.setThickness(2.5)
+
+        def wpos(i, j):
+            return (self.center.x - hw + i * dx, self.center.y - hh + j * dy)
+
+        def add_contour(iso, color):
+            ls.setColor(*color)
+            for j in range(N):
+                for i in range(N):
+                    corners = [
+                        (F[j][i], wpos(i, j)),
+                        (F[j][i + 1], wpos(i + 1, j)),
+                        (F[j + 1][i + 1], wpos(i + 1, j + 1)),
+                        (F[j + 1][i], wpos(i, j + 1)),
+                    ]
+                    pts = []
+                    for k in range(4):
+                        fa, pa = corners[k]
+                        fb, pb = corners[(k + 1) % 4]
+                        if (fa < iso) != (fb < iso):
+                            t = (iso - fa) / (fb - fa)
+                            pts.append((pa[0] + (pb[0] - pa[0]) * t,
+                                        pa[1] + (pb[1] - pa[1]) * t))
+                    for s in range(0, len(pts) - 1, 2):
+                        ls.moveTo(pts[s][0], pts[s][1], z)
+                        ls.drawTo(pts[s + 1][0], pts[s + 1][1], z)
+
+        add_contour(f_edge, (1.0, 0.0, 1.0, 1.0))   # rim = collision boundary
+        add_contour(f_top, (1.0, 1.0, 0.0, 1.0))     # plateau / flat-top edge
+
+        self.debug_np = render.attachNewNode(ls.create())
+        self.debug_np.hide()
 
     def _create_water_visual(self):
         """Flat quad (texcoords 0..1) for marsh; the shader paints an
@@ -370,6 +537,9 @@ class TerrainPiece:
         base = _TERRAIN_COLORS.get(self.terrain_type, Vec4(0.5, 0.5, 0.5, 1.0))
         self.visual.setShaderInput("baseColor", base)
         self.visual.setShaderInput("pieceSize", Vec2(self.width, self.height))
+        # Rim level for the per-pixel edge discard (hill/forest); 0 = no cut.
+        self.visual.setShaderInput(
+            "edgeLevel", self._field_edge if self._field is not None else 0.0)
 
     # ── Scattered trees for forests ───────────────────────────────────
 
@@ -395,9 +565,16 @@ class TerrainPiece:
         for _ in range(count):
             x = self.center.x + rng.uniform(-hw, hw)
             y = self.center.y + rng.uniform(-hh, hh)
+            # Keep trees within the organic forest rim, not the rectangle.
+            if self._field is not None:
+                nx = (x - self.center.x) / (self.width / 2.0)
+                ny = (y - self.center.y) / (self.height / 2.0)
+                if self._field(nx, ny) < self._field_edge:
+                    continue
+            z = self._hf(x - self.center.x, y - self.center.y) if self._hf else 0.0
             placeholder = self.trees_np.attachNewNode("tree")
             tree_model.instanceTo(placeholder)
-            placeholder.setPos(x, y, 0.0)
+            placeholder.setPos(x, y, z)
             placeholder.setH(rng.uniform(0.0, 360.0))
             placeholder.setScale(rng.uniform(0.8, 1.5))
 
@@ -480,11 +657,16 @@ class TerrainPiece:
     def contains(self, pos) -> bool:
         """Return *True* if world-space *pos* lies inside this piece.
 
-        Rivers test the distance to the meandering centreline so the water
-        region matches the visible ribbon; everything else uses its AABB.
+        Rivers test distance to the meandering centreline; hills/forests test
+        the metaball footprint field; everything else uses its AABB — so the
+        gameplay region matches the visible shape.
         """
         if self.terrain_type == 'river' and self.river_centerline:
             return self._river_contains(pos)
+        if self._field is not None:
+            nx = (pos.x - self.center.x) / (self.width / 2.0)
+            ny = (pos.y - self.center.y) / (self.height / 2.0)
+            return self._field(nx, ny) >= self._field_edge
         return (abs(pos.x - self.center.x) <= self.width / 2 and
                 abs(pos.y - self.center.y) <= self.height / 2)
 
@@ -616,6 +798,33 @@ class TerrainManager:
         if not terrains:
             return 1.0
         return min(t.movement_multiplier for t in terrains)
+
+    def get_surface_height(self, pos) -> float:
+        """World-space Z of the raised terrain surface (hill/forest) at *pos*,
+        or 0.0 on flat ground.  Used to sit unit models on the topography."""
+        best = 0.0
+        for t in self.terrain_pieces:
+            if t._hf is not None and t.contains(pos):
+                h = t._hf(pos.x - t.center.x, pos.y - t.center.y) + _HILL_LIFT
+                if h > best:
+                    best = h
+        return best
+
+    def get_surface_normal(self, pos) -> Vec3:
+        """Surface normal of the raised terrain at *pos* (up on flat ground).
+        Horizontal gradient is damped so models stay closer to upright for
+        rank visual coherence."""
+        tilt = 0.5   # <1 biases the normal toward vertical
+        for t in self.terrain_pieces:
+            if t._hf is not None and t.contains(pos):
+                e = 0.3
+                lx, ly = pos.x - t.center.x, pos.y - t.center.y
+                dhx = t._hf(lx + e, ly) - t._hf(lx - e, ly)
+                dhy = t._hf(lx, ly + e) - t._hf(lx, ly - e)
+                n = Vec3(-dhx / (2.0 * e) * tilt, -dhy / (2.0 * e) * tilt, 1.0)
+                n.normalize()
+                return n
+        return Vec3(0, 0, 1)
 
     def get_terrain_between(self, pos_a, pos_b) -> list[TerrainPiece]:
         """Return terrain pieces whose AABB is crossed by the line

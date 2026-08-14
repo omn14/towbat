@@ -329,6 +329,9 @@ def taskMoveUnit(game,unit,task):
     
     # Notify Bullet that the transform has changed
     unit.bodyNP.node().setTransformDirty()
+    # Raise the visual models onto any hill/forest surface under them.
+    if hasattr(game, 'movement'):
+        game.movement.alignModelsToHillNormal(unit)
     outBounds = False
     c = game.checkUnitContactSmall(unit)
     if c:
