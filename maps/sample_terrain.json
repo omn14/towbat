@@ -19,6 +19,12 @@
       "height": 13
     },
     {
+      "type": "hill",
+      "center": [-22, 15, 0],
+      "width": 20,
+      "height": 13
+    },
+    {
       "type": "river",
       "center": [0, 0, 0],
       "width": 100,

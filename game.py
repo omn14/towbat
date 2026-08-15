@@ -234,6 +234,8 @@ class MyApp(ShowBase):
             player_num=2, use_minimax=True, minimax_depth=19
         )
         self.AIplayer2.tree.stop_after_n_returns = 1
+        # TEMP: disable P2 AI so player 2 deploys and acts manually.
+        self.AIplayer2.active = False
         async def auppp():
             for unit in self.player2Units:
                 action = await taskMgr.add(self.AIplayer2.take_turn())
@@ -937,10 +939,13 @@ class MyApp(ShowBase):
             localPoints.append(Point3(point.x, point.y, 0))
         return localPoints
 
-    def losBlockUnit(self, from_pos, to_pos, shooter):
+    def losBlockUnit(self, from_pos, to_pos, candidates):
         """Return the point where line of sight is blocked by an intervening
-        unit (its far edge, so the blocker itself stays targetable but anything
-        behind it is hidden), or None.  The shooter is ignored."""
+        unit (its far edge, so the blocker stays targetable but anything behind
+        it is hidden), or None.  *candidates* is a precomputed list of
+        (x, y, radius_sq) footprints to keep this cheap inside the arc loop."""
+        if not candidates:
+            return None
         dx = to_pos.x - from_pos.x
         dy = to_pos.y - from_pos.y
         length = math.hypot(dx, dy)
@@ -952,16 +957,12 @@ class MyApp(ShowBase):
             sx = from_pos.x + dx * t
             sy = from_pos.y + dy * t
             inside = False
-            for unit in self.units:
-                if unit is shooter:
-                    continue
-                up = unit.bodyNP.getPos()
-                radius = max(getattr(unit, 'unitWidth', 3.0),
-                             getattr(unit, 'unitHeight', 3.0)) / 2.0
-                if (sx - up.x) ** 2 + (sy - up.y) ** 2 <= radius * radius:
+            for c in candidates:
+                cx, cy, r2 = c
+                if (sx - cx) ** 2 + (sy - cy) ** 2 <= r2:
                     if blocker is None:
-                        blocker = unit
-                    if unit is blocker:
+                        blocker = c
+                    if c is blocker:
                         inside = True
             if blocker is not None:
                 if inside:
@@ -974,15 +975,35 @@ class MyApp(ShowBase):
     def checkArrowsTerrain(self,mask=BitMask32.bit(3)):
         shooter = self.unitToMove
         pFrom = Point3(shooter.bodyNP.getX(), shooter.bodyNP.getY(), 0)
+        # On a hill the shooter is elevated: it can see over units, but woods
+        # (and other hills) still block sight.
+        on_hill = False
+        _st = self.terrain_manager.get_terrain_at(shooter.bodyNP.getPos())
+        if _st is not None and _st.terrain_type == 'hill':
+            on_hill = True
+        # Precompute unit-footprint blockers once. On a hill, only units also on
+        # a hill block (lower units are seen over); otherwise all units block.
+        candidates = []
+        for unit in self.units:
+            if unit is shooter:
+                continue
+            up = unit.bodyNP.getPos()
+            if on_hill:
+                ut = self.terrain_manager.get_terrain_at(up)
+                if ut is None or ut.terrain_type != 'hill':
+                    continue
+            radius = max(getattr(unit, 'unitWidth', 3.0),
+                         getattr(unit, 'unitHeight', 3.0)) / 2.0
+            candidates.append((up.x, up.y, radius * radius))
         for n,point in enumerate(self.shootingArcPoints):
             point = point * 2
             point -= Vec2(1,1)
             point = point * 50
             pTo = Point3(point.x, point.y, 0)
             # Clip where the line of sight is first blocked — by LoS-blocking
-            # terrain (forest) or by an intervening unit, whichever is nearer.
+            # terrain (forest/hill) or an intervening unit, whichever is nearer.
             terrain_block = self.terrain_manager.los_block_point(pFrom, pTo)
-            unit_block = self.losBlockUnit(pFrom, pTo, shooter)
+            unit_block = self.losBlockUnit(pFrom, pTo, candidates)
             block = None
             if terrain_block is not None and unit_block is not None:
                 dt = (terrain_block - pFrom).lengthSquared()
