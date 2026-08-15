@@ -37,6 +37,7 @@ from shaders.chargedistshaders import *
 # ─── Project Modules ─────────────────────────────────────────────────────────
 from models import *
 from units import *
+from special_rules import build_special_rules
 from toHitAndToWound import *
 from battleFunctions import *
 from dice import *
@@ -152,6 +153,7 @@ class MyApp(ShowBase):
         self.accept('w-up', self.startTaskFunction,[self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse"])
         
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
+        self.accept('f6', self.toggle_campaign_map)  # F6 toggles the campaign map
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
         self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
         self.accept('f7', self.terrain_manager.toggle_debug)  # F7 toggles river water-detection band
@@ -259,7 +261,6 @@ class MyApp(ShowBase):
         self.tutorial = TutorialManager(self)
         self.cannon = CannonFire(self)
         self.bombard = Bombardment(self)
-        self.accept('c', self.toggle_campaign_map)
         self.accept('t', self.start_tutorial)
 
         self.fsm.request("DeployPhase")
@@ -458,6 +459,23 @@ class MyApp(ShowBase):
                         existing.setdefault(key, value)
                 else:
                     model_instance.weapons[name] = wdict
+
+            # Merge data-driven special rules from the army list (e.g. the
+            # Skirmishers upgrade on an imported roster) and wire their hooks.
+            extra_rules = army_unit_data.get('special_rules') or []
+            if extra_rules:
+                current = model_instance.characteristics.get('Special Rules')
+                current = list(current) if isinstance(current, list) else []
+                for rname in extra_rules:
+                    if rname and rname not in current:
+                        current.append(rname)
+                model_instance.characteristics['Special Rules'] = current
+                have = {r.get('name') for r in model_instance.special_rules
+                        if isinstance(r, dict)}
+                for entry in build_special_rules(model_instance):
+                    if isinstance(entry, dict) and entry.get('name') not in have:
+                        model_instance.special_rules.append(entry)
+                        have.add(entry.get('name'))
 
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
             unit_graphics = unitGraphics(

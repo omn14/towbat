@@ -88,6 +88,24 @@ def _collect_weapons(selection: dict, out: list) -> None:
         _collect_weapons(sub, out)
 
 
+def _collect_special_rules(selection: dict, out: list) -> None:
+    """Gather special-rule names from a unit and its (non-mount) upgrades.
+
+    Rules can sit on the unit itself or on any nested upgrade selection (e.g.
+    the Skirmishers formation upgrade), as a 'Special Rule' profile or a rule.
+    """
+    for p in selection.get("profiles", []):
+        if p.get("typeName") == "Special Rule" and p.get("name"):
+            out.append(p["name"])
+    for r in selection.get("rules", []):
+        if r.get("name"):
+            out.append(r["name"])
+    for sub in selection.get("selections", []):
+        if sub.get("type") == "mount":
+            continue
+        _collect_special_rules(sub, out)
+
+
 def _primary_category(unit: dict):
     for cat in unit.get("categories", []):
         if cat.get("primary"):
@@ -121,6 +139,10 @@ def import_roster(path: str) -> dict:
             # De-duplicate by weapon name (keep first occurrence).
             seen: set = set()
             weapons = [w for w in weapons if not (w["name"] in seen or seen.add(w["name"]))]
+            special_rules: list = []
+            _collect_special_rules(unit, special_rules)
+            # De-duplicate, preserving order.
+            special_rules = list(dict.fromkeys(special_rules))
             units.append({
                 "name": _primary_model_name(unit),
                 "faction": faction_slug,
@@ -132,6 +154,7 @@ def import_roster(path: str) -> dict:
                 "mounted": bool(mount),
                 "mount": mount,
                 "weapons": weapons,
+                "special_rules": special_rules,
             })
 
     return {"budget": limit or total, "faction": faction_slug, "units": units}
