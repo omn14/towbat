@@ -1,0 +1,78 @@
+# Skirmishers — Implementation Plan
+
+Rule (catalogue): *"A unit consisting of models with this special rule may adopt
+a Skirmish formation."* Source rules: <https://tow.whfb.app/unusual-formations/skirmish-formation>
+(rulebook p.184–186).
+
+## How the rule works
+- **Loose formation** — models are ~1" apart in a contiguous blob, *not* in
+  ranks/files. Each model moves individually in any direction, no wheeling, and
+  must keep coherency (within 1" of another model in the unit).
+- **360° facing / LoS** — no flank or rear arcs; may shoot and charge in any
+  direction. Individual models block LoS as normal, but enemies can see
+  *through the gaps* between models.
+- **Enemy fire −1** — a unit shooting at Skirmishers (all models Unit Strength 1)
+  suffers **−1 To Hit**.
+- **No rank bonus** — a unit that is in Skirmish formation when it becomes
+  engaged cannot claim a Rank Bonus.
+- **In combat** — Skirmishers "form up" into base contact (a fighting rank) when
+  they charge or are charged, then spread back out once combat ends. May charge
+  a target visible to **more than 50%** of its models.
+- **Panic** — fleeing Skirmishers do not cause panic in *formed* friendly units
+  they flee through (they still panic other Skirmishers / cause normal panic when
+  annihilated or broken).
+
+## Where this lands in the code
+- Units are a single rigid `bodyNP` with `unit.ranks/files/nmodels`; models are
+  arranged in a grid in `units.py`. Movement is whole-unit (wheel/rotate) in
+  `movement_system.py`.
+- Rank/flank bonus is computed in `combat_resolution.py` (`_verySimpleBattleInner`,
+  ~L687–706) from `unit.ranks`.
+- Shooting arc is a ~90° front arc: `shootingArc(..., rotationangle=getH()+45)`
+  (`movement_system.py` ~L208, driven from `taskShootingArcUpdate` in `game.py`).
+  LoS is already **per-model** via `losBlockUnit` / `los_block_point`.
+- Ranged To-Hit modifiers already flow through `to_hit_ranged` (it has
+  `long_range`) in `toHitAndToWound.py` / `battleFunctions.py`.
+
+## Plan (staged by value vs. risk)
+
+### Phase 0 — flag & state (small) — DONE
+- Added a `_skirmishers` builder to `special_rules.py` (`tag:'formation', skirmish:True`).
+- Added `model.is_skirmisher()` and `model.unit_strength()` helpers.
+
+### Phase 1 — combat/shooting effects (cheap, high value, testable) — DONE
+- **No rank bonus**: `combat_resolution.py` skips the rank-bonus increment for a
+  skirmisher unit in both player branches.
+- **Enemy fire -1**: `game.shootAt` sets `model.target_skirmisher` (US1 skirmisher
+  target); `to_hit_ranged` applies a non-ignorable -1; `battleFunctions` threads
+  the flag through.
+- Tests: `tests/test_skirmishers.py` (flag helpers + -1 To Hit).
+
+### Phase 2 — 360° arc (medium) — DONE
+- `shootingArc` takes a `full_circle` flag; skirmishers get a 2π circle instead
+  of the 90° front cone. Wired into the shooting and magic arc updates in
+  `game.py` (and the point count still lands at the shader's 83).
+- Per-model LoS clipping (forest/units) still applies to the full circle. The
+  "see through gaps" nuance is deferred.
+- Note: charge direction isn't front-arc-gated in this engine (charging uses the
+  movement swing, not an arc), so 360° charging already works; the exact
+  ">50% of models must see the target" gate is deferred (needs a per-model LoS
+  count).
+
+### Phase 3 — loose formation + per-model movement (hard, architectural)
+Separate effort — the engine currently treats a unit as one rigid body + grid.
+- *Minimal*: keep one `bodyNP`, arrange child models as a loose blob, treat the
+  footprint as a circle for spacing / US1.
+- *Full*: per-model movement with coherency — a real rework of
+  `movement_system.py`.
+- **Form-up in combat**: on engage, snap models into a base-contact fighting rank;
+  revert to the blob when combat ends.
+
+### Phase 4 — panic & terrain nuance (small, later)
+- Skirmishers fleeing don't panic formed friendlies (guard the panic path).
+
+## Recommendation
+Do **Phase 0 + Phase 1** first (localized edits + tests; immediate combat/shooting
+behaviour) → then **Phase 2** (360° arc) → treat **Phase 3** (true loose
+movement / form-up) as a dedicated follow-up since it's the only architecturally
+heavy part.

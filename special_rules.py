@@ -82,11 +82,19 @@ def _unbreakable(model, param, desc):
             "Unbreakable": True}
 
 
+def _skirmishers(model, param, desc):
+    return {"name": "Skirmishers",
+            "description": desc or "May adopt a Skirmish formation.",
+            "tag": "formation",
+            "skirmish": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
     "unbreakable": _unbreakable,
+    "skirmishers": _skirmishers,
 }
 
 

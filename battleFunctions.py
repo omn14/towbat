@@ -24,7 +24,7 @@ def simulate_attack(model1,model2):
         else:
             hit = False
     else:
-        hit = to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False))
+        hit = to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False))
         model1.characteristics['S'] = model1.equipedWeapon.get('ranged_strength')
         model1.AP = model1.equipedWeapon.get('ranged_AP', model1.AP)
         #print(model1.characteristics['S'])

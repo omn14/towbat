@@ -205,13 +205,14 @@ class MovementSystem:
         return result.getNumContacts() > 0
 
     
-    def shootingArc(self, origo, num_points=40, rotationangle=30,radius=0.15):
+    def shootingArc(self, origo, num_points=40, rotationangle=30,radius=0.15, full_circle=False):
         points =[]
         origo=(origo/50 +1)*0.5
         origo   = Vec2(origo.x,origo.y)
-        points.append(origo)
-
-        arcmax = math.pi/2
+        # Skirmishers have a 360° arc; everyone else a 90° front cone.
+        arcmax = 2 * math.pi if full_circle else math.pi/2
+        if not full_circle:
+            points.append(origo)   # pie-wedge apex at the shooter
 
         for i in range(0,num_points):
             angle = arcmax * i / (num_points - 1)

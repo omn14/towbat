@@ -51,7 +51,7 @@ def to_wound(model1,model2):
     
     return f"could not calculate to wound"
 
-def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False):
+def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False,target_skirmisher=False):
     bs1 = model1.characteristics.get('BS')
 
     if bs1 is None:
@@ -78,6 +78,9 @@ def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,part
     if full_cover:
         bs1 -= 2
     if multiple_shots and 'multiple_shots' not in ignore:
+        bs1 -= 1
+    # Enemy fire at a unit of US1 Skirmishers suffers -1 To Hit (not ignorable).
+    if target_skirmisher:
         bs1 -= 1
     
     if bs1 == 1 and hit_roll >= 6:

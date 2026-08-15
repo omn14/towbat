@@ -808,13 +808,15 @@ class MyApp(ShowBase):
             print(f"[Shooting] {self.unitToMove.unit.name} has no ranged weapon.")
             return task.done
         _rw = self.unitToMove.unit.model.equipedWeapon
+        _skirm = self.unitToMove.unit.model.is_skirmisher()
         print(f"[Shooting] {self.unitToMove.unit.name} ready with {_rw.get('name')} "
               f"(R{_rw.get('ranged_range','?')} S{_rw.get('ranged_strength','?')} "
-              f"AP-{_rw.get('ranged_AP', 0)})")
+              f"AP-{_rw.get('ranged_AP', 0)}) | arc={'360 (skirmisher)' if _skirm else '90'}")
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
-                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100)
+                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100,
+                                                       full_circle=_skirm)
         self.checkArrowsTerrain()
         self.setGroundOverlay(True, self.shootingArcPoints)
         # Half-range boundary: inside = short range, outside = long range (-1).
@@ -868,7 +870,8 @@ class MyApp(ShowBase):
 
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
-                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius)
+                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius,
+                                                       full_circle=self.unitToMove.unit.model.is_skirmisher())
         self.setGroundOverlay(True, self.shootingArcPoints)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
@@ -1226,6 +1229,9 @@ class MyApp(ShowBase):
         _half = weapon.get('ranged_range', 0) * 1.5
         _dist = (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length()
         attacker.model.at_long_range = bool(_half and _dist > _half)
+        # US1 Skirmisher target imposes -1 To Hit on the shooter.
+        attacker.model.target_skirmisher = (defender.model.is_skirmisher()
+                                             and defender.model.unit_strength() == 1)
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
               f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})")
@@ -1570,8 +1576,8 @@ class MyApp(ShowBase):
     def check_bullet_collision(self, node_a, node_b):
         return self.movement.check_bullet_collision(node_a, node_b)
 
-    def shootingArc(self, origo, num_points=40, rotationangle=30, radius=0.15):
-        return self.movement.shootingArc(origo, num_points, rotationangle, radius)
+    def shootingArc(self, origo, num_points=40, rotationangle=30, radius=0.15, full_circle=False):
+        return self.movement.shootingArc(origo, num_points, rotationangle, radius, full_circle)
 
     def pointArc(self, origo, num_points=40, mouse_pos=None, rotationangle=-21,
                  width=0.5, height=0.5, movedistance=8):

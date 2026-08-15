@@ -684,12 +684,14 @@ class CombatResolver:
                         player2_flank_bonus += 2
                     else:
                         player2_flank_bonus += 0
-                player1_rank_bonus += defenderUnit.unit.ranks - 1
-                if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
-                   defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
-                    player1_rank_bonus -= 1
-                player1_rank_bonus = max(player1_rank_bonus, 0)
-                player1_rank_bonus = min(player1_rank_bonus, 2)
+                # Skirmishers claim no Rank Bonus when engaged.
+                if not defenderUnit.unit.model.is_skirmisher():
+                    player1_rank_bonus += defenderUnit.unit.ranks - 1
+                    if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
+                       defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
+                        player1_rank_bonus -= 1
+                    player1_rank_bonus = max(player1_rank_bonus, 0)
+                    player1_rank_bonus = min(player1_rank_bonus, 2)
             else:
                 player2_score += total_wounds
                 for faceing in defenderUnit.isInCombatFlank:
@@ -699,12 +701,14 @@ class CombatResolver:
                         player1_flank_bonus += 2
                     else:
                         player1_flank_bonus += 0
-                player2_rank_bonus += defenderUnit.unit.ranks - 1
-                if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
-                   defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
-                    player2_rank_bonus -= 1
-                player2_rank_bonus = max(player2_rank_bonus, 0)
-                player2_rank_bonus = min(player2_rank_bonus, 2)
+                # Skirmishers claim no Rank Bonus when engaged.
+                if not defenderUnit.unit.model.is_skirmisher():
+                    player2_rank_bonus += defenderUnit.unit.ranks - 1
+                    if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
+                       defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
+                        player2_rank_bonus -= 1
+                    player2_rank_bonus = max(player2_rank_bonus, 0)
+                    player2_rank_bonus = min(player2_rank_bonus, 2)
 
             combWounds = 0
             combWounds += total_wounds

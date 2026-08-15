@@ -212,6 +212,16 @@ class model:
     def is_mounted(self) -> bool:
         return self.get_mount() is not None
 
+    def is_skirmisher(self) -> bool:
+        """True if the model has the Skirmishers special rule."""
+        return any(isinstance(r, dict) and r.get('skirmish')
+                   for r in self.special_rules)
+
+    def unit_strength(self) -> int:
+        """Approximate Unit Strength: mounted models are US2, others US1.
+        (Monstrous/large models not yet modelled.)"""
+        return 2 if self.is_mounted() else 1
+
     def get_movement(self, default: int = 0) -> int:
         """Movement value; mounted units always use their mount's Movement."""
         mount = self.get_mount()
