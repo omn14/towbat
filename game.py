@@ -329,6 +329,7 @@ class MyApp(ShowBase):
 
         created_units = []
         current_x = start_pos.x
+        RESERVE_GAP = 1.0  # small gap between densely-packed reserve units
         for idx, army_unit_data in enumerate(army_data):
             unit_name = army_unit_data['name']
             # Include player_num in the name so P1 and P2 units with the same
@@ -337,9 +338,11 @@ class MyApp(ShowBase):
             unit_graphics = self._create_unit(army_unit_data, player_num, graphics_name)
             if unit_graphics is None:
                 continue
-            unit_graphics.bodyNP.setPos(current_x, start_pos.y, start_pos.z)
+            # Pack units edge-to-edge by their actual width, starting at start_pos.x.
+            w = getattr(unit_graphics, 'unitWidth', spacing) or spacing
+            unit_graphics.bodyNP.setPos(current_x + w / 2, start_pos.y, start_pos.z)
             created_units.append(unit_graphics)
-            current_x += spacing
+            current_x += w + RESERVE_GAP
             print(f"Loaded unit: {unit_name} ({army_unit_data['nmodels']} models, "
                   f"{army_unit_data['files']}x{army_unit_data['ranks']})")
 
@@ -1744,7 +1747,7 @@ class MyApp(ShowBase):
     def load_player1_army(self, filename="my_army.json"):
         """Load player 1's army from a file"""
         print(f"Loading Player 1 army from {filename}...")
-        units = self.load_army_from_json(filename, player_num=1, start_pos=Point3(-20, -25, 0), spacing=12)
+        units = self.load_army_from_json(filename, player_num=1, start_pos=Point3(-48, -38, 0), spacing=12)
         if units:
             print(f"Player 1 army loaded: {len(units)} units")
         return units
@@ -1752,7 +1755,7 @@ class MyApp(ShowBase):
     def load_player2_army(self, filename="my_army.json"):
         """Load player 2's army from a file"""
         print(f"Loading Player 2 army from {filename}...")
-        units = self.load_army_from_json(filename, player_num=2, start_pos=Point3(-20, 25, 0), spacing=12)
+        units = self.load_army_from_json(filename, player_num=2, start_pos=Point3(-48, 38, 0), spacing=12)
         if units:
             print(f"Player 2 army loaded: {len(units)} units")
             # Set heading to face player 1
