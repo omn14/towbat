@@ -937,17 +937,59 @@ class MyApp(ShowBase):
             localPoints.append(Point3(point.x, point.y, 0))
         return localPoints
 
+    def losBlockUnit(self, from_pos, to_pos, shooter):
+        """Return the point where line of sight is blocked by an intervening
+        unit (its far edge, so the blocker itself stays targetable but anything
+        behind it is hidden), or None.  The shooter is ignored."""
+        dx = to_pos.x - from_pos.x
+        dy = to_pos.y - from_pos.y
+        length = math.hypot(dx, dy)
+        steps = max(int(length / 0.5), 2)
+        blocker = None        # first intervening unit the sight line enters
+        exit_point = None     # last sample still inside it (its far edge)
+        for i in range(1, steps + 1):   # skip i=0 (the shooter's own position)
+            t = i / steps
+            sx = from_pos.x + dx * t
+            sy = from_pos.y + dy * t
+            inside = False
+            for unit in self.units:
+                if unit is shooter:
+                    continue
+                up = unit.bodyNP.getPos()
+                radius = max(getattr(unit, 'unitWidth', 3.0),
+                             getattr(unit, 'unitHeight', 3.0)) / 2.0
+                if (sx - up.x) ** 2 + (sy - up.y) ** 2 <= radius * radius:
+                    if blocker is None:
+                        blocker = unit
+                    if unit is blocker:
+                        inside = True
+            if blocker is not None:
+                if inside:
+                    exit_point = Point3(sx, sy, 0)   # advance through the blocker
+                else:
+                    return exit_point                # past its far edge → block
+        # Sight line ended within the blocker (it's the target) → not blocked.
+        return None
+
     def checkArrowsTerrain(self,mask=BitMask32.bit(3)):
-        hit = False
+        shooter = self.unitToMove
+        pFrom = Point3(shooter.bodyNP.getX(), shooter.bodyNP.getY(), 0)
         for n,point in enumerate(self.shootingArcPoints):
             point = point * 2
             point -= Vec2(1,1)
             point = point * 50
-            # Clip the arc where the line of sight enters LoS-blocking terrain
-            # (forest). Footprint-based, so it ignores the low mesh height.
-            pFrom = Point3(self.unitToMove.bodyNP.getX(), self.unitToMove.bodyNP.getY(), 0)
             pTo = Point3(point.x, point.y, 0)
-            block = self.terrain_manager.los_block_point(pFrom, pTo)
+            # Clip where the line of sight is first blocked — by LoS-blocking
+            # terrain (forest) or by an intervening unit, whichever is nearer.
+            terrain_block = self.terrain_manager.los_block_point(pFrom, pTo)
+            unit_block = self.losBlockUnit(pFrom, pTo, shooter)
+            block = None
+            if terrain_block is not None and unit_block is not None:
+                dt = (terrain_block - pFrom).lengthSquared()
+                du = (unit_block - pFrom).lengthSquared()
+                block = terrain_block if dt <= du else unit_block
+            else:
+                block = terrain_block or unit_block
             if block is not None:
                 hxy = self.coordsToLocal([Vec2(block.x, block.y)])[0]
                 self.shootingArcPoints[n] = Vec2(hxy.x, hxy.y)
