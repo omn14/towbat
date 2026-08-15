@@ -60,13 +60,23 @@ a Skirmish formation."* Source rules: <https://tow.whfb.app/unusual-formations/s
   count).
 
 ### Phase 3 — loose formation + per-model movement (hard, architectural)
-Separate effort — the engine currently treats a unit as one rigid body + grid.
-- *Minimal*: keep one `bodyNP`, arrange child models as a loose blob, treat the
-  footprint as a circle for spacing / US1.
-- *Full*: per-model movement with coherency — a real rework of
-  `movement_system.py`.
-- **Form-up in combat**: on engage, snap models into a base-contact fighting rank;
-  revert to the blob when combat ends.
+Minimal loose layout — DONE:
+- `units.py` lays skirmisher models out as a loose blob (roughly square, ~1"
+  gaps, deterministic jitter) instead of a rigid grid, and sizes the collision
+  footprint to cover the blob. Single `bodyNP` kept.
+Free 360° movement — DONE:
+- `movement_system._skirmishMovePreview`: straight-line translation up to the
+  move allowance in any direction with a circular range indicator + a ghost
+  footprint at the destination (no wheel arc); `pathTowardsMouse` routes
+  skirmishers to it.
+- `moveUnit` skips the wheel rotation and rear-pivot for skirmishers (they
+  translate freely and keep facing).
+Form-up in combat — DONE:
+- `units.formUpForCombat()` snaps a skirmisher's models into a tight fighting
+  rank on `enterInCombat`; `spreadToSkirmish()` returns them to the loose blob on
+  `exitInCombat` (deterministic blob so it reproduces the same layout).
+Still TODO:
+- Full per-model movement with per-model coherency (currently one `bodyNP`).
 
 ### Phase 4 — panic & terrain nuance (small, later)
 - Skirmishers fleeing don't panic formed friendlies (guard the panic path).

@@ -1,4 +1,5 @@
 import math
+import random
 from models import *
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
@@ -53,12 +54,24 @@ class unitGraphics(FSM):
 
         self.request('Idle')
 
-        for i, child in enumerate(children):
-            row = i // files
-            col = i % files
-            p=Point3(col * (self.modelWidth ),-row * (self.modelHeight ), 0)
-            pp=p-Point3(self.unitWidth*2, -self.modelHeight/2,0)
-            child.setPos(p)
+        # Skirmishers deploy as a loose blob (~1" apart), not rigid ranks/files.
+        self.isSkirmisher = bool(self.unit and self.unit.model
+                                 and self.unit.model.is_skirmisher())
+        if self.isSkirmisher:
+            side = max(1, math.ceil(math.sqrt(self.unit.nmodels)))
+            gap = 0.6                                   # loose spacing (< 1")
+            self._skirmSX = self.modelWidth + gap
+            self._skirmSY = self.modelHeight + gap
+            self._skirmCols = side
+            self._skirmRows = math.ceil(self.unit.nmodels / side)
+            self._arrange_skirmish_blob()
+        else:
+            for i, child in enumerate(children):
+                row = i // files
+                col = i % files
+                p=Point3(col * (self.modelWidth ),-row * (self.modelHeight ), 0)
+                pp=p-Point3(self.unitWidth*2, -self.modelHeight/2,0)
+                child.setPos(p)
             #child.setPos((col - (files - 1) / 2) * (self.modelWidth / files), (row - (ranks - 1) / 2) * (self.modelHeight / ranks), 0)
 
         #self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
@@ -284,9 +297,13 @@ class unitGraphics(FSM):
 
             # Create box shape from bounding box dimensions
             box_size = bounds[1] - bounds[0]
+            # Skirmishers occupy a loose blob; size the footprint to cover it.
+            if getattr(self, 'isSkirmisher', False):
+                box_size.setX(self._skirmSX * self._skirmCols)
+                box_size.setY(self._skirmSY * self._skirmRows)
             # When the database provides a base size, size the collision box from
             # the base footprint (per-model base * formation) instead of the mesh.
-            if getattr(self, 'baseSize', None):
+            elif getattr(self, 'baseSize', None):
                 files = max(1, self.unit.files)
                 cols = min(files, self.unit.nmodels)
                 rows = (self.unit.nmodels + files - 1) // files
@@ -361,6 +378,7 @@ class unitGraphics(FSM):
 
     def enterInCombat(self):
         self.isInCombat=True
+        self.formUpForCombat()
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
         else:
@@ -371,7 +389,37 @@ class unitGraphics(FSM):
         self.isInCombat=False
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
+        self.spreadToSkirmish()
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
+
+    def _arrange_skirmish_blob(self):
+        """Scatter the models into the loose skirmish blob (deterministic)."""
+        children = self.model.getChildren()
+        side = getattr(self, '_skirmCols', 1)
+        rng = random.Random(hash(self.unitName) & 0xffffffff)
+        for i, child in enumerate(children):
+            row = i // side
+            col = i % side
+            jx = rng.uniform(-0.25, 0.25)
+            jy = rng.uniform(-0.25, 0.25)
+            child.setPos(Point3(col * self._skirmSX + jx,
+                                -row * self._skirmSY + jy, 0))
+
+    def formUpForCombat(self):
+        """Snap a skirmisher's models into a tight fighting rank for combat."""
+        if not getattr(self, 'isSkirmisher', False):
+            return
+        children = self.model.getChildren()
+        files = max(1, min(self.unit.files or 5, len(children)))
+        for i, child in enumerate(children):
+            row = i // files
+            col = i % files
+            child.setPos(Point3(col * self.modelWidth, -row * self.modelHeight, 0))
+
+    def spreadToSkirmish(self):
+        """Return a skirmisher's models to the loose blob after combat."""
+        if getattr(self, 'isSkirmisher', False):
+            self._arrange_skirmish_blob()
 
     def enterIsFleeing(self):
         self.attemptedRallyThisTurn=False

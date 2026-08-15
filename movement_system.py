@@ -514,7 +514,11 @@ class MovementSystem:
 
             result = self.game.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
-            #surface.set_shader_input("pos", result.getHitPos())
+            # Skirmishers move as a loose group: free 360° translation, no wheel.
+            if getattr(unit, 'isSkirmisher', False) and result.hasHit():
+                self._skirmishMovePreview(unit, result.getHitPos())
+                return
+
 
             #self.game.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
             #self.game.move_node_smoothly(self.game.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
@@ -793,9 +797,52 @@ class MovementSystem:
 
     # ─── Unit Movement Execution ──────────────────────────────────────────
 
+    def _skirmishMovePreview(self, unit, target):
+        """Free-move preview for Skirmishers: straight-line translation up to
+        the move allowance in any direction (no wheel), with a circular range
+        indicator.  Sets arcPoint (normalised) + arcPointRotation=0 for moveUnit.
+        """
+        half = abs(self.game.ground.getTightBounds()[0][0]) or 50.0
+        cur = unit.bodyNP.getPos()
+        m = unit.unit.model.get_movement(0)
+        maxmove = 21.0 if unit.state == "IsPursuing" else m * 2.0
+
+        d = Vec3(target.x - cur.x, target.y - cur.y, 0)
+        dist = d.length()
+        dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
+        clamped = min(dist, maxmove)
+
+        # Straight sweep for a blocking unit along the path.
+        frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(), dirn, clamped)
+        if frac < 1.0:
+            clamped *= frac
+        endp = cur + dirn * clamped
+
+        self.game.arcPoint = Vec2((endp.x / half + 1) * 0.5, (endp.y / half + 1) * 0.5)
+        self.game.arcPointRotation = 0
+        self.game.unitHitPos = endp
+        self.game.playerNP.setPos(endp)
+
+        # Circular move-range indicator centred on the unit.
+        self.game.polygonpoints = self.shootingArc(
+            cur, num_points=80, radius=maxmove / (half * 2.0), full_circle=True)
+        self.game.setGroundOverlay(True, self.game.polygonpoints)
+
+        # Ghost footprint showing where the unit will end up.
+        if getattr(self.game, 'skirmMoveGhost', None):
+            self.game.skirmMoveGhost.removeNode()
+        self.game.skirmMoveGhost = self.drawRectangle(
+            center=Point3(endp.x, endp.y, 0.3),
+            width=unit.unitWidth, height=unit.unitHeight,
+            color=(0.4, 1.0, 0.4, 1.0))
+
     def moveUnit(self, unit):
         if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             taskMgr.remove("taskLoopPathTowardsMouse")
+        # Clear the skirmisher destination ghost once the move is committed.
+        if getattr(self.game, 'skirmMoveGhost', None):
+            self.game.skirmMoveGhost.removeNode()
+            self.game.skirmMoveGhost = None
             
         if unit.state != "Idle":
             if unit.state != "IsPursuing":
@@ -818,8 +865,11 @@ class MovementSystem:
         oposUnit=unit.bodyNP.getPos()
         orotUnit=unit.bodyNP.getHpr()
         unit.bodyNP.setPos(pos.x , pos.y , 0)
-        unit.bodyNP.setH(unit.bodyNP.getH() + self.game.arcPointRotation)
-        unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
+        # Skirmishers translate freely (no wheel, no back-pivot); formed units
+        # wheel about their rear as before.
+        if not getattr(unit, 'isSkirmisher', False):
+            unit.bodyNP.setH(unit.bodyNP.getH() + self.game.arcPointRotation)
+            unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
         #self.game.checkUnitContact(unit)
         c = self.game.checkUnitContactSmall(unit)
         
