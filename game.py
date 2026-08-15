@@ -943,25 +943,13 @@ class MyApp(ShowBase):
             point = point * 2
             point -= Vec2(1,1)
             point = point * 50
-            pFrom = Point3(self.unitToMove.bodyNP.getX(), self.unitToMove.bodyNP.getY(), 0.5)
-            pTo = Point3(point.x, point.y, 0.5)
-
-            result = self.world.rayTestClosest(pFrom, pTo, CM.TERRAIN_FOREST)
-            if result.hasHit():
-                """ print(result.hasHit())
-                print(result.getHitPos())
-                print(result.getHitNormal())
-                print(result.getHitFraction())
-                print(result.getNode().getChildren())
-                for c in result.getNode().getChildren():
-                    print(c.getName())
-                    if "Model" in c.getName():
-                        np = NodePath.anyPath(c)
-                        np.setColor(1,0,1,1)
-                        NodePath.anyPath(result.getNode()).setCollideMask(mask)
-                        #self.toCleanup.append(np)
-                        hit = True """
-                hxy=self.coordsToLocal([Vec2(result.getHitPos().x, result.getHitPos().y)])[0]
+            # Clip the arc where the line of sight enters LoS-blocking terrain
+            # (forest). Footprint-based, so it ignores the low mesh height.
+            pFrom = Point3(self.unitToMove.bodyNP.getX(), self.unitToMove.bodyNP.getY(), 0)
+            pTo = Point3(point.x, point.y, 0)
+            block = self.terrain_manager.los_block_point(pFrom, pTo)
+            if block is not None:
+                hxy = self.coordsToLocal([Vec2(block.x, block.y)])[0]
                 self.shootingArcPoints[n] = Vec2(hxy.x, hxy.y)
         
                 

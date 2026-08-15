@@ -819,6 +819,46 @@ class TerrainManager:
             return 1.0
         return min(t.movement_multiplier for t in terrains)
 
+    def los_block_point(self, from_pos, to_pos):
+        """Return the world point where line of sight is blocked along
+        *from_pos*→*to_pos*, or None if unobstructed.
+
+        Line-of-sight rules for woods: a unit can see *into* a forest but not
+        *through* it, and a forest the shooter stands in never blocks. So the
+        block point is the far edge of the first forest the sight line enters
+        (targets inside that forest stay visible; anything behind is hidden).
+        """
+        dx = to_pos.x - from_pos.x
+        dy = to_pos.y - from_pos.y
+        length = math.hypot(dx, dy)
+        steps = max(int(length / 0.5), 2)   # sample every ~0.5 world-units
+
+        # Forests containing the shooter don't block its own line of sight.
+        ignore = {id(p) for p in self.terrain_pieces
+                  if p.blocks_line_of_sight and p.contains(from_pos)}
+
+        entered = None        # the first blocking forest the sight line enters
+        exit_point = None     # last sample still inside that forest (its far edge)
+        for i in range(steps + 1):
+            t = i / steps
+            sample = Point3(from_pos.x + dx * t, from_pos.y + dy * t, 0)
+            inside = False
+            for p in self.terrain_pieces:
+                if id(p) in ignore or not p.blocks_line_of_sight:
+                    continue
+                if p.contains(sample):
+                    if entered is None:
+                        entered = p
+                    if p is entered:
+                        inside = True
+            if entered is not None:
+                if inside:
+                    exit_point = sample          # advance through the forest
+                else:
+                    return exit_point            # left the forest → block here
+        # Sight line ended inside the forest (target within it) → not blocked.
+        return None
+
     def get_surface_height(self, pos) -> float:
         """World-space Z of the raised terrain surface (hill/forest) at *pos*,
         or 0.0 on flat ground.  Used to sit unit models on the topography."""
