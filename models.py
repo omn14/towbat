@@ -303,6 +303,26 @@ class model:
             best = max(best, armour_bane_x(w.get('special_rules', [])))
         return best
 
+    def equip_best_melee(self) -> str:
+        """Equip the strongest applicable melee weapon so the equipped weapon
+        matches what's actually used in combat (and its hooks fire).  Charge-only
+        weapons (e.g. Lance) count only while charging."""
+        best_name, best_score = 'hand weapon', -1
+        for name, w in self.weapons.items():
+            if w.get('tag') == 'ranged':
+                continue
+            if w.get('charge_only') and not self.charging:
+                continue
+            ap = w.get('ap_penetration', 0)
+            if self.charging and w.get('ap_penetration_charge') is not None:
+                ap = w['ap_penetration_charge']
+            score = (w.get('strength_bonus', 0) + ap
+                     + armour_bane_x(w.get('special_rules', [])))
+            if score > best_score:
+                best_name, best_score = name, score
+        self.equip_weapon(best_name)
+        return best_name
+
 class BlackOrc(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)

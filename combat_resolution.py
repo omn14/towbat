@@ -602,10 +602,12 @@ class CombatResolver:
         defenderUnit = self.game.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels
         print(f"{attackerUnit.unit.name} attacks {defenderUnit.unit.name} in {flank}!")
+        # Fight with each model's best melee weapon (not a bare hand weapon) so
+        # its stats and hooks come from the actually-equipped weapon. The
+        # attacker keeps a melee weapon it was given; only swap off a ranged one.
         if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-            attackerUnit.unit.model.equip_weapon('hand weapon')
-        if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-            defenderUnit.unit.model.equip_weapon('hand weapon')
+            attackerUnit.unit.model.equip_best_melee()
+        defenderUnit.unit.model.equip_best_melee()
 
         self.game.attackSequence = Sequence()
         self.game.attackers = []

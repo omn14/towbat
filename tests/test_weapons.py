@@ -202,6 +202,26 @@ class MeleeApTests(unittest.TestCase):
         self.assertEqual(m.melee_ap(), 2)
 
 
+class EquipBestMeleeTests(unittest.TestCase):
+    def test_equips_halberd_over_hand_weapon(self):
+        m = model("State Trooper", ""); m.give_weapon("Halberd")
+        m.charging = False
+        self.assertEqual(m.equip_best_melee(), "Halberd")
+        self.assertEqual(m.equipedWeapon["name"], "Halberd")
+
+    def test_lance_only_equipped_while_charging(self):
+        m = model("Demigryph Knight", ""); m.give_weapon("Lance")
+        m.charging = False
+        self.assertEqual(m.equip_best_melee(), "hand weapon")
+        m.charging = True
+        self.assertEqual(m.equip_best_melee(), "Lance")
+
+    def test_falls_back_to_hand_weapon(self):
+        m = model("State Trooper", "")
+        m.charging = False
+        self.assertEqual(m.equip_best_melee(), "hand weapon")
+
+
 class ArmourBaneCombatTests(unittest.TestCase):
     def test_bonus_on_natural_six(self):
         with mock.patch("battleFunctions.random.randint", return_value=6), quiet():
