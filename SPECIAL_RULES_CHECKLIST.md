@@ -31,10 +31,49 @@ carry only *keywords* in the data; the coded effects live in `special_rules.py`,
 ## Unit rules — TODO (displayed, not yet applied)
 - [ ] Impetuous
 - [ ] Frenzy
-- [ ] Stubborn
 - [ ] Immune to Psychology
 - [ ] Fear
 - [ ] Terror
+- [ ] Stubborn — see General rules below
+
+## General (core `.gst`) rules — TODO
+From scanning `strategy_armies/nr/dv.json` (Dwarf army) against the engine:
+of 35 distinct rules only **Armour Bane** is coded. These core rules are
+army-agnostic and would benefit every faction.
+
+- [ ] Stubborn — break tests on unmodified Ld (AI classifier reads it, but the
+      mechanic isn't applied)
+- [ ] Fly (X) — flying movement (AI reads `is_flying` only)
+- [ ] General — Inspiring Presence (Ld bubble)
+- [ ] Battle Standard Bearer — re-roll failed break tests near the BSB
+- [ ] Hatred (X) — re-roll misses to hit in the first combat round
+- [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
+- [ ] Impact Hits (D3) — auto-hits on the charge
+- [ ] Skirmishers — loose formation, 360° LoS, no rank bonus
+- [ ] Scouts / Vanguard — pre-game deployment / free move
+- [ ] Swiftstride — better charge / flee / pursuit distance
+- [ ] Move Through Cover — no difficult-terrain movement penalty
+- [ ] Shieldwall — defensive bonus vs charges
+- [ ] Resolute — strikes with full ranks when charged
+- [ ] Veteran — Ld / re-roll bonus
+- [ ] Rallying Cry — bonus to rally tests
+- [ ] Close Order / Open Order / Dispersed Formation — formation modes
+- [ ] Gromril Weapons — hand weapon with AP -1 in melee
+- [ ] Detachment — list-building support (may not need a runtime effect)
+
+## Dwarf-specific (`Dwarfen Mountain Holds.cat`) rules — TODO
+- [ ] Ancestral Grudge — Hatred (enemy characters)
+- [ ] Gromril Armour — re-roll natural 1s on armour saves
+- [ ] Stoic Defenders — +1 Initiative & Attacks when charged
+- [ ] Venerable — friendly units within 6" re-roll failed Panic tests
+- [ ] Runes of Warding — 5+ ward vs Flaming Attacks
+- [ ] Rune Lore — may attempt a Wizardly Dispel
+- [ ] Forgefire — joined unit gains Armour Bane (2) + Flaming Attacks
+- [ ] Dwarf Crafted — no -1 To Hit on a Stand & Shoot reaction
+- [ ] Fire & Flee — shooting-unit flee reaction
+- [ ] Dive Bomb — once-per-game flyer attack
+- [ ] Borne Aloft — Shieldbearers (4 models on one base)
+- [ ] Royal Guard — army-list allowance (list-building, not runtime)
 
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
