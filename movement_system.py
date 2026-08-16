@@ -809,7 +809,9 @@ class MovementSystem:
         """
         half = abs(self.game.ground.getTightBounds()[0][0]) or 50.0
         cur = unit.bodyNP.getPos()
-        m = unit.unit.model.get_movement(0)
+        _model = unit.unit.model
+        # Flyers use their Fly Movement characteristic instead of M.
+        m = _model.get_fly_movement(0) if _model.is_flying() else _model.get_movement(0)
         maxmove = 21.0 if unit.state == "IsPursuing" else m * 2.0
 
         d = Vec3(target.x - cur.x, target.y - cur.y, 0)
