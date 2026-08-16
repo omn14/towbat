@@ -670,6 +670,12 @@ class CombatResolver:
         return task.done
 
     async def verySimpleBattle(self, task):
+        # Hold nearby-friend Panic tests until the whole combat (incl. flee /
+        # pursuit) is resolved, so their moves/reforms don't clash with the
+        # charge-reaction / pursuit choices.
+        psy = getattr(self.game, 'psychology', None)
+        if psy:
+            psy.hold_panic()
         try:
             await self._verySimpleBattleInner(task)
         except Exception as e:
@@ -678,6 +684,9 @@ class CombatResolver:
             traceback.print_exc()
             self.game.resolvingCombat = False
             messenger.send('unit-move-complete')
+        finally:
+            if psy:
+                psy.release_panic()
         return task.done
 
     async def _verySimpleBattleInner(self, task):
@@ -906,16 +915,22 @@ class CombatResolver:
 
             if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
                 print("losing unit flees from combat!")
-                # A US>=5 unit breaking/fleeing panics nearby friends (measure
-                # before it moves).
+                # A US>=5 unit breaking/fleeing panics nearby friends (US taken
+                # at the start of this combat, measured before it moves).
                 if getattr(self.game, 'psychology', None):
-                    self.game.psychology.on_unit_flees_combat(loserUnit)
+                    start_models = self._combatStartModels.get(
+                        id(loserUnit.unit), loserUnit.unit.nmodels)
+                    us0 = loserUnit.unit.model.unit_strength() * start_models
+                    self.game.psychology.on_unit_flees_combat(loserUnit, unit_strength=us0)
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
             elif leadership_score > int(loserUnit.unit.model.characteristics['Ld']) - diff:
                 print("losing unit FBIG!")
                 if getattr(self.game, 'psychology', None):
-                    self.game.psychology.on_unit_flees_combat(loserUnit)
+                    start_models = self._combatStartModels.get(
+                        id(loserUnit.unit), loserUnit.unit.nmodels)
+                    us0 = loserUnit.unit.model.unit_strength() * start_models
+                    self.game.psychology.on_unit_flees_combat(loserUnit, unit_strength=us0)
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
             else:

@@ -927,6 +927,7 @@ class MovementSystem:
                         return
 
             taskMgr.add(self.game.chargeAndChargeReaction, extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
+            unit.isChargingMove = True   # exempt from Panic while making the charge
             #self.game.getFlankFromContact(unit, c)
             unit.model.setColor(.7,0.7,0.7,1)
             copiedUnit=unit.bodyNP.copyTo(render)
@@ -1018,13 +1019,20 @@ class MovementSystem:
         if unit.model.isEmpty() or unit.bodyNP.isEmpty():
             print(f"removeModelsFromUnit: {unit.unitName} NodePath already empty, skipping.")
             return
-        # Capture Unit Strength and position before removal, for the
-        # nearby-friend-destroyed Panic test.
+        # Capture Unit Strength and footprint before removal, for the
+        # nearby-friend-destroyed Panic test.  US uses the unit's size at the
+        # start of this phase/combat (casualties are removed in stages, so the
+        # destroying call can see very few models).
         pre_models = len(unit.model.getChildren())
-        us_before = unit.unit.model.unit_strength() * pre_models
+        sop = getattr(unit, 'startOfPhaseModels', pre_models) or pre_models
+        us_before = unit.unit.model.unit_strength() * max(pre_models, sop)
         friendly_side = (self.game.player1Units if unit in self.game.player1Units
                          else self.game.player2Units)
-        death_pos = unit.bodyNP.getPos()
+        _dp = unit.bodyNP.getPos()
+        death_box = (_dp.x, _dp.y,
+                     getattr(unit, 'unitWidth', 2.0) / 2.0,
+                     getattr(unit, 'unitHeight', 2.0) / 2.0,
+                     unit.bodyNP.getH())
         cildren = unit.model.getChildren()
         models_to_remove = min(len(cildren), models_to_remove)
         #unit.model.ls()
@@ -1059,7 +1067,7 @@ class MovementSystem:
             
             # A destroyed unit of US>=5 panics nearby friends.
             if getattr(self.game, 'psychology', None):
-                self.game.psychology.on_unit_destroyed(death_pos, friendly_side, us_before)
+                self.game.psychology.on_unit_destroyed(death_box, friendly_side, us_before)
             return
         self.game.world.removeRigidBody(unit.bodyNP.node())
         for shape in unit.bodyNP.node().shapes:

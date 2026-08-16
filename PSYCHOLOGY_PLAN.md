@@ -127,20 +127,23 @@ Rules (no-need-for-hysterics):
   - making a **Charge** move,
   - **engaged in combat**,
   - **already fleeing** (and has yet to rally).
-  - *(verify the full bullet list against the rulebook — the site page was
-    truncated; also confirm Unbreakable / Immune to Psychology auto-exempt.)*
-- If two+ units from the **same army** must test at once, the controlling player
-  chooses the order.
+
+> Status: **DONE.** Full exemption list confirmed against the rulebook (charge
+> move / engaged / already fleeing) plus rule immunities (Ignore Panic, Immune
+> to Psychology, Unbreakable) and one-test-per-phase. `panic_exempt_reason`
+> reports the specific reason. `isChargingMove` flag set when a charge is
+> declared and cleared at end of the Movement phase. Simultaneous tests resolve
+> via the sequential panic queue in the owner's unit-list order. Exemption tests
+> in `tests/test_psychology.py`.
 
 Tasks:
-- [ ] `unit.panicTestedThisPhase` flag; set on any panic test, cleared by the
-  FSM on each phase enter. Persist it.
-- [ ] Exemption check used by `panic_test`: charging, in combat, already
-  fleeing, and rule-based (`Ignore Panic`, `Ignore Goblin Panic`, "auto-passes
-  Panic", Unbreakable, Immune to Psychology → auto-pass/skip).
-- [ ] Simultaneous-test ordering: for AI just pick a deterministic order; for
-  the human, resolve in selection/nearest order (document the simplification).
-
+- [x] `unit.panicTestedThisPhase` flag; set on any panic test, cleared by the
+      FSM on each phase enter. Persist it.
+- [x] Exemption check used by `panic_test`: charging, in combat, already
+      fleeing, and rule-based (`Ignore Panic`, Unbreakable, Immune to
+      Psychology -> auto-pass/skip).
+- [x] Simultaneous-test ordering: resolved by the sequential panic queue in the
+      owner's unit-list order (documented simplification).
 ---
 
 ## Phase 3+ — Rest of the psychology system (later)

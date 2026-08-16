@@ -240,6 +240,9 @@ class GamePhaseFSM(FSM):
         taskMgr.remove("taskLoopPathTowardsMouse")
         self._cleanup_phase()
         self.game.ignore('mouse1')
+        # The charge move is over — clear the Panic exemption.
+        for unit in self.game.units:
+            unit.isChargingMove = False
         self.game.boundries.contactTest(
             self.game.boundries.northBoundry, 180, Vec3(0, -0.1, 0)
         )
@@ -300,6 +303,8 @@ class GamePhaseFSM(FSM):
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn = False
             unit.panicTestedThisPhase = False
+            # Combat-start size, for the nearby-friend-destroyed US>=5 gate.
+            unit.startOfPhaseModels = unit.unit.nmodels
 
     def exitCombatPhase(self):
         self.game.ignore('mouse1')

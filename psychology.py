@@ -13,11 +13,71 @@ Pure functions (``leadership_test``, ``panic_fail_outcome``,
 from __future__ import annotations
 
 import random
+import math
 
 from panda3d.core import Vec3, Point3
 from direct.interval.LerpInterval import LerpPosInterval
 from direct.interval.IntervalGlobal import Sequence
 from direct.interval.FunctionInterval import Func
+
+
+# ── Oriented-box (footprint) geometry ──────────────────────────────────────
+# A unit box is (cx, cy, half_width, half_depth, heading_degrees).
+
+def _box_corners(cx, cy, hx, hy, ang_deg):
+    a = math.radians(ang_deg)
+    ca, sa = math.cos(a), math.sin(a)
+    corners = []
+    for sx, sy in ((-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy)):
+        corners.append((cx + sx * ca - sy * sa, cy + sx * sa + sy * ca))
+    return corners
+
+
+def _polys_overlap(a, b):
+    """Separating-Axis test for two convex polygons (True if they overlap)."""
+    for poly in (a, b):
+        n = len(poly)
+        for i in range(n):
+            x1, y1 = poly[i]
+            x2, y2 = poly[(i + 1) % n]
+            nx, ny = -(y2 - y1), (x2 - x1)   # edge normal (need not be unit)
+            amin = min(px * nx + py * ny for px, py in a)
+            amax = max(px * nx + py * ny for px, py in a)
+            bmin = min(px * nx + py * ny for px, py in b)
+            bmax = max(px * nx + py * ny for px, py in b)
+            if amax < bmin or bmax < amin:
+                return False                  # found a separating axis
+    return True
+
+
+def _seg_point_dist(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    if l2 == 0.0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def _poly_edge_dist(a, b):
+    best = float('inf')
+    for (px, py) in a:
+        n = len(b)
+        for i in range(n):
+            bx1, by1 = b[i]
+            bx2, by2 = b[(i + 1) % n]
+            best = min(best, _seg_point_dist(px, py, bx1, by1, bx2, by2))
+    return best
+
+
+def obb_distance(box_a, box_b) -> float:
+    """Closest distance between two oriented footprint boxes (0 if overlapping).
+    Each box is (cx, cy, half_width, half_depth, heading_degrees)."""
+    a = _box_corners(*box_a)
+    b = _box_corners(*box_b)
+    if _polys_overlap(a, b):
+        return 0.0
+    return min(_poly_edge_dist(a, b), _poly_edge_dist(b, a))
 
 
 def _stat_int(characteristics: dict, key: str, default: int = 0) -> int:
@@ -75,15 +135,20 @@ class PsychologySystem:
         # move (and rally/reform) before the next queued test starts.
         self._panic_queue = []
         self._panic_active = False
+        # While held (e.g. during combat resolution) tests queue but do not run
+        # until released, so their moves/reforms don't clash with combat choices.
+        self._panic_hold = False
 
     # ─── Exemptions (No Need for Hysterics) ───────────────────────────────
 
     def panic_exempt_reason(self, unit):
         """Return why *unit* need not take a Panic test, or None if it must.
-        A unit is exempt if it has already tested this phase, is fleeing or
-        engaged in combat, or is rule-immune to Panic."""
+        A unit is exempt if it has already tested this phase, is making a charge
+        move, is fleeing or engaged in combat, or is rule-immune to Panic."""
         if getattr(unit, 'panicTestedThisPhase', False):
             return "already tested this phase"
+        if getattr(unit, 'isChargingMove', False):
+            return "making a charge move"
         if getattr(unit, 'isInCombat', False):
             return "engaged in combat"
         if unit.state == 'IsFleeing':
@@ -110,7 +175,17 @@ class PsychologySystem:
         if unit is None or unit.bodyNP.isEmpty():
             return
         self._panic_queue.append((unit, flee_from, cause))
-        if not self._panic_active:
+        if not self._panic_active and not self._panic_hold:
+            self._run_next_panic()
+
+    def hold_panic(self):
+        """Queue Panic tests without resolving them (used during combat)."""
+        self._panic_hold = True
+
+    def release_panic(self):
+        """Resume resolving queued Panic tests (after combat has finished)."""
+        self._panic_hold = False
+        if not self._panic_active and self._panic_queue:
             self._run_next_panic()
 
     def _run_next_panic(self):
@@ -216,23 +291,34 @@ class PsychologySystem:
         return (self.game.player1Units if unit in self.game.player1Units
                 else self.game.player2Units)
 
-    def units_within(self, pos, radius, side_units):
-        """Non-empty units from *side_units* within *radius* of *pos*."""
-        r2 = radius * radius
+    @staticmethod
+    def _unit_box(unit):
+        """Footprint box (cx, cy, half_w, half_d, heading) of a live unit."""
+        p = unit.bodyNP.getPos()
+        hx = getattr(unit, 'unitWidth', 2.0) / 2.0
+        hy = getattr(unit, 'unitHeight', 2.0) / 2.0
+        return (p.x, p.y, hx, hy, unit.bodyNP.getH())
+
+    def units_within(self, src_box, radius, side_units):
+        """Units from *side_units* whose footprint is within *radius* (edge to
+        edge, oriented boxes) of *src_box*."""
         out = []
         for u in side_units:
             if u.bodyNP.isEmpty():
                 continue
-            if (u.bodyNP.getPos() - pos).lengthSquared() <= r2:
+            if obb_distance(src_box, self._unit_box(u)) <= radius:
                 out.append(u)
         return out
 
-    def panic_nearby_friends(self, pos, side_units, cause, exclude=None):
-        """Every friendly unit within PANIC_RADIUS of *pos* makes a Panic test.
-        (The controlling player picks the order; we use list order.)"""
-        for u in self.units_within(pos, self.PANIC_RADIUS, side_units):
-            if u is exclude:
-                continue
+    def panic_nearby_friends(self, src_box, side_units, cause, exclude=None):
+        """Every friendly unit within PANIC_RADIUS (edge to edge) of *src_box*
+        makes a Panic test.  (The controlling player picks the order; we use
+        list order.)"""
+        near = [u for u in self.units_within(src_box, self.PANIC_RADIUS, side_units)
+                if u is not exclude]
+        print(f"[Panic] {cause}: {len(near)} friendly unit(s) within "
+              f"{self.PANIC_RADIUS:.0f}\": {', '.join(u.unit.name for u in near) or 'none'}")
+        for u in near:
             self.panic_test(u, cause=cause)
 
     def check_heavy_casualties(self, unit, phase, attacker=None):
@@ -245,21 +331,31 @@ class PsychologySystem:
             self.panic_test(unit, flee_from=attacker,
                             cause=f"heavy casualties ({phase})")
 
-    def on_unit_destroyed(self, pos, side_units, unit_strength):
-        """A friendly unit of US>=5 was destroyed: friendlies within 6" test.
-        *pos* is the destroyed unit's location (the measure point)."""
+    def on_unit_destroyed(self, src_box, side_units, unit_strength):
+        """A friendly unit of US>=5 was destroyed: friendlies within 6" (edge to
+        edge) test.  *src_box* is the destroyed unit's footprint (measure point)."""
         if unit_strength < self.PANIC_US_THRESHOLD:
+            print(f"[Panic] destroyed unit US {unit_strength} < "
+                  f"{self.PANIC_US_THRESHOLD} — no nearby-friend Panic.")
             return
-        self.panic_nearby_friends(pos, side_units, cause="nearby friend destroyed")
+        print(f"[Panic] a US {unit_strength} unit was destroyed — friends within "
+              f"{self.PANIC_RADIUS:.0f}\" test.")
+        self.panic_nearby_friends(src_box, side_units, cause="nearby friend destroyed")
 
-    def on_unit_flees_combat(self, unit):
-        """A US>=5 unit that lost combat and broke/fell back: friendlies within
-        6" (measured before it moves) test."""
+    def on_unit_flees_combat(self, unit, unit_strength=None):
+        """A unit that lost combat and broke/fell back panics friends within 6"
+        if its Unit Strength was >= 5 *at the start of that combat* (pass it as
+        *unit_strength*; falls back to the current US)."""
         if unit is None or unit.bodyNP.isEmpty():
             return
-        if unit_strength_total(unit) < self.PANIC_US_THRESHOLD:
+        us = unit_strength if unit_strength is not None else unit_strength_total(unit)
+        if us < self.PANIC_US_THRESHOLD:
+            print(f"[Panic] {unit.unit.name} flees/FBIG but combat-start US {us} "
+                  f"< {self.PANIC_US_THRESHOLD} — no nearby-friend Panic.")
             return
-        self.panic_nearby_friends(unit.bodyNP.getPos(), self._friendlies_of(unit),
+        print(f"[Panic] {unit.unit.name} (combat-start US {us}) flees combat — "
+              f"friends within {self.PANIC_RADIUS:.0f}\" test.")
+        self.panic_nearby_friends(self._unit_box(unit), self._friendlies_of(unit),
                                   cause="nearby friend flees combat", exclude=unit)
 
     PANIC_US_THRESHOLD = PANIC_US_THRESHOLD

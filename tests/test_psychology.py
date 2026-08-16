@@ -3,12 +3,13 @@
 import os
 import sys
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from psychology import (  # noqa: E402
     leadership_test, panic_fail_outcome, unit_strength_total, heavy_casualties,
-    PANIC_US_THRESHOLD, PANIC_RADIUS,
+    PANIC_US_THRESHOLD, PANIC_RADIUS, PsychologySystem, obb_distance,
 )
 
 
@@ -104,6 +105,72 @@ class PanicConstantsTests(unittest.TestCase):
     def test_thresholds(self):
         self.assertEqual(PANIC_US_THRESHOLD, 5)
         self.assertEqual(PANIC_RADIUS, 6.0)
+
+
+class ExemptionTests(unittest.TestCase):
+    """No Need for Hysterics — a unit need not test when exempt."""
+
+    @staticmethod
+    def _unit(rules=None, state='Idle', tested=False, charging=False, combat=False):
+        model = SimpleNamespace(special_rules=rules or [])
+        return SimpleNamespace(
+            state=state, unit=SimpleNamespace(model=model, name='U'),
+            panicTestedThisPhase=tested, isChargingMove=charging, isInCombat=combat)
+
+    def setUp(self):
+        self.psy = PsychologySystem(None)
+
+    def test_not_exempt(self):
+        self.assertIsNone(self.psy.panic_exempt_reason(self._unit()))
+
+    def test_already_tested(self):
+        self.assertEqual(self.psy.panic_exempt_reason(self._unit(tested=True)),
+                         "already tested this phase")
+
+    def test_charging(self):
+        self.assertEqual(self.psy.panic_exempt_reason(self._unit(charging=True)),
+                         "making a charge move")
+
+    def test_in_combat(self):
+        self.assertEqual(self.psy.panic_exempt_reason(self._unit(combat=True)),
+                         "engaged in combat")
+
+    def test_fleeing(self):
+        self.assertEqual(self.psy.panic_exempt_reason(self._unit(state='IsFleeing')),
+                         "already fleeing")
+
+    def test_unbreakable(self):
+        u = self._unit(rules=[{'name': 'Unbreakable', 'Unbreakable': True}])
+        self.assertEqual(self.psy.panic_exempt_reason(u), "Unbreakable")
+
+    def test_ignore_panic(self):
+        u = self._unit(rules=[{'name': 'Ignore Panic'}])
+        self.assertEqual(self.psy.panic_exempt_reason(u), 'Ignore Panic')
+
+    def test_immune_to_psychology(self):
+        u = self._unit(rules=[{'name': 'Immune to Psychology'}])
+        self.assertEqual(self.psy.panic_exempt_reason(u), 'Immune to Psychology')
+
+
+class ObbDistanceTests(unittest.TestCase):
+    def test_overlapping_boxes_zero(self):
+        self.assertEqual(obb_distance((0, 0, 1, 1, 0), (0.5, 0, 1, 1, 0)), 0.0)
+
+    def test_axis_aligned_gap(self):
+        # Two 2x2 boxes (half 1) centred 5 apart on x -> 5 - 1 - 1 = 3 gap.
+        self.assertAlmostEqual(
+            obb_distance((0, 0, 1, 1, 0), (5, 0, 1, 1, 0)), 3.0, places=6)
+
+    def test_symmetry(self):
+        a, b = (0, 0, 1, 2, 30), (7, 1, 2, 1, -15)
+        self.assertAlmostEqual(obb_distance(a, b), obb_distance(b, a), places=6)
+
+    def test_quicksave_troopers_edge_to_edge(self):
+        # From quicksave.json: centres 6.5" apart, footprints ~4.9x2.0 and
+        # ~4.9x3.9 -> edge to edge well within 6" (missed by centre-to-centre).
+        missile = (-0.4, 0.5, 4.9 / 2, 2.0 / 2, 180)
+        troopers = (-6.3, -2.2, 4.9 / 2, 3.9 / 2, 0)
+        self.assertLess(obb_distance(missile, troopers), 6.0)
 
 
 if __name__ == "__main__":
