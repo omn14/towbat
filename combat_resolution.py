@@ -714,6 +714,11 @@ class CombatResolver:
         for unit in defenderUnit.isInCombatWith:
             self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
             self.game.defenders.append(defenderUnit)
+        # Snapshot each unit's model count at the start of combat so that
+        # casualties inflicted earlier this round (e.g. by a charger striking
+        # first) thin the fighting ranks of a unit that strikes back.
+        self._combatStartModels = {id(g.unit): g.unit.nmodels
+                                   for g in set(self.game.attackers) | set(self.game.defenders)}
         player1_score = 0
         player1_flank_bonus = 0
         player1_rank_bonus = 0
@@ -764,9 +769,14 @@ class CombatResolver:
                 defenderUnit.unit.files -= 1
             # The charging unit fights with its charge bonus (and front rank
             # only); everyone else fights as normal (front + supporting rank).
+            # Casualties suffered this round (charger struck first) thin the
+            # supporting rank of a unit that strikes back.
+            casualties = max(0, self._combatStartModels.get(
+                id(defenderUnit.unit), defenderUnit.unit.nmodels) - defenderUnit.unit.nmodels)
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                 defenderUnit.unit, attackerUnit.unit,
-                charge=getattr(defenderUnit, 'chargedThisTurn', False))
+                charge=getattr(defenderUnit, 'chargedThisTurn', False),
+                casualties=casualties)
             defenderUnit.unit.files = origFiles
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                     suffered_wounds, saves_made, total_wounds)

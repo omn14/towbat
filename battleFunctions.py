@@ -217,7 +217,7 @@ def check_armor_save(model, armor_save_value, AP):
         return True
     return False
 
-def simulate_battle(unit1, unit2,charge: bool):
+def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0):
 
     # how many attacks
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
@@ -240,9 +240,10 @@ def simulate_battle(unit1, unit2,charge: bool):
             attacks = A * unit1.nmodels  # fewer models than a full front rank
         else:
             # The second rank adds one supporting attack per model (a full rank
-            # if the unit is deep enough).  Casualties come off the rear ranks,
-            # so this stays full until the unit drops below two ranks.
+            # if the unit is deep enough).  Casualties are taken from the back
+            # and thin the supporting rank first, so each one costs an attack.
             second_rank = min(unit1.files, unit1.nmodels - unit1.files)
+            second_rank = max(0, second_rank - max(0, casualties))
             attacks += second_rank
     
     if unit1.model.equipedWeapon.get('tag') == 'ranged':
