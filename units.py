@@ -249,6 +249,15 @@ class unitGraphics(FSM):
                 row += "Weapons:\n"
                 row += "\n".join(weapon_lines) + "\n"
 
+            # Armour — equipped pieces and the resulting save (7 = no save).
+            save = getattr(m, 'armor_save', 7)
+            armour = getattr(m, 'armour', None) or []
+            row += sep + "\n"
+            save_str = f"{save}+" if save <= 6 else "none"
+            if armour:
+                row += "Armour : " + ", ".join(armour) + "\n"
+            row += f"Save   : {save_str}\n"
+
             # Special rules — unit rules from the catalogue plus any coded rules,
             # excluding the weapons (listed above) and the mount.
             rule_names = list(m.characteristics.get('Special Rules', []) or [])

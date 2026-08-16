@@ -88,6 +88,16 @@ def _collect_weapons(selection: dict, out: list) -> None:
         _collect_weapons(sub, out)
 
 
+def _collect_armour(selection: dict, out: list) -> None:
+    """Gather worn armour names (Armour profiles) from a unit and its upgrades,
+    including barding on a mount (it improves the rider's save)."""
+    for p in selection.get("profiles", []):
+        if p.get("typeName") == "Armour" and p.get("name"):
+            out.append(p["name"])
+    for sub in selection.get("selections", []):
+        _collect_armour(sub, out)
+
+
 def _collect_special_rules(selection: dict, out: list) -> None:
     """Gather special-rule names from a unit and its (non-mount) upgrades.
 
@@ -143,6 +153,9 @@ def import_roster(path: str) -> dict:
             _collect_special_rules(unit, special_rules)
             # De-duplicate, preserving order.
             special_rules = list(dict.fromkeys(special_rules))
+            armour: list = []
+            _collect_armour(unit, armour)
+            armour = list(dict.fromkeys(armour))
             units.append({
                 "name": _primary_model_name(unit),
                 "faction": faction_slug,
@@ -155,6 +168,7 @@ def import_roster(path: str) -> dict:
                 "mount": mount,
                 "weapons": weapons,
                 "special_rules": special_rules,
+                "armour": armour,
             })
 
     return {"budget": limit or total, "faction": faction_slug, "units": units}

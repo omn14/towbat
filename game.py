@@ -477,6 +477,11 @@ class MyApp(ShowBase):
                         model_instance.special_rules.append(entry)
                         have.add(entry.get('name'))
 
+            # Derive the armour save from the roster's armour equipment.
+            armour = army_unit_data.get('armour')
+            if armour:
+                model_instance.set_armour(armour)
+
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
             unit_graphics = unitGraphics(
                 self, graphics_name, model_info['path'], unit_instance,

@@ -73,6 +73,7 @@ def save_game_state(game, filename=None):
             'points_cost': unit.unit.model.characteristics.get('Points', 0) * unit.unit.nmodels,
             'characteristics': unit.unit.model.characteristics,
             'armor_save': unit.unit.model.armor_save,
+            'armour': list(getattr(unit.unit.model, 'armour', []) or []),
             'charging': unit.unit.model.charging,
             'player': getattr(unit, '_player', 1 if unit in game.player1Units else 2),
             'isInCombatWith': [u.unitName for u in unit.isInCombatWith],
@@ -246,6 +247,7 @@ def load_game_state(game, filename):
 
         unit.unit.model.characteristics = unit_data['characteristics']
         unit.unit.model.armor_save = unit_data['armor_save']
+        unit.unit.model.armour = list(unit_data.get('armour', []) or [])
         unit.unit.model.charging = unit_data['charging']
 
         if unit_data['equipped_weapon']:

@@ -17,6 +17,10 @@ carry only *keywords* in the data; the coded effects live in `special_rules.py`,
 - [x] Equip best melee weapon in combat — models fight with their strongest
       applicable melee weapon (Lance only while charging) so its stats/hooks
       come from the equipped weapon, not a bare hand weapon
+- [x] Armour save from equipment — the roster importer collects worn armour
+      (Armour profiles: Light/Heavy/Full Plate, Shield, Barding) and the save
+      is derived at unit creation (best body armour, -1 per shield/barding,
+      capped at 2+). Shown on the hover panel; persisted in saves.
 
 ## Weapon rules — TODO (high frequency)
 - [ ] Multiple Shots (D3) — roll D3/D6+N instead of the hardcoded 3

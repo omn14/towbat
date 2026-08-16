@@ -32,6 +32,16 @@
                     "ap_penetration": 2,
                     "charge_only": true
                 }
+            ],
+            "special_rules": [
+                "\"Hold The Line!\"",
+                "Rallying Cry",
+                "General"
+            ],
+            "armour": [
+                "Shield",
+                "Barding",
+                "Light Armour"
             ]
         },
         {
@@ -51,7 +61,12 @@
                     "special_rules": [],
                     "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon."
                 }
-            ]
+            ],
+            "special_rules": [
+                "Magical Attacks",
+                "Magic Resistance (-1)"
+            ],
+            "armour": []
         },
         {
             "name": "State Missile Trooper",
@@ -86,7 +101,13 @@
                     "ranged_shots": 1,
                     "volley_fire": false
                 }
-            ]
+            ],
+            "special_rules": [
+                "Close Order",
+                "Detachment",
+                "Regimental Unit"
+            ],
+            "armour": []
         },
         {
             "name": "State Trooper",
@@ -119,6 +140,15 @@
                     "ap_penetration": 1,
                     "ap_penetration_charge": 2
                 }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Detachment",
+                "Regimental Unit",
+                "Horde"
+            ],
+            "armour": [
+                "Light Armour"
             ]
         },
         {
@@ -151,6 +181,19 @@
                     "ap_penetration": 2,
                     "charge_only": true
                 }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Counter Charge",
+                "Fear",
+                "First Charge",
+                "Swiftstride",
+                "Order of the Knights Panther"
+            ],
+            "armour": [
+                "Barding",
+                "Shield",
+                "Full Plate Armour"
             ]
         },
         {
@@ -258,6 +301,18 @@
                     "ap": "-1",
                     "ap_penetration": 1
                 }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Crushing Weight",
+                "Impact Hits (D6+1, War Wagon only)",
+                "Large Target",
+                "Stomp Attacks (D3+1)",
+                "Stable Firing Platform",
+                "Assorted Weapons"
+            ],
+            "armour": [
+                "Armour Value : 3+"
             ]
         }
     ]

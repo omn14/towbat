@@ -47,6 +47,45 @@ def armour_bane_x(rules) -> int:
     return 0
 
 
+# Armour value each worn piece grants on its own (target number; lower is
+# better; 7 means no save).  Names match the catalogue 'Armour' profiles.
+ARMOUR_VALUES = {
+    'light armour': 6,
+    'heavy armour': 5,
+    'full plate armour': 4,
+    'plate armour': 4,
+    'gromril armour': 5,
+}
+# Pieces that improve (lower) the armour value by 1 rather than setting it.
+ARMOUR_MODIFIERS = {'shield', 'barding'}
+
+
+def armour_save_from_equipment(items) -> int:
+    """Armour-save target (2-7; 7 = no save) for a list of armour item names.
+
+    The best worn body armour sets the base value; shields and barding each
+    improve it by 1.  E.g. ['Heavy Armour', 'Shield'] -> 4+, ['Shield'] -> 6+.
+    """
+    best = 7
+    improve = 0
+    for it in items or []:
+        key = str(it).strip().lower()
+        if key in ARMOUR_VALUES:
+            best = min(best, ARMOUR_VALUES[key])
+        elif key in ARMOUR_MODIFIERS:
+            improve += 1
+        else:
+            # Some pieces (e.g. chariot hulls) state the value directly, as an
+            # 'Armour Value N+' name/description.
+            av = re.search(r"armou?r value\s*:?\s*(\d+)", key)
+            if av:
+                best = min(best, int(av.group(1)))
+    if best == 7 and improve == 0:
+        return 7
+    return max(2, min(7, best - improve))
+
+
+
 def roll_dice_expr(expr) -> int:
     """Roll a shots/dice expression: '2', 'D3', 'D6', '2D6', 'D3+1'. Returns int >= 0."""
     s = str(expr).upper().replace(" ", "")
@@ -98,6 +137,7 @@ class model:
         self.armor_save = 7
         self.AP = 0  # Armor Penetration
         self.charging = False
+        self.armour = []  # equipped armour item names (from the roster)
         self.special_rules = []
         # Subclass-less units (e.g. Dwarfs) source their special rules from the
         # catalogue; coded subclasses curate their own to avoid double effects.
@@ -228,6 +268,12 @@ class model:
             if isinstance(r, dict) and r.get('fly') and r.get('fly_movement'):
                 return int(r['fly_movement'])
         return default
+
+    def set_armour(self, items):
+        """Record equipped armour item names and recompute the armour save."""
+        self.armour = list(items or [])
+        self.armor_save = armour_save_from_equipment(self.armour)
+        return self.armor_save
 
     def unit_strength(self) -> int:
         """Approximate Unit Strength: mounted models are US2, others US1.
