@@ -44,9 +44,10 @@ army-agnostic and would benefit every faction.
 - [ ] Stubborn — break tests on unmodified Ld (AI classifier reads it, but the
       mechanic isn't applied)
 - [x] Fly (X) — DONE: flyers use their Fly Movement characteristic and pass
-      freely over terrain (no difficult-terrain penalty, no forest-edge block).
-      Leftover: passing over enemy units (sweep still stops at bodies; the rule
-      forbids *ending* on a unit anyway).
+      freely over terrain (no difficult-terrain penalty, no forest-edge block)
+      and over other units (unit-sweep skipped for flyers). Leftover: the
+      end-of-move "not on top of a unit / within 1in of an enemy" restriction
+      is not enforced.
 - [ ] General — Inspiring Presence (Ld bubble)
 - [ ] Battle Standard Bearer — re-roll failed break tests near the BSB
 - [ ] Hatred (X) — re-roll misses to hit in the first combat round

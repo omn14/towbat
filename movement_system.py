@@ -819,10 +819,12 @@ class MovementSystem:
         dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
         clamped = min(dist, maxmove)
 
-        # Straight sweep for a blocking unit along the path.
-        frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(), dirn, clamped)
-        if frac < 1.0:
-            clamped *= frac
+        # Straight sweep for a blocking unit along the path.  Flyers pass over
+        # units freely, so only non-flyers stop at a blocking body.
+        if not _model.is_flying():
+            frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(), dirn, clamped)
+            if frac < 1.0:
+                clamped *= frac
         endp = cur + dirn * clamped
 
         self.game.arcPoint = Vec2((endp.x / half + 1) * 0.5, (endp.y / half + 1) * 0.5)
@@ -1085,6 +1087,9 @@ class MovementSystem:
         return 1.0
     
     def sweepTestRot(self, unit, point,angle,mask=BitMask32.bit(9)):
+        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test.
+        if mask == BitMask32.bit(9) and unit.unit.model.is_flying():
+            mask = BitMask32.allOff()
         startPos=unit.bodyNP.getPos()
         Hpr=unit.bodyNP.getHpr()
         shape = unit.bodyNP.node().getShape(0)
@@ -1118,6 +1123,9 @@ class MovementSystem:
         return 1.0,None,tsTo
     
     def sweepTestDir(self, unit, tsFrom, direction,length,mask=BitMask32.bit(9)):
+        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test.
+        if mask == BitMask32.bit(9) and unit.unit.model.is_flying():
+            mask = BitMask32.allOff()
         
         #tsFrom = TransformState.makePosHpr(startPos, nHpr)
         tsTo = TransformState.makePosHpr(tsFrom.getPos() + direction * length, tsFrom.getHpr())
