@@ -719,6 +719,22 @@ class MyApp(ShowBase):
         self.signal = True
         return
 
+    def startFreeReform(self, unit):
+        """Interactive free reform (rotate/reposition, left-click to confirm).
+        Used by auto-rally after a Fall Back in Good Order."""
+        self.ignore('mouse1')
+        self.accept('mouse1', self.giveSignal)
+        taskMgr.add(self._freeReformTask, "freeReformUnitTask",
+                    extraArgs=[unit], appendTask=True)
+
+    def _freeReformTask(self, unit, task):
+        result = self.freeReformUnit(unit, task)
+        if result == task.done:
+            self.ignore('mouse1')
+            self.accept('mouse1', self.setActiveUnit,
+                        [self.setActiveUnitTask, self.setActiveUnitTaskName])
+        return result
+
     async def rallyUnit(self, unit):
         # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
         Ld=int(unit.unit.model.characteristics['Ld'])

@@ -67,6 +67,7 @@ def save_game_state(game, filename=None):
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
+            'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'startOfBattleModels': getattr(unit, 'startOfBattleModels', unit.unit.nmodels),
             'isDeployed': unit.isDeployed,
@@ -243,6 +244,7 @@ def load_game_state(game, filename):
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
+        unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.startOfBattleModels = unit_data.get('startOfBattleModels', unit.unit.nmodels)
         unit.isDeployed = unit_data['isDeployed']

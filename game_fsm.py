@@ -211,6 +211,7 @@ class GamePhaseFSM(FSM):
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn = False
                 unit.attemptedRallyThisTurn = False
+                unit.cannotChargeThisTurn = False
                 unit.request("Idle")
             unit.updateTextNode()
 

@@ -152,7 +152,7 @@ class PsychologySystem:
     _HALF_X = 35.0
     _HALF_Y = 23.0
 
-    def _panic_move(self, unit, direction: Vec3, distance: float, fleeing: bool):
+    def _panic_move(self, unit, direction: Vec3, distance: float, label: str):
         """Move *unit* straight along *direction* (away from the enemy) by
         *distance*, clamped to the table, facing the flee direction.  Uses a
         plain animated move — not the combat fall-back path."""
@@ -163,20 +163,30 @@ class PsychologySystem:
         target.z = start.z
         # Face the flee direction (back to the enemy).
         unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
-        print(f"[Panic] {unit.unit.name} moves {'flee' if fleeing else 'fall back'} "
-              f"{distance:.0f}\" from ({start.x:.0f},{start.y:.0f}) -> "
-              f"({target.x:.0f},{target.y:.0f})")
+        print(f"[Panic] {unit.unit.name} {label} {distance:.0f}\" from "
+              f"({start.x:.0f},{start.y:.0f}) -> ({target.x:.0f},{target.y:.0f})")
         self.game.move_node_smoothly(unit.bodyNP, target, duration=1.0)
 
     def _flee(self, unit, direction: Vec3):
+        # A fleeing unit's Flee roll is 2D6.
         distance = random.randint(1, 6) + random.randint(1, 6)
         unit.request("IsFleeing")
         unit.hasMovedThisTurn = True
-        self._panic_move(unit, direction, distance, fleeing=True)
+        self._panic_move(unit, direction, distance, "flees")
         unit.updateTextNode()
 
     def _fall_back_in_good_order(self, unit, direction: Vec3):
-        move = _stat_int(unit.unit.model.characteristics, 'M', 4)
-        self._panic_move(unit, direction, move, fleeing=False)
+        # Falls Back in Good Order: move like a fleeing unit, but the Flee roll
+        # is 2D6 discarding the lowest (Rulebook p. 134), then auto-rally.
+        distance = max(random.randint(1, 6), random.randint(1, 6))
+        self._panic_move(unit, direction, distance, "falls back")
         unit.hasMovedThisTurn = True
+        # Automatically rallies at the end of the move: regains composure, may
+        # perform a free reform, cannot charge this turn, counts as having moved.
+        unit.request("Idle")
+        unit.cannotChargeThisTurn = True
+        unit.attemptedRallyThisTurn = True
         unit.updateTextNode()
+        print(f"[Panic] {unit.unit.name} rallies — free reform "
+              f"(cannot charge this turn).")
+        self.game.startFreeReform(unit)

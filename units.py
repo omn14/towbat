@@ -96,6 +96,7 @@ class unitGraphics(FSM):
         self.hasAttackedThisTurn=False
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
+        self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.endedInUnit=False
