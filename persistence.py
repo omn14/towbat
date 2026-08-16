@@ -66,6 +66,7 @@ def save_game_state(game, filename=None):
             'hasMovedThisTurn': unit.hasMovedThisTurn,
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
+            'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
             'isDeployed': unit.isDeployed,
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
@@ -239,6 +240,7 @@ def load_game_state(game, filename):
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
+        unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
         unit.isDeployed = unit_data['isDeployed']
 
         unit.unit.nmodels = unit_data['nmodels']

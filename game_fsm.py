@@ -295,6 +295,9 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
+        # The charge bonus lasts only the turn of the charge.
+        for unit in self.game.units:
+            unit.chargedThisTurn = False
         for spell in self.end_of_turn_spells:
             spell.endSpell()
         self.end_of_turn_spells = []

@@ -489,6 +489,7 @@ class CombatResolver:
 
         unit.request("InCombat")
         unit.isInCombat = True
+        unit.chargedThisTurn = True
 
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
@@ -580,6 +581,7 @@ class CombatResolver:
 
         unit.request("InCombat")
         unit.isInCombat = True
+        unit.chargedThisTurn = True
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
@@ -760,8 +762,11 @@ class CombatResolver:
             origFiles = defenderUnit.unit.files
             if joinedRule and origFiles > 1:
                 defenderUnit.unit.files -= 1
+            # The charging unit fights with its charge bonus (and front rank
+            # only); everyone else fights as normal (front + supporting rank).
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                defenderUnit.unit, attackerUnit.unit, charge=False)
+                defenderUnit.unit, attackerUnit.unit,
+                charge=getattr(defenderUnit, 'chargedThisTurn', False))
             defenderUnit.unit.files = origFiles
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                     suffered_wounds, saves_made, total_wounds)
@@ -807,7 +812,8 @@ class CombatResolver:
             for rule in defenderUnit.unit.model.special_rules:
                 if rule.get('mountUnit'):
                     attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                        rule['mountUnit'], attackerUnit.unit, charge=False)
+                        rule['mountUnit'], attackerUnit.unit,
+                        charge=getattr(defenderUnit, 'chargedThisTurn', False))
                     self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                             suffered_wounds, saves_made, total_wounds)
                     attackerUnit.unit.nmodels -= total_wounds
@@ -824,7 +830,8 @@ class CombatResolver:
                 if cw is None or cw.get('tag') == 'ranged':
                     charUnit.model.equip_weapon('hand weapon')
                 attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                    charUnit, attackerUnit.unit, charge=False)
+                    charUnit, attackerUnit.unit,
+                    charge=getattr(defenderUnit, 'chargedThisTurn', False))
                 self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                         suffered_wounds, saves_made, total_wounds)
                 attackerUnit.unit.nmodels -= total_wounds

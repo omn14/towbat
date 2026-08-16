@@ -95,6 +95,7 @@ class unitGraphics(FSM):
         self.hasMovedThisTurn=False
         self.hasAttackedThisTurn=False
         self.attemptedRallyThisTurn=False
+        self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
         self.endedInUnit=False
         self.tacticalRole=None      # set by AI: e.g. {'role': 'CHARGE', 'target': '...', 'reason': '...'}
         self.madePursuitChoice=False
