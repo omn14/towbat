@@ -60,6 +60,7 @@ from characters import JOIN_TAG
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
+from psychology import PsychologySystem
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
@@ -258,10 +259,13 @@ class MyApp(ShowBase):
         self.fsm = GamePhaseFSM(self)
         self.combat = CombatResolver(self)
         self.movement = MovementSystem(self)
+        self.psychology = PsychologySystem(self)
         self.tutorial = TutorialManager(self)
         self.cannon = CannonFire(self)
         self.bombard = Bombardment(self)
         self.accept('t', self.start_tutorial)
+        # Debug: force a Panic test on the selected unit (Phase 0 wiring).
+        self.accept('shift-p', lambda: self.psychology.panic_test(self.unitToMove, cause="debug"))
 
         self.fsm.request("DeployPhase")
 

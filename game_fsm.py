@@ -207,6 +207,7 @@ class GamePhaseFSM(FSM):
         self.game.setGroundOverlay(False)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
+            unit.panicTestedThisPhase = False
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn = False
                 unit.attemptedRallyThisTurn = False
@@ -223,6 +224,8 @@ class GamePhaseFSM(FSM):
         self.game.debugText.setText(
             f"Current phase: {self.PHASES[self.current_phase_index]}"
         )
+        for unit in self.game.units:
+            unit.panicTestedThisPhase = False
         self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName = "taskLoopPathTowardsMouse"
         self.game.accept(
@@ -255,6 +258,8 @@ class GamePhaseFSM(FSM):
         self.game.debugText.setText(
             f"Current phase: {self.PHASES[self.current_phase_index]}"
         )
+        for unit in self.game.units:
+            unit.panicTestedThisPhase = False
         self.game.setActiveUnitTask = self.game.taskShootingArcUpdate
         self.game.setActiveUnitTaskName = "taskShootingArcUpdate"
         self.game.accept(
@@ -290,6 +295,7 @@ class GamePhaseFSM(FSM):
         for unit in self.game.units:
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn = False
+            unit.panicTestedThisPhase = False
 
     def exitCombatPhase(self):
         self.game.ignore('mouse1')

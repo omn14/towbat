@@ -41,6 +41,12 @@ Reuse what already exists rather than reinventing:
 Goal: a single, reusable Panic test that any cause can call, with the correct
 pass/fail outcome. No causes wired yet (trigger it from a debug key first).
 
+> Status: **DONE.** Implemented in `psychology.py` (`PsychologySystem`,
+> `leadership_test`, `panic_fail_outcome`, `unit_strength_total`). Unit state
+> `startOfBattleModels` / `panicTestedThisPhase` on the unit (persisted); the
+> FSM clears `panicTestedThisPhase` on each phase enter. Debug key **Shift+P**
+> forces a Panic test on the selected unit. Tests in `tests/test_psychology.py`.
+
 Rules (panic-tests page):
 - A Panic test = test against the unit's `Ld` (2D6 ≤ Ld → pass).
 - **Pass** → unit holds, nothing happens.
