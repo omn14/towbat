@@ -1,5 +1,11 @@
 # Skirmishers — Implementation Plan
 
+> Status: **complete for now** (Phases 0–3 done). Leftovers: true per-model
+> coherency, "see through gaps" LoS, >50%-visible charge gate, Phase 4 panic.
+> Note: a unit's skirmisher status comes from the army list's `special_rules`
+> (unit-level rule), not the base catalogue model profile (e.g. Cathay
+> "Peasant Soldier" has no Skirmishers on its model profile).
+
 Rule (catalogue): *"A unit consisting of models with this special rule may adopt
 a Skirmish formation."* Source rules: <https://tow.whfb.app/unusual-formations/skirmish-formation>
 (rulebook p.184–186).

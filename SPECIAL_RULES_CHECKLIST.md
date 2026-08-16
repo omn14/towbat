@@ -49,9 +49,12 @@ army-agnostic and would benefit every faction.
 - [ ] Hatred (X) — re-roll misses to hit in the first combat round
 - [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
 - [ ] Impact Hits (D3) — auto-hits on the charge
-- [ ] Skirmishers (Phase 0+1+2 done; Phase 3 done: loose-blob layout, free 360°
-      move with destination ghost, form-up/spread in combat; remaining: true
-      per-model coherency — see SKIRMISHERS_PLAN.md)
+- [x] Skirmishers — DONE (Phases 0–3): rule flag, no rank bonus, enemy-fire -1,
+      360° arc, loose-blob layout, free 360° move with destination ghost,
+      form-up/spread in combat. Leftovers: true per-model coherency (one bodyNP),
+      "see through gaps" LoS, >50%-visible charge gate, Phase 4 panic nuance —
+      see SKIRMISHERS_PLAN.md. Note: skirmisher status comes from the army list's
+      special_rules (unit-level rule), not the base catalogue model profile.
 - [ ] Scouts / Vanguard — pre-game deployment / free move
 - [ ] Swiftstride — better charge / flee / pursuit distance
 - [ ] Move Through Cover — no difficult-terrain movement penalty
