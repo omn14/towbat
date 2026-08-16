@@ -60,11 +60,13 @@ ARMOUR_VALUES = {
 ARMOUR_MODIFIERS = {'shield', 'barding'}
 
 
-def armour_save_from_equipment(items) -> int:
+def armour_save_from_equipment(items, ignore_shield: bool = False) -> int:
     """Armour-save target (2-7; 7 = no save) for a list of armour item names.
 
     The best worn body armour sets the base value; shields and barding each
     improve it by 1.  E.g. ['Heavy Armour', 'Shield'] -> 4+, ['Shield'] -> 6+.
+    With *ignore_shield* the shield grants no bonus (a two-handed weapon in
+    melee cannot also use a shield).
     """
     best = 7
     improve = 0
@@ -73,6 +75,8 @@ def armour_save_from_equipment(items) -> int:
         if key in ARMOUR_VALUES:
             best = min(best, ARMOUR_VALUES[key])
         elif key in ARMOUR_MODIFIERS:
+            if key == 'shield' and ignore_shield:
+                continue
             improve += 1
         else:
             # Some pieces (e.g. chariot hulls) state the value directly, as an
@@ -274,6 +278,26 @@ class model:
         self.armour = list(items or [])
         self.armor_save = armour_save_from_equipment(self.armour)
         return self.armor_save
+
+    def melee_weapon_requires_two_hands(self) -> bool:
+        """True if the model's active melee weapon has 'Requires Two Hands'.
+        Combat equips the best melee weapon first, so the equipped weapon is it."""
+        w = self.equipedWeapon
+        if not w or w.get('tag') == 'ranged':
+            return False
+        return any('requires two hands' in str(r).lower()
+                   for r in (w.get('special_rules') or []))
+
+    def melee_armour_save(self) -> int:
+        """Armour save used in melee; a two-handed weapon disables the shield.
+        Based on the stored save so hard-coded units keep their value; only the
+        shield's +1 is removed when a two-handed weapon is in use."""
+        save = self.armor_save
+        has_shield = any(str(a).strip().lower() == 'shield'
+                         for a in (self.armour or []))
+        if has_shield and self.melee_weapon_requires_two_hands():
+            save = min(7, save + 1)  # lose the shield's improvement
+        return save
 
     def unit_strength(self) -> int:
         """Approximate Unit Strength: mounted models are US2, others US1.

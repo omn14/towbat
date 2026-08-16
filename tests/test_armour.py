@@ -52,5 +52,38 @@ class ModelSetArmourTests(unittest.TestCase):
         self.assertEqual(m.armour, [])
 
 
+class TwoHandedShieldTests(unittest.TestCase):
+    @staticmethod
+    def _greatweapon():
+        return {"name": "Great Weapon", "tag": "combat",
+                "special_rules": ["Requires Two Hands"]}
+
+    def test_two_handed_removes_shield_in_melee(self):
+        m = model("State Trooper", "")
+        m.set_armour(["Heavy Armour", "Shield"])  # 4+ with shield
+        self.assertEqual(m.armor_save, 4)
+        m.weapons["Great Weapon"] = self._greatweapon()
+        m.equip_weapon("Great Weapon")
+        self.assertTrue(m.melee_weapon_requires_two_hands())
+        # In melee the shield is disabled, so 4+ -> 5+.
+        self.assertEqual(m.melee_armour_save(), 5)
+        # The general (shooting) save is unchanged.
+        self.assertEqual(m.armor_save, 4)
+
+    def test_one_handed_keeps_shield_in_melee(self):
+        m = model("State Trooper", "")
+        m.set_armour(["Heavy Armour", "Shield"])
+        m.equip_weapon("hand weapon")
+        self.assertFalse(m.melee_weapon_requires_two_hands())
+        self.assertEqual(m.melee_armour_save(), 4)
+
+    def test_no_shield_unaffected(self):
+        m = model("State Trooper", "")
+        m.set_armour(["Heavy Armour"])  # 5+, no shield
+        m.weapons["Great Weapon"] = self._greatweapon()
+        m.equip_weapon("Great Weapon")
+        self.assertEqual(m.melee_armour_save(), 5)
+
+
 if __name__ == "__main__":
     unittest.main()

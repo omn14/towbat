@@ -113,7 +113,7 @@ def simulate_battle(unit1, unit2,charge: bool):
             total_wounds += 1
             suffered_wounds += 1
         if wound:
-            if check_armor_save(unit2.model,unit2.model.armor_save, getattr(unit1.model, 'attack_AP', unit1.model.AP)):
+            if check_armor_save(unit2.model,unit2.model.melee_armour_save(), getattr(unit1.model, 'attack_AP', unit1.model.AP)):
                 saves_made += 1
                 total_wounds -= 1
             else:

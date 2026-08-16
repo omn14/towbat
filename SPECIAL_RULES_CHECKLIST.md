@@ -30,7 +30,9 @@ carry only *keywords* in the data; the coded effects live in `special_rules.py`,
 - [ ] Heroic Killing Blow
 - [ ] Strike First
 - [ ] Strike Last
-- [ ] Requires Two Hands — disables shield/parry bonus
+- [x] Requires Two Hands — disables the shield's +1 in melee (a two-handed
+      weapon cannot also use a shield); melee_armour_save() drops the shield
+      bonus when the active melee weapon has this rule. Shooting save keeps it.
 
 ## Unit rules — TODO (displayed, not yet applied)
 - [ ] Impetuous
