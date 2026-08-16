@@ -111,7 +111,12 @@ class PsychologySystem:
         direction = self._flee_direction(unit, enemy)
         outcome = panic_fail_outcome(remaining, start)
         enemy_name = enemy.unit.name if enemy is not None else "board edge"
-        print(f"[Panic] {unit.unit.name} fails -> {outcome} away from {enemy_name}.")
+        up = unit.bodyNP.getPos()
+        ep = enemy.bodyNP.getPos() if enemy is not None else None
+        eps = f"({ep.x:.0f},{ep.y:.0f})" if ep is not None else "n/a"
+        print(f"[Panic] {unit.unit.name} fails -> {outcome} away from {enemy_name} | "
+              f"unit=({up.x:.0f},{up.y:.0f}) enemy={eps} "
+              f"dir=({direction.x:.2f},{direction.y:.2f})")
         if outcome == 'fall_back':
             self._fall_back_in_good_order(unit, direction)
             print(f"[Panic] {unit.unit.name} Falls Back in Good Order.")
@@ -148,50 +153,15 @@ class PsychologySystem:
             return own_edge
         return d.normalized()
 
-    # Playing-area half-extents (the 72x48 table drawn in game.py).
-    _HALF_X = 35.0
-    _HALF_Y = 23.0
-
-    def _clear_overlap(self, unit, direction: Vec3, step: float = 1.0, max_steps: int = 80) -> bool:
-        """Push *unit* out of any overlapping unit footprint (its collision box
-        spans the whole formation, so boxes overlap even with a visible gap).
-        Steps away from the contacted unit (falling back on *direction*), clamped
-        to the table.  Returns True once clear."""
-        body = unit.bodyNP
-        for _ in range(max_steps):
-            for u in self.game.units:
-                if not u.bodyNP.isEmpty():
-                    u.bodyNP.node().setTransformDirty()
-            contact = self.game.checkUnitContactSmall(unit)
-            if contact is None:
-                return True
-            push = Vec3(direction)
-            other = self.game.getSelectedUnit(contact.getNode1())
-            if other is not None and not other.bodyNP.isEmpty():
-                p = body.getPos() - other.bodyNP.getPos()
-                p.z = 0
-                if p.length() > 1e-4:
-                    push = p.normalized()
-            pos = body.getPos() + push * step
-            pos.x = max(-self._HALF_X, min(self._HALF_X, pos.x))
-            pos.y = max(-self._HALF_Y, min(self._HALF_Y, pos.y))
-            body.setPos(pos)
-        return False
-
     def _panic_move(self, unit, direction: Vec3, distance: float, label: str):
         """Move *unit* straight along *direction* (away from the enemy) by
-        *distance*, to a spot clear of other units, facing the flee direction.
-        Uses a plain animated move — not the combat fall-back path."""
+        *distance*.  The unit passes through any units (friend or foe) on the
+        way, but may not settle inside one: if the landing overlaps a unit it
+        keeps going along the flee vector until it is clear on the far side.
+        Not clamped to the board edge.  Plain animated move."""
         start = unit.bodyNP.getPos()
-        target = start + direction * distance
-        target.x = max(-self._HALF_X, min(self._HALF_X, target.x))
-        target.y = max(-self._HALF_Y, min(self._HALF_Y, target.y))
-        target.z = start.z
-        # Resolve overlaps at the destination, then animate to the cleared spot.
-        unit.bodyNP.setPos(target)
-        self._clear_overlap(unit, direction)
-        final = unit.bodyNP.getPos()
-        unit.bodyNP.setPos(start)
+        final = self._flee_until_clear(unit, start, direction, distance)
+        final.z = start.z
         # Face the flee direction (heading only — keep the body upright).
         unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
         unit.bodyNP.setP(0)
@@ -199,6 +169,27 @@ class PsychologySystem:
         print(f"[Panic] {unit.unit.name} {label} {distance:.0f}\" from "
               f"({start.x:.0f},{start.y:.0f}) -> ({final.x:.0f},{final.y:.0f})")
         self.game.move_node_smoothly(unit.bodyNP, final, duration=1.0)
+
+    def _flee_until_clear(self, unit, start, direction: Vec3, distance: float,
+                          step: float = 0.5, max_extra: int = 400):
+        """Landing point straight along *direction*: the flee *distance*, then
+        extended further along the same vector until *unit* no longer overlaps
+        any other unit (it can pass through but not settle inside one)."""
+        body = unit.bodyNP
+        d = distance
+        for _ in range(max_extra + 1):
+            pos = start + direction * d
+            pos.z = start.z
+            body.setPos(pos)
+            for u in self.game.units:
+                if not u.bodyNP.isEmpty():
+                    u.bodyNP.node().setTransformDirty()
+            if self.game.checkUnitContactSmall(unit) is None:
+                break
+            d += step   # still inside a unit — keep going along the flee vector
+        final = Point3(body.getPos())
+        body.setPos(start)
+        return final
 
     def _flee(self, unit, direction: Vec3):
         # A fleeing unit's Flee roll is 2D6.
