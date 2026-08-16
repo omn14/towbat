@@ -849,6 +849,8 @@ class MovementSystem:
         self.game.arcPointRotation = 0
         self.game.unitHitPos = endp
         self.game.playerNP.setPos(endp)
+        # Straight-line distance travelled, for the charge-roll check.
+        self.game.moveArceDistance = clamped
 
         # Circular move-range indicator centred on the unit.
         self.game.polygonpoints = self.shootingArc(

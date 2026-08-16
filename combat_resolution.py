@@ -286,6 +286,11 @@ class CombatResolver:
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
+        # Skirmishers charge straight in — no wheel, no flank-align pivot — but
+        # the charge roll is still made and must reach the target to connect.
+        if getattr(unit, 'isSkirmisher', False):
+            await self._skirmishChargeInterval(unit, defenderNP, oposUnit, orotUnit, flank, chdice)
+            return
         maxmove = _stat_int(unit.unit.model.characteristics, 'M')
         durIntConst = 1.0
         for rule in unit.unit.model.special_rules:
@@ -500,6 +505,90 @@ class CombatResolver:
                 terning.remove(self.game.world)
             del terninger
         return
+
+    async def _skirmishChargeInterval(self, unit, defenderNP, oposUnit, orotUnit, flank, chdice=None):
+        """Charge move for Skirmishers: straight in, keeping facing, no wheel or
+        flank-align pivot.  The charge roll is still made; if it falls short the
+        unit advances only the rolled distance and does not reach combat."""
+        model = unit.unit.model
+        maxmove = model.get_fly_movement(0) if model.is_flying() else model.get_movement(0)
+
+        self.game.diceInfoText.setText(
+            f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
+        if not self.game.autoRoll:
+            terninger, chdice = await self.rullTerninger(2)
+        else:
+            while self.game.attackSequence2.isPlaying():
+                await Task.pause(0.5)
+            await Task.pause(0.5)
+            if chdice is None:
+                chdice = [6, 6]
+            terninger = []
+        self.game.autoCharge = False
+        self.game.autoHold = False
+        print("Charge dice results:", chdice)
+
+        chdist = maxmove + max(chdice)
+        if unit.state == "IsPursuing":
+            chdist = sum(chdice)
+
+        target = self.game.playerNP.getPos()
+        d = target - oposUnit
+        dist = d.length()
+        dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
+        reached = chdist >= self.game.moveArceDistance
+        travel = dist if reached else min(chdist, dist)
+        endp = oposUnit + dirn * travel
+
+        unit.bodyNP.setPos(oposUnit)
+        unit.bodyNP.setHpr(orotUnit)
+        await LerpPosHprInterval(unit.bodyNP, duration=0.5,
+                                 pos=endp, hpr=orotUnit, blendType='easeInOut')
+
+        for terning in terninger:
+            terning.remove(self.game.world)
+
+        if not reached:
+            print("Charge fell short \u2014 skirmishers did not reach the enemy.")
+            unit.request("Moved")
+            return
+
+        defenderUnit = self.game.getSelectedUnit(defenderNP.node())
+
+        # Two units of the same player can never charge each other.
+        for player_units in (self.game.player1Units, self.game.player2Units):
+            if defenderUnit in player_units and unit in player_units:
+                print("Both units belong to the same player, cannot enter combat.")
+                push = unit.bodyNP.getPos() - defenderNP.getPos()
+                push.normalize()
+                self.game.fallBackContactTest(unit.bodyNP, push * .3)
+                unit.request("Moved")
+                return
+
+        if defenderUnit.state == "IsFleeing":
+            print("Contact detected between fleeing unit and pursuer!")
+            self.game.world.removeRigidBody(defenderUnit.bodyNP.node())
+            defenderUnit.model.removeNode()
+            defenderUnit.bodyNP.removeNode()
+            self.game.units.remove(defenderUnit)
+            if defenderUnit in self.game.player1Units:
+                self.game.player1Units.remove(defenderUnit)
+            if defenderUnit in self.game.player2Units:
+                self.game.player2Units.remove(defenderUnit)
+            unit.request("Moved")
+            return
+
+        unit.request("InCombat")
+        unit.isInCombat = True
+        if defenderUnit.state != "InCombat":
+            defenderUnit.request("InCombat")
+        unit.isInCombatWith.append(defenderUnit)
+        unit.isInCombatFlank.append("front")
+        defenderUnit.isInCombatWith.append(unit)
+        defenderUnit.isInCombat = True
+        defenderUnit.isInCombatFlank.append(flank)
+        unit.updateTextNode()
+        defenderUnit.updateTextNode()
 
     # ─── Flank Detection ──────────────────────────────────────────────────
 
