@@ -1,6 +1,168 @@
 import random
 from toHitAndToWound import *
 
+
+# ── Combat report (debug printout) ─────────────────────────────────────────
+# The most recent battle's descriptive detail, captured inside simulate_battle
+# just before characteristics are reset.  Consumed once by printBattleResults;
+# because each simulate_battle call is immediately followed by its own print,
+# a single module-level slot correctly pairs every (sub-)attack with its report.
+LAST_COMBAT_REPORT = None
+
+# Special-rule hook -> human label.  Any rule carrying one of these hooks is
+# reported as "in effect", so new rules that reuse a hook appear automatically.
+_RULE_HOOK_LABELS = {
+    'to_hit': 'To Hit mod/reroll',
+    'to_wound': 'To Wound mod/reroll',
+    'to_save': 'enemy Save mod/reroll',
+    'to_modify_stat': 'stat modifier',
+    'regen': 'Regeneration',
+    'skirmish': 'Skirmishers',
+    'fly': 'Fly',
+    'Unbreakable': 'Unbreakable',
+}
+
+
+def _si(chars, key, default=0):
+    try:
+        return int(chars.get(key))
+    except (TypeError, ValueError):
+        return default
+
+
+def _active_rule_effects(model, charge):
+    """List rules currently in effect on *model* (name + which hooks fire).
+    Charge-only bonuses are included only while charging."""
+    out = []
+    for r in getattr(model, 'special_rules', []) or []:
+        if not isinstance(r, dict):
+            continue
+        name = r.get('name') or 'rule'
+        labels = [lbl for hook, lbl in _RULE_HOOK_LABELS.items() if r.get(hook)]
+        if r.get('charge') and charge:
+            labels.append('charge bonus')
+        if labels:
+            out.append(f"{name} [{', '.join(labels)}]")
+    return out
+
+
+def _weapon_effects(weapon):
+    """Weapon special-rule names (e.g. Armour Bane, Requires Two Hands)."""
+    rules = (weapon or {}).get('special_rules') or []
+    if isinstance(rules, str):
+        rules = [rules]
+    return [str(r) for r in rules]
+
+
+def _ranged_tohit_report(model):
+    """Effective BS, To Hit target and the modifiers in effect for a shot."""
+    bs = _si(model.characteristics, 'BS', 3)
+    ignore = set((getattr(model, 'equipedWeapon', None) or {})
+                 .get('ignore_to_hit_penalties', []))
+    mods = []
+    if getattr(model, 'at_long_range', False) and 'long_range' not in ignore:
+        bs -= 1
+        mods.append('long range -1')
+    if getattr(model, 'firing_multiple', False) and 'multiple_shots' not in ignore:
+        bs -= 1
+        mods.append('multiple shots -1')
+    if getattr(model, 'target_skirmisher', False):
+        bs -= 1
+        mods.append('skirmisher target -1')
+    target = {1: 6, 2: 5, 3: 4, 4: 3, 5: 2}.get(bs, 2 if bs >= 6 else 7)
+    return target, mods, bs
+
+
+def build_combat_report(unit1, unit2, charge, attacks):
+    """Capture the descriptive state of a resolved battle for the debug print.
+    Reads the models *after* stat bonuses were applied, so values are the ones
+    actually in effect.  Never raises fatally (wrapped by the caller)."""
+    m1, m2 = unit1.model, unit2.model
+    w = m1.equipedWeapon or {}
+    ranged = w.get('tag') == 'ranged'
+
+    if ranged:
+        strength = w.get('ranged_strength') or _si(m1.characteristics, 'S', 3)
+        ap = w.get('ranged_AP', 0)
+        to_hit_target, hit_mods, _bs = _ranged_tohit_report(m1)
+    else:
+        strength = _si(m1.characteristics, 'S', 3)
+        ap = m1.melee_ap() if hasattr(m1, 'melee_ap') else m1.AP
+        to_hit_target, hit_mods = to_hit(m1, m2), []
+
+    # To Wound with the strength actually used for this attack.
+    saved_s = m1.characteristics.get('S')
+    m1.characteristics['S'] = str(strength)
+    to_wound_target = to_wound(m1, m2)
+    m1.characteristics['S'] = saved_s
+
+    toughness = (m2.get_toughness() if hasattr(m2, 'get_toughness')
+                 else _si(m2.characteristics, 'T', 4))
+    save = m2.armor_save
+    if not ranged and hasattr(m2, 'melee_armour_save'):
+        save = m2.melee_armour_save()
+    armour = list(getattr(m2, 'armour', []) or [])
+    regen = next((r.get('regen') for r in getattr(m2, 'special_rules', [])
+                  if isinstance(r, dict) and r.get('regen')), None)
+
+    mods = list(hit_mods)
+    if charge:
+        mods.append('charging')
+    if (not ranged and hasattr(m2, 'melee_weapon_requires_two_hands')
+            and m2.melee_weapon_requires_two_hands()
+            and any(str(a).strip().lower() == 'shield' for a in armour)):
+        mods.append("defender's shield disabled (two-handed)")
+
+    return {
+        'attacker': getattr(m1, 'name', '?'),
+        'defender': getattr(m2, 'name', '?'),
+        'weapon': w.get('name', 'hand weapon'),
+        'mode': 'ranged' if ranged else 'melee',
+        'strength': strength, 'ap': ap,
+        'to_hit': to_hit_target, 'to_wound': to_wound_target,
+        'toughness': toughness, 'save': save, 'armour': armour, 'regen': regen,
+        'modifiers': mods,
+        'attacker_effects': _active_rule_effects(m1, charge) + _weapon_effects(w),
+        'defender_effects': _active_rule_effects(m2, charge),
+    }
+
+
+def format_combat_report(r):
+    """Render a report dict into printable debug lines."""
+    if not r:
+        return []
+    ap = r['ap']
+    ap_str = f"AP-{ap}" if ap else "AP0"
+    hit = r['to_hit']
+    tw = r['to_wound']
+    hit_str = f"{hit}+" if isinstance(hit, int) else str(hit)
+    tw_str = f"{tw}+" if isinstance(tw, int) else str(tw)
+    mod_str = f"  ({', '.join(r['modifiers'])})" if r['modifiers'] else ""
+    save = r['save']
+    save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
+    armour = ", ".join(r['armour']) if r['armour'] else "-"
+    regen = f"  regen {r['regen']}+" if r['regen'] else ""
+    lines = [
+        f"   Weapon : {r['weapon']} ({r['mode']})  S{r['strength']} {ap_str}  "
+        f"[hit {hit_str}, wound {tw_str}]{mod_str}",
+        f"   Target : {r['defender']}  T{r['toughness']}  save {save_str}  "
+        f"armour [{armour}]{regen}",
+    ]
+    if r['attacker_effects']:
+        lines.append(f"   Attacker rules : {', '.join(r['attacker_effects'])}")
+    if r['defender_effects']:
+        lines.append(f"   Defender rules : {', '.join(r['defender_effects'])}")
+    return lines
+
+
+def take_last_combat_report():
+    """Return and clear the most recent combat report."""
+    global LAST_COMBAT_REPORT
+    r = LAST_COMBAT_REPORT
+    LAST_COMBAT_REPORT = None
+    return r
+
+
 def simulate_attack(model1,model2):
     model1.attack_roll = random.randint(1, 6)
     model1.wound_roll = random.randint(1, 6)
@@ -126,6 +288,14 @@ def simulate_battle(unit1, unit2,charge: bool):
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
     
+    # Capture the descriptive report before stats are reset (best-effort).
+    global LAST_COMBAT_REPORT
+    try:
+        LAST_COMBAT_REPORT = build_combat_report(unit1, unit2, charge, attacks1)
+    except Exception as e:
+        LAST_COMBAT_REPORT = None
+        print(f"[combat-report] skipped: {e}")
+
     unit1.model.reset_characteristics()
     unit2.model.reset_characteristics()
     

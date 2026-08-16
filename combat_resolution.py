@@ -645,6 +645,9 @@ class CombatResolver:
 
     def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits,
                            suffered_wounds, saves_made, total_wounds):
+        from battleFunctions import take_last_combat_report, format_combat_report
+        for line in format_combat_report(take_last_combat_report()):
+            print(line)
         weapon = attackerUnit.unit.model.equipedWeapon or {}
         verb = 'shots' if weapon.get('tag') == 'ranged' else 'attacks'
         print(f"   {attacks} {verb} -> {total_hits} hit -> {suffered_wounds} wound "
