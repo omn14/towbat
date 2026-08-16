@@ -802,6 +802,21 @@ class MovementSystem:
 
     # ─── Unit Movement Execution ──────────────────────────────────────────
 
+    def _destOnUnit(self, unit, endp) -> bool:
+        """True if placing *unit* at *endp* would overlap another unit's body.
+
+        Used by the flyer preview to decide between flying over (open ground)
+        and charging (landing on top of a model).
+        """
+        body = unit.bodyNP
+        saved = body.getPos()
+        body.setPos(endp.x, endp.y, saved.z)
+        body.node().setTransformDirty()
+        contact = self.game.checkUnitContactSmall(unit)
+        body.setPos(saved)
+        body.node().setTransformDirty()
+        return contact is not None
+
     def _skirmishMovePreview(self, unit, target):
         """Free-move preview for Skirmishers: straight-line translation up to
         the move allowance in any direction (no wheel), with a circular range
@@ -818,14 +833,17 @@ class MovementSystem:
         dist = d.length()
         dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
         clamped = min(dist, maxmove)
+        endp = cur + dirn * clamped
 
-        # Straight sweep for a blocking unit along the path.  Flyers pass over
-        # units freely, so only non-flyers stop at a blocking body.
-        if not _model.is_flying():
-            frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(), dirn, clamped)
+        # Non-flyers always stop at a blocking body.  Flyers pass over units,
+        # but if the preview lands on top of a unit it becomes a charge, so we
+        # sweep to stop against that unit and let moveUnit set up the charge.
+        if not _model.is_flying() or self._destOnUnit(unit, endp):
+            frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(),
+                                           dirn, clamped, pass_over=False)
             if frac < 1.0:
                 clamped *= frac
-        endp = cur + dirn * clamped
+            endp = cur + dirn * clamped
 
         self.game.arcPoint = Vec2((endp.x / half + 1) * 0.5, (endp.y / half + 1) * 0.5)
         self.game.arcPointRotation = 0
@@ -1086,9 +1104,12 @@ class MovementSystem:
             return result.getHitFraction()
         return 1.0
     
-    def sweepTestRot(self, unit, point,angle,mask=BitMask32.bit(9)):
-        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test.
-        if mask == BitMask32.bit(9) and unit.unit.model.is_flying():
+    def sweepTestRot(self, unit, point,angle,mask=BitMask32.bit(9),pass_over=None):
+        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test
+        # unless the caller forces detection with pass_over=False.
+        if pass_over is None:
+            pass_over = unit.unit.model.is_flying()
+        if mask == BitMask32.bit(9) and pass_over:
             mask = BitMask32.allOff()
         startPos=unit.bodyNP.getPos()
         Hpr=unit.bodyNP.getHpr()
@@ -1122,9 +1143,12 @@ class MovementSystem:
             return result.getHitFraction(),result.getHitPos(),tsTo
         return 1.0,None,tsTo
     
-    def sweepTestDir(self, unit, tsFrom, direction,length,mask=BitMask32.bit(9)):
-        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test.
-        if mask == BitMask32.bit(9) and unit.unit.model.is_flying():
+    def sweepTestDir(self, unit, tsFrom, direction,length,mask=BitMask32.bit(9),pass_over=None):
+        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test
+        # unless the caller forces detection with pass_over=False.
+        if pass_over is None:
+            pass_over = unit.unit.model.is_flying()
+        if mask == BitMask32.bit(9) and pass_over:
             mask = BitMask32.allOff()
         
         #tsFrom = TransformState.makePosHpr(startPos, nHpr)
