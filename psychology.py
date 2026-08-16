@@ -58,24 +58,28 @@ class PsychologySystem:
 
     # ─── Exemptions (No Need for Hysterics) ───────────────────────────────
 
-    def is_panic_exempt(self, unit) -> bool:
-        """A unit is not required to test if it has already tested this phase,
-        is fleeing or engaged in combat, or is rule-immune to Panic."""
+    def panic_exempt_reason(self, unit):
+        """Return why *unit* need not take a Panic test, or None if it must.
+        A unit is exempt if it has already tested this phase, is fleeing or
+        engaged in combat, or is rule-immune to Panic."""
         if getattr(unit, 'panicTestedThisPhase', False):
-            return True
+            return "already tested this phase"
         if getattr(unit, 'isInCombat', False):
-            return True
+            return "engaged in combat"
         if unit.state == 'IsFleeing':
-            return True
+            return "already fleeing"
         for r in unit.unit.model.special_rules:
             if not isinstance(r, dict):
                 continue
             if r.get('Unbreakable'):
-                return True
+                return "Unbreakable"
             name = str(r.get('name', '')).lower()
             if any(k in name for k in _FULL_PANIC_IMMUNE):
-                return True
-        return False
+                return r.get('name')
+        return None
+
+    def is_panic_exempt(self, unit) -> bool:
+        return self.panic_exempt_reason(unit) is not None
 
     # ─── Panic test ───────────────────────────────────────────────────────
 
@@ -86,8 +90,9 @@ class PsychologySystem:
         ('pass' / 'fall_back' / 'flee' / 'exempt')."""
         if unit is None or unit.bodyNP.isEmpty():
             return None
-        if self.is_panic_exempt(unit):
-            print(f"[Panic] {unit.unit.name} is exempt from Panic ({cause}).")
+        reason = self.panic_exempt_reason(unit)
+        if reason is not None:
+            print(f"[Panic] {unit.unit.name} is exempt from Panic ({cause}): {reason}.")
             return 'exempt'
 
         unit.panicTestedThisPhase = True
