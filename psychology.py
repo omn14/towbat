@@ -152,20 +152,53 @@ class PsychologySystem:
     _HALF_X = 35.0
     _HALF_Y = 23.0
 
+    def _clear_overlap(self, unit, direction: Vec3, step: float = 1.0, max_steps: int = 80) -> bool:
+        """Push *unit* out of any overlapping unit footprint (its collision box
+        spans the whole formation, so boxes overlap even with a visible gap).
+        Steps away from the contacted unit (falling back on *direction*), clamped
+        to the table.  Returns True once clear."""
+        body = unit.bodyNP
+        for _ in range(max_steps):
+            for u in self.game.units:
+                if not u.bodyNP.isEmpty():
+                    u.bodyNP.node().setTransformDirty()
+            contact = self.game.checkUnitContactSmall(unit)
+            if contact is None:
+                return True
+            push = Vec3(direction)
+            other = self.game.getSelectedUnit(contact.getNode1())
+            if other is not None and not other.bodyNP.isEmpty():
+                p = body.getPos() - other.bodyNP.getPos()
+                p.z = 0
+                if p.length() > 1e-4:
+                    push = p.normalized()
+            pos = body.getPos() + push * step
+            pos.x = max(-self._HALF_X, min(self._HALF_X, pos.x))
+            pos.y = max(-self._HALF_Y, min(self._HALF_Y, pos.y))
+            body.setPos(pos)
+        return False
+
     def _panic_move(self, unit, direction: Vec3, distance: float, label: str):
         """Move *unit* straight along *direction* (away from the enemy) by
-        *distance*, clamped to the table, facing the flee direction.  Uses a
-        plain animated move — not the combat fall-back path."""
+        *distance*, to a spot clear of other units, facing the flee direction.
+        Uses a plain animated move — not the combat fall-back path."""
         start = unit.bodyNP.getPos()
         target = start + direction * distance
         target.x = max(-self._HALF_X, min(self._HALF_X, target.x))
         target.y = max(-self._HALF_Y, min(self._HALF_Y, target.y))
         target.z = start.z
-        # Face the flee direction (back to the enemy).
+        # Resolve overlaps at the destination, then animate to the cleared spot.
+        unit.bodyNP.setPos(target)
+        self._clear_overlap(unit, direction)
+        final = unit.bodyNP.getPos()
+        unit.bodyNP.setPos(start)
+        # Face the flee direction (heading only — keep the body upright).
         unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
+        unit.bodyNP.setP(0)
+        unit.bodyNP.setR(0)
         print(f"[Panic] {unit.unit.name} {label} {distance:.0f}\" from "
-              f"({start.x:.0f},{start.y:.0f}) -> ({target.x:.0f},{target.y:.0f})")
-        self.game.move_node_smoothly(unit.bodyNP, target, duration=1.0)
+              f"({start.x:.0f},{start.y:.0f}) -> ({final.x:.0f},{final.y:.0f})")
+        self.game.move_node_smoothly(unit.bodyNP, final, duration=1.0)
 
     def _flee(self, unit, direction: Vec3):
         # A fleeing unit's Flee roll is 2D6.
@@ -189,4 +222,12 @@ class PsychologySystem:
         unit.updateTextNode()
         print(f"[Panic] {unit.unit.name} rallies — free reform "
               f"(cannot charge this turn).")
+        # Start the reform only after the fall-back move animation has finished,
+        # otherwise the reform's per-frame facing fights the moving position.
+        self.game.taskMgr.doMethodLater(1.1, self._begin_reform,
+                                        "panicReform-" + unit.unitName,
+                                        extraArgs=[unit], appendTask=True)
+
+    def _begin_reform(self, unit, task):
         self.game.startFreeReform(unit)
+        return task.done

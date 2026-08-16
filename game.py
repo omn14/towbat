@@ -700,11 +700,13 @@ class MyApp(ShowBase):
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
 
-            result = base.world.rayTestClosest(pFrom, pTo)
+            result = base.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
             if result.hasHit():
                 hitPos = result.getHitPos()
                 unit.bodyNP.lookAt(hitPos)
+                unit.bodyNP.setP(0)   # reform turns on the spot — keep upright
+                unit.bodyNP.setR(0)
                 #unit.hasMovedThisTurn=True
                 #unit.updateTextNode()
         if self.signal and not contact:
