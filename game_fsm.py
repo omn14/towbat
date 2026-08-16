@@ -208,6 +208,7 @@ class GamePhaseFSM(FSM):
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
             unit.panicTestedThisPhase = False
+            unit.startOfPhaseModels = unit.unit.nmodels
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn = False
                 unit.attemptedRallyThisTurn = False
@@ -227,6 +228,7 @@ class GamePhaseFSM(FSM):
         )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
+            unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName = "taskLoopPathTowardsMouse"
         self.game.accept(
@@ -261,6 +263,7 @@ class GamePhaseFSM(FSM):
         )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
+            unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskShootingArcUpdate
         self.game.setActiveUnitTaskName = "taskShootingArcUpdate"
         self.game.accept(

@@ -150,6 +150,8 @@ class CannonFire:
             total_cas += slain
             if slain:
                 self.game.removeModelsFromUnit(unit, slain)
+                if getattr(self.game, 'psychology', None):
+                    self.game.psychology.check_heavy_casualties(unit, 'shooting', attacker=cannonUnit)
 
         summary = (f"Cannon Fire: hit {total_hit}, wounded {total_wound}, "
                    f"saved {total_saved}, slain {total_cas} (S{strength} AP-{ap})")

@@ -683,7 +683,7 @@ class MyApp(ShowBase):
         c = self.checkUnitContactSmall(unit)
         contact=False
         if c:
-            print("Unit is in contact with another unit, cannot reform here.")
+            # Greyed out signals the unit can't settle here; no per-frame spam.
             unit.model.setColor(.6,0.6,0.6,1)
             contact=True
         else:
@@ -721,9 +721,11 @@ class MyApp(ShowBase):
         self.signal = True
         return
 
-    def startFreeReform(self, unit):
+    def startFreeReform(self, unit, on_done=None):
         """Interactive free reform (rotate/reposition, left-click to confirm).
-        Used by auto-rally after a Fall Back in Good Order."""
+        Used by auto-rally after a Fall Back in Good Order.  Calls *on_done*
+        once the reform is confirmed."""
+        self._reformDone = on_done
         self.ignore('mouse1')
         self.accept('mouse1', self.giveSignal)
         taskMgr.add(self._freeReformTask, "freeReformUnitTask",
@@ -735,6 +737,10 @@ class MyApp(ShowBase):
             self.ignore('mouse1')
             self.accept('mouse1', self.setActiveUnit,
                         [self.setActiveUnitTask, self.setActiveUnitTaskName])
+            cb = getattr(self, '_reformDone', None)
+            self._reformDone = None
+            if cb:
+                cb()
         return result
 
     async def rallyUnit(self, unit):
@@ -1314,6 +1320,8 @@ class MyApp(ShowBase):
         self.p_miss.start(parent=render, renderParent=render)
         await parTra
         self.removeModelsFromUnit(defenderUnit, total_wounds)
+        # Heavy casualties from shooting can trigger a Panic test.
+        self.psychology.check_heavy_casualties(defenderUnit, 'shooting', attacker=attackerUnit)
         await Task.pause(2.0 / self.speedMultiplier)
         self.p.disable()
         self.p_miss.disable()

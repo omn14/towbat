@@ -906,10 +906,16 @@ class CombatResolver:
 
             if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
                 print("losing unit flees from combat!")
+                # A US>=5 unit breaking/fleeing panics nearby friends (measure
+                # before it moves).
+                if getattr(self.game, 'psychology', None):
+                    self.game.psychology.on_unit_flees_combat(loserUnit)
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
             elif leadership_score > int(loserUnit.unit.model.characteristics['Ld']) - diff:
                 print("losing unit FBIG!")
+                if getattr(self.game, 'psychology', None):
+                    self.game.psychology.on_unit_flees_combat(loserUnit)
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
             else:

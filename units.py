@@ -99,6 +99,7 @@ class unitGraphics(FSM):
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
+        self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
         self.endedInUnit=False
         self.tacticalRole=None      # set by AI: e.g. {'role': 'CHARGE', 'target': '...', 'reason': '...'}
         self.madePursuitChoice=False

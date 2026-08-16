@@ -85,26 +85,34 @@ enemy.
 Each cause calls `panic_test`. Respect "one test per phase" (Phase 2) and
 "leave the triggering unit in place until all tests are made" (measure point).
 
-- [ ] **Heavy Casualties** (heavy-casualties): in **any phase except Combat**,
+> Status: **DONE.** Cause hooks wired via `PsychologySystem`
+> (`check_heavy_casualties`, `on_unit_destroyed`, `on_unit_flees_combat`, and
+> Fled-Through in the flee move). Start-of-phase model counts snapshot in the
+> FSM (non-combat phases) and persist. Pure helpers `heavy_casualties`,
+> `unit_strength_total`, constants `PANIC_US_THRESHOLD`/`PANIC_RADIUS`; tests in
+> `tests/test_psychology.py`.
+
+- [x] **Heavy Casualties** (heavy-casualties): in **any phase except Combat**,
   if a unit loses **> 25%** of the models it had **at the start of that phase**,
   it tests. Flee from the enemy unit that caused the casualties (or nearest
   non-fleeing enemy if none). → snapshot each unit's model count at the start of
   each non-combat phase (`game_fsm` enter hooks); check after shooting/magic
   resolves. Note: heavy casualties in the **Combat phase do NOT** cause panic.
-- [ ] **Nearby Friend Destroyed** (nearby-friend-destroyed): when a unit of
+- [x] **Nearby Friend Destroyed** (nearby-friend-destroyed): when a unit of
   **US ≥ 5** is destroyed, all friendlies within **6"** test. Leave the
   destroyed unit in place as the measure point; failed units flee from nearest
   non-fleeing enemy.
-- [ ] **Nearby Friend Flees Combat** (nearby-friend-flees-combat): when a
+- [x] **Nearby Friend Flees Combat** (nearby-friend-flees-combat): when a
   friendly **US ≥ 5** unit loses combat and either Breaks/flees **or** Falls
   Back in Good Order, friendlies within **6"** test (measure before it moves).
   Hook into the existing Break-test outcome in `combat_resolution.py`.
-- [ ] **Fled Through** (fled-through): when a fleeing / falling-back friendly
+- [x] **Fled Through** (fled-through): when a fleeing / falling-back friendly
   unit moves **through** another unit, that unit tests (resolve the movement
   first). Can cascade — a panicked unit fleeing through another triggers a
   further test. Hook into the flee/fall-back movement path.
-- [ ] **Shooting casualties panic** — already referenced by the Shooting rules;
-  fold into Heavy Casualties (shooting is a non-combat phase).
+- [x] **Shooting casualties panic** — already referenced by the Shooting rules;
+  folded into Heavy Casualties (shooting is a non-combat phase; cannon +
+  bombardment wired too).
 
 Acceptance: each cause reliably produces exactly one test at the right time,
 measured from the correct point, fleeing in the correct direction.

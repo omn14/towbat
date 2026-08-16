@@ -7,7 +7,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from psychology import (  # noqa: E402
-    leadership_test, panic_fail_outcome, unit_strength_total,
+    leadership_test, panic_fail_outcome, unit_strength_total, heavy_casualties,
+    PANIC_US_THRESHOLD, PANIC_RADIUS,
 )
 
 
@@ -77,6 +78,32 @@ class UnitStrengthTotalTests(unittest.TestCase):
 
     def test_no_models(self):
         self.assertEqual(unit_strength_total(self._FakeGraphics(1, 0)), 0)
+
+
+class HeavyCasualtiesTests(unittest.TestCase):
+    def test_more_than_quarter_lost(self):
+        # 20 -> 14 is 6 lost (>25%).
+        self.assertTrue(heavy_casualties(14, 20))
+
+    def test_exactly_quarter_lost(self):
+        # 20 -> 15 is 5 lost (exactly 25%, not more).
+        self.assertFalse(heavy_casualties(15, 20))
+
+    def test_no_losses(self):
+        self.assertFalse(heavy_casualties(20, 20))
+
+    def test_zero_start(self):
+        self.assertFalse(heavy_casualties(0, 0))
+
+    def test_small_unit_one_loss(self):
+        # 3 -> 2 is 1 lost of 3 (>25%).
+        self.assertTrue(heavy_casualties(2, 3))
+
+
+class PanicConstantsTests(unittest.TestCase):
+    def test_thresholds(self):
+        self.assertEqual(PANIC_US_THRESHOLD, 5)
+        self.assertEqual(PANIC_RADIUS, 6.0)
 
 
 if __name__ == "__main__":

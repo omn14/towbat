@@ -193,6 +193,8 @@ class Bombardment:
             total_cas += cas
             if cas:
                 self.game.removeModelsFromUnit(enemy, cas)
+                if getattr(self.game, 'psychology', None):
+                    self.game.psychology.check_heavy_casualties(enemy, 'shooting')
 
         summary = (f"Bombardment: {total_hit} under template, {total_cas} slain "
                    f"(centre S{s_central} AP-{ap_central}, rest S{strength} AP-{ap})")

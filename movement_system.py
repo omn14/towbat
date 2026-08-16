@@ -1018,6 +1018,13 @@ class MovementSystem:
         if unit.model.isEmpty() or unit.bodyNP.isEmpty():
             print(f"removeModelsFromUnit: {unit.unitName} NodePath already empty, skipping.")
             return
+        # Capture Unit Strength and position before removal, for the
+        # nearby-friend-destroyed Panic test.
+        pre_models = len(unit.model.getChildren())
+        us_before = unit.unit.model.unit_strength() * pre_models
+        friendly_side = (self.game.player1Units if unit in self.game.player1Units
+                         else self.game.player2Units)
+        death_pos = unit.bodyNP.getPos()
         cildren = unit.model.getChildren()
         models_to_remove = min(len(cildren), models_to_remove)
         #unit.model.ls()
@@ -1050,7 +1057,9 @@ class MovementSystem:
             if unit in self.game.player2Units:
                 self.game.player2Units.remove(unit)
             
-            
+            # A destroyed unit of US>=5 panics nearby friends.
+            if getattr(self.game, 'psychology', None):
+                self.game.psychology.on_unit_destroyed(death_pos, friendly_side, us_before)
             return
         self.game.world.removeRigidBody(unit.bodyNP.node())
         for shape in unit.bodyNP.node().shapes:
