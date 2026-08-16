@@ -89,12 +89,25 @@ def _skirmishers(model, param, desc):
             "skirmish": True}
 
 
+def _fly(model, param, desc):
+    # 'Fly (9)' -> flies with Movement 9, passing freely over models/terrain.
+    entry = {"name": "Fly",
+             "description": desc or "May move by flying over models and terrain.",
+             "tag": "movement",
+             "fly": True}
+    m = re.search(r"(\d+)", str(param or ""))
+    if m:
+        entry["fly_movement"] = int(m.group(1))
+    return entry
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
     "unbreakable": _unbreakable,
     "skirmishers": _skirmishers,
+    "fly": _fly,
 }
 
 

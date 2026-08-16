@@ -217,6 +217,18 @@ class model:
         return any(isinstance(r, dict) and r.get('skirmish')
                    for r in self.special_rules)
 
+    def is_flying(self) -> bool:
+        """True if the model has the Fly special rule."""
+        return any(isinstance(r, dict) and r.get('fly')
+                   for r in self.special_rules)
+
+    def get_fly_movement(self, default: int = 0) -> int:
+        """Fly Movement characteristic (the X in 'Fly (X)'), else *default*."""
+        for r in self.special_rules:
+            if isinstance(r, dict) and r.get('fly') and r.get('fly_movement'):
+                return int(r['fly_movement'])
+        return default
+
     def unit_strength(self) -> int:
         """Approximate Unit Strength: mounted models are US2, others US1.
         (Monstrous/large models not yet modelled.)"""

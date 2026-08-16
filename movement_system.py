@@ -586,13 +586,16 @@ class MovementSystem:
                     rule['mountUnit'].model.reset_characteristics() """
 
             # Mounted units always move using their mount's Movement.
-            M = self.game.unitToMove.unit.model.get_movement(default=0)
+            # Flyers use their Fly Movement characteristic instead.
+            _model = self.game.unitToMove.unit.model
+            _flying = _model.is_flying()
+            M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
             move = M+6
             if unit.state == "IsPursuing":
                 move = 21
 
-            # ── Terrain penalty ──
-            if hasattr(self.game, 'terrain_manager'):
+            # ── Terrain penalty ── (flyers pass over terrain freely)
+            if hasattr(self.game, 'terrain_manager') and not _flying:
                 terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
                 if terrain_mult < 1.0:
                     terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
@@ -604,7 +607,7 @@ class MovementSystem:
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
 
 
-            terrainMod = self.moveSweep(unit,CM.TERRAIN_FOREST)
+            terrainMod = 1 if _flying else self.moveSweep(unit,CM.TERRAIN_FOREST)
             move = int(move * terrainMod)
 
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
@@ -671,15 +674,17 @@ class MovementSystem:
                             modifyerM=ruleM['move']
 
             # Mounted units always move using their mount's Movement.
+            # Flyers use their Fly Movement characteristic instead.
             _model = self.game.unitToMove.unit.model
-            M = _model.get_movement(default=0)
+            _flying = _model.is_flying()
+            M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
             move = M*2
             move = move * (modifyerM if _model.is_mounted() else modifyer)
             if unit.state == "IsPursuing":
                 move = 21
 
-            # ── Terrain penalty ──
-            if hasattr(self.game, 'terrain_manager'):
+            # ── Terrain penalty ── (flyers pass over terrain freely)
+            if hasattr(self.game, 'terrain_manager') and not _flying:
                 terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
                 if terrain_mult < 1.0:
                     terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
