@@ -1158,7 +1158,7 @@ class ArmyListBuilderGUI:
         self.gui_elements.append(cancel_btn)
 
     def show_import_screen(self):
-        """Show screen for importing a NewRecruit/BattleScribe roster export."""
+        """Show a clickable list of roster exports found in strategy_armies/nr/."""
         self.clear_screen()
         self.current_screen = "import"
 
@@ -1168,40 +1168,77 @@ class ArmyListBuilderGUI:
             fg=T.GOLD, align=TextNode.ACenter)
         self.gui_elements.append(title)
 
+        roster_dir = os.path.join(self.base_dir, "strategy_armies", "nr")
+        try:
+            rosters = sorted(f for f in os.listdir(roster_dir) if f.endswith(".json"))
+        except FileNotFoundError:
+            rosters = []
+
         hint = OnscreenText(
             font=self.font,
-            text="Import a NewRecruit / BattleScribe roster (.json)",
+            text=(f"Click a roster from strategy_armies/nr/  ({len(rosters)} found)"
+                  if rosters else "No .json rosters found in strategy_armies/nr/"),
             pos=(0, 0.52), scale=0.045, fg=T.INK_FADED, align=TextNode.ACenter)
         self.gui_elements.append(hint)
 
-        filename_label = OnscreenText(
-            font=self.font,
-            text="Roster filename:", pos=(0, 0.35), scale=0.06,
-            fg=T.CREAM, align=TextNode.ACenter)
-        self.gui_elements.append(filename_label)
+        row_h = 0.09
+        canvas_h = max(0.1, len(rosters) * row_h + 0.1)
+        scroll = DirectScrolledFrame(
+            canvasSize=(-0.7, 0.66, -canvas_h, 0),
+            frameSize=(-0.75, 0.75, -0.55, 0.45),
+            pos=(0, 0, 0),
+            scrollBarWidth=0.04, frameColor=(0, 0, 0, 0),
+            verticalScroll_scrollSize=0.08,
+            verticalScroll_thumb_frameColor=T.BTN_NEUTRAL,
+            verticalScroll_incButton_frameColor=T.PARCHMENT_DARK,
+            verticalScroll_decButton_frameColor=T.PARCHMENT_DARK)
+        self.gui_elements.append(scroll)
 
-        filename_entry = DirectEntry(
-            text_font=self.font,
-            text="", scale=0.07, pos=(-0.45, 0, 0.18),
-            initialText="strategy_armies/Bm.json", numLines=1, width=13,
-            frameColor=T.ENTRY_BG, text_fg=T.ENTRY_FG)
-        self.gui_elements.append(filename_entry)
-
-        import_btn = DirectButton(
-            text_font=self.font,
-            text="Import", scale=0.08, pos=(0, 0, -0.1),
-            command=self.import_roster_file, extraArgs=[filename_entry],
-            frameSize=(-2, 2, -0.5, 1), frameColor=T.BTN_GREEN,
-            text_fg=T.BTN_TEXT, relief=DGG.FLAT)
-        self.gui_elements.append(import_btn)
+        canvas = scroll.getCanvas()
+        y = -0.06
+        for fname in rosters:
+            path = os.path.join(roster_dir, fname)
+            btn = DirectButton(
+                text_font=self.font,
+                text=fname, text_scale=0.05,
+                text_align=TextNode.ALeft, text_pos=(-0.66, -0.014),
+                pos=(0, 0, y),
+                command=self.import_roster_path, extraArgs=[path],
+                frameSize=(-0.7, 0.66, -0.04, 0.04),
+                frameColor=T.BTN_GREEN, text_fg=T.BTN_TEXT,
+                relief=DGG.FLAT, borderWidth=(0.004, 0.004), parent=canvas)
+            btn.bind(DGG.ENTER, lambda evt, b=btn: b.setColorScale(1.3, 1.3, 1.0, 1))
+            btn.bind(DGG.EXIT,  lambda evt, b=btn: b.setColorScale(1, 1, 1, 1))
+            y -= row_h
 
         cancel_btn = DirectButton(
             text_font=self.font,
-            text="Cancel", scale=0.07, pos=(0, 0, -0.4),
+            text="Cancel", scale=0.07, pos=(0, 0, -0.72),
             command=self.show_main_menu,
             frameSize=(-2, 2, -0.5, 1), frameColor=T.BTN_RED,
             text_fg=T.BTN_TEXT, relief=DGG.FLAT)
         self.gui_elements.append(cancel_btn)
+
+    def import_roster_path(self, path):
+        """Import a roster export chosen from the list into the current army list."""
+        if not os.path.isfile(path):
+            self.show_message(f"Roster not found:\n{path}")
+            return
+        try:
+            from roster_importer import import_roster
+            army = import_roster(path)
+        except Exception as e:
+            self.show_message(f"Import failed: {e}")
+            return
+
+        self.army_list = army.get("units", [])
+        self.points_budget = army.get("budget", self.points_budget)
+        self.selected_faction = self._infer_faction(self.army_list)
+        self.show_message(
+            f"Imported {len(self.army_list)} units "
+            f"({self.selected_faction or army.get('faction', '')}) "
+            f"from {os.path.basename(path)}.",
+            self.show_main_menu)
 
     def import_roster_file(self, filename_entry):
         """Convert a roster export into the current army list."""
@@ -1215,26 +1252,15 @@ class ArmyListBuilderGUI:
             os.path.join(self.base_dir, name), os.path.join(self.base_dir, f"{name}.json"),
             os.path.join(self.base_dir, "strategy_armies", name),
             os.path.join(self.base_dir, "strategy_armies", f"{name}.json"),
+            os.path.join(self.base_dir, "strategy_armies", "nr", name),
+            os.path.join(self.base_dir, "strategy_armies", "nr", f"{name}.json"),
         ]
         path = next((p for p in candidates if os.path.isfile(p)), None)
         if not path:
             self.show_message(f"Roster '{name}' not found!")
             return
 
-        try:
-            from roster_importer import import_roster
-            army = import_roster(path)
-        except Exception as e:
-            self.show_message(f"Import failed: {e}")
-            return
-
-        self.army_list = army.get("units", [])
-        self.points_budget = army.get("budget", self.points_budget)
-        self.selected_faction = self._infer_faction(self.army_list)
-        self.show_message(
-            f"Imported {len(self.army_list)} units "
-            f"({self.selected_faction or army.get('faction', '')}).",
-            self.show_main_menu)
+        self.import_roster_path(path)
 
     def load_army_list_file(self, filename_entry):
         """Load an army list from a file"""
