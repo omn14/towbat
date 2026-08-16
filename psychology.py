@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import random
 
-from panda3d.core import Vec3
+from panda3d.core import Vec3, Point3
 
 
 def _stat_int(characteristics: dict, key: str, default: int = 0) -> int:
@@ -110,6 +110,8 @@ class PsychologySystem:
         enemy = flee_from or self.nearest_non_fleeing_enemy(unit)
         direction = self._flee_direction(unit, enemy)
         outcome = panic_fail_outcome(remaining, start)
+        enemy_name = enemy.unit.name if enemy is not None else "board edge"
+        print(f"[Panic] {unit.unit.name} fails -> {outcome} away from {enemy_name}.")
         if outcome == 'fall_back':
             self._fall_back_in_good_order(unit, direction)
             print(f"[Panic] {unit.unit.name} Falls Back in Good Order.")
@@ -146,15 +148,35 @@ class PsychologySystem:
             return own_edge
         return d.normalized()
 
+    # Playing-area half-extents (the 72x48 table drawn in game.py).
+    _HALF_X = 35.0
+    _HALF_Y = 23.0
+
+    def _panic_move(self, unit, direction: Vec3, distance: float, fleeing: bool):
+        """Move *unit* straight along *direction* (away from the enemy) by
+        *distance*, clamped to the table, facing the flee direction.  Uses a
+        plain animated move — not the combat fall-back path."""
+        start = unit.bodyNP.getPos()
+        target = start + direction * distance
+        target.x = max(-self._HALF_X, min(self._HALF_X, target.x))
+        target.y = max(-self._HALF_Y, min(self._HALF_Y, target.y))
+        target.z = start.z
+        # Face the flee direction (back to the enemy).
+        unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
+        print(f"[Panic] {unit.unit.name} moves {'flee' if fleeing else 'fall back'} "
+              f"{distance:.0f}\" from ({start.x:.0f},{start.y:.0f}) -> "
+              f"({target.x:.0f},{target.y:.0f})")
+        self.game.move_node_smoothly(unit.bodyNP, target, duration=1.0)
+
     def _flee(self, unit, direction: Vec3):
         distance = random.randint(1, 6) + random.randint(1, 6)
         unit.request("IsFleeing")
         unit.hasMovedThisTurn = True
-        self.game.movement.fallBack(unit.bodyNP, direction, length=distance, flee=True)
+        self._panic_move(unit, direction, distance, fleeing=True)
         unit.updateTextNode()
 
     def _fall_back_in_good_order(self, unit, direction: Vec3):
         move = _stat_int(unit.unit.model.characteristics, 'M', 4)
-        self.game.movement.fallBack(unit.bodyNP, direction, length=move, GG=True)
+        self._panic_move(unit, direction, move, fleeing=False)
         unit.hasMovedThisTurn = True
         unit.updateTextNode()
