@@ -234,13 +234,16 @@ def simulate_battle(unit1, unit2,charge: bool):
         if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
             attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
     else: #defends
-        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
-        if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
-            attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
-        elif unit1.nmodels % unit1.files > 0: # uncomplete second rank
-            attacks +=   (unit1.nmodels % unit1.files) # only one attack if not in base contact
+        A = int(unit1.model.characteristics.get('A', 0))
+        attacks = A * unit1.files  # front rank fights with full Attacks
+        if attacks >= A * unit1.nmodels:
+            attacks = A * unit1.nmodels  # fewer models than a full front rank
         else:
-            attacks += unit1.files # full second rank
+            # The second rank adds one supporting attack per model (a full rank
+            # if the unit is deep enough).  Casualties come off the rear ranks,
+            # so this stays full until the unit drops below two ranks.
+            second_rank = min(unit1.files, unit1.nmodels - unit1.files)
+            attacks += second_rank
     
     if unit1.model.equipedWeapon.get('tag') == 'ranged':
         w = unit1.model.equipedWeapon
