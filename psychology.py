@@ -116,6 +116,27 @@ def heavy_casualties(remaining: int, start_of_phase: int) -> bool:
     return (start_of_phase - remaining) * 4 > start_of_phase
 
 
+def is_skirmish_unit(unit) -> bool:
+    """True if *unit* fights in a Skirmish formation."""
+    if unit is None:
+        return False
+    if getattr(unit, 'isSkirmisher', False):
+        return True
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    check = getattr(model, 'is_skirmisher', None)
+    return bool(check()) if callable(check) else False
+
+
+def fled_through_panics(fleer_skirmish: bool, target_skirmish: bool) -> bool:
+    """Whether a unit fled through must take a Panic test (Rulebook p. 185).
+
+    Skirmishers do not cause Panic in *formed* friendly units they flee through;
+    they still panic friendly Skirmishers (and still cause Panic as normal when
+    annihilated or when they Break and flee).
+    """
+    return (not fleer_skirmish) or target_skirmish
+
+
 # Units of this Unit Strength or more cause nearby-friend Panic when destroyed
 # or when they flee/fall back from combat.
 PANIC_US_THRESHOLD = 5
@@ -279,10 +300,22 @@ class PsychologySystem:
 
     def _after_unit_done(self, unit, passed, on_done):
         """Queue the fled-through units' Panic tests (they run after this unit,
-        in order), then hand back to the queue."""
+        in order), then hand back to the queue.  Only friendly units test, and
+        Skirmishers do not panic formed friendlies they flee through."""
+        fleer_skirmish = is_skirmish_unit(unit)
+        friends = self._friendlies_of(unit)
         for other in passed:
-            if other is not unit and not other.bodyNP.isEmpty():
-                self._panic_queue.append((other, None, "fled through"))
+            if other is unit or other.bodyNP.isEmpty():
+                continue
+            if other not in friends:
+                print(f"[Panic] {unit.unit.name} fled through enemy "
+                      f"{other.unit.name} — no Panic test (friendly units only).")
+                continue
+            if not fled_through_panics(fleer_skirmish, is_skirmish_unit(other)):
+                print(f"[Panic] Skirmishers {unit.unit.name} fled through formed "
+                      f"{other.unit.name} — no Panic test (Skirmishers & Panic).")
+                continue
+            self._panic_queue.append((other, None, "fled through"))
         on_done()
 
     # ─── Common causes of Panic ───────────────────────────────────────────

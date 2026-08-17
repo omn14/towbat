@@ -1,7 +1,8 @@
 # Skirmishers — Implementation Plan
 
-> Status: **complete for now** (Phases 0–3 done). Leftovers: true per-model
-> coherency, "see through gaps" LoS, >50%-visible charge gate, Phase 4 panic.
+> Status: **complete for now** (Phases 0–4 panic guard done). Leftovers: true
+> per-model coherency, "see through gaps" LoS, >50%-visible charge gate, terrain
+> nuance.
 > Note: a unit's skirmisher status comes from the army list's `special_rules`
 > (unit-level rule), not the base catalogue model profile (e.g. Cathay
 > "Peasant Soldier" has no Skirmishers on its model profile).
@@ -85,7 +86,18 @@ Still TODO:
 - Full per-model movement with per-model coherency (currently one `bodyNP`).
 
 ### Phase 4 — panic & terrain nuance (small, later)
-- Skirmishers fleeing don't panic formed friendlies (guard the panic path).
+- Skirmishers fleeing don't panic formed friendlies — DONE. The Fled-Through
+  panic cause in `psychology.py` (`_after_unit_done`) is guarded by the pure
+  predicate `fled_through_panics(fleer_skirmish, target_skirmish)`: a fleeing /
+  falling-back Skirmisher unit queues no Panic test for *formed* friendlies it
+  passes through, but still panics friendly Skirmishers. Skirmishers still cause
+  Panic as normal when annihilated or when they Break and flee (those go through
+  `on_unit_destroyed` / `on_unit_flees_combat`, which are untouched).
+  Rulebook p. 185 — <https://tow.whfb.app/unusual-formations/skirmishers-and-panic>.
+  Same guard also restricts Fled-Through tests to *friendly* units (an enemy
+  unit fled through no longer takes a Panic test). Tests in
+  `tests/test_psychology.py::SkirmisherPanicTests`.
+- Terrain nuance (shelter / cover from terrain) is still open.
 
 ## Recommendation
 Do **Phase 0 + Phase 1** first (localized edits + tests; immediate combat/shooting

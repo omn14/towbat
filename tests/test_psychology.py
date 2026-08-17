@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from psychology import (  # noqa: E402
     leadership_test, panic_fail_outcome, unit_strength_total, heavy_casualties,
     PANIC_US_THRESHOLD, PANIC_RADIUS, PsychologySystem, obb_distance,
+    is_skirmish_unit, fled_through_panics,
 )
 
 
@@ -171,6 +172,75 @@ class ObbDistanceTests(unittest.TestCase):
         missile = (-0.4, 0.5, 4.9 / 2, 2.0 / 2, 180)
         troopers = (-6.3, -2.2, 4.9 / 2, 3.9 / 2, 0)
         self.assertLess(obb_distance(missile, troopers), 6.0)
+
+
+class SkirmisherPanicTests(unittest.TestCase):
+    """Skirmishers & Panic (Rulebook p. 185) — the fled-through guard."""
+
+    @staticmethod
+    def _unit(name, skirmisher=False, empty=False):
+        model = SimpleNamespace(is_skirmisher=lambda: skirmisher,
+                                special_rules=[])
+        return SimpleNamespace(
+            unitName=name, isSkirmisher=skirmisher,
+            bodyNP=SimpleNamespace(isEmpty=lambda: empty),
+            unit=SimpleNamespace(name=name, model=model))
+
+    def _psy(self, friends, enemies):
+        game = SimpleNamespace(player1Units=friends, player2Units=enemies)
+        return PsychologySystem(game)
+
+    def test_is_skirmish_unit(self):
+        self.assertTrue(is_skirmish_unit(self._unit('Scouts', skirmisher=True)))
+        self.assertFalse(is_skirmish_unit(self._unit('Spears')))
+        self.assertFalse(is_skirmish_unit(None))
+
+    def test_is_skirmish_unit_from_model_only(self):
+        u = self._unit('Scouts', skirmisher=True)
+        del u.isSkirmisher                       # only the model knows
+        self.assertTrue(is_skirmish_unit(u))
+
+    def test_predicate(self):
+        self.assertFalse(fled_through_panics(True, False))   # skirmisher -> formed
+        self.assertTrue(fled_through_panics(True, True))     # skirmisher -> skirmisher
+        self.assertTrue(fled_through_panics(False, False))   # formed -> formed
+        self.assertTrue(fled_through_panics(False, True))    # formed -> skirmisher
+
+    def test_skirmishers_do_not_panic_formed_friends(self):
+        fleer = self._unit('Scouts', skirmisher=True)
+        formed = self._unit('Spearmen')
+        psy = self._psy([fleer, formed], [])
+        psy._after_unit_done(fleer, [formed], lambda: None)
+        self.assertEqual(psy._panic_queue, [])
+
+    def test_skirmishers_still_panic_skirmisher_friends(self):
+        fleer = self._unit('Scouts', skirmisher=True)
+        other = self._unit('Archers', skirmisher=True)
+        psy = self._psy([fleer, other], [])
+        psy._after_unit_done(fleer, [other], lambda: None)
+        self.assertEqual([q[0] for q in psy._panic_queue], [other])
+
+    def test_formed_unit_still_panics_formed_friends(self):
+        fleer = self._unit('Knights')
+        formed = self._unit('Spearmen')
+        psy = self._psy([fleer, formed], [])
+        psy._after_unit_done(fleer, [formed], lambda: None)
+        self.assertEqual([q[0] for q in psy._panic_queue], [formed])
+
+    def test_enemies_fled_through_do_not_test(self):
+        fleer = self._unit('Knights')
+        enemy = self._unit('Orcs')
+        psy = self._psy([fleer], [enemy])
+        psy._after_unit_done(fleer, [enemy], lambda: None)
+        self.assertEqual(psy._panic_queue, [])
+
+    def test_on_done_always_called(self):
+        fleer = self._unit('Scouts', skirmisher=True)
+        formed = self._unit('Spearmen')
+        psy = self._psy([fleer, formed], [])
+        calls = []
+        psy._after_unit_done(fleer, [formed], lambda: calls.append(1))
+        self.assertEqual(calls, [1])
 
 
 if __name__ == "__main__":

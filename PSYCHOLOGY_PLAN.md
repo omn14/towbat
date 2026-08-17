@@ -109,7 +109,9 @@ Each cause calls `panic_test`. Respect "one test per phase" (Phase 2) and
 - [x] **Fled Through** (fled-through): when a fleeing / falling-back friendly
   unit moves **through** another unit, that unit tests (resolve the movement
   first). Can cascade — a panicked unit fleeing through another triggers a
-  further test. Hook into the flee/fall-back movement path.
+  further test. Hook into the flee/fall-back movement path. Only **friendly**
+  units test, and **Skirmishers do not panic formed friendlies** they flee
+  through (Rulebook p. 185) — see `fled_through_panics` in `psychology.py`.
 - [x] **Shooting casualties panic** — already referenced by the Shooting rules;
   folded into Heavy Casualties (shooting is a non-combat phase; cannon +
   bombardment wired too).
