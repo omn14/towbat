@@ -166,6 +166,9 @@ detailed tasks to be written when Panic is done.
 - [ ] **Frenzy** — must charge, extra attacks, immune to psychology while
   frenzied, frenzy can be broken.
 - [ ] **Cold-Blooded / army-specific** Ld modifiers (e.g. re-roll, best-of-3).
+- [x] **Venerable** (Dwarfs) — friendly units within 6" (edge to edge, the
+  nearby-friend Panic bubble) re-roll failed Panic tests:
+  `PsychologySystem.venerable_source` + `leadership_test_with_reroll`.
 
 ---
 

@@ -101,6 +101,14 @@ def _fly(model, param, desc):
     return entry
 
 
+def _venerable(model, param, desc):
+    return {"name": "Venerable",
+            "description": desc or ("Friendly units within 6\" of this model may "
+                                    "re-roll failed Panic tests."),
+            "tag": "psychology",
+            "venerable": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -108,6 +116,7 @@ SPECIAL_RULE_BUILDERS = {
     "unbreakable": _unbreakable,
     "skirmishers": _skirmishers,
     "fly": _fly,
+    "venerable": _venerable,
 }
 
 

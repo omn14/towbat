@@ -6,8 +6,9 @@ This module provides the reusable Panic test and its pure helpers; the causes
 (heavy casualties, nearby friend destroyed/flees, fled through) are wired in
 later phases and simply call ``PsychologySystem.panic_test``.
 
-Pure functions (``leadership_test``, ``panic_fail_outcome``,
-``unit_strength_total``) are free of Panda3D state so they can be unit-tested.
+Pure functions (``leadership_test``, ``leadership_test_with_reroll``,
+``panic_fail_outcome``, ``unit_strength_total``) are free of Panda3D state so
+they can be unit-tested.
 """
 
 from __future__ import annotations
@@ -93,6 +94,20 @@ def leadership_test(ld: int, modifier: int = 0):
     return roll <= (ld + modifier), roll
 
 
+def leadership_test_with_reroll(ld: int, modifier: int = 0, reroll: bool = False):
+    """Leadership test that may re-roll a failure (e.g. Venerable).
+
+    Returns ``(passed, rolls)`` where *rolls* holds every 2D6 result made, so
+    the caller can report the re-roll.  Only one re-roll is ever made.
+    """
+    passed, roll = leadership_test(ld, modifier)
+    rolls = [roll]
+    if not passed and reroll:
+        passed, roll = leadership_test(ld, modifier)
+        rolls.append(roll)
+    return passed, rolls
+
+
 def panic_fail_outcome(remaining: int, start_of_battle: int) -> str:
     """Outcome of a *failed* Panic test.
 
@@ -137,11 +152,24 @@ def fled_through_panics(fleer_skirmish: bool, target_skirmish: bool) -> bool:
     return (not fleer_skirmish) or target_skirmish
 
 
+def is_venerable_unit(unit) -> bool:
+    """True if *unit* carries the Venerable special rule."""
+    if unit is None:
+        return False
+    if getattr(unit, 'isVenerable', False):
+        return True
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    check = getattr(model, 'is_venerable', None)
+    return bool(check()) if callable(check) else False
+
+
 # Units of this Unit Strength or more cause nearby-friend Panic when destroyed
 # or when they flee/fall back from combat.
 PANIC_US_THRESHOLD = 5
 # Friendly units within this range (inches) must test.
 PANIC_RADIUS = 6.0
+# Venerable grants its Panic re-roll to friendly units within the same 6" bubble.
+VENERABLE_RADIUS = PANIC_RADIUS
 
 # Special-rule names that make a unit exempt from Panic (full exemption).
 _FULL_PANIC_IMMUNE = ('ignore panic', 'immune to psychology')
@@ -231,7 +259,13 @@ class PsychologySystem:
 
         unit.panicTestedThisPhase = True
         ld = _stat_int(unit.unit.model.characteristics, 'Ld', 7)
-        passed, roll = leadership_test(ld)
+        venerable = self.venerable_source(unit)
+        passed, rolls = leadership_test_with_reroll(ld, reroll=venerable is not None)
+        roll = rolls[-1]
+        if len(rolls) > 1:
+            print(f"[Panic] {unit.unit.name} re-rolls a failed Panic test "
+                  f"(Venerable: {venerable.unit.name} within "
+                  f"{self.VENERABLE_RADIUS:.0f}\"): 2D6={rolls[0]} -> {rolls[-1]}")
         remaining = unit.unit.nmodels
         start = getattr(unit, 'startOfBattleModels', remaining) or remaining
         pct = 100.0 * remaining / max(1, start)
@@ -354,6 +388,26 @@ class PsychologySystem:
         for u in near:
             self.panic_test(u, cause=cause)
 
+    def venerable_source(self, unit):
+        """The friendly Venerable unit whose 6" bubble covers *unit*, else None.
+
+        Venerable lets friendly units within 6" (edge to edge, same measurement
+        as the nearby-friend Panic bubble) re-roll failed Panic tests.  A unit
+        carrying the rule benefits from it itself; a fleeing Venerable unit
+        inspires nobody.
+        """
+        if unit is None or unit.bodyNP.isEmpty():
+            return None
+        box = self._unit_box(unit)
+        for u in self.units_within(box, self.VENERABLE_RADIUS,
+                                   self._friendlies_of(unit)):
+            if not is_venerable_unit(u):
+                continue
+            if u is not unit and getattr(u, 'state', None) == 'IsFleeing':
+                continue
+            return u
+        return None
+
     def check_heavy_casualties(self, unit, phase, attacker=None):
         """>25% of start-of-phase models lost in a non-Combat phase -> Panic
         test, fleeing from *attacker* (or the nearest non-fleeing enemy)."""
@@ -393,6 +447,7 @@ class PsychologySystem:
 
     PANIC_US_THRESHOLD = PANIC_US_THRESHOLD
     PANIC_RADIUS = PANIC_RADIUS
+    VENERABLE_RADIUS = VENERABLE_RADIUS
 
     # ─── Direction & movement helpers ─────────────────────────────────────
 

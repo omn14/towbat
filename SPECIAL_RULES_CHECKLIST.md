@@ -82,7 +82,11 @@ army-agnostic and would benefit every faction.
 - [ ] Ancestral Grudge — Hatred (enemy characters)
 - [ ] Gromril Armour — re-roll natural 1s on armour saves
 - [ ] Stoic Defenders — +1 Initiative & Attacks when charged
-- [ ] Venerable — friendly units within 6" re-roll failed Panic tests
+- [x] Venerable — DONE: friendly units within 6" of a Venerable unit (edge to
+      edge, the same bubble as nearby-friend Panic) re-roll failed Panic tests.
+      The Venerable unit benefits itself; a fleeing one inspires nobody. See
+      `PsychologySystem.venerable_source` / `leadership_test_with_reroll` in
+      `psychology.py`.
 - [ ] Runes of Warding — 5+ ward vs Flaming Attacks
 - [ ] Rune Lore — may attempt a Wizardly Dispel
 - [ ] Forgefire — joined unit gains Armour Bane (2) + Flaming Attacks
