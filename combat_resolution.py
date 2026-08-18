@@ -34,6 +34,8 @@ from direct.task.Task import Task
 from dice import Dice, checkDice
 from battleFunctions import simulate_battle
 from characters import JOIN_TAG
+from psychology import (break_test_outcome, overwhelmed, should_use_stubborn,
+                       stubborn_available, unit_strength_total)
 
 
 class CombatResolver:
@@ -896,6 +898,27 @@ class CombatResolver:
                                    extraArgs=[loserUnit], appendTask=False)
                 continue
 
+            ld = _stat_int(loserUnit.unit.model.characteristics, 'Ld', 7)
+            overwhelm = self.isOverwhelmed(loserUnit, loserUnits)
+
+            if stubborn_available(loserUnit):
+                if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+                    useStubborn = should_use_stubborn(ld, diff, overwhelm)
+                else:
+                    stubbornChoice = [loserUnit.unitName + '\nStand Firm',
+                                      loserUnit.unitName + '\nBreak test']
+                    selected = await taskMgr.add(
+                        self.game.makeChoiceNew(stubbornChoice, Vec3(0, 0, 10)))
+                    useStubborn = selected == stubbornChoice[0]
+                if useStubborn:
+                    loserUnit.usedStubborn = True
+                    print(f"{loserUnit.unit.name} is Stubborn and refuses its Break "
+                          f"test — Falls Back in Good Order.")
+                    self.notifyFleesCombat(loserUnit)
+                    await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
+                                       extraArgs=[loserUnit], appendTask=False)
+                    continue
+
             terningerLd = []
             for i in range(2):
                 terning = Dice(self.game.world, position=Vec3(20 + i * 2, 0, 10),
@@ -908,29 +931,21 @@ class CombatResolver:
             ldDice = []
             for terning in terningerLd:
                 ldDice.append(terning.currentValue)
-            leadership_score = sum(ldDice)
             for terning in terningerLd:
                 terning.remove(self.game.world)
-            print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
+            print("Leadership dice results for fleeing unit:", ldDice,
+                  "sum:", sum(ldDice), "Ld:", ld, "combat result diff:", diff,
+                  "overwhelmed:", overwhelm)
 
-            if leadership_score > int(loserUnit.unit.model.characteristics['Ld']):
+            outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
+            if outcome == 'break':
                 print("losing unit flees from combat!")
-                # A US>=5 unit breaking/fleeing panics nearby friends (US taken
-                # at the start of this combat, measured before it moves).
-                if getattr(self.game, 'psychology', None):
-                    start_models = self._combatStartModels.get(
-                        id(loserUnit.unit), loserUnit.unit.nmodels)
-                    us0 = loserUnit.unit.model.unit_strength() * start_models
-                    self.game.psychology.on_unit_flees_combat(loserUnit, unit_strength=us0)
+                self.notifyFleesCombat(loserUnit)
                 await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
-            elif leadership_score > int(loserUnit.unit.model.characteristics['Ld']) - diff:
+            elif outcome == 'fall_back':
                 print("losing unit FBIG!")
-                if getattr(self.game, 'psychology', None):
-                    start_models = self._combatStartModels.get(
-                        id(loserUnit.unit), loserUnit.unit.nmodels)
-                    us0 = loserUnit.unit.model.unit_strength() * start_models
-                    self.game.psychology.on_unit_flees_combat(loserUnit, unit_strength=us0)
+                self.notifyFleesCombat(loserUnit)
                 await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
                                    extraArgs=[loserUnit], appendTask=False)
             else:
@@ -950,6 +965,28 @@ class CombatResolver:
         return task.done
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
+
+    def notifyFleesCombat(self, loserUnit):
+        """A US>=5 unit breaking or falling back panics nearby friends. The Unit
+        Strength is the one it had at the start of this combat, and friends are
+        measured before it moves."""
+        if not getattr(self.game, 'psychology', None):
+            return
+        start_models = self._combatStartModels.get(
+            id(loserUnit.unit), loserUnit.unit.nmodels)
+        us0 = loserUnit.unit.model.unit_strength() * start_models
+        self.game.psychology.on_unit_flees_combat(loserUnit, unit_strength=us0)
+
+    def isOverwhelmed(self, loserUnit, loserUnits):
+        """True if the winning side's total Unit Strength is more than twice the
+        losing side's, which turns a Fall Back in Good Order into a Break.
+        Unit Strength is totalled per side at the end of the Combat phase."""
+        winners = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
+        losers = [loserUnit] + [u for u in loserUnits
+                                if u is not loserUnit and not u.bodyNP.isEmpty()
+                                and any(w in u.isInCombatWith for w in winners)]
+        return overwhelmed(sum(unit_strength_total(u) for u in winners),
+                           sum(unit_strength_total(u) for u in losers))
 
     async def GiveGroundFromCombat(self, loserUnit):
         direction = self.game.fleeDirectionMultUnits(

@@ -99,6 +99,7 @@ class unitGraphics(FSM):
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
+        self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
         self.endedInUnit=False

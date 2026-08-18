@@ -109,6 +109,15 @@ def _venerable(model, param, desc):
             "venerable": True}
 
 
+def _stubborn(model, param, desc):
+    return {"name": "Stubborn",
+            "description": desc or ("The first Break test this unit is required to "
+                                    "make may be refused, Falling Back in Good "
+                                    "Order instead."),
+            "tag": "psychology",
+            "stubborn": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -117,6 +126,7 @@ SPECIAL_RULE_BUILDERS = {
     "skirmishers": _skirmishers,
     "fly": _fly,
     "venerable": _venerable,
+    "stubborn": _stubborn,
 }
 
 

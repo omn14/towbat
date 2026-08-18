@@ -14,7 +14,8 @@ from psychology import (  # noqa: E402
     leadership_test, leadership_test_with_reroll, panic_fail_outcome,
     unit_strength_total, heavy_casualties, PANIC_US_THRESHOLD, PANIC_RADIUS,
     VENERABLE_RADIUS, PsychologySystem, obb_distance, is_skirmish_unit,
-    fled_through_panics, is_venerable_unit,
+    fled_through_panics, is_venerable_unit, break_test_outcome, overwhelmed,
+    is_stubborn_unit, stubborn_available, should_use_stubborn,
 )
 
 
@@ -406,6 +407,90 @@ class VenerableTests(unittest.TestCase):
         fled, done = self._resolve(warriors, psy, [1, 1])
         self.assertEqual(fled, [])
         self.assertEqual(done, [1])
+
+
+class BreakTestOutcomeTests(unittest.TestCase):
+    """Break test's three outcomes (Rulebook p. 154)."""
+
+    def test_natural_above_leadership_breaks(self):
+        self.assertEqual(break_test_outcome([5, 4], 8, 0), 'break')
+
+    def test_natural_equal_to_leadership_holds(self):
+        self.assertEqual(break_test_outcome([4, 4], 8, 0), 'give_ground')
+
+    def test_modified_above_leadership_falls_back(self):
+        # Natural 7 <= Ld 8, but 7 + 2 = 9 > 8.
+        self.assertEqual(break_test_outcome([4, 3], 8, 2), 'fall_back')
+
+    def test_modified_equal_to_leadership_gives_ground(self):
+        self.assertEqual(break_test_outcome([3, 3], 8, 2), 'give_ground')
+
+    def test_natural_double_one_always_gives_ground(self):
+        self.assertEqual(break_test_outcome([1, 1], 2, 10), 'give_ground')
+        self.assertEqual(break_test_outcome([1, 1], 1, 10), 'give_ground')
+
+    def test_overwhelmed_turns_fall_back_into_break(self):
+        self.assertEqual(break_test_outcome([4, 3], 8, 2, overwhelm=True), 'break')
+
+    def test_overwhelmed_leaves_give_ground_alone(self):
+        self.assertEqual(break_test_outcome([3, 3], 8, 2, overwhelm=True),
+                         'give_ground')
+
+
+class OverwhelmedTests(unittest.TestCase):
+    def test_more_than_twice(self):
+        self.assertTrue(overwhelmed(21, 10))
+
+    def test_exactly_twice_is_not_enough(self):
+        self.assertFalse(overwhelmed(20, 10))
+
+    def test_weaker_winner(self):
+        self.assertFalse(overwhelmed(5, 10))
+
+
+class StubbornTests(unittest.TestCase):
+    @staticmethod
+    def _unit(stubborn=False, used=False):
+        model = SimpleNamespace(is_stubborn=lambda: stubborn, special_rules=[])
+        return SimpleNamespace(usedStubborn=used,
+                               unit=SimpleNamespace(name='Temple Guard',
+                                                    model=model))
+
+    def test_detected_from_the_model(self):
+        self.assertTrue(is_stubborn_unit(self._unit(stubborn=True)))
+        self.assertFalse(is_stubborn_unit(self._unit()))
+        self.assertFalse(is_stubborn_unit(None))
+
+    def test_builder_registered(self):
+        from special_rules import SPECIAL_RULE_BUILDERS
+        self.assertIn('stubborn', SPECIAL_RULE_BUILDERS)
+        self.assertTrue(SPECIAL_RULE_BUILDERS['stubborn'](None, None, None)['stubborn'])
+
+    def test_available_only_once(self):
+        self.assertTrue(stubborn_available(self._unit(stubborn=True)))
+        self.assertFalse(stubborn_available(self._unit(stubborn=True, used=True)))
+
+    def test_not_available_to_a_unit_without_the_rule(self):
+        self.assertFalse(stubborn_available(self._unit()))
+
+    def test_joined_stubborn_character_does_not_confer_the_rule(self):
+        # Only the unit's own profile is inspected, so a Stubborn character
+        # riding along in a non-Stubborn unit changes nothing.
+        unit = self._unit()
+        unit.unit.model.special_rules.append({'name': 'Stubborn', 'stubborn': True,
+                                             'tag': 'join'})
+        self.assertFalse(stubborn_available(unit))
+
+    def test_ai_spends_it_when_breaking_is_likely(self):
+        self.assertTrue(should_use_stubborn(ld=5, diff=0, overwhelm=False))
+
+    def test_ai_saves_it_on_high_leadership(self):
+        self.assertFalse(should_use_stubborn(ld=9, diff=0, overwhelm=False))
+
+    def test_ai_spends_it_when_overwhelmed_and_pressed(self):
+        # Ld 9 alone is safe, but overwhelmed with a -4 result difference only
+        # a natural 5 or less avoids Breaking.
+        self.assertTrue(should_use_stubborn(ld=9, diff=4, overwhelm=True))
 
 
 if __name__ == "__main__":

@@ -7,8 +7,8 @@ This module provides the reusable Panic test and its pure helpers; the causes
 later phases and simply call ``PsychologySystem.panic_test``.
 
 Pure functions (``leadership_test``, ``leadership_test_with_reroll``,
-``panic_fail_outcome``, ``unit_strength_total``) are free of Panda3D state so
-they can be unit-tested.
+``panic_fail_outcome``, ``unit_strength_total``, ``break_test_outcome``,
+``overwhelmed``) are free of Panda3D state so they can be unit-tested.
 """
 
 from __future__ import annotations
@@ -161,6 +161,78 @@ def is_venerable_unit(unit) -> bool:
     model = getattr(getattr(unit, 'unit', None), 'model', None)
     check = getattr(model, 'is_venerable', None)
     return bool(check()) if callable(check) else False
+
+
+def is_stubborn_unit(unit) -> bool:
+    """True if *unit* carries the Stubborn special rule."""
+    if unit is None:
+        return False
+    if getattr(unit, 'isStubborn', False):
+        return True
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    check = getattr(model, 'is_stubborn', None)
+    return bool(check()) if callable(check) else False
+
+
+def stubborn_available(unit) -> bool:
+    """True if *unit* may still use Stubborn to skip a Break test.
+
+    Only the unit's own profile is inspected: a unit is not Stubborn because a
+    Stubborn character joined it, and a Stubborn character cannot use the rule
+    while part of a unit that is not Stubborn (Rulebook p. 178).
+    """
+    return is_stubborn_unit(unit) and not getattr(unit, 'usedStubborn', False)
+
+
+def overwhelmed(winner_us: int, loser_us: int) -> bool:
+    """True if the winning side's Unit Strength is *more than twice* the loser's.
+
+    A losing unit that rolls the Fall Back in Good Order result Breaks instead
+    (Rulebook p. 154). Unit Strength is the total of every unit on a side,
+    worked out at the end of the Combat phase.
+    """
+    return winner_us > 2 * loser_us
+
+
+def break_test_outcome(dice, ld: int, diff: int, overwhelm: bool = False) -> str:
+    """Resolve a Break test to 'break', 'fall_back' or 'give_ground'.
+
+    *dice* are the two D6 results, *diff* the winner's combat result score minus
+    the loser's. Natural roll above Ld -> Breaks; natural at or below Ld but the
+    modified roll above Ld -> Falls Back in Good Order (Breaks instead when the
+    loser is overwhelmed); otherwise, or on a natural double 1, Gives Ground.
+    """
+    natural = sum(dice)
+    if len(dice) == 2 and dice[0] == 1 and dice[1] == 1:
+        return 'give_ground'
+    if natural > ld:
+        return 'break'
+    if natural + diff > ld:
+        return 'break' if overwhelm else 'fall_back'
+    return 'give_ground'
+
+
+def should_use_stubborn(ld: int, diff: int, overwhelm: bool) -> bool:
+    """AI policy for spending a unit's one Stubborn refusal.
+
+    Stubborn is not free: it trades the chance of Giving Ground (staying in the
+    fight) for a guaranteed Fall Back. Spend it when the Break test would more
+    likely than not end in a Break -- which an overwhelmed unit also suffers on
+    what would otherwise be a Fall Back result.
+    """
+    hold_on = ld - diff if overwhelm else ld
+    return (1.0 - _p_at_most(hold_on)) >= 0.5
+
+
+def _p_at_most(target: int) -> float:
+    """Probability that 2D6 rolls *target* or less."""
+    if target < 2:
+        return 0.0
+    if target >= 12:
+        return 1.0
+    counts = {2: 1, 3: 3, 4: 6, 5: 10, 6: 15, 7: 21,
+              8: 26, 9: 30, 10: 33, 11: 35, 12: 36}
+    return counts[target] / 36.0
 
 
 # Units of this Unit Strength or more cause nearby-friend Panic when destroyed

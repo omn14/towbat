@@ -21,6 +21,11 @@ carry only *keywords* in the data; the coded effects live in `special_rules.py`,
       (Armour profiles: Light/Heavy/Full Plate, Shield, Barding) and the save
       is derived at unit creation (best body armour, -1 per shield/barding,
       capped at 2+). Shown on the hover panel; persisted in saves.
+- [x] Break test, all three outcomes — natural roll > Ld Breaks, natural <= Ld
+      but modified > Ld Falls Back in Good Order, otherwise (or on a natural
+      double 1) Gives Ground. A losing side whose enemies total more than twice
+      its Unit Strength is overwhelmed: a Fall Back result becomes a Break.
+      `break_test_outcome` / `overwhelmed` in `psychology.py`.
 
 ## Weapon rules — TODO (high frequency)
 - [ ] Multiple Shots (D3) — roll D3/D6+N instead of the hardcoded 3
@@ -40,15 +45,20 @@ carry only *keywords* in the data; the coded effects live in `special_rules.py`,
 - [ ] Immune to Psychology
 - [ ] Fear
 - [ ] Terror
-- [ ] Stubborn — see General rules below
+- [x] Stubborn — see General rules below
 
 ## General (core `.gst`) rules — TODO
 From scanning `strategy_armies/nr/dv.json` (Dwarf army) against the engine:
 of 35 distinct rules only **Armour Bane** is coded. These core rules are
 army-agnostic and would benefit every faction.
 
-- [ ] Stubborn — break tests on unmodified Ld (AI classifier reads it, but the
-      mechanic isn't applied)
+- [x] Stubborn — DONE (2024 wording, Rulebook p. 178): the first Break test a
+      Stubborn unit is required to make may be refused, Falling Back in Good
+      Order instead, even when the winning side's Unit Strength is more than
+      twice its own. Once per battle (`usedStubborn`, persisted); the player is
+      prompted, the AI decides via `should_use_stubborn`. Only the unit's own
+      profile counts, so a joined Stubborn character neither confers nor uses
+      the rule. NOTE: this is *not* the old "unmodified Ld" mechanic.
 - [x] Fly (X) — DONE: flyers use their Fly Movement characteristic and pass
       freely over terrain (no difficult-terrain penalty, no forest-edge block)
       and over other units (unit-sweep skipped for flyers). Leftover: the

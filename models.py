@@ -266,6 +266,11 @@ class model:
         return any(isinstance(r, dict) and r.get('venerable')
                    for r in self.special_rules)
 
+    def is_stubborn(self) -> bool:
+        """True if the model has the Stubborn special rule."""
+        return any(isinstance(r, dict) and r.get('stubborn')
+                   for r in self.special_rules)
+
     def is_flying(self) -> bool:
         """True if the model has the Fly special rule."""
         return any(isinstance(r, dict) and r.get('fly')
@@ -458,8 +463,9 @@ class SaurusWarrior(model):
         # Additional Saurus Warrior specific attributes can be added here
         
         self.special_rules.append({'name': 'Stubborn',
-                                   'description': 'This model is stubborn and has a higher Leadership.',
-                                   'tag': 'psychology'})
+                                   'description': 'May refuse its first Break test and Fall Back in Good Order instead.',
+                                   'tag': 'psychology',
+                                   'stubborn': True})
         """ 
         self.special_rules.append({'name': 'Morks curse',
                                    'description': 'This model must reroll saves of 6',
@@ -931,8 +937,9 @@ class BattlePilgrim(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)
         self.special_rules.append({'name': 'Stubborn',
-                                   'description': 'Always uses unmodified Leadership for Break tests.',
-                                   'tag': 'psychology'})
+                                   'description': 'May refuse its first Break test and Fall Back in Good Order instead.',
+                                   'tag': 'psychology',
+                                   'stubborn': True})
         self.special_rules.append({'name': 'Grail Reliquae',
                                    'description': 'Inspired by holy relics — Stubborn and immune to Fear.',
                                    'tag': 'special'})
@@ -1009,8 +1016,9 @@ class TempleGuard(model):
     def __init__(self, name: str, url: str):
         super().__init__(name, url)
         self.special_rules.append({'name': 'Stubborn',
-                                   'description': 'Always uses unmodified Leadership for Break tests.',
-                                   'tag': 'psychology'})
+                                   'description': 'May refuse its first Break test and Fall Back in Good Order instead.',
+                                   'tag': 'psychology',
+                                   'stubborn': True})
         self.special_rules.append({'name': 'Temple Guard',
                                    'description': 'Elite guardians of the Slann.',
                                    'tag': 'special'})
