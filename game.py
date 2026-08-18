@@ -64,6 +64,7 @@ from psychology import PsychologySystem
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
+from debug_tools import DebugTools, debug_enabled
 import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -263,6 +264,8 @@ class MyApp(ShowBase):
         self.tutorial = TutorialManager(self)
         self.cannon = CannonFire(self)
         self.bombard = Bombardment(self)
+        # Developer tools; inert unless WH_DEBUG is set or --debug is passed.
+        self.debug_tools = DebugTools(self) if debug_enabled() else None
         self.accept('t', self.start_tutorial)
         # Debug: force a Panic test on the selected unit (Phase 0 wiring).
         self.accept('shift-p', lambda: self.psychology.panic_test(self.unitToMove, cause="debug"))
