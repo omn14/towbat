@@ -447,13 +447,8 @@ class MovementSystem:
         if tm is None:
             return 0
         mod = 0
-        worst = None
         for t in tm.get_terrain_between(from_pos, to_pos):
-            if t.movement_modifier < mod:
-                mod = t.movement_modifier
-                worst = t
-        if worst is not None:
-            print(f"[Move] {unit.unitName}: {worst.terrain_type} on the path M{mod:+d}")
+            mod = min(mod, t.movement_modifier)
         return mod
 
     def pathTowardsMouse(self,unit,x=None,y=None):
@@ -619,8 +614,6 @@ class MovementSystem:
                 #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
-                print(f"[Move] {unit.unitName}: arc clipped by a blocking body at "
-                      f"{newmove:.1f}\" (allowance was {move})")
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
@@ -648,7 +641,6 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
-            baseM = M
             M = max(1, M + terrainMod)   # difficult terrain: -1 Movement, min 1
             move = M*2
             move = move * (modifyerM if _model.is_mounted() else modifyer)
@@ -656,11 +648,6 @@ class MovementSystem:
                 move = 21
 
             move = int(move)
-            print(f"[Move] {unit.unitName}: M {baseM}"
-                  f"{f'{terrainMod:+d} (terrain)' if terrainMod else ''}"
-                  f" -> march {M*2}"
-                  f"{f' x{modifyerM if _model.is_mounted() else modifyer} (rule)' if (modifyerM if _model.is_mounted() else modifyer) != 1 else ''}"
-                  f" = {move}\"")
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
             for rule in self.game.unitToMove.unit.model.special_rules:

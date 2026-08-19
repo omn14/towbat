@@ -667,12 +667,6 @@ class TerrainPiece:
         mask = _TERRAIN_COLLISION_MASK.get(self.terrain_type, BitMask32.bit(20))
         self.ghost_np.setCollideMask(mask)
         self.game.world.attachRigidBody(body)
-        bounds = self.ghost_np.getTightBounds()
-        where = (f"x[{bounds[0].x:.1f},{bounds[1].x:.1f}] y[{bounds[0].y:.1f},{bounds[1].y:.1f}]"
-                 f" z[{bounds[0].z:.2f},{bounds[1].z:.2f}]" if bounds else "EMPTY (no geometry)")
-        print(f"[Terrain] {self.terrain_type} declared at "
-              f"({self.center.x:.1f},{self.center.y:.1f}) {self.width:.0f}x{self.height:.0f}"
-              f" -> collision body {where}")
 
     # ── Queries ───────────────────────────────────────────────────────
 
