@@ -64,7 +64,14 @@ army-agnostic and would benefit every faction.
       and over other units (unit-sweep skipped for flyers). Leftover: the
       end-of-move "not on top of a unit / within 1in of an enemy" restriction
       is not enforced.
-- [ ] General — Inspiring Presence (Ld bubble)
+- [x] General — Inspiring Presence (Ld bubble): the General is the character
+      with the highest Leadership (an explicit `General` rule in the army list
+      wins), nominated once per army load and never replaced when slain. Unless
+      it is fleeing, friendly units within its Command range — a flat 12",
+      18" with Large Target — test on its Leadership instead of their own
+      (Break, Panic and Rally). Measured edge to edge from the General's own
+      base, including when it has joined a unit. See
+      `PsychologySystem.general_of` / `leadership_of` in `psychology.py`.
 - [ ] Battle Standard Bearer — re-roll failed break tests near the BSB
 - [ ] Hatred (X) — re-roll misses to hit in the first combat round
 - [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic

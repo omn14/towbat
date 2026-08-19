@@ -899,6 +899,13 @@ class CombatResolver:
                 continue
 
             ld = _stat_int(loserUnit.unit.model.characteristics, 'Ld', 7)
+            psy = getattr(self.game, 'psychology', None)
+            if psy is not None:
+                ld, general = psy.leadership_of(loserUnit)
+                if general is not None:
+                    print(f"{loserUnit.unit.name} takes its Break test on the "
+                          f"General's Leadership ({general.unit.name}, Ld {ld}) "
+                          f"— Inspiring Presence.")
             overwhelm = self.isOverwhelmed(loserUnit, loserUnits)
 
             if stubborn_available(loserUnit):

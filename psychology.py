@@ -174,6 +174,61 @@ def is_stubborn_unit(unit) -> bool:
     return bool(check()) if callable(check) else False
 
 
+def is_character_unit(unit) -> bool:
+    """True if *unit* is a character model (catalogue Category)."""
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    chars = getattr(model, 'characteristics', None) or {}
+    return str(chars.get('Category', '')).strip().lower() == 'characters'
+
+
+def is_large_target(unit) -> bool:
+    """True if *unit* has the Large Target special rule (or is mounted on one)."""
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    rules = getattr(model, 'special_rules', None) or []
+    return any(isinstance(r, dict) and r.get('large_target') for r in rules)
+
+
+def command_range(general) -> float:
+    """The General's Command range in inches.
+
+    The General and Battle Standard Bearer have a flat 12" Command range
+    regardless of their Leadership (Rulebook p. 202), extended to 18" by Large
+    Target.
+    """
+    return (LARGE_TARGET_COMMAND_RANGE if is_large_target(general)
+            else COMMAND_RANGE)
+
+
+def effective_leadership(own_ld: int, general_ld=None) -> int:
+    """Leadership to test on, given an inspiring General's Ld (or None).
+
+    Inspiring Presence lets a unit *use* the General's Leadership, so a lower
+    value is simply never taken.
+    """
+    return own_ld if general_ld is None else max(own_ld, general_ld)
+
+
+def select_general(units):
+    """Nominate the army General from *units* and return it (or None).
+
+    The General is the character with the highest Leadership; a character the
+    army list explicitly flags as the General wins outright (Rulebook p. 203).
+    Ties fall to list order, where the rules would let the player choose.
+    """
+    for u in units:
+        setattr(u, 'isGeneral', False)
+    characters = [u for u in units if is_character_unit(u)]
+    if not characters:
+        return None
+    model_flag = [u for u in characters
+                  if any(isinstance(r, dict) and r.get('general')
+                         for r in (u.unit.model.special_rules or []))]
+    pool = model_flag or characters
+    general = max(pool, key=lambda u: _stat_int(u.unit.model.characteristics, 'Ld', 0))
+    general.isGeneral = True
+    return general
+
+
 def stubborn_available(unit) -> bool:
     """True if *unit* may still use Stubborn to skip a Break test.
 
@@ -242,6 +297,9 @@ PANIC_US_THRESHOLD = 5
 PANIC_RADIUS = 6.0
 # Venerable grants its Panic re-roll to friendly units within the same 6" bubble.
 VENERABLE_RADIUS = PANIC_RADIUS
+# The General's Command range, in inches (Inspiring Presence reaches this far).
+COMMAND_RANGE = 12.0
+LARGE_TARGET_COMMAND_RANGE = 18.0
 
 # Special-rule names that make a unit exempt from Panic (full exemption).
 _FULL_PANIC_IMMUNE = ('ignore panic', 'immune to psychology')
@@ -330,7 +388,10 @@ class PsychologySystem:
             return
 
         unit.panicTestedThisPhase = True
-        ld = _stat_int(unit.unit.model.characteristics, 'Ld', 7)
+        ld, general = self.leadership_of(unit)
+        if general is not None:
+            print(f"[Panic] {unit.unit.name} uses the General's Leadership "
+                  f"({general.unit.name}, Ld {ld}) — Inspiring Presence.")
         venerable = self.venerable_source(unit)
         passed, rolls = leadership_test_with_reroll(ld, reroll=venerable is not None)
         roll = rolls[-1]
@@ -432,11 +493,15 @@ class PsychologySystem:
 
     @staticmethod
     def _unit_box(unit):
-        """Footprint box (cx, cy, half_w, half_d, heading) of a live unit."""
-        p = unit.bodyNP.getPos()
+        """Footprint box (cx, cy, half_w, half_d, heading) of a live unit, in
+        world space -- a joined character's body is parented to its host, so its
+        own transform is host-relative and has to be resolved against the root."""
+        body = unit.bodyNP
+        top = body.getTop()
+        p = body.getPos(top)
         hx = getattr(unit, 'unitWidth', 2.0) / 2.0
         hy = getattr(unit, 'unitHeight', 2.0) / 2.0
-        return (p.x, p.y, hx, hy, unit.bodyNP.getH())
+        return (p.x, p.y, hx, hy, body.getH(top))
 
     def units_within(self, src_box, radius, side_units):
         """Units from *side_units* whose footprint is within *radius* (edge to
@@ -479,6 +544,59 @@ class PsychologySystem:
                 continue
             return u
         return None
+
+    # ─── Inspiring Presence ───────────────────────────────────────────────
+
+    def generals_on_side(self, unit):
+        """Friendly Generals, including one riding along inside a host unit.
+        A joined character is dropped from the player lists, so hosts have to
+        be searched too."""
+        out = []
+        for u in self._friendlies_of(unit):
+            if getattr(u, 'isGeneral', False):
+                out.append(u)
+            joined = getattr(u, 'joinedCharacter', None)
+            if joined is not None and getattr(joined, 'isGeneral', False):
+                out.append(joined)
+        return out
+
+    @staticmethod
+    def _is_fleeing(unit):
+        """True if *unit* is fleeing — for a joined character, that is whatever
+        its host is doing."""
+        host = getattr(unit, 'hostUnit', None)
+        return getattr(host or unit, 'state', None) == 'IsFleeing'
+
+    def general_of(self, unit):
+        """The friendly General whose Command range covers *unit*, else None.
+
+        Measured edge to edge from the General's own base — a joined General
+        inspires from wherever it stands in the host's ranks, not from the
+        host's centre. A fleeing General inspires nobody.
+        """
+        if unit is None or unit.bodyNP.isEmpty():
+            return None
+        box = self._unit_box(unit)
+        for g in self.generals_on_side(unit):
+            if g.bodyNP.isEmpty() or self._is_fleeing(g):
+                continue
+            if obb_distance(self._unit_box(g), box) <= command_range(g):
+                return g
+        return None
+
+    def leadership_of(self, unit):
+        """Leadership *unit* tests on, plus the inspiring General (or None).
+
+        Inspiring Presence lets any friendly unit within the General's Command
+        range use the General's Leadership instead of its own.
+        """
+        own = _stat_int(unit.unit.model.characteristics, 'Ld', 7)
+        general = self.general_of(unit)
+        if general is None or general is unit:
+            return own, None
+        gen_ld = _stat_int(general.unit.model.characteristics, 'Ld', 7)
+        ld = effective_leadership(own, gen_ld)
+        return ld, (general if ld > own else None)
 
     def check_heavy_casualties(self, unit, phase, attacker=None):
         """>25% of start-of-phase models lost in a non-Combat phase -> Panic

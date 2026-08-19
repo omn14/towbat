@@ -153,6 +153,26 @@ Black Orc Mob  [Idle]  GRABBED
 rule under test: regeneration   dice: random
 ```
 
+The unit dump (`i`) and the overlay both report the Leadership a unit will
+actually test on, so Inspiring Presence is visible without resolving a test:
+
+```
+  command  : Ld 9 (P1_Vampire0)
+```
+
+---
+
+## Command range rings
+
+While debug mode is on, a ring is drawn on the table around every General
+showing its Command range — the bubble inside which friendly units may use the
+General's Leadership (Inspiring Presence). Green is player 1, red player 2.
+
+The ring is centred on the General's **own base**, so a General that has joined a
+unit inspires from wherever it stands in that unit's ranks rather than from the
+host's centre. Rings redraw every frame and follow units as they move; they are
+removed when debug mode is switched off.
+
 ---
 
 ## Typical workflows

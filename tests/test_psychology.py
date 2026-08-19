@@ -16,6 +16,8 @@ from psychology import (  # noqa: E402
     VENERABLE_RADIUS, PsychologySystem, obb_distance, is_skirmish_unit,
     fled_through_panics, is_venerable_unit, break_test_outcome, overwhelmed,
     is_stubborn_unit, stubborn_available, should_use_stubborn,
+    command_range, effective_leadership, select_general, is_character_unit,
+    COMMAND_RANGE, LARGE_TARGET_COMMAND_RANGE,
 )
 
 
@@ -264,8 +266,9 @@ class VenerableTests(unittest.TestCase):
             panicTestedThisPhase=False, isChargingMove=False, isInCombat=False,
             startOfBattleModels=nmodels,
             bodyNP=SimpleNamespace(isEmpty=lambda: empty,
-                                   getPos=lambda: SimpleNamespace(x=x, y=y),
-                                   getH=lambda: 0.0),
+                                   getTop=lambda: None,
+                                   getPos=lambda *_a: SimpleNamespace(x=x, y=y),
+                                   getH=lambda *_a: 0.0),
             unit=SimpleNamespace(name=name, model=model, nmodels=nmodels))
 
     @staticmethod
@@ -491,6 +494,154 @@ class StubbornTests(unittest.TestCase):
         # Ld 9 alone is safe, but overwhelmed with a -4 result difference only
         # a natural 5 or less avoids Breaking.
         self.assertTrue(should_use_stubborn(ld=9, diff=4, overwhelm=True))
+
+
+class InspiringPresenceTests(unittest.TestCase):
+    """The General's Command range and Leadership substitution (p. 203)."""
+
+    @staticmethod
+    def _unit(name, ld=7, character=False, x=0.0, y=0.0, state='Idle',
+              rules=None, width=2.0, height=2.0, empty=False):
+        model = SimpleNamespace(
+            is_venerable=lambda: False, is_skirmisher=lambda: False,
+            special_rules=list(rules or []),
+            characteristics={'Ld': str(ld),
+                             'Category': 'Characters' if character else 'Core'})
+        return SimpleNamespace(
+            unitName=name, state=state, isGeneral=False,
+            unitWidth=width, unitHeight=height,
+            bodyNP=SimpleNamespace(isEmpty=lambda: empty,
+                                   getTop=lambda: None,
+                                   getPos=lambda *_a: SimpleNamespace(x=x, y=y),
+                                   getH=lambda *_a: 0.0),
+            unit=SimpleNamespace(name=name, model=model, nmodels=1))
+
+    @staticmethod
+    def _psy(friends, enemies=()):
+        game = SimpleNamespace(player1Units=list(friends),
+                               player2Units=list(enemies))
+        return PsychologySystem(game)
+
+    # ─── pure helpers ──────────────────────────────────────────────
+
+    def test_command_range_is_a_flat_twelve_inches(self):
+        # Not the character's Leadership in inches: the General is always 12".
+        self.assertEqual(command_range(self._unit('Lord', ld=10)), COMMAND_RANGE)
+        self.assertEqual(command_range(self._unit('Runt', ld=5)), COMMAND_RANGE)
+
+    def test_large_target_widens_the_range(self):
+        giant = self._unit('Giant Lord', rules=[{'large_target': True}])
+        self.assertEqual(command_range(giant), LARGE_TARGET_COMMAND_RANGE)
+
+    def test_effective_leadership_takes_the_better_value(self):
+        self.assertEqual(effective_leadership(6, 9), 9)
+
+    def test_effective_leadership_never_takes_a_worse_one(self):
+        self.assertEqual(effective_leadership(9, 6), 9)
+
+    def test_effective_leadership_without_a_general(self):
+        self.assertEqual(effective_leadership(7, None), 7)
+
+    # ─── nominating the General ────────────────────────────────────
+
+    def test_is_character_unit(self):
+        self.assertTrue(is_character_unit(self._unit('Lord', character=True)))
+        self.assertFalse(is_character_unit(self._unit('Boyz')))
+
+    def test_highest_leadership_character_leads(self):
+        boyz = self._unit('Boyz', ld=9)          # not a character
+        hero = self._unit('Hero', ld=7, character=True)
+        lord = self._unit('Lord', ld=8, character=True)
+        self.assertIs(select_general([boyz, hero, lord]), lord)
+        self.assertTrue(lord.isGeneral)
+        self.assertFalse(hero.isGeneral)
+        self.assertFalse(boyz.isGeneral)
+
+    def test_explicit_nomination_wins(self):
+        hero = self._unit('Hero', ld=7, character=True,
+                          rules=[{'name': 'General', 'general': True}])
+        lord = self._unit('Lord', ld=9, character=True)
+        self.assertIs(select_general([hero, lord]), hero)
+
+    def test_army_without_characters_has_no_general(self):
+        self.assertIsNone(select_general([self._unit('Boyz'), self._unit('Gits')]))
+
+    def test_reselecting_clears_the_previous_general(self):
+        hero = self._unit('Hero', ld=7, character=True)
+        lord = self._unit('Lord', ld=9, character=True)
+        select_general([hero])
+        self.assertTrue(hero.isGeneral)
+        select_general([hero, lord])
+        self.assertFalse(hero.isGeneral)
+        self.assertTrue(lord.isGeneral)
+
+    # ─── the bubble ────────────────────────────────────────────
+
+    def _general_and_unit(self, gap, **kwargs):
+        """A General and a unit whose footprints are *gap* inches apart."""
+        general = self._unit('Lord', ld=9, character=True, width=1.0, height=1.0,
+                             **kwargs)
+        general.isGeneral = True
+        # 1" and 2" deep boxes -> centres are gap + 0.5 + 1.0 apart.
+        troops = self._unit('Boyz', ld=6, y=gap + 1.5)
+        return general, troops
+
+    def test_unit_just_inside_command_range(self):
+        general, troops = self._general_and_unit(11.9)
+        psy = self._psy([general, troops])
+        self.assertIs(psy.general_of(troops), general)
+        self.assertEqual(psy.leadership_of(troops), (9, general))
+
+    def test_unit_just_outside_command_range(self):
+        general, troops = self._general_and_unit(12.1)
+        psy = self._psy([general, troops])
+        self.assertIsNone(psy.general_of(troops))
+        self.assertEqual(psy.leadership_of(troops), (6, None))
+
+    def test_fleeing_general_inspires_nobody(self):
+        general, troops = self._general_and_unit(6.0, state='IsFleeing')
+        psy = self._psy([general, troops])
+        self.assertIsNone(psy.general_of(troops))
+
+    def test_general_with_lower_leadership_is_not_reported(self):
+        general = self._unit('Runt', ld=5, character=True)
+        general.isGeneral = True
+        troops = self._unit('Boyz', ld=8, y=3.0)
+        psy = self._psy([general, troops])
+        self.assertEqual(psy.leadership_of(troops), (8, None))
+
+    def test_enemy_general_does_not_inspire(self):
+        general, troops = self._general_and_unit(2.0)
+        psy = self._psy([troops], [general])
+        self.assertIsNone(psy.general_of(troops))
+
+    def test_joined_general_is_found_through_its_host(self):
+        # join_unit() drops the character from the player lists, so the General
+        # is only reachable via its host.
+        general = self._unit('Lord', ld=9, character=True, width=1.0, height=1.0)
+        general.isGeneral = True
+        host = self._unit('Guard', ld=7)
+        general.hostUnit = host
+        host.joinedCharacter = general
+        troops = self._unit('Boyz', ld=6, y=5.0)
+        psy = self._psy([host, troops])
+        self.assertIs(psy.general_of(troops), general)
+        self.assertEqual(psy.leadership_of(troops)[0], 9)
+
+    def test_joined_general_stops_inspiring_when_its_host_flees(self):
+        general = self._unit('Lord', ld=9, character=True, width=1.0, height=1.0)
+        general.isGeneral = True
+        host = self._unit('Guard', ld=7, state='IsFleeing')
+        general.hostUnit = host
+        host.joinedCharacter = general
+        troops = self._unit('Boyz', ld=6, y=5.0)
+        psy = self._psy([host, troops])
+        self.assertIsNone(psy.general_of(troops))
+
+    def test_builder_registered(self):
+        from special_rules import SPECIAL_RULE_BUILDERS
+        self.assertIn('general', SPECIAL_RULE_BUILDERS)
+        self.assertTrue(SPECIAL_RULE_BUILDERS['general'](None, None, None)['general'])
 
 
 if __name__ == "__main__":

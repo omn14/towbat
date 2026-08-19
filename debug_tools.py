@@ -11,16 +11,18 @@ Press F12 in game to toggle the tools on; F12 again restores normal play.
 from __future__ import annotations
 
 import os
+import math
 import random
 import sys
 
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-from panda3d.core import Point3, TextNode
+from panda3d.core import LineSegs, Point3, TextNode
 
 import gui_theme
 from collision_masks import CollisionMask as CM
 from special_rules import SPECIAL_RULE_BUILDERS
+from psychology import command_range
 
 NUDGE_COARSE = 0.5
 NUDGE_FINE = 0.1
@@ -62,6 +64,9 @@ HELP_TEXT = """
   Dice & state
   y            loaded d6: off -> all 1s -> all 6s -> off
   F8           snapshot to debug_snapshot.json (shift-F8 restores)
+
+  Always on while debug mode is active: a ring around each General showing
+  its Command range (the Inspiring Presence Leadership bubble).
 ────────────────────────────────────────────────────────────
 """
 
@@ -85,6 +90,7 @@ class DebugTools(DirectObject):
         self.loaded_dice = None
         self._orig_randint = None
         self.overlay = None
+        self._command_rings = []
         self.accept("f12", self.toggle)
         print("[debug] debug mode available - press F12")
 
@@ -114,6 +120,7 @@ class DebugTools(DirectObject):
         self.set_loaded_dice(None)
         self._unbind()
         self.removeTask("debugOverlay")
+        self._clear_command_rings()
         if self.overlay:
             self.overlay.hide()
         self.enabled = False
@@ -447,6 +454,12 @@ class DebugTools(DirectObject):
         print(f"           : panicked={unit.panicTestedThisPhase} "
               f"stubbornUsed={unit.usedStubborn} rallied={unit.attemptedRallyThisTurn} "
               f"skirmisher={unit.isSkirmisher}")
+        psy = getattr(self.game, "psychology", None)
+        if psy is not None:
+            ld, general = psy.leadership_of(unit)
+            source = "General" if getattr(unit, "isGeneral", False) else (
+                general.unitName if general is not None else "own")
+            print(f"  command  : Ld {ld} ({source})")
         if unit.isInCombatWith:
             pairs = ", ".join(
                 f"{u.unitName}({f})" for u, f in
@@ -505,6 +518,50 @@ class DebugTools(DirectObject):
         self.game.load_game_state(self.SNAPSHOT)
         print(f"[debug] restored {self.SNAPSHOT}")
 
+    # ─── Command range rings ──────────────────────────────────────────────
+
+    def _clear_command_rings(self):
+        for node in self._command_rings:
+            node.removeNode()
+        self._command_rings = []
+
+    def _side_of(self, unit):
+        if unit in self.game.player1Units:
+            return 1
+        if unit in self.game.player2Units:
+            return 2
+        return getattr(unit, "_player", 2)   # a joined character leaves both lists
+
+    def _update_command_rings(self):
+        """Ring each General's Command range — the Inspiring Presence bubble."""
+        self._clear_command_rings()
+        for unit in self.game.units:
+            if not getattr(unit, "isGeneral", False) or unit.bodyNP.isEmpty():
+                continue
+            body = unit.bodyNP
+            centre = body.getPos(body.getTop())   # a joined General sits under its host
+            colour = ((0.3, 1.0, 0.4, 0.8) if self._side_of(unit) == 1
+                      else (1.0, 0.4, 0.3, 0.8))
+            self._command_rings.append(
+                self._draw_ring(centre, command_range(unit), colour))
+
+    @staticmethod
+    def _draw_ring(centre, radius, colour, segments=64):
+        ls = LineSegs()
+        ls.setColor(*colour)
+        ls.setThickness(2.0)
+        for i in range(segments + 1):
+            a = 2 * math.pi * i / segments
+            x = centre.x + radius * math.cos(a)
+            y = centre.y + radius * math.sin(a)
+            if i == 0:
+                ls.moveTo(x, y, centre.z + 0.2)
+            else:
+                ls.drawTo(x, y, centre.z + 0.2)
+        node = render.attachNewNode(ls.create())
+        node.setName("DebugCommandRing")
+        return node
+
     # ─── Overlay ──────────────────────────────────────────────────────────
 
     def _overlay_task(self, task):
@@ -530,4 +587,5 @@ class DebugTools(DirectObject):
         lines.append(f"rule under test: {self.rule_keyword}"
                      f"   dice: {self.loaded_dice or 'random'}")
         self.overlay.setText("\n".join(lines))
+        self._update_command_rings()
         return Task.cont

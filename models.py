@@ -271,6 +271,11 @@ class model:
         return any(isinstance(r, dict) and r.get('stubborn')
                    for r in self.special_rules)
 
+    def is_general(self) -> bool:
+        """True if the army list nominates this model as the General."""
+        return any(isinstance(r, dict) and r.get('general')
+                   for r in self.special_rules)
+
     def is_flying(self) -> bool:
         """True if the model has the Fly special rule."""
         return any(isinstance(r, dict) and r.get('fly')

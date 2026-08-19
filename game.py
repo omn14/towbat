@@ -60,7 +60,7 @@ from characters import JOIN_TAG
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
-from psychology import PsychologySystem
+from psychology import PsychologySystem, select_general, command_range
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
@@ -748,7 +748,10 @@ class MyApp(ShowBase):
 
     async def rallyUnit(self, unit):
         # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
-        Ld=int(unit.unit.model.characteristics['Ld'])
+        Ld, general = self.psychology.leadership_of(unit)
+        if general is not None:
+            print(f"{unit.unit.name} rallies on the General's Leadership "
+                  f"({general.unit.name}, Ld {Ld}) — Inspiring Presence.")
         terningerLd=[]
         for i in range(2):
             terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
@@ -762,8 +765,9 @@ class MyApp(ShowBase):
         leadership_score = sum(ldDice)
         for terning in terningerLd:
             terning.remove(self.world)
-        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score)
-        if leadership_score <= Ld+99:
+        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score,
+              "Ld:", Ld)
+        if leadership_score <= Ld:
             print(f"Rallying unit: {unit.unit.name}")
             self.ignore('mouse1')
             self.accept('mouse1', self.giveSignal)
@@ -772,6 +776,8 @@ class MyApp(ShowBase):
             self.ignore('mouse1')
             self.accept('mouse1', self.setActiveUnit,[self.taskLoopStrategy, "taskLoopStrategy"])
             unit.request("Idle")
+        else:
+            print(f"Unit {unit.unit.name} fails to rally and keeps fleeing.")
         unit.attemptedRallyThisTurn=True
         return
 
@@ -1812,6 +1818,7 @@ class MyApp(ShowBase):
         units = self.load_army_from_json(filename, player_num=1, start_pos=Point3(-48, -38, 0), spacing=12)
         if units:
             print(f"Player 1 army loaded: {len(units)} units")
+            self.nominate_general(units, 1)
         return units
     
     def load_player2_army(self, filename="my_army.json"):
@@ -1820,10 +1827,23 @@ class MyApp(ShowBase):
         units = self.load_army_from_json(filename, player_num=2, start_pos=Point3(-48, 38, 0), spacing=12)
         if units:
             print(f"Player 2 army loaded: {len(units)} units")
+            self.nominate_general(units, 2)
             # Set heading to face player 1
             for unit in units:
                 unit.bodyNP.setH(180)
         return units
+
+    def nominate_general(self, units, player_num):
+        """Pick the army General (highest-Leadership character) before deployment.
+        A slain General is not replaced, so this runs once per army load."""
+        general = select_general(units)
+        if general is None:
+            print(f"Player {player_num} has no character to lead — no General.")
+        else:
+            ld = general.unit.model.characteristics.get('Ld', '?')
+            print(f"Player {player_num} General: {general.unit.name} (Ld {ld}), "
+                  f"Command range {command_range(general):.0f}\"")
+        return general
 
     def set_player_army(self, army_list, player_num, budget=2000):
         """Replace a player's on-table army with a new list (from the list builder)."""

@@ -100,6 +100,7 @@ class unitGraphics(FSM):
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
+        self.isGeneral=False         # army commander; radiates Inspiring Presence
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
         self.endedInUnit=False
@@ -287,6 +288,15 @@ class unitGraphics(FSM):
         attacked_str = "Yes" if self.hasAttackedThisTurn  else "No"
         row += f"State  : {self.state}\n"
         row += f"Combat : {combat_str:<3}  Moved : {moved_str:<3}  Atk : {attacked_str}\n"
+
+        if self.isGeneral:
+            row += "Command: General\n"
+        else:
+            psy = getattr(self.game, 'psychology', None) if self.game else None
+            if psy is not None:
+                ld, general = psy.leadership_of(self)
+                if general is not None:
+                    row += f"Command: Ld {ld} from {general.unitName}\n"
 
         if self.isInCombatWith:
             names = ", ".join(u.unitName for u in self.isInCombatWith)

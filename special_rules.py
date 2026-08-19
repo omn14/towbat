@@ -118,6 +118,15 @@ def _stubborn(model, param, desc):
             "stubborn": True}
 
 
+def _general(model, param, desc):
+    # Marks the army commander; Inspiring Presence is applied from the unit.
+    return {"name": "General",
+            "description": desc or ("Friendly units within this model's Command "
+                                    "range may use its Leadership."),
+            "tag": "psychology",
+            "general": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -127,6 +136,7 @@ SPECIAL_RULE_BUILDERS = {
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,
+    "general": _general,
 }
 
 
