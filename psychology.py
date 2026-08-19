@@ -21,6 +21,9 @@ from direct.interval.LerpInterval import LerpPosInterval
 from direct.interval.IntervalGlobal import Sequence
 from direct.interval.FunctionInterval import Func
 
+from special_rules import (board_edge_distance, should_use_swiftstride,
+                           unit_has_swiftstride)
+
 
 # ── Oriented-box (footprint) geometry ──────────────────────────────────────
 # A unit box is (cx, cy, half_width, half_depth, heading_degrees).
@@ -501,6 +504,14 @@ class PsychologySystem:
         # the lowest (Rulebook p. 134).
         d1, d2 = random.randint(1, 6), random.randint(1, 6)
         distance = max(d1, d2) if outcome == 'fall_back' else d1 + d2
+        # Panic flees resolve without a prompt, so Swiftstride's optional die is
+        # taken on the same policy the AI uses.
+        if unit_has_swiftstride(unit) and should_use_swiftstride(
+                'flee', board_edge_distance(up.x, up.y)):
+            bonus = random.randint(1, 6)
+            distance += bonus
+            print(f"[Panic] {unit.unit.name} adds Swiftstride +{bonus} to its "
+                  f"Flee roll.")
         self._start_flee_move(unit, direction, distance, outcome, on_done)
 
     def _start_flee_move(self, unit, direction: Vec3, distance: float, outcome, on_done):

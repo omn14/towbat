@@ -136,6 +136,14 @@ def _battle_standard(model, param, desc):
             "battle_standard": True}
 
 
+def _swiftstride(model, param, desc):
+    return {"name": "Swiftstride",
+            "description": desc or ("+3\" maximum charge range; may add a D6 to "
+                                    "Charge, Flee and Pursuit rolls."),
+            "tag": "movement",
+            "swiftstride": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -147,7 +155,83 @@ SPECIAL_RULE_BUILDERS = {
     "stubborn": _stubborn,
     "general": _general,
     "battle standard bearer": _battle_standard,
+    "swiftstride": _swiftstride,
 }
+
+
+# ── Swiftstride (Rulebook p. 178) ──────────────────────────────────────────
+
+# Swiftstride adds this much to the maximum possible charge range. Note it is
+# NOT the 6 the bonus die could roll: the rulebook fixes the declaration range
+# at +3" whatever the die later does.
+SWIFTSTRIDE_CHARGE_BONUS = 3
+# Flee further than this and the board edge stops being a worry.
+SAFE_FLEE_MARGIN = 12.0
+
+
+def unit_has_swiftstride(unit) -> bool:
+    """True if *unit* consists entirely of Swiftstride models.
+
+    The engine keeps one profile per unit, so the rank and file are covered by
+    the unit's own model (or its mount). A joined character with different
+    profile is the one way to get a mixed unit, and it costs the unit the rule.
+    """
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    check = getattr(model, 'is_swiftstride', None)
+    if not callable(check) or not check():
+        return False
+    joined = getattr(unit, 'joinedCharacter', None)
+    if joined is None:
+        return True
+    return unit_has_swiftstride(joined)
+
+
+def max_charge_range(movement: int, swiftstride: bool = False) -> int:
+    """Maximum possible charge range: Movement plus the best Charge roll (6),
+    plus 3\" for Swiftstride (Rulebook p. 121)."""
+    return movement + 6 + (SWIFTSTRIDE_CHARGE_BONUS if swiftstride else 0)
+
+
+def charge_roll(dice) -> int:
+    """Result of a Charge roll: 2D6 discarding the lowest.
+
+    Any further dice are Swiftstride's bonus and are *added* -- the bonus die is
+    never one of the two the roll discards between.
+    """
+    if not dice:
+        return 0
+    return max(dice[:2]) + sum(dice[2:])
+
+
+def max_pursuit_range(swiftstride: bool = False) -> int:
+    """Furthest a Pursuit roll can carry a unit: 2D6 summed, with no Movement
+    added, plus Swiftstride's bonus die. The +3\" is a charge-declaration rule
+    and does not apply here.
+    """
+    return 12 + (6 if swiftstride else 0)
+
+
+def should_use_swiftstride(kind: str, distance_to_edge=None) -> bool:
+    """AI policy for Swiftstride's optional bonus die.
+
+    The choice is made before the roll, so it is judged on consequences, not
+    results. Charging further is free -- the unit stops at its target -- but a
+    fleeing unit must move the full distance even off the battlefield, where it
+    is destroyed, so decline when the board edge is close. A pursuit is treated
+    the same way, cautiously: a long one can carry the unit off the table.
+    """
+    if kind in ('flee', 'fall back', 'pursuit') and distance_to_edge is not None:
+        return distance_to_edge >= SAFE_FLEE_MARGIN
+    return True
+
+
+def board_edge_distance(x: float, y: float, half_x: float = 36.0,
+                        half_y: float = 24.0) -> float:
+    """Distance from (x, y) to the nearest table edge, in inches.
+
+    Feeds the flee decision above; the board is 72x48 centred on the origin.
+    """
+    return min(half_x - abs(x), half_y - abs(y))
 
 
 def build_special_rules(model) -> list:

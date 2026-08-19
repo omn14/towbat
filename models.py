@@ -286,6 +286,14 @@ class model:
         return any(isinstance(r, dict) and r.get('fly')
                    for r in self.special_rules)
 
+    def is_swiftstride(self) -> bool:
+        """True if this model has Swiftstride, or rides a mount that does."""
+        if any(isinstance(r, dict) and r.get('swiftstride')
+               for r in self.special_rules):
+            return True
+        mount = self.get_mount()
+        return bool(mount is not None and mount.is_swiftstride())
+
     def get_fly_movement(self, default: int = 0) -> int:
         """Fly Movement characteristic (the X in 'Fly (X)'), else *default*."""
         for r in self.special_rules:

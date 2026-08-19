@@ -34,9 +34,16 @@ from direct.task.Task import Task
 from dice import Dice, checkDice
 from battleFunctions import simulate_battle
 from characters import JOIN_TAG
+from special_rules import (board_edge_distance, charge_roll, max_charge_range,
+                           max_pursuit_range, should_use_swiftstride,
+                           unit_has_swiftstride)
 from psychology import (battle_standard_bonus, break_test_outcome, overwhelmed,
                        should_reroll_break, should_use_stubborn,
                        stubborn_available, unit_strength_total)
+
+# Swiftstride's bonus die rolls in its own colour so it is never mistaken for
+# one of the dice a Charge or Fall Back roll discards.
+SWIFTSTRIDE_DIE_COLOR = (0.3, 0.9, 1.0, 1)
 
 
 class CombatResolver:
@@ -140,6 +147,11 @@ class CombatResolver:
         for terning in self.terningerFlee:
             fldice.append(terning.currentValue)
         print("Flee dice results:", fldice)
+        fleeingUnit = self.game.getSelectedUnit(defenderNP.node())
+        fleePos = defenderNP.getPos()
+        fleeBonus = await self.swiftstrideDie(
+            fleeingUnit, 'flee',
+            distance_to_edge=board_edge_distance(fleePos.x, fleePos.y))
         contactPos = unit.bodyNP.getPos()
         contactRot = unit.bodyNP.getHpr()
 
@@ -193,11 +205,11 @@ class CombatResolver:
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
 
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
-        fldist = sum(fldice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice)
+        fldist = sum(fldice) + fleeBonus
         if chdist < wdistance:
             angle = math.degrees(chdist / width)
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z) * wheel1Angle / abs(wheel1Angle)
@@ -286,6 +298,58 @@ class CombatResolver:
             chdice.append(terning.currentValue)
         return terninger, chdice
 
+    async def swiftstrideDie(self, unit, kind, distance_to_edge=None,
+                             position=Vec3(8, 0, 10)):
+        """Roll Swiftstride's optional bonus die, or return 0.
+
+        The die is rolled in its own colour and added to the result — it is
+        never one of the dice a Charge or Fall Back roll discards.
+        """
+        if not unit_has_swiftstride(unit):
+            return 0
+        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+            use = should_use_swiftstride(kind, distance_to_edge)
+        else:
+            choice = [unit.unitName + '\nSwiftstride +D6',
+                      unit.unitName + '\nNo bonus']
+            selected = await taskMgr.add(
+                self.game.makeChoiceNew(choice, Vec3(0, 0, 10)))
+            use = selected == choice[0]
+        if not use:
+            print(f"{unit.unit.name} declines its Swiftstride {kind} bonus.")
+            return 0
+        terning = Dice(self.game.world, position=position, size=1.0,
+                       color=SWIFTSTRIDE_DIE_COLOR)
+        terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskSwiftstride",
+                          extraArgs=[[terning]], appendTask=True)
+        bonus = terning.currentValue
+        terning.remove(self.game.world)
+        print(f"{unit.unit.name} adds Swiftstride +{bonus} to its {kind} roll.")
+        return bonus
+
+    async def swiftstrideChargeDie(self, unit):
+        """Swiftstride's bonus die for a charge, or for a pursuit — pursuit moves
+        are resolved through the charge machinery with the roll summed instead
+        of discarded."""
+        if unit.state == "IsPursuing":
+            p = unit.bodyNP.getPos()
+            return await self.swiftstrideDie(
+                unit, 'pursuit',
+                distance_to_edge=board_edge_distance(p.x, p.y))
+        return await self.swiftstrideDie(unit, 'charge')
+
+    def chargeRangeText(self, unit, maxmove):
+        """The roll-needed readout. A pursuit adds no Movement and sums 2D6, so
+        it reaches further than a charge's discard-lowest roll."""
+        swiftstride = unit_has_swiftstride(unit)
+        needed = math.ceil(self.game.moveArceDistance)
+        if unit.state == "IsPursuing":
+            return (f"Roll needed: {needed:.0f}"
+                    f"   (max pursuit {max_pursuit_range(swiftstride)}\")")
+        return (f"Roll needed: {needed - int(maxmove):.0f}"
+                f"   (max charge {max_charge_range(int(maxmove), swiftstride)}\")")
+
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
@@ -301,12 +365,10 @@ class CombatResolver:
                 maxmove = _stat_int(rule['mountUnit'].model.characteristics, 'M')
         if unit.state == "IsPursuing":
             maxmove = 0
-        self.game.diceInfoText.setText(f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
+        self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
-            self.game.diceInfoText.setText(
-                f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
-
             terninger, chdice = await self.rullTerninger(2)
+            chdice = list(chdice) + [await self.swiftstrideChargeDie(unit)]
 
         else:
             while self.game.attackSequence2.isPlaying():
@@ -380,10 +442,10 @@ class CombatResolver:
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
 
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + max(chdice)
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + max(chdice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice)
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
         if chdist < wdistance:
@@ -517,10 +579,10 @@ class CombatResolver:
         model = unit.unit.model
         maxmove = model.get_fly_movement(0) if model.is_flying() else model.get_movement(0)
 
-        self.game.diceInfoText.setText(
-            f"Roll needed: {(math.ceil(self.game.moveArceDistance) - int(maxmove)):.0f}")
+        self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
             terninger, chdice = await self.rullTerninger(2)
+            chdice = list(chdice) + [await self.swiftstrideChargeDie(unit)]
         else:
             while self.game.attackSequence2.isPlaying():
                 await Task.pause(0.5)
@@ -532,7 +594,7 @@ class CombatResolver:
         self.game.autoHold = False
         print("Charge dice results:", chdice)
 
-        chdist = maxmove + max(chdice)
+        chdist = maxmove + charge_roll(chdice)
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
 
@@ -1124,7 +1186,12 @@ class CombatResolver:
             if unit == loserUnit:
                 persuitDices = persuitDiceDices[0]
                 persuit_results = [terning.currentValue for terning in persuitDices]
-                persuit_score = max(persuit_results)
+                # Fall Back in Good Order discards the lowest die; Swiftstride's
+                # bonus is added on top of the one that is kept.
+                loserPos = loserUnit.bodyNP.getPos()
+                persuit_score = max(persuit_results) + await self.swiftstrideDie(
+                    loserUnit, 'fall back',
+                    distance_to_edge=board_edge_distance(loserPos.x, loserPos.y))
             else:
                 pass
             print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
@@ -1221,7 +1288,10 @@ class CombatResolver:
             if unit == loserUnit:
                 persuitDices = persuitDiceDices[0]
                 persuit_results = [terning.currentValue for terning in persuitDices]
-                persuit_score = sum(persuit_results)
+                loserPos = loserUnit.bodyNP.getPos()
+                persuit_score = sum(persuit_results) + await self.swiftstrideDie(
+                    loserUnit, 'flee',
+                    distance_to_edge=board_edge_distance(loserPos.x, loserPos.y))
                 print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
 
                 print(f"{unit.unit.name} successfully pursues the fleeing unit!")

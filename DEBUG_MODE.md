@@ -99,7 +99,8 @@ nearby friends and collision-shape rebuilding all behave normally.
 The cycle covers every keyword with a coded builder in `special_rules.py`:
 
 ```
-fly · furious charge · regeneration · skirmishers · stubborn · unbreakable · venerable
+battle standard bearer · fly · furious charge · general · regeneration ·
+skirmishers · stubborn · swiftstride · unbreakable · venerable
 ```
 
 Granting supplies a working parameter where the catalogue normally omits one

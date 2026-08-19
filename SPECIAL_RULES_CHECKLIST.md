@@ -93,7 +93,16 @@ army-agnostic and would benefit every faction.
       from the army list's special_rules (unit-level rule), not the base
       catalogue model profile.
 - [ ] Scouts / Vanguard — pre-game deployment / free move
-- [ ] Swiftstride — better charge / flee / pursuit distance
+- [x] Swiftstride — DONE: a unit made entirely of Swiftstride models (the rule
+      may come from the mount; a joined character without it breaks the unit's
+      claim) adds 3" to its maximum possible charge range and may add a D6 to
+      its Charge, Flee, Fall Back and Pursuit rolls. The bonus die is rolled in
+      its own colour and is *added*, never one of the two a Charge or Fall Back
+      roll discards between. `unit_has_swiftstride` / `max_charge_range` /
+      `max_pursuit_range` / `charge_roll` / `should_use_swiftstride` in
+      `special_rules.py`. Pursuit moves run through the charge machinery
+      (`IsPursuing` -> `maxmove = 0`, `chdist = sum(chdice)`), so the bonus die
+      is summed there rather than discarded.
 - [ ] Move Through Cover — no difficult-terrain movement penalty
 - [ ] Shieldwall — defensive bonus vs charges
 - [ ] Resolute — strikes with full ranks when charged
