@@ -276,6 +276,11 @@ class model:
         return any(isinstance(r, dict) and r.get('general')
                    for r in self.special_rules)
 
+    def is_battle_standard(self) -> bool:
+        """True if this model carries the army's Battle Standard."""
+        return any(isinstance(r, dict) and r.get('battle_standard')
+                   for r in self.special_rules)
+
     def is_flying(self) -> bool:
         """True if the model has the Fly special rule."""
         return any(isinstance(r, dict) and r.get('fly')

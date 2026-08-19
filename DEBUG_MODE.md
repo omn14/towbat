@@ -157,19 +157,21 @@ The unit dump (`i`) and the overlay both report the Leadership a unit will
 actually test on, so Inspiring Presence is visible without resolving a test:
 
 ```
-  command  : Ld 9 (P1_Vampire0)
+  command  : Ld 9 (P1_Vampire0)   re-rolls: P1_Thane1
 ```
 
 ---
 
 ## Command range rings
 
-While debug mode is on, a ring is drawn on the table around every General
-showing its Command range — the bubble inside which friendly units may use the
-General's Leadership (Inspiring Presence). Green is player 1, red player 2.
+While debug mode is on, a ring is drawn on the table around every General and
+Battle Standard Bearer showing its Command range — the bubble inside which
+friendly units may use the General's Leadership (Inspiring Presence) or take the
+Battle Standard's re-rolls (Hold Your Ground). Generals are green (player 1) and
+red (player 2); Battle Standards are blue and amber.
 
-The ring is centred on the General's **own base**, so a General that has joined a
-unit inspires from wherever it stands in that unit's ranks rather than from the
+The ring is centred on the model's **own base**, so a character that has joined a
+unit leads from wherever it stands in that unit's ranks rather than from the
 host's centre. Rings redraw every frame and follow units as they move; they are
 removed when debug mode is switched off.
 

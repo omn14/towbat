@@ -34,7 +34,8 @@ from direct.task.Task import Task
 from dice import Dice, checkDice
 from battleFunctions import simulate_battle
 from characters import JOIN_TAG
-from psychology import (break_test_outcome, overwhelmed, should_use_stubborn,
+from psychology import (battle_standard_bonus, break_test_outcome, overwhelmed,
+                       should_reroll_break, should_use_stubborn,
                        stubborn_available, unit_strength_total)
 
 
@@ -866,6 +867,16 @@ class CombatResolver:
 
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
+        engaged = set(self.game.attackers) | set(self.game.defenders)
+        player1_standard = battle_standard_bonus(
+            [u for u in engaged if u in self.game.player1Units])
+        player2_standard = battle_standard_bonus(
+            [u for u in engaged if u in self.game.player2Units])
+        player1_score += player1_standard
+        player2_score += player2_standard
+        if player1_standard or player2_standard:
+            print(f"Battle Standard combat result bonus: "
+                  f"P1 +{player1_standard}, P2 +{player2_standard}")
         print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
         await self.game.attackSequence
         await modRemoveSequence
@@ -926,25 +937,30 @@ class CombatResolver:
                                        extraArgs=[loserUnit], appendTask=False)
                     continue
 
-            terningerLd = []
-            for i in range(2):
-                terning = Dice(self.game.world, position=Vec3(20 + i * 2, 0, 10),
-                               size=1.0, color=(1, 0, 0, 1))
-                terningerLd.append(terning)
-            for terning in terningerLd:
-                terning.roll()
-            await taskMgr.add(checkDice, "checkDiceTaskFlee",
-                              extraArgs=[terningerLd], appendTask=True)
-            ldDice = []
-            for terning in terningerLd:
-                ldDice.append(terning.currentValue)
-            for terning in terningerLd:
-                terning.remove(self.game.world)
+            ldDice = await self.rollBreakDice()
             print("Leadership dice results for fleeing unit:", ldDice,
                   "sum:", sum(ldDice), "Ld:", ld, "combat result diff:", diff,
                   "overwhelmed:", overwhelm)
-
             outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
+
+            bsb = psy.battle_standard_of(loserUnit) if psy is not None else None
+            if bsb is not None:
+                if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+                    reroll = should_reroll_break(outcome, ld, diff, overwhelm)
+                else:
+                    rerollChoice = [loserUnit.unitName + f'\nRe-roll ({outcome})',
+                                    loserUnit.unitName + '\nKeep']
+                    selected = await taskMgr.add(
+                        self.game.makeChoiceNew(rerollChoice, Vec3(0, 0, 10)))
+                    reroll = selected == rerollChoice[0]
+                if reroll:
+                    ldDice = await self.rollBreakDice()
+                    # The second roll stands, even if it is worse than the first.
+                    outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
+                    print(f"{loserUnit.unit.name} re-rolls its Break test "
+                          f"(Hold Your Ground: {bsb.unit.name}): {ldDice} "
+                          f"sum {sum(ldDice)} -> {outcome}")
+
             if outcome == 'break':
                 print("losing unit flees from combat!")
                 self.notifyFleesCombat(loserUnit)
@@ -972,6 +988,22 @@ class CombatResolver:
         return task.done
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
+
+    async def rollBreakDice(self):
+        """Roll the physical 2D6 of a Break test and return their values."""
+        terningerLd = []
+        for i in range(2):
+            terning = Dice(self.game.world, position=Vec3(20 + i * 2, 0, 10),
+                           size=1.0, color=(1, 0, 0, 1))
+            terningerLd.append(terning)
+        for terning in terningerLd:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskFlee",
+                          extraArgs=[terningerLd], appendTask=True)
+        values = [terning.currentValue for terning in terningerLd]
+        for terning in terningerLd:
+            terning.remove(self.game.world)
+        return values
 
     def notifyFleesCombat(self, loserUnit):
         """A US>=5 unit breaking or falling back panics nearby friends. The Unit

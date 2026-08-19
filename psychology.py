@@ -174,6 +174,17 @@ def is_stubborn_unit(unit) -> bool:
     return bool(check()) if callable(check) else False
 
 
+def is_battle_standard_unit(unit) -> bool:
+    """True if *unit* carries the army's Battle Standard."""
+    if unit is None:
+        return False
+    if getattr(unit, 'isBSB', False):
+        return True
+    model = getattr(getattr(unit, 'unit', None), 'model', None)
+    check = getattr(model, 'is_battle_standard', None)
+    return bool(check()) if callable(check) else False
+
+
 def is_character_unit(unit) -> bool:
     """True if *unit* is a character model (catalogue Category)."""
     model = getattr(getattr(unit, 'unit', None), 'model', None)
@@ -224,9 +235,54 @@ def select_general(units):
                   if any(isinstance(r, dict) and r.get('general')
                          for r in (u.unit.model.special_rules or []))]
     pool = model_flag or characters
-    general = max(pool, key=lambda u: _stat_int(u.unit.model.characteristics, 'Ld', 0))
+    # The Battle Standard Bearer cannot be the General (Rulebook p. 203) unless
+    # it is the only character left to lead the army.
+    eligible = [u for u in pool if not _carries_battle_standard(u)]
+    if not eligible:
+        print("Only the Battle Standard Bearer can lead — making it the General.")
+        eligible = pool
+    general = max(eligible, key=lambda u: _stat_int(u.unit.model.characteristics, 'Ld', 0))
     general.isGeneral = True
     return general
+
+
+def _carries_battle_standard(unit) -> bool:
+    """Whether the unit's profile carries the Battle Standard keyword (as opposed
+    to the ``isBSB`` nomination, which is what selection is about to set)."""
+    return any(isinstance(r, dict) and r.get('battle_standard')
+               for r in (unit.unit.model.special_rules or []))
+
+
+def select_battle_standard(units):
+    """Nominate the army Battle Standard Bearer from *units* and return it.
+
+    The bearer is a character the army list equips with the Battle Standard; the
+    banner is lost with them and cannot be picked up by anybody else.
+    """
+    for u in units:
+        setattr(u, 'isBSB', False)
+    bearers = [u for u in units
+               if is_character_unit(u) and _carries_battle_standard(u)]
+    if not bearers:
+        return None
+    bearers[0].isBSB = True
+    return bearers[0]
+
+
+def battle_standard_bonus(units_on_side) -> int:
+    """Combat result points from a Battle Standard fighting on this side.
+
+    The Battle Standard is worth +1 even when an ordinary standard is also
+    present, but two Battle Standards on the same side still only count once
+    (Rulebook p. 203).
+    """
+    for u in units_on_side:
+        if is_battle_standard_unit(u):
+            return 1
+        joined = getattr(u, 'joinedCharacter', None)
+        if joined is not None and is_battle_standard_unit(joined):
+            return 1
+    return 0
 
 
 def stubborn_available(unit) -> bool:
@@ -277,6 +333,23 @@ def should_use_stubborn(ld: int, diff: int, overwhelm: bool) -> bool:
     """
     hold_on = ld - diff if overwhelm else ld
     return (1.0 - _p_at_most(hold_on)) >= 0.5
+
+
+def should_reroll_break(outcome: str, ld: int, diff: int,
+                        overwhelm: bool = False) -> bool:
+    """AI policy for a Battle Standard's Break test re-roll.
+
+    The second roll has to be accepted even if it is worse, so only re-roll when
+    the odds beat what was rolled: always after a Break, and after a Fall Back
+    only when Giving Ground is likelier than Breaking.
+    """
+    if outcome == 'give_ground':
+        return False
+    if outcome == 'break':
+        return True
+    p_give_ground = _p_at_most(ld - diff)
+    p_break = 1.0 - _p_at_most(ld)
+    return p_give_ground > p_break
 
 
 def _p_at_most(target: int) -> float:
@@ -393,12 +466,16 @@ class PsychologySystem:
             print(f"[Panic] {unit.unit.name} uses the General's Leadership "
                   f"({general.unit.name}, Ld {ld}) — Inspiring Presence.")
         venerable = self.venerable_source(unit)
-        passed, rolls = leadership_test_with_reroll(ld, reroll=venerable is not None)
+        bsb = self.battle_standard_of(unit)
+        reroll_source = venerable or bsb
+        passed, rolls = leadership_test_with_reroll(ld, reroll=reroll_source is not None)
         roll = rolls[-1]
         if len(rolls) > 1:
+            why = ("Venerable" if venerable is not None
+                   else "Hold Your Ground")
             print(f"[Panic] {unit.unit.name} re-rolls a failed Panic test "
-                  f"(Venerable: {venerable.unit.name} within "
-                  f"{self.VENERABLE_RADIUS:.0f}\"): 2D6={rolls[0]} -> {rolls[-1]}")
+                  f"({why}: {reroll_source.unit.name}): "
+                  f"2D6={rolls[0]} -> {rolls[-1]}")
         remaining = unit.unit.nmodels
         start = getattr(unit, 'startOfBattleModels', remaining) or remaining
         pct = 100.0 * remaining / max(1, start)
@@ -545,20 +622,24 @@ class PsychologySystem:
             return u
         return None
 
-    # ─── Inspiring Presence ───────────────────────────────────────────────
+    # ─── Command range (Inspiring Presence / Hold Your Ground) ────────────
 
-    def generals_on_side(self, unit):
-        """Friendly Generals, including one riding along inside a host unit.
-        A joined character is dropped from the player lists, so hosts have to
-        be searched too."""
+    def command_models_on_side(self, unit, is_source):
+        """Friendly units matching *is_source*, including one riding along
+        inside a host unit. A joined character is dropped from the player lists,
+        so hosts have to be searched too."""
         out = []
         for u in self._friendlies_of(unit):
-            if getattr(u, 'isGeneral', False):
+            if is_source(u):
                 out.append(u)
             joined = getattr(u, 'joinedCharacter', None)
-            if joined is not None and getattr(joined, 'isGeneral', False):
+            if joined is not None and is_source(joined):
                 out.append(joined)
         return out
+
+    def generals_on_side(self, unit):
+        return self.command_models_on_side(
+            unit, lambda u: getattr(u, 'isGeneral', False))
 
     @staticmethod
     def _is_fleeing(unit):
@@ -567,22 +648,34 @@ class PsychologySystem:
         host = getattr(unit, 'hostUnit', None)
         return getattr(host or unit, 'state', None) == 'IsFleeing'
 
-    def general_of(self, unit):
-        """The friendly General whose Command range covers *unit*, else None.
+    def _command_source(self, unit, is_source):
+        """The friendly command model whose Command range covers *unit*.
 
-        Measured edge to edge from the General's own base — a joined General
-        inspires from wherever it stands in the host's ranks, not from the
-        host's centre. A fleeing General inspires nobody.
+        Measured edge to edge from the model's own base — one that has joined a
+        unit leads from wherever it stands in the host's ranks, not from the
+        host's centre. A fleeing model inspires nobody.
         """
         if unit is None or unit.bodyNP.isEmpty():
             return None
         box = self._unit_box(unit)
-        for g in self.generals_on_side(unit):
-            if g.bodyNP.isEmpty() or self._is_fleeing(g):
+        for src in self.command_models_on_side(unit, is_source):
+            if src.bodyNP.isEmpty() or self._is_fleeing(src):
                 continue
-            if obb_distance(self._unit_box(g), box) <= command_range(g):
-                return g
+            if obb_distance(self._unit_box(src), box) <= command_range(src):
+                return src
         return None
+
+    def general_of(self, unit):
+        """The friendly General whose Command range covers *unit*, else None."""
+        return self._command_source(unit, lambda u: getattr(u, 'isGeneral', False))
+
+    def battle_standard_of(self, unit):
+        """The friendly Battle Standard Bearer whose Command range covers *unit*.
+
+        Hold Your Ground lets those units re-roll failed Panic and Rally tests,
+        and re-roll the 2D6 of a Break test (Rulebook p. 203).
+        """
+        return self._command_source(unit, is_battle_standard_unit)
 
     def leadership_of(self, unit):
         """Leadership *unit* tests on, plus the inspiring General (or None).

@@ -60,7 +60,8 @@ from characters import JOIN_TAG
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager
-from psychology import PsychologySystem, select_general, command_range
+from psychology import (PsychologySystem, select_general, select_battle_standard,
+                       command_range)
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
@@ -746,27 +747,37 @@ class MyApp(ShowBase):
                 cb()
         return result
 
-    async def rallyUnit(self, unit):
-        # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
-        Ld, general = self.psychology.leadership_of(unit)
-        if general is not None:
-            print(f"{unit.unit.name} rallies on the General's Leadership "
-                  f"({general.unit.name}, Ld {Ld}) — Inspiring Presence.")
-        terningerLd=[]
+    async def rollLeadershipDice(self):
+        """Roll the physical 2D6 of a Leadership test and return their values."""
+        terningerLd = []
         for i in range(2):
             terning = Dice(self.world, position=Vec3(20+i*2,0,10), size=1.0,color=(1,0,0,1))
             terningerLd.append(terning)
         for terning in terningerLd:
             terning.roll()
         await taskMgr.add(checkDice, "checkDiceTaskFlee", extraArgs=[terningerLd], appendTask=True)
-        ldDice = []
-        for terning in terningerLd:
-            ldDice.append(terning.currentValue)
-        leadership_score = sum(ldDice)
+        ldDice = [terning.currentValue for terning in terningerLd]
         for terning in terningerLd:
             terning.remove(self.world)
+        return ldDice
+
+    async def rallyUnit(self, unit):
+        # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
+        Ld, general = self.psychology.leadership_of(unit)
+        if general is not None:
+            print(f"{unit.unit.name} rallies on the General's Leadership "
+                  f"({general.unit.name}, Ld {Ld}) — Inspiring Presence.")
+        ldDice = await self.rollLeadershipDice()
+        leadership_score = sum(ldDice)
         print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score,
               "Ld:", Ld)
+        bsb = self.psychology.battle_standard_of(unit)
+        if leadership_score > Ld and bsb is not None:
+            print(f"{unit.unit.name} re-rolls its failed Rally test "
+                  f"(Hold Your Ground: {bsb.unit.name}).")
+            ldDice = await self.rollLeadershipDice()
+            leadership_score = sum(ldDice)
+            print("Re-rolled Leadership dice:", ldDice, "sum:", leadership_score)
         if leadership_score <= Ld:
             print(f"Rallying unit: {unit.unit.name}")
             self.ignore('mouse1')
@@ -1834,8 +1845,10 @@ class MyApp(ShowBase):
         return units
 
     def nominate_general(self, units, player_num):
-        """Pick the army General (highest-Leadership character) before deployment.
-        A slain General is not replaced, so this runs once per army load."""
+        """Pick the army General (highest-Leadership character) and the Battle
+        Standard Bearer before deployment. Neither is replaced once slain, so
+        this runs once per army load."""
+        bsb = select_battle_standard(units)
         general = select_general(units)
         if general is None:
             print(f"Player {player_num} has no character to lead — no General.")
@@ -1843,6 +1856,9 @@ class MyApp(ShowBase):
             ld = general.unit.model.characteristics.get('Ld', '?')
             print(f"Player {player_num} General: {general.unit.name} (Ld {ld}), "
                   f"Command range {command_range(general):.0f}\"")
+        if bsb is not None:
+            print(f"Player {player_num} Battle Standard: {bsb.unit.name}, "
+                  f"Command range {command_range(bsb):.0f}\"")
         return general
 
     def set_player_army(self, army_list, player_num, budget=2000):

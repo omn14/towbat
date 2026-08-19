@@ -72,7 +72,15 @@ army-agnostic and would benefit every faction.
       (Break, Panic and Rally). Measured edge to edge from the General's own
       base, including when it has joined a unit. See
       `PsychologySystem.general_of` / `leadership_of` in `psychology.py`.
-- [ ] Battle Standard Bearer — re-roll failed break tests near the BSB
+- [x] Battle Standard Bearer — DONE: nominated from the army list's `Battle
+      Standard Bearer` keyword and never the General. Unless it is fleeing,
+      friendly units in its Command range re-roll failed Panic and Rally tests
+      and may re-roll a Break test's 2D6 (the second roll stands, even if
+      worse), and its side gets +1 combat result — once, even with two
+      bearers. `PsychologySystem.battle_standard_of` /
+      `battle_standard_bonus` / `should_reroll_break` in `psychology.py`.
+      NOTE: ordinary standard bearers are not modelled at all, so the Battle
+      Standard is currently the only source of a combat result standard bonus.
 - [ ] Hatred (X) — re-roll misses to hit in the first combat round
 - [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
 - [ ] Impact Hits (D3) — auto-hits on the charge

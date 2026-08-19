@@ -18,6 +18,8 @@ from psychology import (  # noqa: E402
     is_stubborn_unit, stubborn_available, should_use_stubborn,
     command_range, effective_leadership, select_general, is_character_unit,
     COMMAND_RANGE, LARGE_TARGET_COMMAND_RANGE,
+    select_battle_standard, is_battle_standard_unit, battle_standard_bonus,
+    should_reroll_break,
 )
 
 
@@ -642,6 +644,130 @@ class InspiringPresenceTests(unittest.TestCase):
         from special_rules import SPECIAL_RULE_BUILDERS
         self.assertIn('general', SPECIAL_RULE_BUILDERS)
         self.assertTrue(SPECIAL_RULE_BUILDERS['general'](None, None, None)['general'])
+
+
+BSB_RULE = {'name': 'Battle Standard Bearer', 'battle_standard': True}
+
+
+class BattleStandardTests(unittest.TestCase):
+    """The Battle Standard: Hold Your Ground and the combat result bonus."""
+
+    _unit = staticmethod(InspiringPresenceTests._unit)
+    _psy = staticmethod(InspiringPresenceTests._psy)
+
+    # ─── nomination ───────────────────────────────────────────────────────
+
+    def test_builder_registered(self):
+        from special_rules import SPECIAL_RULE_BUILDERS
+        self.assertIn('battle standard bearer', SPECIAL_RULE_BUILDERS)
+        rule = SPECIAL_RULE_BUILDERS['battle standard bearer'](None, None, None)
+        self.assertTrue(rule['battle_standard'])
+
+    def test_bearer_is_nominated_from_the_list(self):
+        thane = self._unit('Thane', character=True, rules=[BSB_RULE])
+        lord = self._unit('Lord', ld=9, character=True)
+        self.assertIs(select_battle_standard([lord, thane]), thane)
+        self.assertTrue(thane.isBSB)
+        self.assertFalse(lord.isBSB)
+
+    def test_army_without_a_bearer(self):
+        self.assertIsNone(select_battle_standard([self._unit('Lord', character=True)]))
+
+    def test_bearer_cannot_be_the_general(self):
+        # The Thane has the higher Leadership but carries the standard.
+        thane = self._unit('Thane', ld=9, character=True, rules=[BSB_RULE])
+        lord = self._unit('Lord', ld=8, character=True)
+        self.assertIs(select_general([thane, lord]), lord)
+
+    def test_lone_bearer_leads_anyway(self):
+        thane = self._unit('Thane', ld=9, character=True, rules=[BSB_RULE])
+        self.assertIs(select_general([thane]), thane)
+
+    def test_detected_by_flag_or_profile(self):
+        flagged = self._unit('Thane', character=True)
+        flagged.isBSB = True
+        self.assertTrue(is_battle_standard_unit(flagged))
+        self.assertFalse(is_battle_standard_unit(self._unit('Boyz')))
+        self.assertFalse(is_battle_standard_unit(None))
+
+    # ─── the bubble ───────────────────────────────────────────────────────
+
+    def _bearer_and_unit(self, gap, **kwargs):
+        bearer = self._unit('Thane', character=True, width=1.0, height=1.0,
+                            rules=[BSB_RULE], **kwargs)
+        bearer.isBSB = True
+        return bearer, self._unit('Boyz', y=gap + 1.5)
+
+    def test_unit_inside_command_range(self):
+        bearer, troops = self._bearer_and_unit(11.9)
+        psy = self._psy([bearer, troops])
+        self.assertIs(psy.battle_standard_of(troops), bearer)
+
+    def test_unit_outside_command_range(self):
+        bearer, troops = self._bearer_and_unit(12.1)
+        psy = self._psy([bearer, troops])
+        self.assertIsNone(psy.battle_standard_of(troops))
+
+    def test_fleeing_bearer_steadies_nobody(self):
+        bearer, troops = self._bearer_and_unit(4.0, state='IsFleeing')
+        psy = self._psy([bearer, troops])
+        self.assertIsNone(psy.battle_standard_of(troops))
+
+    def test_joined_bearer_is_found_through_its_host(self):
+        bearer, troops = self._bearer_and_unit(4.0)
+        host = self._unit('Guard')
+        bearer.hostUnit = host
+        host.joinedCharacter = bearer
+        psy = self._psy([host, troops])
+        self.assertIs(psy.battle_standard_of(troops), bearer)
+
+    # ─── combat result bonus ──────────────────────────────────────────────
+
+    def test_bonus_for_a_bearer_in_the_combat(self):
+        bearer = self._unit('Thane', character=True, rules=[BSB_RULE])
+        bearer.isBSB = True
+        self.assertEqual(battle_standard_bonus([self._unit('Boyz'), bearer]), 1)
+
+    def test_no_bonus_without_a_bearer(self):
+        self.assertEqual(battle_standard_bonus([self._unit('Boyz')]), 0)
+
+    def test_two_bearers_still_count_once(self):
+        one = self._unit('Thane', character=True, rules=[BSB_RULE])
+        two = self._unit('Champion', character=True, rules=[BSB_RULE])
+        one.isBSB = two.isBSB = True
+        self.assertEqual(battle_standard_bonus([one, two]), 1)
+
+    def test_bonus_counts_a_bearer_inside_a_unit(self):
+        bearer = self._unit('Thane', character=True, rules=[BSB_RULE])
+        bearer.isBSB = True
+        host = self._unit('Guard')
+        host.joinedCharacter = bearer
+        self.assertEqual(battle_standard_bonus([host]), 1)
+
+    # ─── the Break test re-roll ───────────────────────────────────────────
+
+    def test_never_rerolls_a_give_ground(self):
+        self.assertFalse(should_reroll_break('give_ground', ld=7, diff=2))
+
+    def test_always_rerolls_a_break(self):
+        self.assertTrue(should_reroll_break('break', ld=7, diff=2))
+
+    def test_rerolls_a_fall_back_when_holding_is_likelier(self):
+        # Ld 9, result difference 1: Giving Ground needs 8 or less (72%),
+        # Breaking needs 10 or more (17%).
+        self.assertTrue(should_reroll_break('fall_back', ld=9, diff=1))
+
+    def test_keeps_a_fall_back_when_breaking_is_likelier(self):
+        # Ld 5, result difference 4: Giving Ground needs 1 (impossible on 2D6).
+        self.assertFalse(should_reroll_break('fall_back', ld=5, diff=4))
+
+    def test_second_roll_stands_even_when_worse(self):
+        # The re-roll is resolved by calling break_test_outcome again, so a
+        # worse second result simply replaces the first.
+        first = break_test_outcome([1, 2], 7, 2)
+        second = break_test_outcome([6, 5], 7, 2)
+        self.assertEqual(first, 'give_ground')
+        self.assertEqual(second, 'break')
 
 
 if __name__ == "__main__":

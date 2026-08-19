@@ -459,7 +459,10 @@ class DebugTools(DirectObject):
             ld, general = psy.leadership_of(unit)
             source = "General" if getattr(unit, "isGeneral", False) else (
                 general.unitName if general is not None else "own")
-            print(f"  command  : Ld {ld} ({source})")
+            bsb = psy.battle_standard_of(unit)
+            standard = ("self" if getattr(unit, "isBSB", False)
+                        else bsb.unitName if bsb is not None else "none")
+            print(f"  command  : Ld {ld} ({source})   re-rolls: {standard}")
         if unit.isInCombatWith:
             pairs = ", ".join(
                 f"{u.unitName}({f})" for u, f in
@@ -533,15 +536,22 @@ class DebugTools(DirectObject):
         return getattr(unit, "_player", 2)   # a joined character leaves both lists
 
     def _update_command_rings(self):
-        """Ring each General's Command range — the Inspiring Presence bubble."""
+        """Ring each General's and Battle Standard's Command range."""
         self._clear_command_rings()
         for unit in self.game.units:
-            if not getattr(unit, "isGeneral", False) or unit.bodyNP.isEmpty():
+            if unit.bodyNP.isEmpty():
+                continue
+            general = getattr(unit, "isGeneral", False)
+            if not general and not getattr(unit, "isBSB", False):
                 continue
             body = unit.bodyNP
-            centre = body.getPos(body.getTop())   # a joined General sits under its host
-            colour = ((0.3, 1.0, 0.4, 0.8) if self._side_of(unit) == 1
-                      else (1.0, 0.4, 0.3, 0.8))
+            centre = body.getPos(body.getTop())   # a joined leader sits under its host
+            if general:
+                colour = ((0.3, 1.0, 0.4, 0.8) if self._side_of(unit) == 1
+                          else (1.0, 0.4, 0.3, 0.8))
+            else:
+                colour = ((0.4, 0.7, 1.0, 0.8) if self._side_of(unit) == 1
+                          else (1.0, 0.8, 0.3, 0.8))
             self._command_rings.append(
                 self._draw_ring(centre, command_range(unit), colour))
 

@@ -101,6 +101,7 @@ class unitGraphics(FSM):
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
         self.isGeneral=False         # army commander; radiates Inspiring Presence
+        self.isBSB=False             # carries the Battle Standard (Hold Your Ground)
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
         self.endedInUnit=False
@@ -291,12 +292,17 @@ class unitGraphics(FSM):
 
         if self.isGeneral:
             row += "Command: General\n"
+        elif self.isBSB:
+            row += "Command: Battle Standard\n"
         else:
             psy = getattr(self.game, 'psychology', None) if self.game else None
             if psy is not None:
                 ld, general = psy.leadership_of(self)
                 if general is not None:
                     row += f"Command: Ld {ld} from {general.unitName}\n"
+                bsb = psy.battle_standard_of(self)
+                if bsb is not None:
+                    row += f"Standard: re-rolls from {bsb.unitName}\n"
 
         if self.isInCombatWith:
             names = ", ".join(u.unitName for u in self.isInCombatWith)

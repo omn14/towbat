@@ -127,6 +127,15 @@ def _general(model, param, desc):
             "general": True}
 
 
+def _battle_standard(model, param, desc):
+    return {"name": "Battle Standard Bearer",
+            "description": desc or ("Friendly units within this model's Command "
+                                    "range may re-roll Panic, Rally and Break "
+                                    "tests; +1 combat result."),
+            "tag": "psychology",
+            "battle_standard": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -137,6 +146,7 @@ SPECIAL_RULE_BUILDERS = {
     "venerable": _venerable,
     "stubborn": _stubborn,
     "general": _general,
+    "battle standard bearer": _battle_standard,
 }
 
 
