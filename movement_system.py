@@ -9,6 +9,7 @@ are used directly; all other game state is accessed via ``self.game``.
 import math
 from collision_masks import CollisionMask as CM
 from characters import on_host_removed
+from special_rules import max_charge_range, unit_has_swiftstride
 
 from panda3d.core import (
     Vec2, Vec3, Vec4, Point3,
@@ -435,50 +436,25 @@ class MovementSystem:
 
     # ─── Movement & Pathfinding ───────────────────────────────────────────
 
-    def moveSweep(self,unit,mask):
-        p1 = (self.game.polygonpoints[self.game.numsPoints-3]*2-1)*50
-        p2 = (self.game.polygonpoints[self.game.numsPoints-2]*2-1)*50
-        p3 = (self.game.polygonpoints[0]*2-1)*50
-        p4 = (self.game.polygonpoints[self.game.numsPoints-1]*2-1)*50
-        #self.game.world.doPhysics(0.016)
-        closest_dist = float('inf')
-        closest_pos = None
-        
-        frac,closest_pos_frac,tsTo = self.sweepTestRot(unit,p3,self.game.arcPointRotation,mask)
-        if frac < 1.0:
-            self.game.arcPointRotation *= frac
-            closest_dist = 0
-            closest_pos = closest_pos_frac
+    def pathTerrainModifier(self, unit, from_pos, to_pos) -> int:
+        """Movement characteristic modifier from terrain on the move path.
 
-        else:
-            dire=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).normalized()
-            le=(Vec3(p2.x, p2.y, .9) - Vec3(p1.x, p1.y, .9) ).length()
-            #le=move/(2*abs(groundSizeboundingbox[0][1]))
-            #le-=math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
-            frac,closest_pos_frac = self.sweepTestDir(unit,tsTo,dire,le,mask)
-            if frac < 1.0:
-                closest_dist = le*frac
-                closest_pos = closest_pos_frac
-
-        
-
-
-        if closest_pos:
-            """ self.game.unitHitPos = closest_pos
-            self.game.playerNP.setPos(closest_pos)
-            #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
-
-            newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
-            print("New move distance:", newmove, "closest dist:", closest_dist, "arc rotation:", self.game.arcPointRotation)
-            self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
-                                            width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                            movedistance=newmove/(2*abs(groundSizeboundingbox[0][1]))) """
-            
-            #lol
-            return 0.5
-
-        return 1
-
+        Difficult terrain is -1 to Movement whether the unit starts in it,
+        passes through it or ends in it (Rulebook p. 135). Uses the terrain
+        field, so the penalty matches the shape the player can see.
+        """
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return 0
+        mod = 0
+        worst = None
+        for t in tm.get_terrain_between(from_pos, to_pos):
+            if t.movement_modifier < mod:
+                mod = t.movement_modifier
+                worst = t
+        if worst is not None:
+            print(f"[Move] {unit.unitName}: {worst.terrain_type} on the path M{mod:+d}")
+        return mod
 
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():
@@ -590,25 +566,17 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
-            move = M+6
+            # ── Terrain penalty ── (flyers pass over terrain freely)
+            terrainMod = 0
+            if not _flying and result.hasHit():
+                terrainMod = self.pathTerrainModifier(
+                    unit, unit.bodyNP.getPos(), result.getHitPos())
+            M = max(1, M + terrainMod)
+            # This arc is the one kept when the path runs into a unit, so it is
+            # the charge-declaration range rather than a march.
+            move = max_charge_range(M, unit_has_swiftstride(unit))
             if unit.state == "IsPursuing":
                 move = 21
-
-            # ── Terrain penalty ── (flyers pass over terrain freely)
-            if hasattr(self.game, 'terrain_manager') and not _flying:
-                terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
-                if terrain_mult < 1.0:
-                    terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
-                    print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
-                    move = int(move * terrain_mult)
-
-            self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
-                                               width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
-
-
-            terrainMod = 1 if _flying else self.moveSweep(unit,CM.TERRAIN_FOREST)
-            move = int(move * terrainMod)
 
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
@@ -651,6 +619,8 @@ class MovementSystem:
                 #self.game.z2.setPos(closest_pos + Vec3(0,0,0.5))
 
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
+                print(f"[Move] {unit.unitName}: arc clipped by a blocking body at "
+                      f"{newmove:.1f}\" (allowance was {move})")
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
@@ -678,20 +648,19 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
+            baseM = M
+            M = max(1, M + terrainMod)   # difficult terrain: -1 Movement, min 1
             move = M*2
             move = move * (modifyerM if _model.is_mounted() else modifyer)
             if unit.state == "IsPursuing":
                 move = 21
 
-            # ── Terrain penalty ── (flyers pass over terrain freely)
-            if hasattr(self.game, 'terrain_manager') and not _flying:
-                terrain_mult = self.game.terrain_manager.get_movement_multiplier(unit.bodyNP.getPos())
-                if terrain_mult < 1.0:
-                    terrain = self.game.terrain_manager.get_terrain_at(unit.bodyNP.getPos())
-                    print(f"Terrain penalty ({terrain.terrain_type}): move {move} × {terrain_mult} = {int(move * terrain_mult)}")
-                    move = int(move * terrain_mult)
-            
-            move = int(move * terrainMod)
+            move = int(move)
+            print(f"[Move] {unit.unitName}: M {baseM}"
+                  f"{f'{terrainMod:+d} (terrain)' if terrainMod else ''}"
+                  f" -> march {M*2}"
+                  f"{f' x{modifyerM if _model.is_mounted() else modifyer} (rule)' if (modifyerM if _model.is_mounted() else modifyer) != 1 else ''}"
+                  f" = {move}\"")
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
             for rule in self.game.unitToMove.unit.model.special_rules:

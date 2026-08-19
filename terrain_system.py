@@ -27,15 +27,15 @@ from panda3d.bullet import (
 
 TERRAIN_RULES = {
     'forest': {
-        'movement_multiplier': 0.5,     # half movement
+        'movement_modifier': -1,        # difficult terrain: -1 Movement
         'blocks_line_of_sight': True,
         'combat_modifier': 0,
         'charge_allowed': True,
         'formation_break': True,        # units lose rank bonuses
-        'description': 'Difficult terrain — halves movement rate',
+        'description': 'Difficult terrain — -1 Movement',
     },
     'hill': {
-        'movement_multiplier': 1.0,     # no penalty
+        'movement_modifier': 0,         # no penalty
         'blocks_line_of_sight': False,   # but gives LoS advantage
         'combat_modifier': 1,           # higher-ground advantage
         'charge_allowed': True,
@@ -43,20 +43,20 @@ TERRAIN_RULES = {
         'description': 'Open terrain — +1 combat res when defending',
     },
     'river': {
-        'movement_multiplier': 0.5,
+        'movement_modifier': -1,
         'blocks_line_of_sight': False,
         'combat_modifier': -1,
         'charge_allowed': False,
         'formation_break': True,
-        'description': 'Water — halves movement, no charges across',
+        'description': 'Water — -1 Movement, no charges across',
     },
     'marsh': {
-        'movement_multiplier': 0.25,
+        'movement_modifier': -2,
         'blocks_line_of_sight': False,
         'combat_modifier': -1,
         'charge_allowed': False,
         'formation_break': True,
-        'description': 'Very difficult terrain — quarter movement rate',
+        'description': 'Very difficult terrain — -2 Movement',
     },
 }
 
@@ -641,9 +641,14 @@ class TerrainPiece:
         collision_copy.flattenStrong()
 
         mesh = BulletTriangleMesh()
-        for geom_np in collision_copy.findAllMatches('**/+GeomNode'):
+        # The visual IS a GeomNode, and '**' matches only descendants, so the
+        # copy itself has to be included or the mesh comes out empty.
+        geom_nps = list(collision_copy.findAllMatches('**/+GeomNode'))
+        if isinstance(collision_copy.node(), GeomNode):
+            geom_nps.append(collision_copy)
+        for geom_np in geom_nps:
             geom_node = geom_np.node()
-            ts = geom_np.getTransform(collision_copy)
+            ts = geom_np.getTransform(render)   # world space: keeps the piece's position
             for geom in geom_node.getGeoms():
                 mesh.addGeom(geom, ts=ts)
 
@@ -662,6 +667,12 @@ class TerrainPiece:
         mask = _TERRAIN_COLLISION_MASK.get(self.terrain_type, BitMask32.bit(20))
         self.ghost_np.setCollideMask(mask)
         self.game.world.attachRigidBody(body)
+        bounds = self.ghost_np.getTightBounds()
+        where = (f"x[{bounds[0].x:.1f},{bounds[1].x:.1f}] y[{bounds[0].y:.1f},{bounds[1].y:.1f}]"
+                 f" z[{bounds[0].z:.2f},{bounds[1].z:.2f}]" if bounds else "EMPTY (no geometry)")
+        print(f"[Terrain] {self.terrain_type} declared at "
+              f"({self.center.x:.1f},{self.center.y:.1f}) {self.width:.0f}x{self.height:.0f}"
+              f" -> collision body {where}")
 
     # ── Queries ───────────────────────────────────────────────────────
 
@@ -701,8 +712,8 @@ class TerrainPiece:
         return best <= best_w
 
     @property
-    def movement_multiplier(self) -> float:
-        return self.rules['movement_multiplier']
+    def movement_modifier(self) -> int:
+        return self.rules['movement_modifier']
 
     @property
     def blocks_line_of_sight(self) -> bool:
@@ -793,7 +804,7 @@ class TerrainManager:
         types = ", ".join(t.terrain_type for t in hits) if hits else "open ground"
         in_water = any(t.terrain_type in ('river', 'marsh') for t in hits)
         print(f"[Terrain] {label} ({pos.x:.1f}, {pos.y:.1f}) -> {types} "
-              f"| in_water={in_water} | move×{self.get_movement_multiplier(pos):.2f}")
+              f"| in_water={in_water} | M{self.get_movement_modifier(pos):+d}")
 
     # ── Queries ───────────────────────────────────────────────────────
 
@@ -808,16 +819,16 @@ class TerrainManager:
         """Return every terrain piece overlapping *pos*."""
         return [t for t in self.terrain_pieces if t.contains(pos)]
 
-    def get_movement_multiplier(self, pos) -> float:
-        """Return the effective movement multiplier at *pos*.
+    def get_movement_modifier(self, pos) -> int:
+        """Movement characteristic modifier at *pos*.
 
-        If the position overlaps multiple terrain pieces the most
-        restrictive (lowest) multiplier wins.
+        If the position overlaps several pieces the most restrictive (lowest)
+        modifier wins; the modifiers do not stack.
         """
         terrains = self.get_all_terrain_at(pos)
         if not terrains:
-            return 1.0
-        return min(t.movement_multiplier for t in terrains)
+            return 0
+        return min(t.movement_modifier for t in terrains)
 
     def los_block_point(self, from_pos, to_pos):
         """Return the world point where line of sight is blocked along
