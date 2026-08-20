@@ -226,8 +226,13 @@ class MovementSystem:
             points.append(points[-1])
         return points
 
-    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,height=0.5,movedistance=8):
+    def pointArc(self,origo, num_points=40, mouse_pos=None,rotationangle=-21,width=0.5,height=0.5,movedistance=8,sidemove=None):
         points =[]
+        sidestep_point = None
+        # A sideways move halves the Movement characteristic, so it has its own
+        # allowance rather than being a fraction of the forward one.
+        if sidemove is None:
+            sidemove = movedistance / 4
         forward= Vec2(-math.sin(math.radians(rotationangle)), math.cos(math.radians(rotationangle)))*height/2.0
         origo = origo + forward
         #origo   = Vec2(0.55,0.55)
@@ -241,6 +246,7 @@ class MovementSystem:
         midpoint_unit_vector = midpoint - origo
         midpoint_mouse_vector = mouse_pos - midpoint if mouse_pos else Vec2(1,1)
         maxMoveDistance=movedistance
+        raw_mouse_pos = mouse_pos   # kept unmirrored, so a sidestep knows its side
         #movedistance = min(movedistance, midpoint_mouse_vector.length())
         filipped=False
         if midpoint_unit_vector.normalized().dot(midpoint_mouse_vector.normalized()) > 0:
@@ -272,6 +278,13 @@ class MovementSystem:
                 #return points
         elif behind < 0 and abs(behind) < 0.8:
             angle = 0
+            # Move Sideways: half the Movement characteristic, facing unchanged
+            # (Rulebook p. 125).
+            right = Vec2(quarternion.getRight().x, quarternion.getRight().y)
+            frontMid = origo + right * (width / 2.0)   # origo is the front-left corner
+            lateral = (raw_mouse_pos - frontMid).dot(right) if raw_mouse_pos else 0.0
+            lateral = max(-sidemove, min(sidemove, lateral))
+            reach = abs(lateral)
             x = width * math.cos(0) 
             y = width * math.sin(0)
             points.append(origo+Vec2(x,y))
@@ -281,18 +294,24 @@ class MovementSystem:
             points.append(points[-1])
             points.append(points[0]+Vec2(-math.sin(math.radians(rotationangle)),math.cos(math.radians(rotationangle)))*height)
             for i in [2,3]:
-                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*movedistance/4 
+                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*reach 
             for i in [1,4]:
-                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*(movedistance/4 -width)
+                points[i] = points[i]+Vec2(quarternion.getRight().x, quarternion.getRight().y)*(reach -width)
 
             for i in range(len(points)):
-                points[i] = points[i]-Vec2(quarternion.getForward().x, quarternion.getForward().y)*height/2
+                # The band is built forward of the front edge; pull it back a
+                # whole depth so it covers the unit's own footprint instead.
+                points[i] = points[i]-Vec2(quarternion.getForward().x, quarternion.getForward().y)*height
             points = [points[-1]] + points[:-1]
 
             vinkel=rotationangle+90
             filipped = not filipped
-            self.game.moveArceDistance = .9
-            self.game.debugTextInfo.setText(f"Arc distance: {(self.game.moveArceDistance):.1f} ")
+            # arcPoint is where the front-edge centre lands; the move is purely
+            # along the unit's right vector, with no forward component.
+            sidestep_point = frontMid + right * lateral
+            self.game.moveArceDistance = reach * 100
+            self.game.debugTextInfo.setText(
+                f"Sidestep: {self.game.moveArceDistance:.1f} of {sidemove * 100:.1f} ")
         
         
             
@@ -343,19 +362,17 @@ class MovementSystem:
         #print(len(points))
 
         if filipped:
-            mirrored_points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
-            #self.game.arcPoint=mirrored_points[nums+2]
-            #self.game.arcPoint=midpointfront
-            self.game.arcPoint=(mirrored_points[nums-1] + mirrored_points[nums-2]) * 0.5
+            points = self.mirrorPointArc(points, mirror_vec=Vec2(math.cos(math.radians(vinkel)), math.sin(math.radians(vinkel))), origin=midpoint)
+            self.game.arcPoint=(points[nums-1] + points[nums-2]) * 0.5
             self.game.arcPointRotation=math.degrees(-angle)
-            return mirrored_points
-        
-        #print(points)
-        #self.game.arcPoint=(points[nums+1]+points[nums])*0.5
-        self.game.arcPoint=midpointfront
-        self.game.arcPointRotation=math.degrees(angle)
+        else:
+            self.game.arcPoint=midpointfront
+            self.game.arcPointRotation=math.degrees(angle)
 
-        
+        if sidestep_point is not None:
+            self.game.arcPoint = sidestep_point
+            self.game.arcPointRotation = 0.0
+
         return points
 
     def mirrorPointArc(self, points, mirror_vec, origin):
@@ -575,7 +592,8 @@ class MovementSystem:
 
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
+                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])),
+                                               sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
             #self.game.polygonpoints = self.mirrorPointArc(self.game.polygonpoints)
 
             
@@ -616,7 +634,8 @@ class MovementSystem:
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
+                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])),
+                                                sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
 
                 self.game.setGroundOverlay(True, self.game.polygonpoints)
                 return
@@ -655,7 +674,8 @@ class MovementSystem:
                     rule['mountUnit'].model.reset_characteristics() """
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])))
+                                               movedistance=move/(2*abs(groundSizeboundingbox[0][1])),
+                                               sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
             #self.game.polygonpoints = self.mirrorPointArc(self.game.polygonpoints)
 
             
@@ -696,7 +716,8 @@ class MovementSystem:
                 newmove = closest_dist+math.radians(abs(self.game.arcPointRotation))*unit.unitWidth
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
-                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])))
+                                                movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])),
+                                                sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
 
             self.game.setGroundOverlay(True, self.game.polygonpoints)
 
