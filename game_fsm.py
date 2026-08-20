@@ -38,6 +38,10 @@ class GamePhaseFSM(FSM):
 
         self.menu_cubes = base.camera.findAllMatches("**/*MenuCube")
 
+        # The cube rides the camera, but Bullet only re-reads a body's transform
+        # when that body is flagged dirty, and moving an ancestor doesn't flag it.
+        taskMgr.add(self._sync_menu_cube, "syncMenuCube")
+
         self.accept('mouse1', self._on_menu_click)
 
     # ─── Convenience properties for backward compatibility ──────────
@@ -87,6 +91,10 @@ class GamePhaseFSM(FSM):
         except Exception:
             pass
         return cube_np
+
+    def _sync_menu_cube(self, task):
+        self.end_phase_cube.node().setTransformDirty()
+        return task.cont
 
     def _on_menu_click(self):
         """Handle click on the phase-advance menu cube."""
