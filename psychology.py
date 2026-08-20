@@ -298,6 +298,29 @@ def stubborn_available(unit) -> bool:
     return is_stubborn_unit(unit) and not getattr(unit, 'usedStubborn', False)
 
 
+MAX_RANK_BONUS = 2
+
+
+def rank_bonus(unit) -> int:
+    """Combat result points a formed unit claims for its ranks.
+
+    One per rank behind the first, except that a rank short of the unit's
+    frontage does not count. Skirmishers claim none, and each troop type caps
+    what it can claim -- a heavy chariot cannot form ranks at all.
+    """
+    model = unit.model
+    if model.is_skirmisher():
+        return 0
+    cap = model.max_rank_bonus(MAX_RANK_BONUS)
+    if cap <= 0:
+        return 0
+    bonus = unit.ranks - 1
+    remainder = unit.nmodels % unit.files if unit.files else 0
+    if 0 < remainder < 4:
+        bonus -= 1
+    return max(0, min(bonus, cap))
+
+
 def overwhelmed(winner_us: int, loser_us: int) -> bool:
     """True if the winning side's Unit Strength is *more than twice* the loser's.
 

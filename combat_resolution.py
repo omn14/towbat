@@ -39,9 +39,9 @@ from characters import JOIN_TAG
 from special_rules import (board_edge_distance, charge_roll, max_charge_range,
                            max_pursuit_range, should_use_swiftstride,
                            unit_has_swiftstride)
-from psychology import (battle_standard_bonus, break_test_outcome, overwhelmed,
-                       should_reroll_break, should_use_stubborn,
-                       stubborn_available, unit_strength_total)
+from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcome,
+                       overwhelmed, rank_bonus, should_reroll_break,
+                       should_use_stubborn, stubborn_available, unit_strength_total)
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -915,14 +915,8 @@ class CombatResolver:
                         player2_flank_bonus += 2
                     else:
                         player2_flank_bonus += 0
-                # Skirmishers claim no Rank Bonus when engaged.
-                if not defenderUnit.unit.model.is_skirmisher():
-                    player1_rank_bonus += defenderUnit.unit.ranks - 1
-                    if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
-                       defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
-                        player1_rank_bonus -= 1
-                    player1_rank_bonus = max(player1_rank_bonus, 0)
-                    player1_rank_bonus = min(player1_rank_bonus, 2)
+                player1_rank_bonus = min(player1_rank_bonus + rank_bonus(defenderUnit.unit),
+                                         MAX_RANK_BONUS)
             else:
                 player2_score += total_wounds
                 for faceing in defenderUnit.isInCombatFlank:
@@ -932,14 +926,8 @@ class CombatResolver:
                         player1_flank_bonus += 2
                     else:
                         player1_flank_bonus += 0
-                # Skirmishers claim no Rank Bonus when engaged.
-                if not defenderUnit.unit.model.is_skirmisher():
-                    player2_rank_bonus += defenderUnit.unit.ranks - 1
-                    if defenderUnit.unit.nmodels % defenderUnit.unit.files > 0 and \
-                       defenderUnit.unit.nmodels % defenderUnit.unit.files < 4:
-                        player2_rank_bonus -= 1
-                    player2_rank_bonus = max(player2_rank_bonus, 0)
-                    player2_rank_bonus = min(player2_rank_bonus, 2)
+                player2_rank_bonus = min(player2_rank_bonus + rank_bonus(defenderUnit.unit),
+                                         MAX_RANK_BONUS)
 
             combWounds = 0
             combWounds += total_wounds

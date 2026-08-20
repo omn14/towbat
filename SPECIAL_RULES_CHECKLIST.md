@@ -92,9 +92,9 @@ army-agnostic and would benefit every faction.
       for a rider and the chariot itself for a chariot. Armour and Regeneration
       saves apply as normal. The 3" condition needed the charge to record how
       far it actually moved (`chargeDistance`).
-      LEFTOVER: no Armour Piercing (Crushing Weight gives AP-1/-2/-3),
-      no Rank Bonus improvement, and no weapon-profile variants (Grinding
-      Attacks, whirling blades).
+      LEFTOVER: no Rank Bonus improvement, and no weapon-profile variants
+      (Grinding Attacks, whirling blades). Armour Piercing is done for a heavy
+      chariot's Scythed Wheels; Crushing Weight still has no effect.
 - [x] Skirmishers — DONE (Phases 0–3 + the Phase 4 panic guard): rule flag, no
       rank bonus, enemy-fire -1, 360° arc, loose-blob layout, free 360° move with
       destination ghost, form-up/spread in combat, and fleeing Skirmishers no
@@ -161,7 +161,28 @@ army-agnostic and would benefit every faction.
       its beasts' Movement, Toughness/Wounds stay on the chariot, and the crew
       and beasts each fight with their own WS/S/A at full count while the
       chariot itself has no Attacks (`CombatResolver.chariotParts`).
-      LEFTOVER: Impact Hits use the chariot's Strength but have no AP.
+      LEFTOVER: the crew's own Ballistic Skill and their own weapons — a War
+      Wagon cannot shoot with its crew's missile weapons; and "special rules
+      that apply to one element apply to the others".
+- [x] Troop types (Rulebook p. 194-195) — `troop_types.py`. A troop type's rules
+      are the one thing the catalogue never states: nothing in the .cat/.gst
+      mentions Scythed Wheels, Lumbering, Iron Shod Wheels or Firing Platform,
+      and a model is meant to have them purely because its Troop Type reads
+      "Heavy Chariot". The table supplies models per rank, maximum rank bonus,
+      Unit Strength and the implied rule list, normalising the data's
+      inconsistent casing, `(named character)` suffixes and comma-separated
+      compound types. Only the chariot rows are filled in; every other type
+      keeps the engine's previous behaviour rather than guessing at values.
+      Done from it: Unit Strength (a heavy chariot is US5, not US1, which
+      changes Overwhelmed, panic and pursuit routs), no Rank Bonus for a heavy
+      chariot and at most +1 for a light one (`psychology.rank_bonus`, which
+      also de-duplicates the two copies of that sum in `combat_resolution`),
+      Scythed Wheels (`model.impact_hit_ap()` — Impact Hits at AP-2) and
+      Firing Platform (`model.has_all_round_vision()` — the 360° arc
+      skirmishers already had, for shooting and casting).
+      LEFTOVER: Lumbering (pivot 90° about centre, cannot join or be joined)
+      and Iron Shod Wheels, which needs Dangerous Terrain and linear obstacles
+      — neither exists in `terrain_system.py` yet.
 - [x] Multi-wound models \u2014 `MovementSystem.applyWounds` converts unsaved wounds
       into slain models using the profile's Wounds, keeping the remainder on the
       wounded model (`woundsOnModel`, persisted). Combat and shooting passed

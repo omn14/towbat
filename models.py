@@ -10,6 +10,7 @@ import re
 
 from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
 from special_rules import build_special_rules
+import troop_types
 
 # Base directory for unit characteristic JSON files, organised by faction
 ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_units')
@@ -266,6 +267,27 @@ class model:
         """True if this model is a chariot, which has a split profile."""
         return 'chariot' in str(self.characteristics.get('Troop Type', '')).lower()
 
+    def troop_type(self) -> str:
+        return str(self.characteristics.get('Troop Type', '') or '')
+
+    def troop_type_rule(self, rule_name: str) -> bool:
+        """True if this model's troop type grants *rule_name*. These rules are
+        implied by the troop type and never appear in the catalogue data."""
+        return troop_types.has_rule(self.troop_type(), rule_name)
+
+    def max_rank_bonus(self, default: int) -> int:
+        return troop_types.max_rank_bonus(self.troop_type(), default)
+
+    def has_all_round_vision(self) -> bool:
+        """360° vision arc for shooting and casting: Firing Platform (p. 194)
+        for a chariot, and Skirmishers, who have no formed facing."""
+        return self.is_skirmisher() or self.troop_type_rule('Firing Platform')
+
+    def impact_hit_ap(self) -> int:
+        """Armour Piercing of this model's Impact Hits: Scythed Wheels (p. 195)
+        gives a heavy chariot -2."""
+        return 2 if self.troop_type_rule('Scythed Wheels') else 0
+
     def _tagged_part(self, tag):
         for rule in self.special_rules:
             if isinstance(rule, dict) and rule.get('tag') == tag and rule.get('partUnit'):
@@ -383,9 +405,11 @@ class model:
         return save
 
     def unit_strength(self) -> int:
-        """Approximate Unit Strength: mounted models are US2, others US1.
-        (Monstrous/large models not yet modelled.)"""
-        return 2 if self.is_mounted() else 1
+        """Unit Strength per model. The troop type decides it where the rulebook
+        value is known (a heavy chariot is US5); otherwise mounted models count
+        as US2 and everything else as US1."""
+        return troop_types.unit_strength(self.troop_type(),
+                                         2 if self.is_mounted() else 1)
 
     def get_movement(self, default: int = 0) -> int:
         """Movement value; mounted units always use their mount's Movement."""

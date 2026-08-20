@@ -864,15 +864,17 @@ class MyApp(ShowBase):
             print(f"[Shooting] {self.unitToMove.unit.name} has no ranged weapon.")
             return task.done
         _rw = self.unitToMove.unit.model.equipedWeapon
-        _skirm = self.unitToMove.unit.model.is_skirmisher()
+        _model = self.unitToMove.unit.model
+        _all_round = _model.has_all_round_vision()
+        _why = 'skirmisher' if _model.is_skirmisher() else 'firing platform'
         print(f"[Shooting] {self.unitToMove.unit.name} ready with {_rw.get('name')} "
               f"(R{_rw.get('ranged_range','?')} S{_rw.get('ranged_strength','?')} "
-              f"AP-{_rw.get('ranged_AP', 0)}) | arc={'360 (skirmisher)' if _skirm else '90'}")
+              f"AP-{_rw.get('ranged_AP', 0)}) | arc={f'360 ({_why})' if _all_round else '90'}")
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
                                                        radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100,
-                                                       full_circle=_skirm)
+                                                       full_circle=_all_round)
         self.checkArrowsTerrain()
         self.setGroundOverlay(True, self.shootingArcPoints)
         # Half-range boundary: inside = short range, outside = long range (-1).
@@ -927,7 +929,7 @@ class MyApp(ShowBase):
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius,
-                                                       full_circle=self.unitToMove.unit.model.is_skirmisher())
+                                                       full_circle=self.unitToMove.unit.model.has_all_round_vision())
         self.setGroundOverlay(True, self.shootingArcPoints)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")

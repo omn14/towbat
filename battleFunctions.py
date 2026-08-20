@@ -272,9 +272,10 @@ def resolve_impact_hits(unit1, unit2):
     target = to_wound(m, unit2.model, strength=unmodified_strength(m))
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
 
+    ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     saves = 0
     for _ in range(wounds):
-        if check_armor_save(unit2.model, unit2.model.melee_armour_save(), 0):
+        if check_armor_save(unit2.model, unit2.model.melee_armour_save(), ap):
             saves += 1
             continue
         for rule in unit2.model.special_rules:
@@ -292,10 +293,11 @@ def impact_hit_report(unit1, unit2):
     m, expr = found
     strength = unmodified_strength(m)
     target = to_wound(m, unit2.model, strength=strength)
+    ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     save = unit2.model.melee_armour_save()
     save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
-    return [f"   Impact Hits ({expr}) : {m.name}  S{strength} AP0  "
-            f"[wound {target}+]",
+    return [f"   Impact Hits ({expr}) : {m.name}  S{strength} "
+            f"{f'AP-{ap}' if ap else 'AP0'}  [wound {target}+]",
             f"   Target : {unit2.model.name}  "
             f"T{stat_value(unit2.model.characteristics.get('T'), 4)}  "
             f"save {save_str}"]

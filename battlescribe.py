@@ -513,24 +513,27 @@ def parse_weapons(cat_path: str) -> list:
 
 
 def _rule_descriptions(cat_path: str) -> dict:
-    """Map Special Rule name -> description text for a catalogue. Only
-    army-specific abilities are defined this way; core rulebook keywords
-    (Regeneration, Fear, ...) are referenced by name only and never appear here."""
+    """Map Special Rule name -> description text for a catalogue or game system.
+
+    Army-specific abilities are defined in the .cat files; the core rulebook
+    keywords (Impact Hits, Fear, the chariot rules...) are defined only in the
+    .gst, which uses a different XML namespace, so match on the local tag.
+    """
     try:
         root = ET.parse(cat_path).getroot()
     except ET.ParseError:
         return {}
     out: dict = {}
-    for prof in root.iter(f"{NS}profile"):
-        if prof.get("typeName") != "Special Rule":
+    for prof in root.iter():
+        if _tag(prof) != "profile" or prof.get("typeName") != "Special Rule":
             continue
         name = (prof.get("name") or "").strip()
         if not name:
             continue
         desc = " ".join(
             (c.text or "").strip()
-            for c in prof.iter(f"{NS}characteristic")
-            if c.text
+            for c in prof.iter()
+            if _tag(c) == "characteristic" and c.text
         ).strip()
         if desc:
             out.setdefault(name, desc)
@@ -568,10 +571,13 @@ class Catalogue:
         for filename in sorted(os.listdir(self.cat_dir)):
             path = os.path.join(self.cat_dir, filename)
             if filename.endswith(".gst"):
-                # Game system holds the common (shared) weapons.
+                # Game system holds the common (shared) weapons and the core
+                # rulebook's special-rule descriptions.
                 try:
                     for w in parse_weapons(path):
                         self.weapons_by_slug.setdefault(slugify(w["name"]), w)
+                    for name, desc in _rule_descriptions(path).items():
+                        self.rule_desc_by_slug.setdefault(slugify(name), desc)
                 except ET.ParseError as exc:
                     print(f"[battlescribe] failed to parse {filename}: {exc}")
                 continue
