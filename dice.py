@@ -2,7 +2,7 @@ from panda3d.core import Vec3
 from panda3d.bullet import BulletRigidBodyNode, BulletBoxShape
 from direct.showbase.ShowBase import ShowBase
 import random
-from panda3d.core import LRotationf
+from panda3d.core import LRotationf, LColor, Material
 
 
 def checkDice(allDice,task):
@@ -47,7 +47,8 @@ def checkDice(allDice,task):
     return task.cont
 
 class Dice:
-    def __init__(self, world, position=(0, 0, 5), size=1.0,color=(1,1,1,1)):
+    def __init__(self, world, position=(0, 0, 5), size=1.0,color=(1,1,1,1),
+                 body_color=None):
         """
         Initialize a 6-sided dice cube with Bullet physics.
         
@@ -55,6 +56,8 @@ class Dice:
             world: BulletWorld instance
             position: Initial position as tuple (x, y, z)
             size: Size of the dice cube
+            color: colour *scale* applied over the model (a tint)
+            body_color: repaints the die body outright, keeping the pips white
         """
         self.size = size
         self.currentValue = None  # To store the result after rolling
@@ -87,9 +90,23 @@ class Dice:
         self.model.setScale(size)
         self.model.reparentTo(self.np)
         self.model.setColorScale(*color)
+        if body_color is not None:
+            self.paint_body(body_color)
         #self.model.setPos(-Vec3(size / 2, size / 2, size / 2))
         #self.zup = loader.loadModel('models/zup-axis')
         #self.zup.reparentTo(self.model)
+
+    def paint_body(self, colour):
+        """Recolour the die body. The model carries one material per part, so
+        the near-grey pip material is left alone and stays white."""
+        for mat in self.model.findAllMaterials():
+            base = mat.getBaseColor()
+            channels = (base.getX(), base.getY(), base.getZ())
+            if max(channels) - min(channels) < 0.15:   # neutral: the pips
+                continue
+            painted = Material(mat)
+            painted.setBaseColor(LColor(*colour))
+            self.model.replaceMaterial(mat, painted)
     
     def roll(self, force=10):
         """Apply random force and torque to simulate rolling."""
