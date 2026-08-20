@@ -133,7 +133,29 @@ army-agnostic and would benefit every faction.
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
-- [ ] Non-numeric stats (e.g. Giant A="*") still break `int()` in some call sites
+- [x] Non-numeric stats (e.g. Giant A="*", a chariot's WS="-") no longer break
+      the combat maths: `stat_value()` in `toHitAndToWound.py` reads them as 0,
+      which is what the rules mean by them (Rulebook p. 97), and WS 0 follows
+      p. 158 — its attacks all miss, attacks against it hit automatically.
+      To Hit/To Wound used to return an error *string*, which then blew up on
+      the `>=` comparison.
+- [x] Chariot split profiles (Rulebook p. 194) — the catalogue marks the crew
+      `subType="crew"` and the beasts with a CHARIOT CREW category link, and
+      the unit profile gives the troop type. `battlescribe.py` now also follows
+      a unit's `entryLinks` to sibling model entries (which is how chariots are
+      declared, and why they had no troop type before), and records `Crew` /
+      `Beasts`, each with the count its selection constraints fix (a War Wagon
+      takes exactly 6 crew and 2 horses). `models.py` attaches them: enemies
+      roll To Hit against the crew's WS (`defending_ws`), the chariot moves at
+      its beasts' Movement, Toughness/Wounds stay on the chariot, and the crew
+      and beasts each fight with their own WS/S/A at full count while the
+      chariot itself has no Attacks (`CombatResolver.chariotParts`).
+      LEFTOVER: Impact Hits, which use the chariot's Strength.
+- [x] Multi-wound models \u2014 `MovementSystem.applyWounds` converts unsaved wounds
+      into slain models using the profile's Wounds, keeping the remainder on the
+      wounded model (`woundsOnModel`, persisted). Combat and shooting passed
+      their wound totals straight to `removeModelsFromUnit`, which counts
+      *models*, so a single wound destroyed a 6-Wound War Wagon.
 
 ## Deferred war-machine items
 - [ ] Multiple Wounds (D3+1) generic rule

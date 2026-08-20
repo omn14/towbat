@@ -229,12 +229,12 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0):
             if rule.get('charge'):
                 rule['charge'](unit1.model)
             else:
-                attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files #front rank attacks
-        attacks = int(unit1.model.characteristics.get('A', 0)) * unit1.files
-        if attacks >= int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels: 
-            attacks = int(unit1.model.characteristics.get('A', 0)) *unit1.nmodels # cannot attack more than you have models in front rank
+                attacks = stat_value(unit1.model.characteristics.get('A')) * unit1.files #front rank attacks
+        attacks = stat_value(unit1.model.characteristics.get('A')) * unit1.files
+        if attacks >= stat_value(unit1.model.characteristics.get('A')) *unit1.nmodels: 
+            attacks = stat_value(unit1.model.characteristics.get('A')) *unit1.nmodels # cannot attack more than you have models in front rank
     else: #defends
-        A = int(unit1.model.characteristics.get('A', 0))
+        A = stat_value(unit1.model.characteristics.get('A'))
         attacks = A * unit1.files  # front rank fights with full Attacks
         if attacks >= A * unit1.nmodels:
             attacks = A * unit1.nmodels  # fewer models than a full front rank

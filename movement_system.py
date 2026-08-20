@@ -10,6 +10,7 @@ import math
 from collision_masks import CollisionMask as CM
 from characters import on_host_removed
 from special_rules import max_charge_range, unit_has_swiftstride
+from toHitAndToWound import stat_value
 
 from panda3d.core import (
     Vec2, Vec3, Vec4, Point3,
@@ -988,6 +989,25 @@ class MovementSystem:
         world_center = unit.model.getPos(render) + center
         return world_center
         
+    def applyWounds(self, unit, wounds):
+        """Turn unsaved wounds into slain models.
+
+        Multi-wound models (a chariot has 6) soak several wounds each, and the
+        leftovers stay on the wounded model rather than carrying to the next.
+        """
+        if wounds <= 0:
+            return
+        W = max(1, stat_value(unit.unit.model.characteristics.get('W'), 1))
+        if W == 1:
+            self.removeModelsFromUnit(unit, wounds)
+            return
+        pool = getattr(unit, 'woundsOnModel', 0) + wounds
+        slain, unit.woundsOnModel = divmod(pool, W)
+        print(f"{unit.unit.name}: {wounds} wound(s) -> {slain} slain "
+              f"({unit.woundsOnModel}/{W} on the wounded model)")
+        if slain:
+            self.removeModelsFromUnit(unit, slain)
+
     def removeModelsFromUnit(self, unit, models_to_remove):
         # Unit may have already been fully removed by another simultaneous combat
         if unit not in self.game.units:

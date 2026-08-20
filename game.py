@@ -447,7 +447,10 @@ class MyApp(ShowBase):
                 model_instance = model_class(unit_name, "")
 
             # Attach a data-driven mount to any unit that didn't already get one.
-            if mount_unit is not None and not model_instance.is_mounted():
+            # A chariot's draught beasts are listed as a mount in the roster but
+            # are part of its own profile, so they must not be attached twice.
+            if mount_unit is not None and not model_instance.is_mounted() \
+                    and not model_instance.is_chariot():
                 model_instance.attach_mount(mount_unit)
 
             # Equip data-driven weapons from the army list (e.g. imported rosters).
@@ -1339,7 +1342,7 @@ class MyApp(ShowBase):
         self.p.start(parent=render, renderParent=render)
         self.p_miss.start(parent=render, renderParent=render)
         await parTra
-        self.removeModelsFromUnit(defenderUnit, total_wounds)
+        self.applyWounds(defenderUnit, total_wounds)
         # Heavy casualties from shooting can trigger a Panic test.
         self.psychology.check_heavy_casualties(defenderUnit, 'shooting', attacker=attackerUnit)
         await Task.pause(2.0 / self.speedMultiplier)
@@ -1752,6 +1755,9 @@ class MyApp(ShowBase):
 
     def removeModelsFromUnit(self, unit, models_to_remove):
         self.movement.removeModelsFromUnit(unit, models_to_remove)
+
+    def applyWounds(self, unit, wounds):
+        self.movement.applyWounds(unit, wounds)
 
     def sweepTest(self, unit, direction, length):
         return self.movement.sweepTest(unit, direction, length)

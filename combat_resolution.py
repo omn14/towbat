@@ -12,6 +12,7 @@ All methods operate on the game instance passed during construction.
 """
 
 import math
+from types import SimpleNamespace
 
 from panda3d.core import Vec2, Vec3, NodePath
 
@@ -910,6 +911,18 @@ class CombatResolver:
                     else:
                         player2_score += total_wounds
                     combWounds += total_wounds
+            for partUnit in self.chariotParts(defenderUnit):
+                attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
+                    partUnit, attackerUnit.unit,
+                    charge=getattr(defenderUnit, 'chargedThisTurn', False))
+                self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
+                                        suffered_wounds, saves_made, total_wounds)
+                attackerUnit.unit.nmodels -= total_wounds
+                if defenderUnit in self.game.player1Units:
+                    player1_score += total_wounds
+                else:
+                    player2_score += total_wounds
+                combWounds += total_wounds
             # A joined character fights with its own profile (single model).
             if joinedRule:
                 charUnit = joinedRule['characterUnit']
@@ -928,7 +941,7 @@ class CombatResolver:
                     player2_score += total_wounds
                 combWounds += total_wounds
             modRemoveSequence.append(
-                Func(self.game.removeModelsFromUnit, attackerUnit, combWounds))
+                Func(self.game.applyWounds, attackerUnit, combWounds))
 
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
@@ -1069,6 +1082,26 @@ class CombatResolver:
         for terning in terningerLd:
             terning.remove(self.game.world)
         return values
+
+    def chariotParts(self, hostUnit):
+        """A chariot's crew and beasts as fighting units of their own.
+
+        Each uses its own Weapon Skill, Strength and Attacks (Rulebook p. 194);
+        the chariot itself has no Attacks. The catalogue says how many of each
+        a chariot carries -- a War Wagon has 6 crew and 2 horses -- and they all
+        fight, so the part's frontage is its own count times the number of
+        chariots in the unit.
+        """
+        model = hostUnit.unit.model
+        parts = []
+        for tag, part in (('crew', model.get_crew()), ('beasts', model.get_beasts())):
+            if part is None:
+                continue
+            count = model.part_count(tag) * hostUnit.unit.nmodels
+            parts.append(SimpleNamespace(
+                name=part.name, model=part,
+                nmodels=count, files=count, ranks=1))
+        return parts
 
     def notifyFleesCombat(self, loserUnit):
         """A US>=5 unit breaking or falling back panics nearby friends. The Unit

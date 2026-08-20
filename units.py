@@ -102,6 +102,7 @@ class unitGraphics(FSM):
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
         self.isGeneral=False         # army commander; radiates Inspiring Presence
         self.isBSB=False             # carries the Battle Standard (Hold Your Ground)
+        self.woundsOnModel=0         # unsaved wounds on the current multi-wound model
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
         self.endedInUnit=False

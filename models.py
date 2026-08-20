@@ -157,6 +157,12 @@ class model:
         # named the same as the model in the catalogue.
         if str(self.characteristics.get('Troop Type', '')).lower() == 'war machine':
             self.give_weapon(self.name)
+        # A chariot is one model made of several profiles; pull in the parts the
+        # catalogue lists so combat can use the right one (Rulebook p. 194).
+        for part in (self.characteristics.get('Crew') or []):
+            self.attach_crew(model(part['name'], ""), part.get('count', 1))
+        for part in (self.characteristics.get('Beasts') or []):
+            self.attach_beasts(model(part['name'], ""), part.get('count', 1))
         self.attack_roll = 0
         self.wound_roll = 0
 
@@ -256,6 +262,55 @@ class model:
     def is_mounted(self) -> bool:
         return self.get_mount() is not None
 
+    def is_chariot(self) -> bool:
+        """True if this model is a chariot, which has a split profile."""
+        return 'chariot' in str(self.characteristics.get('Troop Type', '')).lower()
+
+    def _tagged_part(self, tag):
+        for rule in self.special_rules:
+            if isinstance(rule, dict) and rule.get('tag') == tag and rule.get('partUnit'):
+                part = rule['partUnit']
+                return getattr(part, 'model', part)
+        return None
+
+    def part_count(self, tag: str) -> int:
+        """How many models of a chariot part there are (6 crew, 2 horses...)."""
+        for rule in self.special_rules:
+            if isinstance(rule, dict) and rule.get('tag') == tag and rule.get('partUnit'):
+                return rule.get('count', 1)
+        return 0
+
+    def _attach_part(self, tag, name, description, part, count=1):
+        self.special_rules = [r for r in self.special_rules
+                              if not (isinstance(r, dict) and r.get('tag') == tag)]
+        self.special_rules.append({'name': name, 'description': description,
+                                   'tag': tag, 'partUnit': part, 'count': count})
+
+    def get_crew(self):
+        """The chariot's crew model, or None."""
+        return self._tagged_part('crew')
+
+    def attach_crew(self, crew_model, count=1):
+        self._attach_part('crew', 'Chariot Crew',
+                          "Enemy rolls To Hit are made against the crew's Weapon Skill.",
+                          crew_model, count)
+
+    def get_beasts(self):
+        """The beasts drawing the chariot, or None."""
+        return self._tagged_part('beasts')
+
+    def attach_beasts(self, beast_model, count=1):
+        self._attach_part('beasts', 'Chariot Beasts',
+                          'The chariot moves at the speed of the beasts drawing it.',
+                          beast_model, count)
+
+    def defending_ws(self, default: int = 0) -> int:
+        """The Weapon Skill enemies roll against: a chariot is hit on its crew's
+        (Rulebook p. 194)."""
+        crew = self.get_crew()
+        source = crew if crew is not None else self
+        return stat_int(source.characteristics, 'WS', default)
+
     def is_skirmisher(self) -> bool:
         """True if the model has the Skirmishers special rule."""
         return any(isinstance(r, dict) and r.get('skirmish')
@@ -337,6 +392,10 @@ class model:
         mount = self.get_mount()
         if mount is not None:
             return stat_int(mount.characteristics, 'M', default)
+        # A chariot moves at the speed of the beasts that draw it, if any.
+        beasts = self.get_beasts()
+        if beasts is not None:
+            return stat_int(beasts.characteristics, 'M', default)
         return stat_int(self.characteristics, 'M', default)
 
     def get_toughness(self, default: int = 4) -> int:

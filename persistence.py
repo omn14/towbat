@@ -72,6 +72,7 @@ def save_game_state(game, filename=None):
             'usedStubborn': getattr(unit, 'usedStubborn', False),
             'isGeneral': getattr(unit, 'isGeneral', False),
             'isBSB': getattr(unit, 'isBSB', False),
+            'woundsOnModel': getattr(unit, 'woundsOnModel', 0),
             'startOfBattleModels': getattr(unit, 'startOfBattleModels', unit.unit.nmodels),
             'startOfPhaseModels': getattr(unit, 'startOfPhaseModels', unit.unit.nmodels),
             'isDeployed': unit.isDeployed,
@@ -254,6 +255,7 @@ def load_game_state(game, filename):
         # Saves written before the General was tracked keep the load-time nomination.
         unit.isGeneral = unit_data.get('isGeneral', getattr(unit, 'isGeneral', False))
         unit.isBSB = unit_data.get('isBSB', getattr(unit, 'isBSB', False))
+        unit.woundsOnModel = unit_data.get('woundsOnModel', 0)
         unit.startOfBattleModels = unit_data.get('startOfBattleModels', unit.unit.nmodels)
         unit.startOfPhaseModels = unit_data.get('startOfPhaseModels', unit.unit.nmodels)
         unit.isDeployed = unit_data['isDeployed']

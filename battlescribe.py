@@ -361,6 +361,80 @@ def _weapon_profiles(root: ET.Element) -> list:
     return out
 
 
+def _index_entries_by_name(root: ET.Element) -> dict:
+    """Map selectionEntry name -> element, for following entryLinks."""
+    out: dict = {}
+    for entry in root.iter(f"{NS}selectionEntry"):
+        out.setdefault(entry.get("name"), entry)
+    return out
+
+
+def _linked_entries(entry: ET.Element, by_name: dict) -> list:
+    """Model entries a unit reaches through <entryLinks> rather than nesting.
+
+    Chariots are built this way: 'Empire War Wagons' carries the Troop Type and
+    links out to a sibling 'War Wagon' model entry.
+    """
+    links = _direct_child(entry, "entryLinks")
+    if links is None:
+        return []
+    out = []
+    for link in links:
+        if link.get("type") != "selectionEntry":
+            continue
+        target = by_name.get(link.get("name"))
+        if target is not None and target is not entry:
+            out.append(target)
+    return out
+
+
+def _entry_count(entry: ET.Element, default: int = 1) -> int:
+    """How many of an entry a unit takes, from its selection constraints.
+    A War Wagon's crew is one entry constrained to exactly 6, its horses to 2."""
+    constraints = _direct_child(entry, "constraints")
+    if constraints is None:
+        return default
+    counts = {}
+    for c in constraints:
+        if c.get("field") != "selections":
+            continue
+        try:
+            counts[c.get("type")] = int(float(c.get("value", "0")))
+        except (TypeError, ValueError):
+            continue
+    for key in ("max", "min"):
+        if counts.get(key, 0) > 0:
+            return counts[key]
+    return default
+
+
+def _model_parts(model_entry: ET.Element, by_name: dict) -> dict:
+    """Crew and beast models belonging to a split-profile model, with how many
+    of each the entry takes.
+
+    A chariot's crew is a nested entry marked subType='crew'; the beasts that
+    draw it are linked out and tagged with a CHARIOT CREW category.
+    """
+    crew, beasts = [], []
+    entries = _direct_child(model_entry, "selectionEntries")
+    if entries is not None:
+        for sub in entries:
+            if sub.get("type") == "model" and sub.get("subType") == "crew":
+                crew.append({"name": sub.get("name"), "count": _entry_count(sub)})
+    links = _direct_child(model_entry, "entryLinks")
+    if links is not None:
+        for link in links:
+            cats = _direct_child(link, "categoryLinks")
+            if cats is None:
+                continue
+            for cat in cats:
+                if (cat.get("name") or "").strip().upper() == "CHARIOT CREW":
+                    beasts.append({"name": link.get("name"),
+                                   "count": _entry_count(link)})
+                    break
+    return {"Crew": crew, "Beasts": beasts}
+
+
 def parse_catalogue_full(cat_path: str):
     """Parse one catalogue into (faction, unit_records, profile_records, weapons)."""
     tree = ET.parse(cat_path)
@@ -370,6 +444,7 @@ def parse_catalogue_full(cat_path: str):
     profiles = _index_model_profiles(root)
     org_map = _index_org_categories(root)
     base_by_profile = _index_base_by_profile(root, profiles)
+    entries_by_name = _index_entries_by_name(root)
     records: list = []
 
     for unit in root.iter(f"{NS}selectionEntry"):
@@ -379,7 +454,10 @@ def parse_catalogue_full(cat_path: str):
         context = _unit_context(unit)
         category = _unit_org_category(unit, org_map)
 
-        for model_entry in unit.iter(f"{NS}selectionEntry"):
+        model_entries = list(unit.iter(f"{NS}selectionEntry"))
+        for linked in _linked_entries(unit, entries_by_name):
+            model_entries.extend(linked.iter(f"{NS}selectionEntry"))
+        for model_entry in model_entries:
             if model_entry.get("type") != "model":
                 continue
             profile_id = _first_model_profile_id(model_entry, profiles)
@@ -402,6 +480,7 @@ def parse_catalogue_full(cat_path: str):
             record["Special Rules"] = list(context["Special Rules"])
             record["Category"] = category
             record["Faction"] = faction_name
+            record.update(_model_parts(model_entry, entries_by_name))
             records.append(record)
 
     # Standalone model profiles (mounts, champion variants) that are not tied to
