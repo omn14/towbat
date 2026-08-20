@@ -321,6 +321,7 @@ class GamePhaseFSM(FSM):
         # The charge bonus lasts only the turn of the charge.
         for unit in self.game.units:
             unit.chargedThisTurn = False
+            unit.chargeDistance = 0.0
         for spell in self.end_of_turn_spells:
             spell.endSpell()
         self.end_of_turn_spells = []

@@ -32,8 +32,8 @@ def to_hit(model1,model2):
         return 5
     return 4
 
-def to_wound(model1,model2):
-    str1 = stat_value(model1.characteristics.get('S'))
+def to_wound(model1,model2,strength=None):
+    str1 = stat_value(model1.characteristics.get('S')) if strength is None else strength
 
     # Mounted defenders always use the rider's Toughness.
     if hasattr(model2, 'get_toughness'):

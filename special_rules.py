@@ -47,6 +47,16 @@ def _param_save(param, default=None):
     return default
 
 
+def _param_dice(param, default=None):
+    """Leading dice expression of a rule param: '2', 'D6', 'D6+1', '2D6+2'.
+
+    A param often carries prose the engine cannot model, e.g. Impact Hits
+    '(D6+1, War Wagon only)'; only the expression is kept.
+    """
+    m = re.match(r"\s*(\d*[Dd]\d+(?:\s*[+-]\s*\d+)?|\d+)", str(param or ""))
+    return m.group(1).replace(" ", "").upper() if m else default
+
+
 def _flag(name: str, desc: str | None, tag: str = "special") -> dict:
     """A display-only special rule with no coded mechanic (yet)."""
     return {"name": name, "description": desc or "", "tag": tag}
@@ -144,6 +154,15 @@ def _swiftstride(model, param, desc):
             "swiftstride": True}
 
 
+def _impact_hits(model, param, desc):
+    return {"name": "Impact Hits",
+            "description": desc or ("A charging model that moved 3\" or more "
+                                    "causes automatic hits at its unmodified "
+                                    "Strength before any attacks are made."),
+            "tag": "combat",
+            "impact_hits": _param_dice(param, "1")}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
@@ -156,6 +175,7 @@ SPECIAL_RULE_BUILDERS = {
     "general": _general,
     "battle standard bearer": _battle_standard,
     "swiftstride": _swiftstride,
+    "impact hits": _impact_hits,
 }
 
 
@@ -246,6 +266,11 @@ def build_special_rules(model) -> list:
         display, param = parse_special_rule(raw)
         desc = cat.rule_description(display) or cat.rule_description(raw)
         builder = SPECIAL_RULE_BUILDERS.get(display.lower())
+        if builder is None and "(" in display:
+            # A rule that replaces another keeps both values, e.g. 'Impact Hits
+            # (2) (D3+1)'; the trailing one is the replacement that applies.
+            display = display.split("(")[0].strip()
+            builder = SPECIAL_RULE_BUILDERS.get(display.lower())
         entry = builder(model, param, desc) if builder else _flag(display, desc)
         if entry:
             rules.append(entry)

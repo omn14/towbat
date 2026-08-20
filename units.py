@@ -96,6 +96,7 @@ class unitGraphics(FSM):
         self.hasAttackedThisTurn=False
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
+        self.chargeDistance=0.0      # inches actually covered by that charge (Impact Hits need 3"+)
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)

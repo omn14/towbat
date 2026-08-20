@@ -83,7 +83,18 @@ army-agnostic and would benefit every faction.
       Standard is currently the only source of a combat result standard bonus.
 - [ ] Hatred (X) — re-roll misses to hit in the first combat round
 - [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
-- [ ] Impact Hits (D3) — auto-hits on the charge
+- [x] Impact Hits (X) — DONE (Rulebook p. 172): the `(X)` is parsed off the rule
+      name (`_param_dice` copes with prose such as `(D6+1, War Wagon only)`), and
+      `impactHits` resolves them for every charging unit before any blows are
+      struck, once per combat. Each model in base contact — the front rank —
+      causes `X` automatic hits, so no To Hit roll is made; they wound with the
+      unmodified Strength of the model that owns the rule, which is the mount
+      for a rider and the chariot itself for a chariot. Armour and Regeneration
+      saves apply as normal. The 3" condition needed the charge to record how
+      far it actually moved (`chargeDistance`).
+      LEFTOVER: no Armour Piercing (Crushing Weight gives AP-1/-2/-3),
+      no Rank Bonus improvement, and no weapon-profile variants (Grinding
+      Attacks, whirling blades).
 - [x] Skirmishers — DONE (Phases 0–3 + the Phase 4 panic guard): rule flag, no
       rank bonus, enemy-fire -1, 360° arc, loose-blob layout, free 360° move with
       destination ghost, form-up/spread in combat, and fleeing Skirmishers no
@@ -150,7 +161,7 @@ army-agnostic and would benefit every faction.
       its beasts' Movement, Toughness/Wounds stay on the chariot, and the crew
       and beasts each fight with their own WS/S/A at full count while the
       chariot itself has no Attacks (`CombatResolver.chariotParts`).
-      LEFTOVER: Impact Hits, which use the chariot's Strength.
+      LEFTOVER: Impact Hits use the chariot's Strength but have no AP.
 - [x] Multi-wound models \u2014 `MovementSystem.applyWounds` converts unsaved wounds
       into slain models using the profile's Wounds, keeping the remainder on the
       wounded model (`woundsOnModel`, persisted). Combat and shooting passed

@@ -217,6 +217,90 @@ def check_armor_save(model, armor_save_value, AP):
         return True
     return False
 
+
+# ── Impact Hits (Rulebook p. 172) ──────────────────────────────────────────
+
+MIN_IMPACT_HIT_CHARGE = 3.0
+
+
+def _impact_hit_rule(m):
+    for rule in getattr(m, 'special_rules', []) or []:
+        if isinstance(rule, dict) and rule.get('impact_hits'):
+            return rule['impact_hits']
+    return None
+
+
+def impact_hit_profile(unit):
+    """(model, dice expression) for the model in *unit* causing Impact Hits.
+
+    A mount's Impact Hits are made with the mount's Strength, and a chariot's
+    with the chariot's own rather than its crew's, so the model that carries
+    the rule is also the one that resolves it.
+    """
+    m = getattr(unit, 'model', None)
+    if m is None:
+        return None
+    expr = _impact_hit_rule(m)
+    if expr:
+        return m, expr
+    mount = m.get_mount() if hasattr(m, 'get_mount') else None
+    expr = _impact_hit_rule(mount) if mount is not None else None
+    return (mount, expr) if expr else None
+
+
+def unmodified_strength(m):
+    """The model's Strength as printed, ignoring weapon and charge bonuses."""
+    base = getattr(m, '_base_characteristics', None) or m.characteristics
+    return stat_value(base.get('S'))
+
+
+def resolve_impact_hits(unit1, unit2):
+    """Impact Hits from charging *unit1* against *unit2*.
+
+    Returns (hits, wounds, saves, unsaved). The hits are automatic, so no To
+    Hit roll is made; every model in base contact causes them, which is the
+    charging unit's front rank.
+    """
+    found = impact_hit_profile(unit1)
+    if not found:
+        return 0, 0, 0, 0
+    m, expr = found
+    from models import roll_dice_expr
+    contacting = max(0, min(unit1.files, unit1.nmodels))
+    hits = sum(roll_dice_expr(expr) for _ in range(contacting))
+
+    target = to_wound(m, unit2.model, strength=unmodified_strength(m))
+    wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
+
+    saves = 0
+    for _ in range(wounds):
+        if check_armor_save(unit2.model, unit2.model.melee_armour_save(), 0):
+            saves += 1
+            continue
+        for rule in unit2.model.special_rules:
+            if rule.get('regen') and check_armor_save(unit2.model, rule['regen'], 0):
+                saves += 1
+                break
+    return hits, wounds, saves, wounds - saves
+
+
+def impact_hit_report(unit1, unit2):
+    """Printable lines describing an Impact Hits attack, or []."""
+    found = impact_hit_profile(unit1)
+    if not found:
+        return []
+    m, expr = found
+    strength = unmodified_strength(m)
+    target = to_wound(m, unit2.model, strength=strength)
+    save = unit2.model.melee_armour_save()
+    save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
+    return [f"   Impact Hits ({expr}) : {m.name}  S{strength} AP0  "
+            f"[wound {target}+]",
+            f"   Target : {unit2.model.name}  "
+            f"T{stat_value(unit2.model.characteristics.get('T'), 4)}  "
+            f"save {save_str}"]
+
+
 def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0):
 
     # how many attacks

@@ -33,7 +33,8 @@ from direct.interval.FunctionInterval import Func
 from direct.task.Task import Task
 
 from dice import Dice, checkDice
-from battleFunctions import simulate_battle
+from battleFunctions import (MIN_IMPACT_HIT_CHARGE, impact_hit_report,
+                             resolve_impact_hits, simulate_battle)
 from characters import JOIN_TAG
 from special_rules import (board_edge_distance, charge_roll, max_charge_range,
                            max_pursuit_range, should_use_swiftstride,
@@ -559,6 +560,8 @@ class CombatResolver:
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True
+        # Impact Hits need to know the charge covered 3" or more (p. 172).
+        unit.chargeDistance = float(self.game.moveArceDistance)
 
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
@@ -651,6 +654,7 @@ class CombatResolver:
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True
+        unit.chargeDistance = float(travel)
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
@@ -724,6 +728,45 @@ class CombatResolver:
         print(f"   {attacks} {verb} -> {total_hits} hit -> {suffered_wounds} wound "
               f"-> {saves_made} saved -> {total_wounds} slain "
               f"({defenderUnit.unit.name})")
+
+    # ─── Impact Hits ──────────────────────────────────────────────────────
+
+    def impactHits(self, modRemoveSequence):
+        """Resolve Impact Hits before any blows are struck (Rulebook p. 172).
+
+        Returns each player's combat result contribution.
+        """
+        player1_score = player2_score = 0
+        resolved = set()
+        for striker, target in zip(self.game.attackers, self.game.defenders):
+            if id(striker) in resolved or striker.hasAttackedThisTurn:
+                continue
+            resolved.add(id(striker))
+            if not getattr(striker, 'chargedThisTurn', False):
+                continue
+            if getattr(striker, 'chargeDistance', 0.0) < MIN_IMPACT_HIT_CHARGE:
+                continue
+            hits, wounds, saves, unsaved = resolve_impact_hits(striker.unit,
+                                                               target.unit)
+            if not hits:
+                continue
+            for line in impact_hit_report(striker.unit, target.unit):
+                print(line)
+            print(f"   {hits} impact hits -> {wounds} wound -> {saves} saved "
+                  f"-> {unsaved} unsaved ({target.unit.name})")
+            if not unsaved:
+                continue
+            # Thin the target now so it strikes back with its losses, the way
+            # the attack loop does; applyWounds later confirms the count.
+            W = max(1, _stat_int(target.unit.model.characteristics, 'W', 1))
+            slain = (getattr(target, 'woundsOnModel', 0) + unsaved) // W
+            target.unit.nmodels = max(0, target.unit.nmodels - slain)
+            if striker in self.game.player1Units:
+                player1_score += unsaved
+            else:
+                player2_score += unsaved
+            modRemoveSequence.append(Func(self.game.applyWounds, target, unsaved))
+        return player1_score, player2_score
 
     # ─── Battle Start & Resolution ────────────────────────────────────────
 
@@ -804,6 +847,9 @@ class CombatResolver:
         player2_flank_bonus = 0
         player2_rank_bonus = 0
         modRemoveSequence = Sequence()
+        impact1, impact2 = self.impactHits(modRemoveSequence)
+        player1_score += impact1
+        player2_score += impact2
         for i in range(len(self.game.attackers)):
             unit = self.game.attackers[i]
             if unit.hasAttackedThisTurn:
