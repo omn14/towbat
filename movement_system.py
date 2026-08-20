@@ -1030,22 +1030,12 @@ class MovementSystem:
             unit.bodyNP.node().removeShape(shape)
         if unit.model.isEmpty():
             return
-        bounds = unit.model.getTightBounds()
-        box_size = bounds[1] - bounds[0]
+        box_size = unit.footprintSize()
         shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
-        #body = BulletRigidBodyNode('UnitCollision-' + self.game.unitName)
         unit.bodyNP.node().addShape(shape)
         unit.bodyNP.node().setMass(0)  # Static object
         self.game.world.attachRigidBody(unit.bodyNP.node())
-        
-        
-        unit.model.setPos(0,0,0)
-        
-        unit.model.setPos(-box_size.x/2+unit.modelWidth/2, box_size.y/2-unit.modelHeight/2,0)
-
-
-        
-        #unit.setUpCollisions()
+        unit.applyFootprint(box_size)
 
     # ─── Sweep Tests ──────────────────────────────────────────────────────
 

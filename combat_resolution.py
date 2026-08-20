@@ -26,7 +26,7 @@ def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
 
 from panda3d.bullet import BulletBoxShape
 from panda3d.core import LRotationf
-from direct.interval.LerpInterval import LerpPosHprInterval
+from direct.interval.LerpInterval import LerpPosHprInterval, LerpPosInterval
 from direct.interval.IntervalGlobal import Sequence, Parallel, Wait
 from direct.interval.FunctionInterval import Func
 from direct.task.Task import Task
@@ -48,6 +48,9 @@ SWIFTSTRIDE_DIE_COLOR = (0.85, 0.05, 0.05, 1)
 
 class CombatResolver:
     """Encapsulates all combat resolution logic for the game."""
+
+    # A unit that Gives Ground moves 2" away, and the winner Follows Up 2".
+    GIVE_GROUND = 2.0
 
     def __init__(self, game):
         self.game = game
@@ -1096,7 +1099,6 @@ class CombatResolver:
 
         persuingUnit = []
         persuingUnit.append(loserUnit)
-        self.game.attackSequence2 = Sequence()
         for i, unit in enumerate(loserUnit.isInCombatWith):
             if unit.madePursuitChoice:
                 loserUnit.isInCombatWith.remove(unit)
@@ -1112,19 +1114,23 @@ class CombatResolver:
                 print(f"{unit.unit.name} chooses to pursue!")
                 persuingUnit.append(unit)
 
-        crashFractionMin = 1.0
-        for i, unit in enumerate(persuingUnit):
-            persuit_results = 2
-            persuit_score = persuit_results
-            print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
-            crashFraction = self.game.sweepTest(unit, direction, persuit_score) * .95
-            crashFractionMin = min(crashFraction, crashFractionMin)
-
-            print(f"{unit.unit.name} successfully pursues the fleeing unit!")
+        # Giving Ground and the Follow Up are the same 2" in the same direction,
+        # so both ends are worked out up front and moved together: the units
+        # keep base contact by construction, with no separation test between
+        # them to push the follower back out again.
+        crashFraction = 1.0
+        for unit in persuingUnit:
+            crashFraction = min(crashFraction,
+                                self.game.sweepTest(unit, direction, self.GIVE_GROUND) * .95)
+        step = direction * (self.GIVE_GROUND * crashFraction)
+        self.game.attackSequence2 = Parallel()
+        for unit in persuingUnit:
+            print(f"{unit.unit.name} moves {step.length():.1f}\" "
+                  f"({'gives ground' if unit is loserUnit else 'follows up'})")
             self.game.attackSequence2.append(
-                Func(self.game.fallBack, unit.bodyNP, direction,
-                     length=persuit_score * crashFractionMin, GG=True))
-            self.game.attackSequence2.append(Wait(0.25))
+                LerpPosInterval(unit.bodyNP, duration=1.0,
+                                pos=unit.bodyNP.getPos() + step,
+                                blendType='easeInOut'))
 
         if not self.game.attackSequence.isPlaying():
             await self.game.attackSequence2

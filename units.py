@@ -318,29 +318,40 @@ class unitGraphics(FSM):
 
         self.text.setText(row)
 
+    def footprintSize(self):
+        """Collision-box size for the unit's current formation.
+
+        Taken from the models' bases when the catalogue provides base data, so
+        the box matches the frontage the unit actually occupies rather than the
+        extents of its mesh.
+        """
+        bounds = self.model.getTightBounds()
+        box_size = bounds[1] - bounds[0]
+        # Skirmishers occupy a loose blob; size the footprint to cover it.
+        if getattr(self, 'isSkirmisher', False):
+            box_size.setX(self._skirmSX * self._skirmCols)
+            box_size.setY(self._skirmSY * self._skirmRows)
+        elif getattr(self, 'baseSize', None):
+            files = max(1, self.unit.files)
+            cols = min(files, self.unit.nmodels)
+            rows = (self.unit.nmodels + files - 1) // files
+            box_size.setX(self.modelWidth * cols)
+            box_size.setY(self.modelHeight * rows)
+        return box_size
+
+    def applyFootprint(self, box_size):
+        """Update everything derived from the footprint: the measured width and
+        depth, the front/back markers and where the models sit in the box."""
+        self.bodyNPfront.setPos(0, box_size.y * 0.45, 0)
+        self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)
+        self.unitWidth = box_size.x * self.bodyNP.getScale().x
+        self.unitHeight = box_size.y * self.bodyNP.getScale().y
+        self.model.setPos(-box_size.x / 2 + self.modelWidth / 2,
+                          box_size.y / 2 - self.modelHeight / 2, 0)
+
     def setUpCollisions(self):
         if self.world:
-            # Estimate radius from bounding box
-            #self.model.clearBounds()
-            #self.model.calcTightBounds(render)
-            bounds = self.model.getTightBounds()
-            
-            
-
-            # Create box shape from bounding box dimensions
-            box_size = bounds[1] - bounds[0]
-            # Skirmishers occupy a loose blob; size the footprint to cover it.
-            if getattr(self, 'isSkirmisher', False):
-                box_size.setX(self._skirmSX * self._skirmCols)
-                box_size.setY(self._skirmSY * self._skirmRows)
-            # When the database provides a base size, size the collision box from
-            # the base footprint (per-model base * formation) instead of the mesh.
-            elif getattr(self, 'baseSize', None):
-                files = max(1, self.unit.files)
-                cols = min(files, self.unit.nmodels)
-                rows = (self.unit.nmodels + files - 1) // files
-                box_size.setX(self.modelWidth * cols)
-                box_size.setY(self.modelHeight * rows)
+            box_size = self.footprintSize()
             shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
             body = BulletRigidBodyNode('UnitCollision-' + self.unitName)
             body.addShape(shape)
@@ -350,9 +361,7 @@ class unitGraphics(FSM):
             
             self.bodyNP = render.attachNewNode(body)
             self.bodyNPfront = self.bodyNP.attachNewNode("front")
-            self.bodyNPfront.setPos(0, box_size.y * 0.45, 0)  # Front point
             self.bodyNPback = self.bodyNP.attachNewNode("back")
-            self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)  # Back point
             self.bodyNP.setCollideMask(BitMask32.bit(1))
             self.world.attachRigidBody(body)
             #self.world.attachCharacter(self.bodyNP.node())
@@ -360,11 +369,7 @@ class unitGraphics(FSM):
             self.model.node().setName('Model-' + self.unitName)
             self.model.reparentTo(self.bodyNP)
             self.bodyNP.setScale(1.0)
-            #self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])*self.bodyNP.getScale().x
-            #self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])*self.bodyNP.getScale().y
-            self.unitWidth=box_size.x*self.bodyNP.getScale().x
-            self.unitHeight=box_size.y*self.bodyNP.getScale().y
-            self.model.setPos(-box_size.x/2+self.modelWidth/2, box_size.y/2-self.modelHeight/2,0)
+            self.applyFootprint(box_size)
             #self.model.flattenLight()
     
     def _add_character_marker(self):
