@@ -7,6 +7,7 @@ and matched back to the catalogue by name.
 
 import asyncio
 import json
+import math
 import os
 import sys
 import unittest
@@ -21,12 +22,13 @@ from battlescribe import get_catalogue  # noqa: E402
 from models import model  # noqa: E402
 from panda3d.core import Point3  # noqa: E402
 from psychology import GIVE_GROUND  # noqa: E402
-from spell_system import (BATTLE_MAGIC, UNTIL_NEXT_START_OF_TURN,  # noqa: E402
+from spell_system import (BATTLE_MAGIC, BLAST_TEMPLATE_SMALL,  # noqa: E402
+                          UNTIL_NEXT_START_OF_TURN,
                           ArcaneUrgencySpell, CurseOfArrowAttractionSpell,
                           CurseOfCowardlyFlightSpell, FireballSpell,
                           HammerhandSpell, OakenShieldSpell, PillarOfFireSpell,
-                          Spell, load_spells, save_spells, spell_class,
-                          spell_readout)
+                          Spell, distance_to_segment, load_spells, nudge_clear,
+                          save_spells, spell_class, spell_readout)
 
 
 def _model(name="Goblin", **rules):
@@ -388,6 +390,159 @@ class TestTheVortexIsPlacedOnTheBoard(unittest.TestCase):
         reach = next(s['range'] for s in get_catalogue().lore("Battle Magic")
                      if s['name'] == 'Pillar of Fire')
         self.assertEqual(PillarOfFireSpell.RANGE, reach)
+
+    def test_the_template_is_three_inches(self):
+        self.assertEqual(BLAST_TEMPLATE_SMALL, 3.0)
+
+
+class TestTheTemplateNeverRestsOnABase(unittest.TestCase):
+    """A Magical Vortex is placed not touching any model's base, and one whose
+    move ends over a unit is shifted the least it can be (Rulebook p. 107)."""
+
+    RADIUS = BLAST_TEMPLATE_SMALL / 2.0
+
+    def _clear_of(self, centre, obstacles):
+        dx, dy = nudge_clear(centre, self.RADIUS, obstacles)
+        x, y = centre[0] + dx, centre[1] + dy
+        return [math.hypot(x - ox, y - oy) - (self.RADIUS + r)
+                for ox, oy, r in obstacles]
+
+    def test_an_empty_board_needs_no_shift(self):
+        self.assertEqual(nudge_clear((0, 0), self.RADIUS, []), (0.0, 0.0))
+
+    def test_a_distant_unit_needs_no_shift(self):
+        self.assertEqual(nudge_clear((0, 0), self.RADIUS, [(20, 0, 0.5)]),
+                         (0.0, 0.0))
+
+    def test_a_template_on_a_model_is_moved_off_it(self):
+        for gap in self._clear_of((0, 0), [(0.5, 0, 0.5)]):
+            self.assertGreaterEqual(gap, 0.0)
+
+    def test_a_template_on_several_models_clears_them_all(self):
+        base = [(0.0, 0.0, 0.5), (1.0, 0.0, 0.5), (2.0, 0.0, 0.5),
+                (0.0, 1.0, 0.5), (1.0, 1.0, 0.5), (2.0, 1.0, 0.5)]
+        for gap in self._clear_of((1.0, 0.5), base):
+            self.assertGreaterEqual(gap, 0.0)
+
+    def test_the_shift_is_away_from_the_model(self):
+        dx, dy = nudge_clear((0, 0), self.RADIUS, [(1.0, 0, 0.5)])
+        self.assertLess(dx, 0)
+        self.assertAlmostEqual(dy, 0.0, places=1)
+
+    def test_it_takes_the_short_way_out(self):
+        # A model just off centre: the shift should be about enough to clear
+        # it, not the width of the whole template.
+        dx, dy = nudge_clear((0, 0), self.RADIUS, [(1.9, 0, 0.5)])
+        self.assertLess(math.hypot(dx, dy), 0.2)
+
+    def test_it_never_leaves_the_template_touching(self):
+        # Exactly touching still counts as touching, so it is nudged.
+        dx, dy = nudge_clear((0, 0), self.RADIUS, [(2.0, 0, 0.5)])
+        self.assertGreater(math.hypot(dx, dy), 0.0)
+
+
+class TestDistanceToSegment(unittest.TestCase):
+    """The template sweeps a path when it scatters, not just a point."""
+
+    def test_a_point_on_the_line(self):
+        self.assertAlmostEqual(distance_to_segment(5, 0, 0, 0, 10, 0), 0.0)
+
+    def test_perpendicular_offset(self):
+        self.assertAlmostEqual(distance_to_segment(5, 3, 0, 0, 10, 0), 3.0)
+
+    def test_past_the_end_measures_from_the_endpoint(self):
+        self.assertAlmostEqual(distance_to_segment(14, 3, 0, 0, 10, 0), 5.0)
+
+    def test_before_the_start_measures_from_the_start(self):
+        self.assertAlmostEqual(distance_to_segment(-3, 4, 0, 0, 10, 0), 5.0)
+
+    def test_a_zero_length_segment_is_just_a_point(self):
+        self.assertAlmostEqual(distance_to_segment(3, 4, 0, 0, 0, 0), 5.0)
+
+
+class TestTheTemplateScatteringOverAUnit(unittest.TestCase):
+    """"Any enemy unit ... that the template moves over" — the ground it swept
+    counts, not only where it came to rest."""
+
+    def setUp(self):
+        self.spell = PillarOfFireSpell('Pillar of Fire', 9, [])
+        self.spell.piece = SimpleNamespace(width=BLAST_TEMPLATE_SMALL)
+
+    def _at(self, *points, base=1.0):
+        self.spell.model_positions = lambda unit: list(points)
+        return SimpleNamespace(modelWidth=base, modelHeight=base)
+
+    def test_a_unit_under_the_resting_place_is_caught(self):
+        unit = self._at((20, 0))
+        self.assertTrue(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_a_unit_the_template_passed_over_is_caught(self):
+        # Ten inches along the path, nowhere near either end.
+        unit = self._at((10, 0.5))
+        self.assertTrue(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_a_unit_beside_the_path_is_missed(self):
+        unit = self._at((10, 4))
+        self.assertFalse(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_one_model_under_the_edge_is_enough(self):
+        # Measured from the model bases, so clipping one end of a line counts.
+        unit = self._at((10, 8), (10, 5), (10, 1.4))
+        self.assertTrue(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_a_base_that_meets_the_template_counts(self):
+        # The centre is 2" from the path, further than the 1.5" radius, but a
+        # 1" base reaches 0.7" and so lies under it. Measuring centres alone
+        # let a pillar sweep between two ranks and burn nobody.
+        unit = self._at((10, 2.0), base=1.0)
+        self.assertTrue(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_the_reach_matches_the_one_used_to_nudge_it_clear(self):
+        # settle() shifts the template off anything within radius + base; the
+        # same models have to be the ones it burned on the way.
+        unit = self._at((10, 2.2), base=1.0)
+        self.assertTrue(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+        unit = self._at((10, 2.3), base=1.0)
+        self.assertFalse(self.spell.caught(unit, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_a_bigger_base_reaches_further(self):
+        far = self._at((10, 3.0), base=1.0)
+        self.assertFalse(self.spell.caught(far, Point3(0, 0, 0), Point3(20, 0, 0)))
+        big = self._at((10, 3.0), base=3.0)
+        self.assertTrue(self.spell.caught(big, Point3(0, 0, 0), Point3(20, 0, 0)))
+
+    def test_the_footprint_is_round_not_square(self):
+        # Same distance out, one on the axis and one on the diagonal: a square
+        # footprint would catch the diagonal, a round one catches neither.
+        reach = BLAST_TEMPLATE_SMALL / 2.0 + math.hypot(1.0, 1.0) / 2.0
+        step = (reach + 0.1) / math.sqrt(2.0)
+        origin = Point3(0, 0, 0)
+        self.assertFalse(self.spell.caught(self._at((reach + 0.1, 0)),
+                                           origin, origin))
+        self.assertFalse(self.spell.caught(self._at((step, step)),
+                                           origin, origin))
+
+    def test_the_whole_unit_burns_however_many_models_are_covered(self):
+        """"Any enemy unit ... suffers D3+3 hits" — the unit is the target, so
+        one model under the template costs it as much as all of them."""
+        burned = []
+        self.spell.burn = burned.append
+        for covered in ([(10, 1.4)],
+                        [(9, 0), (10, 0), (11, 0), (9, 1), (10, 1)]):
+            burned.clear()
+            unit = self._at(*covered)
+            self.spell.enemies = lambda game, u=unit: [u]
+            self.spell.burn_units_between(None, Point3(0, 0, 0),
+                                          Point3(20, 0, 0))
+            self.assertEqual(burned, [unit])
+
+    def test_a_unit_out_of_the_path_is_left_alone(self):
+        burned = []
+        self.spell.burn = burned.append
+        unit = self._at((10, 9), (10, 10))
+        self.spell.enemies = lambda game: [unit]
+        self.spell.burn_units_between(None, Point3(0, 0, 0), Point3(20, 0, 0))
+        self.assertEqual(burned, [])
 
 
 class TestTheSpellReadout(unittest.TestCase):

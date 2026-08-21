@@ -58,7 +58,7 @@ from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
                           Spell, dispel_result, is_dispelled, may_attempt,
                           spell_class, spell_readout)
 from persistence import save_game_state, load_game_state
-from characters import JOIN_TAG
+from characters import JOIN_TAG, enemy_units
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager, sees_over
@@ -1470,8 +1470,7 @@ class MyApp(ShowBase):
         spell is stopped — which is *before* its effect is worked out, so there
         is nothing to undo.
         """
-        foes = (self.player2Units if caster in self.player1Units
-                else self.player1Units)
+        foes = enemy_units(self, caster)
         dispeller = max((u for u in foes if u.unit.model.is_wizard()),
                         key=lambda u: u.unit.model.wizard_level(0), default=None)
         level = dispeller.unit.model.wizard_level(0) if dispeller else 0

@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from characters import (  # noqa: E402
     is_character, same_player, has_joined_character, get_joined_character,
-    on_host_removed, JOIN_TAG,
+    on_host_removed, enemy_units, friendly_units, side_of, JOIN_TAG,
 )
 from models import model  # noqa: E402
 from battleFunctions import simulate_battle  # noqa: E402
@@ -47,6 +47,53 @@ def mk_graphics(category=None, name="u"):
 def mk_unit(m, nmodels=5, files=5, ranks=1, name="u"):
     """Lightweight stand-in for units.unit."""
     return SimpleNamespace(model=m, name=name, nmodels=nmodels, files=files, ranks=ranks)
+
+
+class WhichSideIsItOnTests(unittest.TestCase):
+    """Joining takes a character out of both player lists, so anything that
+    asks 'whose side is this on?' by membership gets it wrong for exactly the
+    models that cast most of the spells."""
+
+    def setUp(self):
+        self.wizard = mk_graphics("Characters", name="wizard")
+        self.host = mk_graphics("Core", name="spears")
+        self.foe = mk_graphics("Core", name="orcs")
+        self.game = SimpleNamespace(player1Units=[self.host],
+                                    player2Units=[self.foe])
+
+    def _join(self):
+        # What join_unit does to the lists, without the Panda3D half.
+        self.wizard._player = 1
+        self.wizard.hostUnit = self.host
+        self.host.joinedCharacter = self.wizard
+
+    def test_a_lone_unit_is_found_by_membership(self):
+        self.assertEqual(side_of(self.game, self.host), 1)
+        self.assertEqual(side_of(self.game, self.foe), 2)
+
+    def test_a_joined_character_keeps_its_side(self):
+        self._join()
+        self.assertEqual(side_of(self.game, self.wizard), 1)
+
+    def test_a_joined_character_falls_back_to_its_host(self):
+        self._join()
+        del self.wizard._player
+        self.assertEqual(side_of(self.game, self.wizard), 1)
+
+    def test_a_joined_wizards_enemies_are_the_other_side(self):
+        # This is the bug: a Pillar of Fire cast by a joined Wizard swept over
+        # the real enemy and burned nobody.
+        self._join()
+        self.assertEqual(enemy_units(self.game, self.wizard), [self.foe])
+        self.assertEqual(friendly_units(self.game, self.wizard), [self.host])
+
+    def test_a_lone_wizards_enemies_are_the_other_side(self):
+        self.game.player1Units.append(self.wizard)
+        self.assertEqual(enemy_units(self.game, self.wizard), [self.foe])
+
+    def test_a_player_two_character_looks_the_other_way(self):
+        self.wizard._player = 2
+        self.assertEqual(enemy_units(self.game, self.wizard), [self.host])
 
 
 class CharacterHelperTests(unittest.TestCase):

@@ -38,6 +38,33 @@ def same_player(game, a, b) -> bool:
             (a in game.player2Units and b in game.player2Units))
 
 
+def side_of(game, unit) -> int:
+    """Which player *unit* fights for, 1 or 2.
+
+    Joining takes a character out of both player lists, so membership alone
+    answers this wrongly for the very models that cast most of the spells.
+    """
+    if unit in game.player1Units:
+        return 1
+    if unit in game.player2Units:
+        return 2
+    side = getattr(unit, '_player', None)
+    if side in (1, 2):
+        return side
+    host = getattr(unit, 'hostUnit', None)
+    return side_of(game, host) if host is not None else 1
+
+
+def friendly_units(game, unit):
+    """The units on *unit*'s own side."""
+    return game.player1Units if side_of(game, unit) == 1 else game.player2Units
+
+
+def enemy_units(game, unit):
+    """The units opposing *unit*."""
+    return game.player2Units if side_of(game, unit) == 1 else game.player1Units
+
+
 def join_unit(game, character, host) -> bool:
     """Attach *character* to the front rank of *host*. Returns True on success."""
     if character is host or has_joined_character(host) or is_character(host):

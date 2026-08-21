@@ -323,13 +323,58 @@ class CurseOfArrowAttractionSpell(Spell):
             affected.unit.model.arrow_attraction = False
 
 
+def distance_to_segment(px, py, ax, ay, bx, by) -> float:
+    """Shortest distance from a point to the segment a-b, on the table plane."""
+    dx, dy = bx - ax, by - ay
+    span = dx * dx + dy * dy
+    t = 0.0 if span < 1e-9 else ((px - ax) * dx + (py - ay) * dy) / span
+    t = max(0.0, min(1.0, t))
+    return math.hypot(px - (ax + dx * t), py - (ay + dy * t))
+
+
+# Templates are placed *not touching* a base, so clearance is a shade over the
+# radii that just meet.
+_TOUCHING = 0.01
+
+
+def nudge_clear(centre, radius, obstacles, directions: int = 72):
+    """The smallest shift putting a template of *radius* centred on *centre*
+    clear of every obstacle, each given as (x, y, base radius).
+
+    A Magical Vortex is never placed touching a model's base, so one that ends
+    a move over a unit is moved by the smallest amount possible, in any
+    direction (Rulebook p. 107). Returns (dx, dy), zero when it already stands
+    clear. "Any direction" is sampled rather than solved, which costs at most
+    half a degree of slack on a shift of a few inches.
+    """
+    cx, cy = centre
+    blocking = [(x, y, radius + r + _TOUCHING) for x, y, r in obstacles
+                if math.hypot(cx - x, cy - y) < radius + r + _TOUCHING]
+    if not blocking:
+        return 0.0, 0.0
+    best = None
+    for i in range(directions):
+        a = 2.0 * math.pi * i / directions
+        dx, dy = math.cos(a), math.sin(a)
+        need = 0.0
+        for x, y, clear in blocking:
+            vx, vy = cx - x, cy - y
+            proj = vx * dx + vy * dy
+            disc = max(0.0, proj * proj - (vx * vx + vy * vy) + clear * clear)
+            need = max(need, math.sqrt(disc) - proj)
+        if best is None or need < best[0]:
+            best = (need, dx, dy)
+    need, dx, dy = best
+    return dx * need, dy * need
+
+
 class PillarOfFireSpell(Spell):
     """3. Pillar of Fire — a Magical Vortex that Remains in Play.
 
-    A 3" template of difficult terrain, placed with its centre within 12" of
-    the caster. It scatters D6" every Start of Turn and burns any enemy unit
-    that walks through it, or that it drifts over, for D3+3 Strength 3 hits
-    at AP -2.
+    A 3" template of difficult terrain, placed with its central hole within
+    12" of the caster and never touching a base. It scatters D6" every Start
+    of Turn and burns any enemy unit that walks through it, or that it drifts
+    over, for D3+3 Strength 3 hits at AP -2.
     """
 
     targets_ground = True
@@ -354,8 +399,9 @@ class PillarOfFireSpell(Spell):
         game = self.game
         if game is None:
             return
+        # Placing it hurts nobody: the template goes down clear of every base,
+        # so there is no unit under it to burn.
         self.place(game, Point3(point))
-        self.burn_units_under(game)
 
     def place(self, game, point):
         """Put the template on the board; also how a save restores it."""
@@ -365,9 +411,10 @@ class PillarOfFireSpell(Spell):
             BLAST_TEMPLATE_SMALL, BLAST_TEMPLATE_SMALL)
         # Remains in Play: it lives on the board, not on the turn timer.
         game.remainsInPlay.append(self)
+        self.settle(game)
 
     def scatter(self, game):
-        """Drift D6" in a random direction, then burn whatever is underneath.
+        """Drift D6" in a random direction, burning whatever it crosses.
 
         Called once per Start of Turn sub-phase while the spell is in play.
         """
@@ -375,31 +422,98 @@ class PillarOfFireSpell(Spell):
             return
         angle = random.uniform(0.0, 2.0 * math.pi)
         distance = random.randint(1, 6)
-        move = Vec3(math.cos(angle) * distance, math.sin(angle) * distance, 0)
+        start = Point3(self.piece.center)
+        self.shift(Vec3(math.cos(angle) * distance,
+                        math.sin(angle) * distance, 0))
+        print(f"[Magic] {self.name} scatters {distance}\" to "
+              f"({self.piece.center.x:.0f}, {self.piece.center.y:.0f}).")
+        # "any enemy unit that the template moves over": the ground it swept
+        # counts, not only where it came to rest.
+        self.burn_units_between(game, start, self.piece.center)
+        self.settle(game)
+
+    def shift(self, move):
+        """Move the template and everything drawn for it."""
         self.piece.center = Point3(self.piece.center + move)
         for np in (self.piece.visual, self.piece.ghost_np, self.piece.outline):
             if np is not None and not np.isEmpty():
                 np.setPos(np.getPos() + move)
-        print(f"[Magic] {self.name} scatters {distance}\" to "
-              f"({self.piece.center.x:.0f}, {self.piece.center.y:.0f}).")
-        self.burn_units_under(game)
 
-    def burn_units_under(self, game):
-        """Hit every enemy unit currently standing under the template."""
+    def settle(self, game):
+        """Shift the template off any base it came to rest on.
+
+        A Magical Vortex is never placed touching a model's base, so one whose
+        scatter ends over a unit is moved the least it can be, in any
+        direction, until it stands clear (Rulebook p. 107).
+        """
+        obstacles = []
+        for unit in self.all_units(game):
+            reach = self.base_radius(unit)
+            obstacles += [(x, y, reach) for x, y in self.model_positions(unit)]
+        centre = self.piece.center
+        dx, dy = nudge_clear((centre.x, centre.y), self.piece.width / 2.0,
+                             obstacles)
+        if dx or dy:
+            self.shift(Vec3(dx, dy, 0))
+            print(f"[Magic] {self.name} may not rest on a base; nudged "
+                  f"{math.hypot(dx, dy):.1f}\" to "
+                  f"({self.piece.center.x:.0f}, {self.piece.center.y:.0f}).")
+
+    def burn_units_between(self, game, start, end):
+        """Hit every enemy unit the template covered on its way from *start*
+        to *end*."""
         for other in self.enemies(game):
-            p = other.bodyNP.getPos()
-            if self.piece.contains(Point3(p.x, p.y, 0)):
+            if self.caught(other, start, end):
                 self.burn(other)
+
+    def caught(self, unit, start, end) -> bool:
+        """Whether any of *unit*'s models lie under the template's path.
+
+        A model counts when its *base* meets the template, which is the same
+        reach `settle` uses to decide the template is touching one. Measuring
+        centres alone let a vortex sweep between two ranks, close enough to be
+        nudged off the unit afterwards, and burn nobody.
+        """
+        reach = self.piece.width / 2.0 + self.base_radius(unit)
+        return any(distance_to_segment(x, y, start.x, start.y,
+                                       end.x, end.y) <= reach
+                   for x, y in self.model_positions(unit))
+
+    @staticmethod
+    def model_positions(unit):
+        """Where each of the unit's models stands, in world space."""
+        if unit.model.isEmpty():
+            p = unit.bodyNP.getPos()
+            return [(p.x, p.y)]
+        out = []
+        for child in unit.model.getChildren():
+            p = child.getPos(render)
+            out.append((p.x, p.y))
+        return out
+
+    @staticmethod
+    def base_radius(unit):
+        """Half a model base's diagonal — the round template only needs to
+        know how far a base reaches, not which way it faces."""
+        return math.hypot(getattr(unit, 'modelWidth', 1.0),
+                          getattr(unit, 'modelHeight', 1.0)) / 2.0
 
     def burn(self, unit):
         self._magic_hits(unit, 'D3+3', strength=3, ap=2, flaming=True)
 
+    @staticmethod
+    def all_units(game):
+        """Every live unit. The template may not touch *any* base, friend or
+        foe; only the damage cares whose side a unit is on."""
+        units = getattr(game, 'units', None)
+        if units is None:
+            units = list(game.player1Units) + list(game.player2Units)
+        return [u for u in units if not u.bodyNP.isEmpty()]
+
     def enemies(self, game):
-        own_side = (game.player1Units if self.caster in game.player1Units
-                    else game.player2Units)
-        foes = (game.player2Units if own_side is game.player1Units
-                else game.player1Units)
-        return [u for u in foes if not u.bodyNP.isEmpty()]
+        from characters import enemy_units
+        return [u for u in enemy_units(game, self.caster)
+                if not u.bodyNP.isEmpty()]
 
     def endSpell(self):
         if self.piece is None:

@@ -144,6 +144,25 @@ army-agnostic and would benefit every faction.
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
+- [x] Casting allowance survives a save — `spellsCastThisTurn` and
+      `cannotCastThisTurn` were the only per-unit turn flags `persistence.py`
+      never wrote, so loading left whatever the running session had: a spell
+      attempted *after* the save was still marked as attempted, and a Wizard
+      that had failed to cast could not try again. `tests/test_persistence.py`
+      now asserts every turn flag is written.
+- [x] Whose side is a joined character on — `join_unit` takes a character out
+      of both player lists (it keeps `_player` for the save), so any code that
+      answered that question by list membership got it wrong for exactly the
+      models that cast most of the spells. A joined Wizard was treated as being
+      on player 2 whatever its actual side, which made its Pillar of Fire sweep
+      over the real enemy and burn nobody, and had the Dispel offered to its own
+      side. `characters.side_of` / `friendly_units` / `enemy_units` resolve it
+      through `_player`, then through the host unit, and the spell and the
+      Dispel both go through them now.
+      LEFTOVER: about forty other sites still ask by membership
+      (`combat_resolution`, `movement_system`, `psychology`); they are all
+      reached with host units rather than joined characters, so none is known
+      to be wrong, but they would be better off using the helper.
 - [x] Non-numeric stats (e.g. Giant A="*", a chariot's WS="-") no longer break
       the combat maths: `stat_value()` in `toHitAndToWound.py` reads them as 0,
       which is what the rules mean by them (Rulebook p. 97), and WS 0 follows
@@ -277,14 +296,26 @@ army-agnostic and would benefit every faction.
       Curse of Cowardly Flight: `panic_test(..., compulsory=True)` — the test is
       taken even by a unit that would pass automatically, and *that* unit Gives
       Ground (2") on a failure instead of fleeing.
-      Pillar of Fire: a Magical Vortex. The template is placed by clicking a
-      point on the board — a range ring shows the 12" the centre must fall
-      within — and becomes a real 3" `pillar_of_fire` terrain piece (difficult
-      going). It burns every enemy unit under it for D3+3 S3 AP-2, again for
-      any enemy that walks through it (`MovementSystem.magicalVortexTests`,
-      which rides the same move hook as the Dangerous Terrain test), and it
-      Remains in Play on `game.remainsInPlay`, scattering D6" at every Start of
-      Turn. `TerrainManager.remove_terrain` takes it away when it ends.
+      Pillar of Fire: a Magical Vortex (Rulebook p. 107). The template is
+      placed by clicking a point on the board — a range ring shows the 12" its
+      central hole must fall within — and becomes a 3" `pillar_of_fire` terrain
+      piece (difficult going), drawn as the ring it is on the tabletop and with
+      a round footprint to match, rather than a scaled terrain mesh in a square
+      box. A Vortex is never placed touching a base, so `nudge_clear` finds the
+      smallest shift, in any direction, that puts it clear of every model,
+      friend or foe; placing it therefore hurts nobody, and one whose scatter
+      ends over a unit steps off again.
+      It burns for D3+3 S3 AP-2 anything that walks through it
+      (`MovementSystem.magicalVortexTests`, which rides the same move hook as
+      the Dangerous Terrain test) and anything its D6" Start of Turn scatter
+      sweeps over — the whole swept path counts, not just where it comes to
+      rest, which is what "that the template moves over" means. A model is
+      under the template when its *base* meets it (`caught` /
+      `distance_to_segment`), the same reach `settle` uses to decide the
+      template is touching one; measuring model centres alone let a pillar
+      sweep down the gap between two ranks, close enough to be nudged off the
+      unit afterwards, and burn nobody.
+      `TerrainManager.remove_terrain` takes it away when it ends.
       Ward saves did not exist at all and were needed for Oaken Shield:
       `ward_save_value` picks the best of several (they never combine) and
       `check_saves` runs the whole sequence — Armour, then Ward, then
@@ -306,7 +337,8 @@ army-agnostic and would benefit every faction.
       LEFTOVER: Magic Resistance, Unbinding and Outclassed in the Art are still
       unimplemented, so nothing reduces a spell's chance beyond the single
       Dispel attempt, and a Remains in Play spell cannot be dispelled after the
-      turn it was cast.
+      turn it was cast. The vortex is not removed when it drifts off the table
+      edge, and it is nudged clear of bases but not of impassable terrain.
 - [ ] Too Tough to Wound — `to_wound` returns 6+ for any Strength shortfall,
       but a difference of -3 or worse cannot wound at all (Rulebook p. 143).
       Found while testing Battle Magic; affects all combat, not just spells.

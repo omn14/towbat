@@ -128,7 +128,11 @@ _TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3,
 _WATER_TYPES = {'river', 'marsh'}
 
 # Pieces that build their own coloured geometry and want no terrain shader.
-_BUILT_TYPES = {'house'}
+_BUILT_TYPES = {'house', 'pillar_of_fire'}
+
+# Conjured pieces: a rules region drawn as a marker, with no body to collide
+# with and no box outline to misrepresent its shape.
+_ETHEREAL_TYPES = {'pillar_of_fire'}
 
 # Small lift so raised terrain doesn't z-fight the ground plane.
 _HILL_LIFT = 0.02
@@ -526,10 +530,14 @@ class TerrainPiece:
         # Water and field-shaped pieces read as natural shapes; a rectangle
         # outline would misrepresent them.
         self.outline = None
-        if self.terrain_type not in _WATER_TYPES and self.terrain_type not in ('hill', 'forest'):
+        if (self.terrain_type not in _WATER_TYPES
+                and self.terrain_type not in ('hill', 'forest')
+                and self.terrain_type not in _ETHEREAL_TYPES):
             self._create_outline()
         #self._create_collision()
-        self._create_collision_from_mesh()
+        self.ghost_np = None
+        if self.terrain_type not in _ETHEREAL_TYPES:
+            self._create_collision_from_mesh()
         self.trees_np = None
         if self.terrain_type == 'forest':
             self._create_trees()
@@ -541,6 +549,8 @@ class TerrainPiece:
             self._create_water_visual()
         elif self.terrain_type == 'house':
             self._create_house_visual()
+        elif self.terrain_type == 'pillar_of_fire':
+            self._create_vortex_visual()
         elif self.terrain_type == 'hill':
             self._create_heightfield_visual(
                 peak=min(self.width, self.height) * 0.11, seed=11.0)
@@ -568,6 +578,25 @@ class TerrainPiece:
         # way round. Buildings sit square to the board.
         self.visual.setH(90.0 if self.height > self.width else 0.0)
         self.visual.flattenStrong()
+
+    def _create_vortex_visual(self):
+        """A blast template, drawn as the ring it is on the tabletop."""
+        radius = self.width / 2.0
+        color = _TERRAIN_COLORS.get(self.terrain_type, Vec4(1, 0.4, 0.1, 1))
+        ls = LineSegs(f"vortex_{id(self)}")
+        ls.setColor(color[0], color[1], color[2], 1.0)
+        ls.setThickness(3.0)
+        segments = 48
+        for i in range(segments + 1):
+            a = 2.0 * math.pi * i / segments
+            x, y = radius * math.cos(a), radius * math.sin(a)
+            (ls.moveTo if i == 0 else ls.drawTo)(x, y, 0.0)
+        self.visual = render.attachNewNode(ls.create())
+        self.visual.setPos(self.center.x, self.center.y, _HILL_LIFT)
+        self.visual.setLightOff()
+        # A circular footprint, so contains() matches the ring that is drawn.
+        self._field = lambda nx, ny: 1.0 - (nx * nx + ny * ny)
+        self._field_edge = 0.0
 
     def _create_mesh_visual(self):
         model_path = _TERRAIN_MODEL_PATHS.get(self.terrain_type, "models/hills.bam")
@@ -1062,6 +1091,8 @@ class TerrainPiece:
         if getattr(self, 'trees_np', None) is not None:
             self.trees_np.removeNode()
             self.trees_np = None
+        if self.ghost_np is None:
+            return
         body = self.ghost_np.node()
         if hasattr(body, 'getMass'):
             # It's a rigid body (from _create_collision_from_mesh)

@@ -73,6 +73,8 @@ def save_game_state(game, filename=None):
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
+            'spellsCastThisTurn': list(getattr(unit, 'spellsCastThisTurn', [])),
+            'cannotCastThisTurn': getattr(unit, 'cannotCastThisTurn', False),
             'isDisrupted': getattr(unit, 'isDisrupted', False),
             'isGeneral': getattr(unit, 'isGeneral', False),
             'isBSB': getattr(unit, 'isBSB', False),
@@ -262,6 +264,10 @@ def load_game_state(game, filename):
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.usedStubborn = unit_data.get('usedStubborn', False)
+        # A spell attempted after the save was taken has not been attempted in
+        # the state being loaded, so the allowance has to come back with it.
+        unit.spellsCastThisTurn = list(unit_data.get('spellsCastThisTurn', []))
+        unit.cannotCastThisTurn = unit_data.get('cannotCastThisTurn', False)
         unit.isDisrupted = unit_data.get('isDisrupted', False)
         # Saves written before the General was tracked keep the load-time nomination.
         unit.isGeneral = unit_data.get('isGeneral', getattr(unit, 'isGeneral', False))

@@ -499,7 +499,10 @@ class MovementSystem:
         crossed = set(tm.get_terrain_between(from_pos, to_pos))
         for spell in list(getattr(self.game, 'remainsInPlay', [])):
             piece = getattr(spell, 'piece', None)
-            if piece in crossed and unit in spell.enemies(self.game):
+            if piece is None or unit not in spell.enemies(self.game):
+                continue
+            # Either the move crossed it, or the unit came to rest on it.
+            if piece in crossed or spell.caught(unit, piece.center, piece.center):
                 print(f"{unit.unit.name} moves through {spell.name}.")
                 spell.burn(unit)
 
