@@ -101,6 +101,7 @@ class unitGraphics(FSM):
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
+        self.isDisrupted=False       # a quarter or more of the models in difficult terrain: no Rank Bonus
         self.isGeneral=False         # army commander; radiates Inspiring Presence
         self.isBSB=False             # carries the Battle Standard (Hold Your Ground)
         self.woundsOnModel=0         # unsaved wounds on the current multi-wound model

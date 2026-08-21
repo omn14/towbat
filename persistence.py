@@ -71,6 +71,7 @@ def save_game_state(game, filename=None):
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
+            'isDisrupted': getattr(unit, 'isDisrupted', False),
             'isGeneral': getattr(unit, 'isGeneral', False),
             'isBSB': getattr(unit, 'isBSB', False),
             'woundsOnModel': getattr(unit, 'woundsOnModel', 0),
@@ -254,6 +255,7 @@ def load_game_state(game, filename):
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.usedStubborn = unit_data.get('usedStubborn', False)
+        unit.isDisrupted = unit_data.get('isDisrupted', False)
         # Saves written before the General was tracked keep the load-time nomination.
         unit.isGeneral = unit_data.get('isGeneral', getattr(unit, 'isGeneral', False))
         unit.isBSB = unit_data.get('isBSB', getattr(unit, 'isBSB', False))

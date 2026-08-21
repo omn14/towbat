@@ -25,38 +25,59 @@ from panda3d.bullet import (
 
 # ── Terrain rule definitions ──────────────────────────────────────────────────
 
+# The going a piece presents is separate from what it looks like: the rulebook
+# is explicit that a wood "might be classed as difficult, dangerous or even
+# impassable terrain, based upon its size and density" (p. 270). A map may say
+# so per piece; each terrain type carries the category it presents by default.
+TERRAIN_CATEGORIES = {
+    'open': {
+        'movement_modifier': 0,
+        'dangerous': False,
+        'impassable': False,
+        'disrupts': False,
+        'description': 'Open ground',
+    },
+    'difficult': {
+        'movement_modifier': -1,
+        'dangerous': False,
+        'impassable': False,
+        'disrupts': True,
+        'description': 'Difficult terrain — -1 Movement, charge discards the highest die',
+    },
+    'dangerous': {
+        # Dangerous terrain "hinders movement just like difficult terrain".
+        'movement_modifier': -1,
+        'dangerous': True,
+        'impassable': False,
+        'disrupts': True,
+        'description': 'Dangerous terrain — as difficult, and a D6 test or lose a Wound',
+    },
+    'impassable': {
+        'movement_modifier': 0,
+        'dangerous': False,
+        'impassable': True,
+        'disrupts': False,
+        'description': 'Impassable terrain — cannot be crossed',
+    },
+}
+
 TERRAIN_RULES = {
     'forest': {
-        'movement_modifier': -1,        # difficult terrain: -1 Movement
+        'going': 'difficult',
         'blocks_line_of_sight': True,
-        'combat_modifier': 0,
-        'charge_allowed': True,
-        'formation_break': True,        # units lose rank bonuses
-        'description': 'Difficult terrain — -1 Movement',
     },
     'hill': {
-        'movement_modifier': 0,         # no penalty
-        'blocks_line_of_sight': False,   # but gives LoS advantage
-        'combat_modifier': 1,           # higher-ground advantage
-        'charge_allowed': True,
-        'formation_break': False,
-        'description': 'Open terrain — +1 combat res when defending',
+        # Hills are open ground; their advantage is elevation, not going.
+        'going': 'open',
+        'blocks_line_of_sight': True,
     },
     'river': {
-        'movement_modifier': -1,
+        'going': 'dangerous',
         'blocks_line_of_sight': False,
-        'combat_modifier': -1,
-        'charge_allowed': False,
-        'formation_break': True,
-        'description': 'Water — -1 Movement, no charges across',
     },
     'marsh': {
-        'movement_modifier': -2,
+        'going': 'dangerous',
         'blocks_line_of_sight': False,
-        'combat_modifier': -1,
-        'charge_allowed': False,
-        'formation_break': True,
-        'description': 'Very difficult terrain — -2 Movement',
     },
 }
 
@@ -96,6 +117,37 @@ _TERRAIN_HEIGHT = {'forest': 2.0, 'hill': 4.0, 'river': 0.3, 'marsh': 0.4}
 
 # Cached, shared GLSL shader instance (loaded once on first use).
 _TERRAIN_SHADER = None
+
+
+# ── Dangerous Terrain tests (Rulebook p. 269) ─────────────────────────────────
+
+# A unit with a quarter or more of its models in difficult terrain is Disrupted.
+DISRUPT_FRACTION = 4
+
+
+def is_disrupted(models_in_terrain: int, models: int) -> bool:
+    """True if enough of a unit's models stand in difficult terrain to cost it
+    its Rank Bonus (Rulebook p. 269)."""
+    if models <= 0:
+        return False
+    return models_in_terrain * DISRUPT_FRACTION >= models
+
+
+def dangerous_terrain_wounds(features: int, models: int, damage='1') -> int:
+    """Wounds a unit suffers crossing *features* dangerous terrain features.
+
+    Every model that begins in, passes through or ends in dangerous terrain
+    tests, once per separate feature, and loses a Wound on a roll of 1.
+    *damage* is a dice expression so Iron Shod Wheels can cost a chariot D3.
+    """
+    if features <= 0 or models <= 0:
+        return 0
+    from models import roll_dice_expr
+    wounds = 0
+    for _ in range(features * models):
+        if random.randint(1, 6) == 1:
+            wounds += roll_dice_expr(damage)
+    return wounds
 
 
 def _get_terrain_shader():
@@ -203,7 +255,7 @@ class TerrainPiece:
     """A single rectangular terrain feature on the battlefield."""
 
     def __init__(self, terrain_type: str, center: Point3,
-                 width: float, height: float, game):
+                 width: float, height: float, game, going: str = None):
         if terrain_type not in TERRAIN_RULES:
             raise ValueError(
                 f"Unknown terrain type '{terrain_type}'. "
@@ -211,6 +263,13 @@ class TerrainPiece:
             )
         self.terrain_type = terrain_type
         self.rules = TERRAIN_RULES[terrain_type]
+        self.going = going or self.rules['going']
+        if self.going not in TERRAIN_CATEGORIES:
+            raise ValueError(
+                f"Unknown terrain category '{self.going}'. "
+                f"Valid categories: {list(TERRAIN_CATEGORIES)}"
+            )
+        self.category = TERRAIN_CATEGORIES[self.going]
         self.center = center
         self.width = width
         self.height = height
@@ -707,23 +766,28 @@ class TerrainPiece:
 
     @property
     def movement_modifier(self) -> int:
-        return self.rules['movement_modifier']
+        return self.category['movement_modifier']
 
     @property
     def blocks_line_of_sight(self) -> bool:
         return self.rules['blocks_line_of_sight']
 
     @property
-    def combat_modifier(self) -> int:
-        return self.rules['combat_modifier']
+    def is_dangerous(self) -> bool:
+        return self.category['dangerous']
 
     @property
-    def charge_allowed(self) -> bool:
-        return self.rules['charge_allowed']
+    def is_impassable(self) -> bool:
+        return self.category['impassable']
 
     @property
-    def formation_break(self) -> bool:
-        return self.rules['formation_break']
+    def disrupts(self) -> bool:
+        """True if standing in this terrain costs a unit its Rank Bonus."""
+        return self.category['disrupts']
+
+    @property
+    def description(self) -> str:
+        return self.category['description']
 
     # ── Cleanup ───────────────────────────────────────────────────────
 
@@ -759,12 +823,13 @@ class TerrainManager:
     # ── Add / remove ──────────────────────────────────────────────────
 
     def add_terrain(self, terrain_type: str, center: Point3,
-                    width: float, height: float) -> TerrainPiece:
-        piece = TerrainPiece(terrain_type, center, width, height, self.game)
+                    width: float, height: float,
+                    going: str = None) -> TerrainPiece:
+        piece = TerrainPiece(terrain_type, center, width, height, self.game, going)
         self.terrain_pieces.append(piece)
         print(f"[Terrain] Added {terrain_type} at ({center.x:.0f}, "
               f"{center.y:.0f}) size {width:.0f}×{height:.0f}  "
-              f"— {piece.rules['description']}")
+              f"— {piece.description}")
         return piece
 
     def clear(self):
@@ -832,7 +897,6 @@ class TerrainManager:
         wood, or on a hill's near slope/crest) but not through/over them to the
         dead ground behind.  A piece the shooter stands in/on never blocks.
         """
-        blocking = ('forest', 'hill')
         dx = to_pos.x - from_pos.x
         dy = to_pos.y - from_pos.y
         length = math.hypot(dx, dy)
@@ -840,7 +904,7 @@ class TerrainManager:
 
         # A wood/hill the shooter occupies doesn't block its own line of sight.
         ignore = {id(p) for p in self.terrain_pieces
-                  if p.terrain_type in blocking and p.contains(from_pos)}
+                  if p.blocks_line_of_sight and p.contains(from_pos)}
 
         entered = None        # the first blocking piece the sight line enters
         exit_point = None     # last sample still inside that piece (its far edge)
@@ -849,7 +913,7 @@ class TerrainManager:
             sample = Point3(from_pos.x + dx * t, from_pos.y + dy * t, 0)
             inside = False
             for p in self.terrain_pieces:
-                if id(p) in ignore or p.terrain_type not in blocking:
+                if id(p) in ignore or not p.blocks_line_of_sight:
                     continue
                 if p.contains(sample):
                     if entered is None:
@@ -909,23 +973,35 @@ class TerrainManager:
                     result.append(terrain)
         return result
 
+    def dangerous_between(self, pos_a, pos_b) -> list[TerrainPiece]:
+        """Dangerous pieces on the path. A model tests once per feature it
+        meets, so each piece is listed once (Rulebook p. 269)."""
+        return [t for t in self.get_terrain_between(pos_a, pos_b) if t.is_dangerous]
+
+    def crosses_difficult(self, pos_a, pos_b) -> bool:
+        """True if the path meets terrain that hinders movement. Dangerous
+        terrain hinders it just like difficult terrain."""
+        return any(t.movement_modifier < 0
+                   for t in self.get_terrain_between(pos_a, pos_b))
+
     def is_charge_allowed(self, from_pos, to_pos) -> bool:
-        """Return *False* if any terrain on the charge path blocks charges."""
-        for t in self.get_terrain_between(from_pos, to_pos):
-            if not t.charge_allowed:
-                return False
-        return True
+        """Return *False* if impassable terrain lies on the charge path."""
+        return not any(t.is_impassable
+                       for t in self.get_terrain_between(from_pos, to_pos))
 
     # ── Serialisation ─────────────────────────────────────────────────
 
     def load_from_json(self, filepath: str):
         """Load terrain layout from a JSON file.
 
-        Expected format::
+        ``going`` is optional and overrides the category the terrain type
+        presents by default, so the same wood can be difficult on one map and
+        dangerous on another::
 
             {
                 "terrain": [
-                    {"type": "forest", "center": [0, 5, 0], "width": 15, "height": 10},
+                    {"type": "forest", "center": [0, 5, 0], "width": 15,
+                     "height": 10, "going": "dangerous"},
                     ...
                 ]
             }
@@ -938,6 +1014,7 @@ class TerrainManager:
                 Point3(*entry['center']),
                 entry['width'],
                 entry['height'],
+                entry.get('going'),
             )
 
     def save_to_json(self, filepath: str):
@@ -948,6 +1025,7 @@ class TerrainManager:
                     'center': [t.center.x, t.center.y, t.center.z],
                     'width': t.width,
                     'height': t.height,
+                    'going': t.going,
                 }
                 for t in self.terrain_pieces
             ]

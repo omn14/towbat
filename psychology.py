@@ -301,15 +301,16 @@ def stubborn_available(unit) -> bool:
 MAX_RANK_BONUS = 2
 
 
-def rank_bonus(unit) -> int:
+def rank_bonus(unit, disrupted: bool = False) -> int:
     """Combat result points a formed unit claims for its ranks.
 
     One per rank behind the first, except that a rank short of the unit's
-    frontage does not count. Skirmishers claim none, and each troop type caps
-    what it can claim -- a heavy chariot cannot form ranks at all.
+    frontage does not count. Skirmishers claim none, a Disrupted unit claims
+    none, and each troop type caps what it can claim -- a heavy chariot cannot
+    form ranks at all.
     """
     model = unit.model
-    if model.is_skirmisher():
+    if disrupted or model.is_skirmisher():
         return 0
     cap = model.max_rank_bonus(MAX_RANK_BONUS)
     if cap <= 0:

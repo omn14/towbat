@@ -10,6 +10,7 @@ import math
 from collision_masks import CollisionMask as CM
 from characters import on_host_removed
 from special_rules import max_charge_range, unit_has_swiftstride
+from terrain_system import dangerous_terrain_wounds, is_disrupted
 from toHitAndToWound import stat_value
 
 from panda3d.core import (
@@ -469,6 +470,39 @@ class MovementSystem:
             mod = min(mod, t.movement_modifier)
         return mod
 
+    def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1') -> int:
+        """Test every model against each dangerous feature the move met, and
+        apply the wounds (Rulebook p. 269)."""
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return 0
+        features = tm.dangerous_between(from_pos, to_pos)
+        if not features:
+            return 0
+        wounds = dangerous_terrain_wounds(len(features), unit.unit.nmodels, damage)
+        names = ', '.join(sorted({t.terrain_type for t in features}))
+        print(f"{unit.unit.name}: Dangerous Terrain test ({names}) "
+              f"-> {wounds} wound(s)")
+        self.applyWounds(unit, wounds)
+        return wounds
+
+    def updateDisrupted(self, unit) -> bool:
+        """Recompute whether *unit* stands in enough difficult terrain to lose
+        its Rank Bonus. Counts the unit's own model nodes, so it measures the
+        models rather than the footprint box."""
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None or unit.model.isEmpty():
+            return False
+        children = unit.model.getChildren()
+        inside = sum(1 for c in children
+                     if any(t.disrupts for t in tm.get_all_terrain_at(c.getPos(render))))
+        was = getattr(unit, 'isDisrupted', False)
+        unit.isDisrupted = is_disrupted(inside, len(children))
+        if unit.isDisrupted != was:
+            print(f"{unit.unit.name} is {'now' if unit.isDisrupted else 'no longer'} "
+                  f"Disrupted ({inside}/{len(children)} models in difficult terrain)")
+        return unit.isDisrupted
+
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():
             return
@@ -919,6 +953,8 @@ class MovementSystem:
         else:
             unit.request("Moved")
             self.alignModelsToHillNormal(unit)
+            self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
+            self.updateDisrupted(unit)
         self.game.bakeTextures(self.game.ground)
 
     # ─── Flee, Pursuit & Rally ────────────────────────────────────────────

@@ -313,6 +313,7 @@ class GamePhaseFSM(FSM):
             unit.panicTestedThisPhase = False
             # Combat-start size, for the nearby-friend-destroyed US>=5 gate.
             unit.startOfPhaseModels = unit.unit.nmodels
+            self.game.movement.updateDisrupted(unit)
 
     def exitCombatPhase(self):
         self.game.ignore('mouse1')

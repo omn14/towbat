@@ -185,9 +185,39 @@ army-agnostic and would benefit every faction.
       Scythed Wheels (`model.impact_hit_ap()` — Impact Hits at AP-2) and
       Firing Platform (`model.has_all_round_vision()` — the 360° arc
       skirmishers already had, for shooting and casting).
-      LEFTOVER: Lumbering (pivot 90° about centre, cannot join or be joined)
-      and Iron Shod Wheels, which needs Dangerous Terrain and linear obstacles
-      — neither exists in `terrain_system.py` yet.
+      LEFTOVER: Lumbering (pivot 90° about centre, cannot join or be joined),
+      and Iron Shod Wheels, which needs linear obstacles and "difficult counts
+      as dangerous for me"; the D3 damage hook is already in place
+      (`dangerousTerrainTests(..., damage='D3')`).
+- [x] Categories of terrain (Rulebook p. 269-270) — what a piece *is* is now
+      separate from what it *looks like*, because the rulebook is explicit that
+      a wood "might be classed as difficult, dangerous or even impassable
+      terrain, based upon its size and density". `TERRAIN_CATEGORIES` holds the
+      rules (open / difficult / dangerous / impassable); `TERRAIN_RULES` holds
+      the look plus the category that type presents by default, and a map may
+      override it per piece with a `going` tag. Old maps without the tag load
+      unchanged.
+      Done: -1 Movement (already there), the Dangerous Terrain test (every
+      model tests once per feature it meets, losing a Wound on a 1 —
+      `dangerous_terrain_wounds`, applied on normal moves and on charges,
+      including charges that fall short), the difficult-terrain Charge roll
+      (`charge_roll(dice, difficult=True)` discards the *highest* die, with
+      Swiftstride's bonus die still added), and Disrupted (a quarter or more of
+      a unit's models in difficult terrain costs it its Rank Bonus — counted
+      from the unit's own model nodes, recomputed after a move and at the start
+      of the Combat phase, and persisted).
+      Corrected on the way: marsh was -2 Movement (no such modifier exists) and
+      is now dangerous; river invented a no-charges rule and is now dangerous;
+      hills gave +1 combat result and are now open ground as the rulebook says,
+      keeping their line-of-sight behaviour. `combat_modifier`,
+      `charge_allowed` and `formation_break` were dead keys, contradicted by
+      the code that ignored them, and are gone; `blocks_line_of_sight` was
+      likewise ignored (hills were flagged False yet blocked) and now drives
+      `los_block_point`.
+      LEFTOVER: impassable terrain does not physically block movement (terrain
+      bodies are on collision bits 20-23, which the movement sweep mask does
+      not include), linear obstacles are not represented at all, and hills owe
+      Vantage Point (fire with one extra rank).
 - [x] Multi-wound models \u2014 `MovementSystem.applyWounds` converts unsaved wounds
       into slain models using the profile's Wounds, keeping the remainder on the
       wounded model (`woundsOnModel`, persisted). Combat and shooting passed

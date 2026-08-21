@@ -212,15 +212,18 @@ def max_charge_range(movement: int, swiftstride: bool = False) -> int:
     return movement + 6 + (SWIFTSTRIDE_CHARGE_BONUS if swiftstride else 0)
 
 
-def charge_roll(dice) -> int:
+def charge_roll(dice, difficult: bool = False) -> int:
     """Result of a Charge roll: 2D6 discarding the lowest.
 
-    Any further dice are Swiftstride's bonus and are *added* -- the bonus die is
-    never one of the two the roll discards between.
+    Charging through difficult terrain discards the highest instead, so the
+    lowest of the two is the result (Rulebook p. 269). Any further dice are
+    Swiftstride's bonus and are *added* -- the bonus die is never one of the
+    two the roll discards between.
     """
     if not dice:
         return 0
-    return max(dice[:2]) + sum(dice[2:])
+    pair = min(dice[:2]) if difficult else max(dice[:2])
+    return pair + sum(dice[2:])
 
 
 def max_pursuit_range(swiftstride: bool = False) -> int:

@@ -4,13 +4,15 @@
       "type": "forest",
       "center": [10, 16, 0],
       "width": 14,
-      "height": 10
+      "height": 10,
+      "going": "difficult"
     },
     {
       "type": "forest",
       "center": [22, -15, 0],
       "width": 14,
-      "height": 10
+      "height": 10,
+      "going": "dangerous"
     },
     {
       "type": "hill",
@@ -26,7 +28,7 @@
     },
     {
       "type": "river",
-      "center": [0, 0, 0],
+      "center": [0, -48, 0],
       "width": 100,
       "height": 14
     }

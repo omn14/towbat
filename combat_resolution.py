@@ -217,10 +217,11 @@ class CombatResolver:
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
 
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice)
+        rough = self.chargeThroughDifficult(unit, oposUnit)
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice, rough)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice, rough)
         fldist = sum(fldice) + fleeBonus
         if chdist < wdistance:
             angle = math.degrees(chdist / width)
@@ -355,6 +356,15 @@ class CombatResolver:
         return (f"Roll needed: {needed - int(maxmove):.0f}"
                 f"   (max charge {max_charge_range(int(maxmove), swiftstride)}\")")
 
+    def chargeThroughDifficult(self, unit, from_pos) -> bool:
+        """True if the charge path meets terrain that hinders movement, which
+        makes the Charge roll discard the highest die instead of the lowest
+        (Rulebook p. 269)."""
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return False
+        return tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
+
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
@@ -447,10 +457,14 @@ class CombatResolver:
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
 
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice)
+        rough = self.chargeThroughDifficult(unit, oposUnit)
+        if rough:
+            print("Charging through difficult terrain \u2014 the Charge roll "
+                  "discards the highest die.")
+        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice, rough)
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice)
+                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice, rough)
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
         if chdist < wdistance:
@@ -495,6 +509,8 @@ class CombatResolver:
             for terning in terninger:
                 terning.remove(self.game.world)
             print("Charge fell short \u2014 unit did not reach the enemy.")
+            self.game.movement.dangerousTerrainTests(unit, oposUnit,
+                                                     unit.bodyNP.getPos())
             unit.request("Moved")
             return
 
@@ -562,6 +578,8 @@ class CombatResolver:
         unit.chargedThisTurn = True
         # Impact Hits need to know the charge covered 3" or more (p. 172).
         unit.chargeDistance = float(self.game.moveArceDistance)
+        self.game.movement.dangerousTerrainTests(unit, oposUnit,
+                                                 unit.bodyNP.getPos())
 
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
@@ -601,7 +619,7 @@ class CombatResolver:
         self.game.autoHold = False
         print("Charge dice results:", chdice)
 
-        chdist = maxmove + charge_roll(chdice)
+        chdist = maxmove + charge_roll(chdice, self.chargeThroughDifficult(unit, oposUnit))
         if unit.state == "IsPursuing":
             chdist = sum(chdice)
 
@@ -623,6 +641,7 @@ class CombatResolver:
 
         if not reached:
             print("Charge fell short \u2014 skirmishers did not reach the enemy.")
+            self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
             unit.request("Moved")
             return
 
@@ -655,6 +674,7 @@ class CombatResolver:
         unit.isInCombat = True
         unit.chargedThisTurn = True
         unit.chargeDistance = float(travel)
+        self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
         unit.isInCombatWith.append(defenderUnit)
@@ -915,8 +935,9 @@ class CombatResolver:
                         player2_flank_bonus += 2
                     else:
                         player2_flank_bonus += 0
-                player1_rank_bonus = min(player1_rank_bonus + rank_bonus(defenderUnit.unit),
-                                         MAX_RANK_BONUS)
+                player1_rank_bonus = min(player1_rank_bonus + rank_bonus(
+                    defenderUnit.unit, getattr(defenderUnit, 'isDisrupted', False)),
+                    MAX_RANK_BONUS)
             else:
                 player2_score += total_wounds
                 for faceing in defenderUnit.isInCombatFlank:
@@ -926,8 +947,9 @@ class CombatResolver:
                         player1_flank_bonus += 2
                     else:
                         player1_flank_bonus += 0
-                player2_rank_bonus = min(player2_rank_bonus + rank_bonus(defenderUnit.unit),
-                                         MAX_RANK_BONUS)
+                player2_rank_bonus = min(player2_rank_bonus + rank_bonus(
+                    defenderUnit.unit, getattr(defenderUnit, 'isDisrupted', False)),
+                    MAX_RANK_BONUS)
 
             combWounds = 0
             combWounds += total_wounds
