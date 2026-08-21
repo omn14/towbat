@@ -1146,12 +1146,14 @@ class MovementSystem:
             return result.getHitFraction()
         return 1.0
     
-    def sweepTestRot(self, unit, point,angle,mask=BitMask32.bit(9),pass_over=None):
-        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test
-        # unless the caller forces detection with pass_over=False.
+    def sweepTestRot(self, unit, point,angle,mask=None,pass_over=None):
+        # Flyers pass over other units and terrain: skip the hit test unless the
+        # caller forces detection with pass_over=False.
+        if mask is None:
+            mask = CM.MOVE_BLOCKERS
         if pass_over is None:
             pass_over = unit.unit.model.is_flying()
-        if mask == BitMask32.bit(9) and pass_over:
+        if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
         startPos=unit.bodyNP.getPos()
         Hpr=unit.bodyNP.getHpr()
@@ -1185,12 +1187,14 @@ class MovementSystem:
             return result.getHitFraction(),result.getHitPos(),tsTo
         return 1.0,None,tsTo
     
-    def sweepTestDir(self, unit, tsFrom, direction,length,mask=BitMask32.bit(9),pass_over=None):
-        # Flyers pass over other units: skip the unit-sweep (bit 9) hit test
-        # unless the caller forces detection with pass_over=False.
+    def sweepTestDir(self, unit, tsFrom, direction,length,mask=None,pass_over=None):
+        # Flyers pass over other units and terrain: skip the hit test unless the
+        # caller forces detection with pass_over=False.
+        if mask is None:
+            mask = CM.MOVE_BLOCKERS
         if pass_over is None:
             pass_over = unit.unit.model.is_flying()
-        if mask == BitMask32.bit(9) and pass_over:
+        if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
         
         #tsFrom = TransformState.makePosHpr(startPos, nHpr)

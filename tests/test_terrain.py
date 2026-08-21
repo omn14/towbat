@@ -15,7 +15,10 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from panda3d.core import BitMask32  # noqa: E402
+
 import terrain_system as ts  # noqa: E402
+from collision_masks import CollisionMask as CM  # noqa: E402
 from models import model  # noqa: E402
 from psychology import rank_bonus  # noqa: E402
 from special_rules import charge_roll  # noqa: E402
@@ -153,6 +156,38 @@ class TestDisrupted(unittest.TestCase):
                                files=5, ranks=4)
         self.assertEqual(rank_bonus(unit), 2)
         self.assertEqual(rank_bonus(unit, disrupted=True), 0)
+
+
+class TestImpassableTerrain(unittest.TestCase):
+    """Impassable terrain cannot be crossed; units must go around it."""
+
+    def test_a_house_is_impassable(self):
+        self.assertEqual(ts.TERRAIN_RULES['house']['going'], 'impassable')
+        cat = ts.TERRAIN_CATEGORIES['impassable']
+        self.assertTrue(cat['impassable'])
+        # It stops movement outright rather than slowing it.
+        self.assertEqual(cat['movement_modifier'], 0)
+        self.assertFalse(cat['dangerous'])
+        self.assertFalse(cat['disrupts'])
+
+    def test_a_building_blocks_line_of_sight(self):
+        self.assertTrue(ts.TERRAIN_RULES['house']['blocks_line_of_sight'])
+
+    def test_it_has_its_own_collision_bit(self):
+        self.assertEqual(ts._TERRAIN_COLLISION_MASK['house'],
+                         CM.TERRAIN_IMPASSABLE)
+
+    def test_movement_sweeps_hit_it(self):
+        # The sweep used to test bit 9 only, so terrain never stopped anything.
+        self.assertTrue((CM.MOVE_BLOCKERS & CM.TERRAIN_IMPASSABLE)
+                        != BitMask32.allOff())
+        self.assertTrue((CM.MOVE_BLOCKERS & CM.SWEEP_TARGET)
+                        != BitMask32.allOff())
+
+    def test_passable_terrain_does_not_block(self):
+        for kind in ('forest', 'hill', 'river', 'marsh'):
+            self.assertTrue((CM.MOVE_BLOCKERS & ts._TERRAIN_COLLISION_MASK[kind])
+                            == BitMask32.allOff(), kind)
 
 
 class TestChargingThroughDifficultTerrain(unittest.TestCase):

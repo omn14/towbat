@@ -22,6 +22,8 @@ from panda3d.bullet import (
     BulletTriangleMesh, BulletTriangleMeshShape, BulletRigidBodyNode,
 )
 
+from collision_masks import CollisionMask as CM
+
 
 # ── Terrain rule definitions ──────────────────────────────────────────────────
 
@@ -79,6 +81,11 @@ TERRAIN_RULES = {
         'going': 'dangerous',
         'blocks_line_of_sight': False,
     },
+    'house': {
+        # "most buildings" are impassable terrain (Rulebook p. 270).
+        'going': 'impassable',
+        'blocks_line_of_sight': True,
+    },
 }
 
 # Colours used to tint the terrain overlay (RGBA, alpha < 1 → translucent)
@@ -87,6 +94,7 @@ _TERRAIN_COLORS = {
     'hill':   Vec4(0.50, 0.40, 0.20, 0.35),
     'river':  Vec4(0.10, 0.20, 0.60, 0.45),
     'marsh':  Vec4(0.30, 0.30, 0.10, 0.40),
+    'house':  Vec4(0.45, 0.20, 0.15, 0.60),
 }
 
 _TERRAIN_COLLISION_MASK = {
@@ -94,6 +102,7 @@ _TERRAIN_COLLISION_MASK = {
     'hill':   BitMask32.bit(21),
     'river':  BitMask32.bit(22),
     'marsh':  BitMask32.bit(23),
+    'house':  CM.TERRAIN_IMPASSABLE,
 }
 
 _TERRAIN_MODEL_PATHS = {
@@ -109,11 +118,15 @@ _TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3}
 # Water is drawn as a flat animated surface instead of a raised mesh.
 _WATER_TYPES = {'river', 'marsh'}
 
+# Pieces that build their own coloured geometry and want no terrain shader.
+_BUILT_TYPES = {'house'}
+
 # Small lift so raised terrain doesn't z-fight the ground plane.
 _HILL_LIFT = 0.02
 
 # Vertical scale per type — hills rise, forests sit low, water is nearly flat.
-_TERRAIN_HEIGHT = {'forest': 2.0, 'hill': 4.0, 'river': 0.3, 'marsh': 0.4}
+_TERRAIN_HEIGHT = {'forest': 2.0, 'hill': 4.0, 'river': 0.3, 'marsh': 0.4,
+                   'house': 4.5}
 
 # Cached, shared GLSL shader instance (loaded once on first use).
 _TERRAIN_SHADER = None
@@ -222,6 +235,131 @@ def _get_tree_model():
     return _TREE_MODEL or None
 
 
+# ── Simple coloured-mesh builder (houses) ──────────────────────────────────
+
+class _MeshBuilder:
+    """Accumulates flat-shaded coloured triangles into one Geom."""
+
+    def __init__(self, name='mesh'):
+        fmt = GeomVertexFormat.getV3n3c4()
+        self._vdata = GeomVertexData(name, fmt, Geom.UHStatic)
+        self._vw = GeomVertexWriter(self._vdata, 'vertex')
+        self._nw = GeomVertexWriter(self._vdata, 'normal')
+        self._cw = GeomVertexWriter(self._vdata, 'color')
+        self._tris = GeomTriangles(Geom.UHStatic)
+        self._n = 0
+
+    def tri(self, a, b, c, color):
+        n = Vec3(*b) - Vec3(*a)
+        n = n.cross(Vec3(*c) - Vec3(*a))
+        if n.length() > 1e-9:
+            n.normalize()
+        else:
+            n = Vec3(0, 0, 1)
+        for p in (a, b, c):
+            self._vw.addData3(*p)
+            self._nw.addData3(n.x, n.y, n.z)
+            self._cw.addData4(*color)
+        self._tris.addVertices(self._n, self._n + 1, self._n + 2)
+        self._n += 3
+
+    def quad(self, a, b, c, d, color):
+        self.tri(a, b, c, color)
+        self.tri(a, c, d, color)
+
+    def box(self, x0, x1, y0, y1, z0, z1, color, top_color=None):
+        self.quad((x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1), color)
+        self.quad((x1, y1, z0), (x0, y1, z0), (x0, y1, z1), (x1, y1, z1), color)
+        self.quad((x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1), color)
+        self.quad((x0, y1, z0), (x0, y0, z0), (x0, y0, z1), (x0, y1, z1), color)
+        self.quad((x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),
+                  top_color or color)
+
+    def geom(self):
+        g = Geom(self._vdata)
+        self._tris.closePrimitive()
+        g.addPrimitive(self._tris)
+        return g
+
+
+# Medieval timber-framed house palette.
+_HOUSE_PLASTER = (0.86, 0.82, 0.71, 1.0)
+_HOUSE_TIMBER = (0.26, 0.17, 0.10, 1.0)
+_HOUSE_ROOF = (0.42, 0.22, 0.16, 1.0)
+_HOUSE_ROOF_DARK = (0.32, 0.16, 0.12, 1.0)
+_HOUSE_DOOR = (0.30, 0.19, 0.11, 1.0)
+_HOUSE_WINDOW = (0.14, 0.12, 0.10, 1.0)
+_HOUSE_STONE = (0.55, 0.52, 0.47, 1.0)
+
+
+def _house_geom(length, breadth, height):
+    """A timber-framed house with a gabled roof, centred on the origin.
+
+    The ridge runs along X, so *length* is the ridge axis and the roof slopes
+    down towards ±Y. The caller turns the piece if its footprint is deeper
+    than it is wide.
+    """
+    b = _MeshBuilder('house')
+    # Leave a margin so the building sits inside its footprint rather than
+    # exactly on the edge that blocks movement.
+    hw, hd = length * 0.42, breadth * 0.42
+    wall = height * 0.55
+    ridge = height
+    eave = min(hw, hd) * 0.16              # roof overhang
+    sill = wall * 0.06                     # stone footing
+
+    b.box(-hw, hw, -hd, hd, 0.0, sill, _HOUSE_STONE)
+    b.box(-hw, hw, -hd, hd, sill, wall, _HOUSE_PLASTER)
+
+    # Corner posts and a mid rail, the timber frame that dates the building.
+    post = min(hw, hd) * 0.09
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            b.box(sx * hw - post, sx * hw + post, sy * hd - post, sy * hd + post,
+                  sill, wall, _HOUSE_TIMBER)
+    rail = wall * 0.55
+    for sy in (-1, 1):
+        b.box(-hw, hw, sy * hd - 0.02, sy * hd + 0.02,
+              rail - post * 0.6, rail + post * 0.6, _HOUSE_TIMBER)
+
+    # Gable ends: the wall triangle between the eaves and the ridge, at the
+    # ends of the ridge.
+    for sx in (-1, 1):
+        x = sx * hw
+        b.tri((x, -hd, wall), (x, hd, wall), (x, 0.0, ridge), _HOUSE_PLASTER)
+        b.tri((x, hd, wall), (x, -hd, wall), (x, 0.0, ridge), _HOUSE_PLASTER)
+
+    # Roof: two slopes meeting at the ridge, overhanging all four sides.
+    x0, x1 = -hw - eave, hw + eave
+    y0, y1 = -hd - eave, hd + eave
+    b.quad((x0, y0, wall), (x1, y0, wall), (x1, 0.0, ridge), (x0, 0.0, ridge),
+           _HOUSE_ROOF)
+    b.quad((x1, y1, wall), (x0, y1, wall), (x0, 0.0, ridge), (x1, 0.0, ridge),
+           _HOUSE_ROOF)
+    # Undersides, so the eaves are not see-through from below.
+    b.quad((x1, y0, wall), (x0, y0, wall), (x0, 0.0, ridge), (x1, 0.0, ridge),
+           _HOUSE_ROOF_DARK)
+    b.quad((x0, y1, wall), (x1, y1, wall), (x1, 0.0, ridge), (x0, 0.0, ridge),
+           _HOUSE_ROOF_DARK)
+
+    # Door and shuttered windows along the front.
+    dw, dh = hw * 0.16, wall * 0.66
+    b.quad((-dw, -hd - 0.03, 0.0), (dw, -hd - 0.03, 0.0),
+           (dw, -hd - 0.03, dh), (-dw, -hd - 0.03, dh), _HOUSE_DOOR)
+    ww = hw * 0.13
+    for sx in (-1, 1):
+        cx = sx * hw * 0.55
+        b.quad((cx - ww, -hd - 0.03, wall * 0.42), (cx + ww, -hd - 0.03, wall * 0.42),
+               (cx + ww, -hd - 0.03, wall * 0.74), (cx - ww, -hd - 0.03, wall * 0.74),
+               _HOUSE_WINDOW)
+
+    # Chimney, rising against one gable end.
+    cw = min(hw, hd) * 0.15
+    cx = hw * 0.72
+    b.box(cx - cw, cx + cw, -cw, cw, wall * 0.5, ridge * 1.2, _HOUSE_STONE)
+    return b.geom()
+
+
 # ── Deterministic value noise for procedural terrain shapes ────────────────
 def _hash2(x, y, seed):
     n = math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453
@@ -298,6 +436,8 @@ class TerrainPiece:
             self._create_river_visual()
         elif self.terrain_type in _WATER_TYPES:
             self._create_water_visual()
+        elif self.terrain_type == 'house':
+            self._create_house_visual()
         elif self.terrain_type == 'hill':
             self._create_heightfield_visual(
                 peak=min(self.width, self.height) * 0.11, seed=11.0)
@@ -306,7 +446,24 @@ class TerrainPiece:
                 peak=min(self.width, self.height) * 0.03, seed=23.0)
         else:
             self._create_mesh_visual()
-        self._apply_shader()
+        if self.terrain_type not in _BUILT_TYPES:
+            self._apply_shader()
+
+    def _create_house_visual(self):
+        """A medieval timber-framed house filling the piece's footprint."""
+        long_side = max(self.width, self.height)
+        short_side = min(self.width, self.height)
+        node = GeomNode(f"house_{id(self)}")
+        node.addGeom(_house_geom(long_side, short_side,
+                                 _TERRAIN_HEIGHT.get('house', 4.0)))
+        self.visual = render.attachNewNode(node)
+        self.visual.setPos(self.center.x, self.center.y, _HILL_LIFT)
+        # The ridge is built along X; turn it if the footprint is the deeper way
+        # round, and jitter slightly so a row of houses is not stamped out.
+        seed = int(self.center.x * 131 + self.center.y * 17)
+        turn = 90.0 if self.height > self.width else 0.0
+        self.visual.setH(turn + random.Random(seed).uniform(-6.0, 6.0))
+        self.visual.flattenStrong()
 
     def _create_mesh_visual(self):
         model_path = _TERRAIN_MODEL_PATHS.get(self.terrain_type, "models/hills.bam")

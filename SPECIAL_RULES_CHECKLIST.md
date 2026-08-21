@@ -214,10 +214,20 @@ army-agnostic and would benefit every faction.
       the code that ignored them, and are gone; `blocks_line_of_sight` was
       likewise ignored (hills were flagged False yet blocked) and now drives
       `los_block_point`.
-      LEFTOVER: impassable terrain does not physically block movement (terrain
-      bodies are on collision bits 20-23, which the movement sweep mask does
-      not include), linear obstacles are not represented at all, and hills owe
+      LEFTOVER: linear obstacles are not represented at all, and hills owe
       Vantage Point (fire with one extra rank).
+- [x] Impassable terrain (Rulebook p. 270) — a `house` terrain type, built as a
+      procedural medieval timber-framed building (plaster walls, corner posts
+      and a mid rail, gabled roof with overhanging eaves, stone chimney, door
+      and shuttered windows) sized to its footprint and turned to run its ridge
+      along the longer side. It blocks line of sight like a wood, and it stops
+      movement: terrain bodies already carried collision bits 20-24, but the
+      movement sweeps tested bit 9 (units) alone, so no terrain had ever
+      physically blocked anything. `CollisionMask.MOVE_BLOCKERS` is now the
+      sweep default, and only the impassable bit is in it, so woods and hills
+      still let units walk in. Flyers pass over as before.
+      LEFTOVER: a charge that cannot align because of impassable terrain should
+      become a disordered charge, which is not modelled.
 - [x] Multi-wound models \u2014 `MovementSystem.applyWounds` converts unsaved wounds
       into slain models using the profile's Wounds, keeping the remainder on the
       wounded model (`woundsOnModel`, persisted). Combat and shooting passed

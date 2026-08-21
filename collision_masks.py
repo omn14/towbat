@@ -57,6 +57,7 @@ class CollisionMask:
     TERRAIN_HILL            = BitMask32.bit(21)  # terrain ghost nodes (hill)
     TERRAIN_RIVER           = BitMask32.bit(22)  # terrain ghost nodes (river)
     TERRAIN_MARSH           = BitMask32.bit(23)  # terrain ghost nodes (marsh)
+    TERRAIN_IMPASSABLE      = BitMask32.bit(24)  # terrain that stops movement (houses…)
     BOARD            = BitMask32.bit(1)   # the game board (shares bit 1 today)
 
     # ── convenience combos ──────────────────────────────────────
@@ -75,7 +76,11 @@ class CollisionMask:
     HOVER_PICK       = UNIT_DEFAULT | COMBAT_ENGAGED | OPPONENT_UNIT  # bits 1 + 4 + 7
 
     # What a *terrain piece* should be hittable by (terrain queries only):
-    TERRAIN_INTO     = TERRAIN_FOREST | TERRAIN_HILL | TERRAIN_RIVER | TERRAIN_MARSH  # bits 20-23
+    TERRAIN_INTO     = (TERRAIN_FOREST | TERRAIN_HILL | TERRAIN_RIVER
+                        | TERRAIN_MARSH | TERRAIN_IMPASSABLE)      # bits 20-24
+
+    # What stops a moving unit: other units, and terrain it cannot cross.
+    MOVE_BLOCKERS    = SWEEP_TARGET | TERRAIN_IMPASSABLE     # bits 9 + 24
 
     # ── helpers ─────────────────────────────────────────────────
     @staticmethod
