@@ -56,7 +56,8 @@ def _weapon_effects(weapon):
 
 def _ranged_tohit_report(model):
     """Effective BS, To Hit target and the modifiers in effect for a shot."""
-    bs = _si(model.characteristics, 'BS', 3)
+    bs = (model.firing_bs(3) if hasattr(model, 'firing_bs')
+          else _si(model.characteristics, 'BS', 3))
     ignore = set((getattr(model, 'equipedWeapon', None) or {})
                  .get('ignore_to_hit_penalties', []))
     mods = []
@@ -82,7 +83,9 @@ def build_combat_report(unit1, unit2, charge, attacks):
     ranged = w.get('tag') == 'ranged'
 
     if ranged:
-        strength = w.get('ranged_strength') or _si(m1.characteristics, 'S', 3)
+        strength = w.get('ranged_strength') or (
+            m1.shooting_strength() if hasattr(m1, 'shooting_strength')
+            else _si(m1.characteristics, 'S', 3))
         ap = w.get('ranged_AP', 0)
         to_hit_target, hit_mods, _bs = _ranged_tohit_report(m1)
     else:

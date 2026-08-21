@@ -21,7 +21,7 @@ from battleFunctions import simulate_battle  # noqa: E402
 from combat_resolution import CombatResolver  # noqa: E402
 from models import model  # noqa: E402
 from movement_system import MovementSystem  # noqa: E402
-from toHitAndToWound import to_hit, to_wound, stat_value  # noqa: E402
+from toHitAndToWound import to_hit, to_hit_ranged, to_wound, stat_value  # noqa: E402
 
 
 class TestChariotCatalogue(unittest.TestCase):
@@ -103,6 +103,46 @@ class TestChariotToHit(unittest.TestCase):
     def test_wounds_are_rolled_against_the_chariot(self):
         # S3 against the chariot's T5 is a 6, not against the crew's T of '-'.
         self.assertEqual(to_wound(self.ghoul, self.wagon), 6)
+
+
+class TestChariotShooting(unittest.TestCase):
+    """The crew shoot with their own Ballistic Skill and Strength (p. 194)."""
+
+    BLUNDERBUSS = {'name': 'Blunderbuss', 'tag': 'ranged', 'ranged_range': 12,
+                   'ranged_strength': 3, 'ranged_AP': 1, 'ranged_shots': 1,
+                   'ranged_shots_dice': 'D3'}
+
+    def setUp(self):
+        self.wagon = model("War Wagon", "")
+        self.wagon.weapons['Blunderbuss'] = dict(self.BLUNDERBUSS)
+
+    def test_the_chariot_has_no_ballistic_skill_of_its_own(self):
+        self.assertEqual(self.wagon.characteristics['BS'], '-')
+
+    def test_it_shoots_with_the_crews(self):
+        self.assertEqual(self.wagon.firing_bs(), 3)
+        self.assertEqual(self.wagon.get_crew().characteristics['BS'], '3')
+
+    def test_a_shot_can_actually_hit(self):
+        # A BS of '-' reads as 0, which to_hit_ranged rejects outright, so every
+        # shot missed however good the roll.
+        self.wagon.equip_weapon('Blunderbuss')
+        self.wagon.attack_roll = 4          # crew BS 3 hits on a 4+
+        self.assertTrue(to_hit_ranged(self.wagon))
+        self.wagon.attack_roll = 3
+        self.assertFalse(to_hit_ranged(self.wagon))
+
+    def test_a_weapon_without_a_strength_uses_the_crews(self):
+        # The chariot is S5, its crew S3; a bow has no Strength of its own.
+        self.assertEqual(self.wagon.shooting_strength(), 3)
+        self.assertEqual(stat_value(self.wagon.characteristics['S']), 5)
+
+    def test_an_ordinary_model_is_unaffected(self):
+        ghoul = model("Crypt Ghoul", "")
+        self.assertEqual(ghoul.firing_bs(),
+                         stat_value(ghoul.characteristics.get('BS')))
+        self.assertEqual(ghoul.shooting_strength(),
+                         stat_value(ghoul.characteristics.get('S')))
 
 
 class TestChariotAttacks(unittest.TestCase):

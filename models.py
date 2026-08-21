@@ -333,6 +333,20 @@ class model:
         source = crew if crew is not None else self
         return stat_int(source.characteristics, 'WS', default)
 
+    def firing_bs(self, default: int = 0) -> int:
+        """The Ballistic Skill this model shoots with. A chariot's own profile
+        has none; its crew shoot with theirs (Rulebook p. 194)."""
+        crew = self.get_crew()
+        source = crew if crew is not None else self
+        return stat_int(source.characteristics, 'BS', default)
+
+    def shooting_strength(self, default: int = 3) -> int:
+        """Strength for a weapon that has none of its own, e.g. a bow. The crew
+        shoot with their own Strength, not the chariot's."""
+        crew = self.get_crew()
+        source = crew if crew is not None else self
+        return stat_int(source.characteristics, 'S', default)
+
     def is_skirmisher(self) -> bool:
         """True if the model has the Skirmishers special rule."""
         return any(isinstance(r, dict) and r.get('skirmish')
@@ -446,7 +460,7 @@ class model:
         w = get_catalogue().weapon(name)
         if w:
             if w.get('tag') == 'ranged' and not w.get('ranged_strength'):
-                w['ranged_strength'] = stat_int(self.characteristics, 'S', 3)
+                w['ranged_strength'] = self.shooting_strength()
             self.weapons[w['name']] = w
         return w
 

@@ -55,7 +55,9 @@ def to_wound(model1,model2,strength=None):
     return 6
 
 def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False,target_skirmisher=False):
-    bs1 = stat_value(model1.characteristics.get('BS'))
+    # A chariot shoots with its crew's Ballistic Skill; its own profile has none.
+    bs1 = (model1.firing_bs() if hasattr(model1, 'firing_bs')
+           else stat_value(model1.characteristics.get('BS')))
     if bs1 <= 0:
         return False   # BS 0: no ranged ability at all
 

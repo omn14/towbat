@@ -161,9 +161,14 @@ army-agnostic and would benefit every faction.
       its beasts' Movement, Toughness/Wounds stay on the chariot, and the crew
       and beasts each fight with their own WS/S/A at full count while the
       chariot itself has no Attacks (`CombatResolver.chariotParts`).
-      LEFTOVER: the crew's own Ballistic Skill and their own weapons — a War
-      Wagon cannot shoot with its crew's missile weapons; and "special rules
-      that apply to one element apply to the others".
+      The crew also shoot with their own Ballistic Skill and Strength
+      (`firing_bs` / `shooting_strength`) — a chariot's own BS is '-', which
+      reads as 0, and `to_hit_ranged` rejects BS 0 outright, so a War Wagon
+      fired its blunderbuss every turn and could never hit with it.
+      LEFTOVER: one weapon per unit, so the crew cannot each carry their own —
+      a War Wagon's 6 crew take exactly 6 different weapon upgrades in the
+      catalogue, 3 of them missile weapons; and "special rules that apply to
+      one element apply to the others".
 - [x] Troop types (Rulebook p. 194-195) — `troop_types.py`. A troop type's rules
       are the one thing the catalogue never states: nothing in the .cat/.gst
       mentions Scythed Wheels, Lumbering, Iron Shod Wheels or Firing Platform,

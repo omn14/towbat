@@ -457,10 +457,7 @@ class MyApp(ShowBase):
             for w in army_unit_data.get('weapons', []):
                 wdict = dict(w)
                 if wdict.get('tag') == 'ranged' and not wdict.get('ranged_strength'):
-                    try:
-                        wdict['ranged_strength'] = int(model_instance.characteristics.get('S'))
-                    except (TypeError, ValueError):
-                        wdict['ranged_strength'] = 3
+                    wdict['ranged_strength'] = model_instance.shooting_strength()
                 name = wdict.get('name', 'weapon')
                 # A class/catalogue weapon (e.g. a war machine's piece) is the
                 # fresh source of truth; saved data only fills fields it lacks.
