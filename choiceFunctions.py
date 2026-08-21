@@ -4,16 +4,26 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 from direct.interval.IntervalGlobal import Parallel, Sequence, LerpPosInterval
 
+import gui_theme
 from collision_masks import CollisionMask as CM
 
 class Choice:
-    def __init__(self, choices, pos, cancellable=False):
+    def __init__(self, choices, pos, cancellable=False, descriptions=None):
         self.num_choices = len(choices)
         self.choices = choices
         self.choiceMade = False
         self.choice = None
         self.hitbox = None
         self.boxes = []
+        # Hovering a choice shows its blurb; a spell is unplayable if you
+        # cannot read what it does before committing to it.
+        self.descriptions = descriptions or {}
+        self.detail = None
+        self.shown = None
+        if self.descriptions:
+            self.detail = gui_theme.styled_text(
+                text="", pos=(0.0, -0.55), scale=0.045,
+                fg=gui_theme.CREAM, align=TextNode.ACenter)
         for i, c in enumerate(self.choices):
             loc=pos+Vec3(i*16,0,20)
             box=self.create_bullet_rigidbody_cube(None, location=loc, size=8.0, name=c)
@@ -31,6 +41,9 @@ class Choice:
         self.choiceMade = True
         self.helper1.ignore('mouse1')
         self.helper1.ignore('mouse3')
+        if self.detail is not None:
+            self.detail.destroy()
+            self.detail = None
         
         for box in self.boxes:
             if box.isEmpty():
@@ -81,9 +94,16 @@ class Choice:
                 #print(f"Choice selected: {hit_node.getName()}")
             else:
                 self.hitbox=None
+            self._showDetail(self.hitbox.getName() if self.hitbox else None)
             if self.choiceMade:
                 return task.done    
         return task.cont
+
+    def _showDetail(self, name):
+        if self.detail is None or name == self.shown:
+            return
+        self.shown = name
+        self.detail.setText(self.descriptions.get(name, ""))
     
     def create_bullet_rigidbody_cube(self, world, location=Vec3(0, 0, 0), size=1.0, name="BulletCube"):
         """Create a cube with Panda3D bullet physics rigidbody properties"""

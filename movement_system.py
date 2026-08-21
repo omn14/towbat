@@ -476,6 +476,7 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return 0
+        self.magicalVortexTests(unit, from_pos, to_pos)
         features = tm.dangerous_between(from_pos, to_pos)
         if not features:
             return 0
@@ -485,6 +486,22 @@ class MovementSystem:
               f"-> {wounds} wound(s)")
         self.applyWounds(unit, wounds)
         return wounds
+
+    def magicalVortexTests(self, unit, from_pos, to_pos):
+        """Burn *unit* for every enemy Magical Vortex its move passed through.
+
+        This rides the same hook as the Dangerous Terrain test because both ask
+        the same question: what did the move from here to there run into?
+        """
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return
+        crossed = set(tm.get_terrain_between(from_pos, to_pos))
+        for spell in list(getattr(self.game, 'remainsInPlay', [])):
+            piece = getattr(spell, 'piece', None)
+            if piece in crossed and unit in spell.enemies(self.game):
+                print(f"{unit.unit.name} moves through {spell.name}.")
+                spell.burn(unit)
 
     def modelsInTerrain(self, unit, predicate):
         """(models standing in terrain matching *predicate*, models in the unit).

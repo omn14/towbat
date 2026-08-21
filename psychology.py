@@ -390,6 +390,8 @@ def _p_at_most(target: int) -> float:
     return counts[target] / 36.0
 
 
+# A unit that Gives Ground backs off this far, in inches (Rulebook p. 134).
+GIVE_GROUND = 2.0
 # Units of this Unit Strength or more cause nearby-friend Panic when destroyed
 # or when they flee/fall back from combat.
 PANIC_US_THRESHOLD = 5
@@ -447,13 +449,18 @@ class PsychologySystem:
 
     # ─── Panic test (queued, sequential) ──────────────────────────────────
 
-    def panic_test(self, unit, flee_from=None, cause: str = ""):
+    def panic_test(self, unit, flee_from=None, cause: str = "",
+                   compulsory: bool = False):
         """Queue a Panic test for *unit*.  Tests resolve one at a time: each
         unit completes its move (and rally/reform) before the next starts, so
-        a fled-through / nearby unit only begins after the first unit rallies."""
+        a fled-through / nearby unit only begins after the first unit rallies.
+
+        A *compulsory* test is one the unit must take even when it would pass
+        automatically; failing that one costs it ground rather than its nerve.
+        """
         if unit is None or unit.bodyNP.isEmpty():
             return
-        self._panic_queue.append((unit, flee_from, cause))
+        self._panic_queue.append((unit, flee_from, cause, compulsory))
         if not self._panic_active and not self._panic_hold:
             self._run_next_panic()
 
@@ -472,20 +479,25 @@ class PsychologySystem:
             self._panic_active = False
             return
         self._panic_active = True
-        unit, flee_from, cause = self._panic_queue.pop(0)
-        self._resolve_panic(unit, flee_from, cause, self._run_next_panic)
+        unit, flee_from, cause, compulsory = self._panic_queue.pop(0)
+        self._resolve_panic(unit, flee_from, cause, self._run_next_panic,
+                            compulsory)
 
-    def _resolve_panic(self, unit, flee_from, cause, on_done):
+    def _resolve_panic(self, unit, flee_from, cause, on_done, compulsory=False):
         """Test *unit*; on failure move it (flee / fall back) and call *on_done*
         only once the whole move (and rally/reform) has finished."""
         if unit is None or unit.bodyNP.isEmpty():
             on_done()
             return
         reason = self.panic_exempt_reason(unit)
-        if reason is not None:
+        if reason is not None and not compulsory:
             print(f"[Panic] {unit.unit.name} is exempt from Panic ({cause}): {reason}.")
             on_done()
             return
+        forced = reason is not None
+        if forced:
+            print(f"[Panic] {unit.unit.name} would be exempt ({reason}) but "
+                  f"{cause} compels the test — a failure costs it ground.")
 
         unit.panicTestedThisPhase = True
         ld, general = self.leadership_of(unit)
@@ -515,7 +527,8 @@ class PsychologySystem:
 
         enemy = flee_from or self.nearest_non_fleeing_enemy(unit)
         direction = self._flee_direction(unit, enemy)
-        outcome = panic_fail_outcome(remaining, start)
+        outcome = ('give_ground' if forced
+                   else panic_fail_outcome(remaining, start))
         enemy_name = enemy.unit.name if enemy is not None else "board edge"
         up = unit.bodyNP.getPos()
         ep = enemy.bodyNP.getPos() if enemy is not None else None
@@ -525,12 +538,17 @@ class PsychologySystem:
               f"dir=({direction.x:.2f},{direction.y:.2f})")
 
         # A fleeing unit's Flee roll is 2D6; Fall Back in Good Order discards
-        # the lowest (Rulebook p. 134).
+        # the lowest (Rulebook p. 134). Giving Ground is a flat 2".
         d1, d2 = random.randint(1, 6), random.randint(1, 6)
-        distance = max(d1, d2) if outcome == 'fall_back' else d1 + d2
+        if outcome == 'give_ground':
+            distance = GIVE_GROUND
+        elif outcome == 'fall_back':
+            distance = max(d1, d2)
+        else:
+            distance = d1 + d2
         # Panic flees resolve without a prompt, so Swiftstride's optional die is
         # taken on the same policy the AI uses.
-        if unit_has_swiftstride(unit) and should_use_swiftstride(
+        if outcome != 'give_ground' and unit_has_swiftstride(unit) and should_use_swiftstride(
                 'flee', board_edge_distance(up.x, up.y)):
             bonus = random.randint(1, 6)
             distance += bonus
@@ -549,7 +567,8 @@ class PsychologySystem:
         unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
         unit.bodyNP.setP(0)
         unit.bodyNP.setR(0)
-        label = "falls back" if outcome == 'fall_back' else "flees"
+        label = {'fall_back': "falls back",
+                 'give_ground': "gives ground"}.get(outcome, "flees")
         print(f"[Panic] {unit.unit.name} {label} {distance:.0f}\" from "
               f"({start.x:.0f},{start.y:.0f}) -> ({final.x:.0f},{final.y:.0f})")
         if passed:
@@ -561,7 +580,12 @@ class PsychologySystem:
 
         def after_move(task=None):
             unit.updateTextNode()
-            if outcome == 'fall_back':
+            if outcome == 'give_ground':
+                # The unit never lost its nerve, so there is nothing to rally
+                # from and nobody it can be said to have fled through.
+                print(f"[Panic] {unit.unit.name} Gives Ground.")
+                on_done()
+            elif outcome == 'fall_back':
                 # Auto-rally: regain composure, cannot charge this turn.
                 unit.request("Idle")
                 unit.cannotChargeThisTurn = True
@@ -594,7 +618,7 @@ class PsychologySystem:
                 print(f"[Panic] Skirmishers {unit.unit.name} fled through formed "
                       f"{other.unit.name} — no Panic test (Skirmishers & Panic).")
                 continue
-            self._panic_queue.append((other, None, "fled through"))
+            self._panic_queue.append((other, None, "fled through", False))
         on_done()
 
     # ─── Common causes of Panic ───────────────────────────────────────────

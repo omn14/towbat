@@ -257,6 +257,59 @@ army-agnostic and would benefit every faction.
       wounded model (`woundsOnModel`, persisted). Combat and shooting passed
       their wound totals straight to `removeModelsFromUnit`, which counts
       *models*, so a single wound destroyed a 6-Wound War Wagon.
+- [x] Battle Magic (Rulebook p. 320) — all seven spells do something now. The
+      catalogue gives a spell's name, casting value, range, type and wording but
+      never its effect, so `BATTLE_MAGIC` in `spell_system.py` matches each one
+      to a class by name and `game.py` prefers that over `CatalogueSpell`.
+      Fireball: 2D6 S4 AP0 automatic hits. Hammerhand: 2D3 S4 AP-2 on an enemy
+      the caster is engaged with. Both go through `resolve_magic_hits`, which
+      skips To Hit entirely (a spell has no attacking model) and rolls To Wound
+      on the spell's own Strength.
+      Curse of Arrow Attraction: sets `arrow_attraction` on the target's model;
+      `simulate_attack` re-rolls a natural 1 To Hit when shooting at it. Oaken
+      Shield: appends a `{'ward': 5}` rule to the caster's model. Both last
+      "until your next Start of Turn", which is a whole round — `Spell` now
+      carries `ticks_remaining` and the FSM only calls `endSpell()` when it
+      reaches zero, so one turn (the old blanket behaviour) is still the
+      default and two spans the opponent's turn.
+      Arcane Urgency: clears `hasMovedThisTurn` so a unit that has already moved
+      may move again; refuses a fleeing unit and one that has not moved.
+      Curse of Cowardly Flight: `panic_test(..., compulsory=True)` — the test is
+      taken even by a unit that would pass automatically, and *that* unit Gives
+      Ground (2") on a failure instead of fleeing.
+      Pillar of Fire: a Magical Vortex. The template is placed by clicking a
+      point on the board — a range ring shows the 12" the centre must fall
+      within — and becomes a real 3" `pillar_of_fire` terrain piece (difficult
+      going). It burns every enemy unit under it for D3+3 S3 AP-2, again for
+      any enemy that walks through it (`MovementSystem.magicalVortexTests`,
+      which rides the same move hook as the Dangerous Terrain test), and it
+      Remains in Play on `game.remainsInPlay`, scattering D6" at every Start of
+      Turn. `TerrainManager.remove_terrain` takes it away when it ends.
+      Ward saves did not exist at all and were needed for Oaken Shield:
+      `ward_save_value` picks the best of several (they never combine) and
+      `check_saves` runs the whole sequence — Armour, then Ward, then
+      Regeneration (p. 141, p. 176) — with AP applying only to the armour value.
+      `simulate_battle` and `resolve_impact_hits` both went through it, so every
+      Ward save in the game now works, not just this spell's.
+      The Dispel now happens between the Casting roll and the effect, which is
+      where the rulebook puts it (p. 110). It used to resolve the effect first
+      and undo it afterwards, so the player was shown damage that was then
+      taken back. `Spell.spellFunction` is a fixed sequence — `canTarget`,
+      `_attempt`, `_dispelled`, `apply` — and every spell supplies the pieces
+      rather than the whole thing.
+      A spell in play survives a quicksave: `save_spells` / `load_spells`
+      record the caster, the target and either the remaining duration or the
+      template's centre, and put the effect back without re-rolling anything.
+      Choosing a spell shows its card — type, casting value, range and the
+      catalogue's own wording — under the cursor and on the status line
+      (`spell_readout`, `Choice(descriptions=...)`).
+      LEFTOVER: Magic Resistance, Unbinding and Outclassed in the Art are still
+      unimplemented, so nothing reduces a spell's chance beyond the single
+      Dispel attempt, and a Remains in Play spell cannot be dispelled after the
+      turn it was cast.
+- [ ] Too Tough to Wound — `to_wound` returns 6+ for any Strength shortfall,
+      but a difference of -3 or worse cannot wound at all (Rulebook p. 143).
+      Found while testing Battle Magic; affects all combat, not just spells.
 
 ## Deferred war-machine items
 - [ ] Multiple Wounds (D3+1) generic rule

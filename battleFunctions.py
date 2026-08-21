@@ -189,7 +189,13 @@ def simulate_attack(model1,model2):
         else:
             hit = False
     else:
-        hit = to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False))
+        def shoot():
+            return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False))
+        hit = shoot()
+        # Curse of Arrow Attraction: a natural 1 To Hit may be re-rolled.
+        if not hit and model1.attack_roll == 1 and getattr(model2, 'arrow_attraction', False):
+            model1.attack_roll = random.randint(1, 6)
+            hit = shoot()
         model1.characteristics['S'] = model1.equipedWeapon.get('ranged_strength')
         model1.AP = model1.equipedWeapon.get('ranged_AP', model1.AP)
         #print(model1.characteristics['S'])
@@ -219,6 +225,54 @@ def check_armor_save(model, armor_save_value, AP):
     if armor_save_roll - AP >= armor_save_value:
         return True
     return False
+
+
+def ward_save_value(model) -> int:
+    """The model's Warding value, or 0 for none.
+
+    Only one Ward save may ever be attempted and two never combine, so a model
+    carrying more than one simply uses the best (Rulebook p. 141).
+    """
+    best = 0
+    for rule in getattr(model, 'special_rules', []) or []:
+        if isinstance(rule, dict) and rule.get('ward'):
+            best = rule['ward'] if not best else min(best, rule['ward'])
+    return best
+
+
+def check_saves(model, armor_save_value, AP):
+    """The whole save sequence against one wound: Armour, then Ward, then
+    Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
+
+    Rules that modify armour values leave Warding and Regeneration values
+    alone, so neither of those is touched by the attack's AP.
+    """
+    if check_armor_save(model, armor_save_value, AP):
+        return True
+    ward = ward_save_value(model)
+    if ward and random.randint(1, 6) >= ward:
+        return True
+    for rule in getattr(model, 'special_rules', []) or []:
+        if rule.get('regen') and check_armor_save(model, rule['regen'], 0):
+            return True
+    return False
+
+
+def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
+    """*hits* automatic hits of the given Strength and AP against *unit*.
+
+    Returns (wounds, saves, unsaved). A spell has no attacking model, so there
+    is no To Hit roll and the hits wound on the spell's own Strength.
+    """
+    if hits <= 0:
+        return 0, 0, 0
+    m = unit.model
+    # to_wound reads its first model only for a Strength, which is given here.
+    target = to_wound(m, m, strength=strength)
+    wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
+    saves = sum(1 for _ in range(wounds)
+                if check_saves(m, m.melee_armour_save(), ap))
+    return wounds, saves, wounds - saves
 
 
 # ── Impact Hits (Rulebook p. 172) ──────────────────────────────────────────
@@ -276,15 +330,8 @@ def resolve_impact_hits(unit1, unit2):
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
 
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
-    saves = 0
-    for _ in range(wounds):
-        if check_armor_save(unit2.model, unit2.model.melee_armour_save(), ap):
-            saves += 1
-            continue
-        for rule in unit2.model.special_rules:
-            if rule.get('regen') and check_armor_save(unit2.model, rule['regen'], 0):
-                saves += 1
-                break
+    saves = sum(1 for _ in range(wounds)
+                if check_saves(unit2.model, unit2.model.melee_armour_save(), ap))
     return hits, wounds, saves, wounds - saves
 
 
@@ -385,15 +432,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             total_wounds += 1
             suffered_wounds += 1
         if wound:
-            if check_armor_save(unit2.model,unit2.model.melee_armour_save(), getattr(unit1.model, 'attack_AP', unit1.model.AP)):
+            if check_saves(unit2.model, unit2.model.melee_armour_save(),
+                           getattr(unit1.model, 'attack_AP', unit1.model.AP)):
                 saves_made += 1
                 total_wounds -= 1
-            else:
-                for rule in unit2.model.special_rules:
-                    if rule.get('regen'):
-                        if check_armor_save(unit2.model,rule['regen'], 0):
-                            saves_made += 1
-                            total_wounds -= 1
             #if total_wounds >= unit2.nmodels:
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have

@@ -6,6 +6,8 @@ during the Strategy / Spell phases.
 """
 
 import math
+import random
+import textwrap
 from panda3d.core import Point3, Vec3, LRotationf
 from panda3d.bullet import BulletBoxShape
 from dice import Dice, checkDice
@@ -110,20 +112,55 @@ def may_attempt(spells_cast, spell_name: str, wizard_level: int,
 class Spell:
     """Base class for all spells."""
 
+    # True for a spell aimed at a point on the board rather than at a unit.
+    targets_ground = False
+
     def __init__(self, name, casting_value, duration_list=None, wizard_level=1,
-                 effect=''):
+                 effect='', game=None, caster=None):
         self.name = name
         self.casting_value = casting_value
         self.duration_list = duration_list
         self.wizard_level = wizard_level
         self.effect = effect
+        self.game = game
+        self.caster = caster
         self.casting = 0            # result a dispel attempt must beat
         self.perfect = False        # a perfect invocation cannot be dispelled
         self.no_more_spells = False # the caster is spent for this turn
+        # End-of-turn ticks this spell survives before endSpell() is called.
+        self.ticks_remaining = 1
 
-    async def cast(self, target_unit):
-        """Override in subclasses to implement spell effects."""
+    async def spellFunction(self, target):
+        """Cast at *target*: roll, offer the Dispel, then apply the effect.
+
+        The Dispel belongs between the roll and the effect. A dispelled spell
+        never happens at all, so nothing may have been worked out yet — the
+        engine used to resolve the effect first and undo it afterwards, which
+        showed the player damage that was then taken back.
+        """
+        if not self.canTarget(target):
+            return
+        if not await self._attempt(target):
+            return
+        if await self._dispelled():
+            return
+        await self.apply(target)
+
+    def canTarget(self, target) -> bool:
+        """Whether *target* is legal. Overrides print why when they refuse."""
+        return True
+
+    async def apply(self, target):
+        """The spell's effect, once it is cast and has survived the Dispel."""
         raise NotImplementedError
+
+    async def _dispelled(self) -> bool:
+        """Offer the other side its single Dispel attempt."""
+        if self.perfect or not self.casting:
+            return False
+        if self.game is None or self.caster is None:
+            return False
+        return await self.game.dispelAttempt(self, self.caster)
 
     def endSpell(self):
         """Called at end of turn to revert temporary spell effects."""
@@ -187,6 +224,32 @@ class Spell:
 
         return total, values
 
+    # ─── Shared effect helpers ──────────────────────────────────────
+
+    def _game_of(self, unit):
+        return self.game or getattr(unit, 'game', None)
+
+    def _magic_hits(self, unit, dice, strength, ap, flaming=False):
+        """Roll *dice* automatic hits of the given Strength and AP onto *unit*.
+
+        A spell has no attacking model, so nothing rolls To Hit; the hits go
+        straight to the To Wound roll and the target's usual saves.
+        """
+        from battleFunctions import resolve_magic_hits
+        from models import roll_dice_expr
+        hits = roll_dice_expr(dice)
+        wounds, saves, unsaved = resolve_magic_hits(unit.unit, hits, strength, ap)
+        ap_str = f"AP-{ap}" if ap else "AP0"
+        flame = ", Flaming Attacks" if flaming else ""
+        print(f"   {unit.unit.name}: {hits} S{strength} {ap_str} hit(s){flame} "
+              f"-> {wounds} wound(s), {saves} saved, {unsaved} unsaved")
+        game = self._game_of(unit)
+        if unsaved and game is not None:
+            game.movement.applyWounds(unit, unsaved)
+            game.psychology.check_heavy_casualties(unit, 'shooting',
+                                                   attacker=self.caster)
+        return unsaved
+
 
 class DevilsVisitSpell(Spell):
     """Increases an ally unit's Movement characteristic for one turn."""
@@ -195,9 +258,7 @@ class DevilsVisitSpell(Spell):
         super().__init__(name, casting_value, duration_list, **kw)
         self.affected_unit = None
 
-    async def spellFunction(self, unit):
-        if not await self._attempt(unit):
-            return
+    async def apply(self, unit):
         self.affected_unit = unit
         self.duration_list.append(self)
         plusSTAT(unit.unit.model, 'M', 11, -99)
@@ -214,13 +275,299 @@ class CatalogueSpell(Spell):
     effect can be applied by hand until it is implemented.
     """
 
-    async def spellFunction(self, unit):
-        if not await self._attempt(unit):
-            return
+    async def apply(self, unit):
         target = getattr(getattr(unit, 'unit', None), 'name', unit)
         print(f"   target: {target}")
         print(f"   {self.effect or 'No effect text in the catalogue.'}")
         print("   (not yet applied automatically)")
+
+
+# ── Battle Magic (Rulebook p. 320) ────────────────────────────────────────
+
+# "Until your next Start of Turn sub-phase" spans a whole round: the spell has
+# to outlive the end of the caster's turn and the end of the opponent's.
+UNTIL_NEXT_START_OF_TURN = 2
+
+# A small (3") blast template, in world units.
+BLAST_TEMPLATE_SMALL = 3.0
+
+
+class FireballSpell(Spell):
+    """1. Fireball — 2D6 Strength 4 hits with no AP, and Flaming Attacks."""
+
+    async def apply(self, unit):
+        self._magic_hits(unit, '2D6', strength=4, ap=0, flaming=True)
+
+
+class CurseOfArrowAttractionSpell(Spell):
+    """2. Curse of Arrow Attraction — shots at the target re-roll natural 1s
+    To Hit, until the caster's next Start of Turn."""
+
+    affected_unit = None
+
+    async def apply(self, unit):
+        self.attach(unit, UNTIL_NEXT_START_OF_TURN)
+        print(f"   {unit.unit.name} is cursed: shooting at it re-rolls "
+              f"natural 1s To Hit.")
+
+    def attach(self, unit, ticks):
+        """Put the curse on *unit*; also how a save restores it."""
+        self.affected_unit = unit
+        unit.unit.model.arrow_attraction = True
+        self.ticks_remaining = ticks
+        self.duration_list.append(self)
+
+    def endSpell(self):
+        affected = getattr(self, 'affected_unit', None)
+        if affected is not None:
+            affected.unit.model.arrow_attraction = False
+
+
+class PillarOfFireSpell(Spell):
+    """3. Pillar of Fire — a Magical Vortex that Remains in Play.
+
+    A 3" template of difficult terrain, placed with its centre within 12" of
+    the caster. It scatters D6" every Start of Turn and burns any enemy unit
+    that walks through it, or that it drifts over, for D3+3 Strength 3 hits
+    at AP -2.
+    """
+
+    targets_ground = True
+
+    piece = None
+
+    def canTarget(self, point):
+        caster = self.caster
+        if caster is None:
+            return True
+        reach = Vec3(Point3(point) - caster.bodyNP.getPos())
+        reach.z = 0
+        if reach.length() > self.RANGE:
+            print(f"   that point is {reach.length():.0f}\" away; the template "
+                  f"must be placed within {self.RANGE:.0f}\".")
+            return False
+        return True
+
+    RANGE = 12.0
+
+    async def apply(self, point):
+        game = self.game
+        if game is None:
+            return
+        self.place(game, Point3(point))
+        self.burn_units_under(game)
+
+    def place(self, game, point):
+        """Put the template on the board; also how a save restores it."""
+        self.game = game
+        self.piece = game.terrain_manager.add_terrain(
+            'pillar_of_fire', Point3(point.x, point.y, 0.1),
+            BLAST_TEMPLATE_SMALL, BLAST_TEMPLATE_SMALL)
+        # Remains in Play: it lives on the board, not on the turn timer.
+        game.remainsInPlay.append(self)
+
+    def scatter(self, game):
+        """Drift D6" in a random direction, then burn whatever is underneath.
+
+        Called once per Start of Turn sub-phase while the spell is in play.
+        """
+        if self.piece is None:
+            return
+        angle = random.uniform(0.0, 2.0 * math.pi)
+        distance = random.randint(1, 6)
+        move = Vec3(math.cos(angle) * distance, math.sin(angle) * distance, 0)
+        self.piece.center = Point3(self.piece.center + move)
+        for np in (self.piece.visual, self.piece.ghost_np, self.piece.outline):
+            if np is not None and not np.isEmpty():
+                np.setPos(np.getPos() + move)
+        print(f"[Magic] {self.name} scatters {distance}\" to "
+              f"({self.piece.center.x:.0f}, {self.piece.center.y:.0f}).")
+        self.burn_units_under(game)
+
+    def burn_units_under(self, game):
+        """Hit every enemy unit currently standing under the template."""
+        for other in self.enemies(game):
+            p = other.bodyNP.getPos()
+            if self.piece.contains(Point3(p.x, p.y, 0)):
+                self.burn(other)
+
+    def burn(self, unit):
+        self._magic_hits(unit, 'D3+3', strength=3, ap=2, flaming=True)
+
+    def enemies(self, game):
+        own_side = (game.player1Units if self.caster in game.player1Units
+                    else game.player2Units)
+        foes = (game.player2Units if own_side is game.player1Units
+                else game.player1Units)
+        return [u for u in foes if not u.bodyNP.isEmpty()]
+
+    def endSpell(self):
+        if self.piece is None:
+            return
+        game = self.game
+        if game is not None:
+            game.terrain_manager.remove_terrain(self.piece)
+            if self in game.remainsInPlay:
+                game.remainsInPlay.remove(self)
+        self.piece = None
+
+
+class ArcaneUrgencySpell(Spell):
+    """4. Arcane Urgency — a friendly unit that has already moved this phase
+    may immediately move again."""
+
+    def canTarget(self, unit):
+        if unit.state == 'IsFleeing':
+            print(f"   {unit.unit.name} is fleeing and cannot be hurried.")
+            return False
+        if not getattr(unit, 'hasMovedThisTurn', False):
+            print(f"   {unit.unit.name} has not moved yet this phase.")
+            return False
+        return True
+
+    async def apply(self, unit):
+        unit.hasMovedThisTurn = False
+        unit.updateTextNode()
+        print(f"   {unit.unit.name} may move again.")
+
+
+class OakenShieldSpell(Spell):
+    """5. Oaken Shield — the caster, and any unit it has joined, gain a 5+ Ward
+    save until the caster's next Start of Turn."""
+
+    WARDING_VALUE = 5
+
+    affected_unit = None
+    rule = None
+
+    async def apply(self, unit):
+        # Range 'Self': the target is the caster whatever was clicked.
+        target = self.caster or unit
+        self.attach(target, UNTIL_NEXT_START_OF_TURN)
+        print(f"   {target.unit.name} gains a {self.WARDING_VALUE}+ Ward save.")
+
+    def attach(self, unit, ticks):
+        """Put the Ward on *unit*; also how a save restores it."""
+        self.affected_unit = unit
+        self.rule = {'name': self.name, 'ward': self.WARDING_VALUE}
+        unit.unit.model.special_rules.append(self.rule)
+        self.ticks_remaining = ticks
+        self.duration_list.append(self)
+
+    def endSpell(self):
+        affected = getattr(self, 'affected_unit', None)
+        rule = getattr(self, 'rule', None)
+        if affected is None or rule is None:
+            return
+        rules = affected.unit.model.special_rules
+        if rule in rules:
+            rules.remove(rule)
+
+
+class CurseOfCowardlyFlightSpell(Spell):
+    """6. Curse of Cowardly Flight — an immediate Panic test the target cannot
+    duck, even if it normally passes them automatically."""
+
+    async def apply(self, unit):
+        game = self._game_of(unit)
+        if game is not None:
+            game.psychology.panic_test(unit, flee_from=self.caster,
+                                       cause=self.name, compulsory=True)
+
+
+class HammerhandSpell(Spell):
+    """Signature — an enemy unit the caster is engaged with suffers 2D3
+    Strength 4 hits at AP -2."""
+
+    def canTarget(self, unit):
+        caster = self.caster
+        if caster is not None and unit not in getattr(caster, 'isInCombatWith', []):
+            print(f"   {caster.unit.name} is not engaged in combat with "
+                  f"{unit.unit.name}.")
+            return False
+        return True
+
+    async def apply(self, unit):
+        self._magic_hits(unit, '2D3', strength=4, ap=2)
+
+
+# The catalogue gives a spell's name, casting value, range and wording; what it
+# cannot give is the effect, so each one is matched to its class by name.
+BATTLE_MAGIC = {
+    'Fireball': FireballSpell,
+    'Curse of Arrow Attraction': CurseOfArrowAttractionSpell,
+    'Pillar of Fire': PillarOfFireSpell,
+    'Arcane Urgency': ArcaneUrgencySpell,
+    'Oaken Shield': OakenShieldSpell,
+    'Curse of Cowardly Flight': CurseOfCowardlyFlightSpell,
+    'Hammerhand': HammerhandSpell,
+}
+
+
+def spell_class(name: str):
+    """The coded class for a spell, or None if only its wording is known."""
+    return BATTLE_MAGIC.get((name or '').strip())
+
+
+def spell_readout(name: str, spell: dict, width: int = 46) -> str:
+    """The card for one spell: type, casting value, range and wording.
+
+    Wrapped here rather than by the GUI because both the hover panel and the
+    status line are plain text nodes.
+    """
+    spell = spell or {}
+    reach = spell.get('range')
+    reach = f'{reach}"' if isinstance(reach, (int, float)) else (reach or '-')
+    head = (f"{name}  ({spell.get('type') or 'Spell'})\n"
+            f"Casting {spell.get('casting_value') or '?'}+   Range {reach}")
+    body = ' '.join((spell.get('effect') or '').split())
+    return f"{head}\n{textwrap.fill(body, width)}" if body else head
+
+
+# ── Saving and restoring spells in play ───────────────────────────────────
+#
+# A hex, a ward or a vortex outlives the turn it was cast in, so a quicksave
+# taken while one is up has to carry it or the spell silently ends on load.
+
+def save_spells(game) -> list:
+    """A JSON-safe record of every spell still in play."""
+    out = []
+    for spell in list(game.fsm.endOfTurnSpells) + list(game.remainsInPlay):
+        target = getattr(spell, 'affected_unit', None)
+        piece = getattr(spell, 'piece', None)
+        out.append({
+            'name': spell.name,
+            'casting_value': spell.casting_value,
+            'wizard_level': spell.wizard_level,
+            'effect': spell.effect,
+            'ticks': spell.ticks_remaining,
+            'caster': spell.caster.unitName if spell.caster is not None else None,
+            'target': target.unitName if target is not None else None,
+            'center': ([piece.center.x, piece.center.y]
+                       if piece is not None else None),
+        })
+    return out
+
+
+def load_spells(game, records, unit_map):
+    """Put saved spells back in play. Nothing is re-rolled: the casting is
+    history, only its lingering effect is restored."""
+    for data in records or ():
+        cls = spell_class(data.get('name'))
+        if cls is None:
+            continue
+        caster = unit_map.get(data.get('caster'))
+        spell = cls(data['name'], data.get('casting_value') or 12,
+                    game.fsm.endOfTurnSpells,
+                    wizard_level=data.get('wizard_level') or 1,
+                    effect=data.get('effect', ''), game=game, caster=caster)
+        center = data.get('center')
+        if center is not None and hasattr(spell, 'place'):
+            spell.place(game, Point3(center[0], center[1], 0.1))
+            continue
+        target = unit_map.get(data.get('target'))
+        if target is not None and hasattr(spell, 'attach'):
+            spell.attach(target, data.get('ticks') or 1)
 
 
 class RaiseDeadSpell(Spell):
@@ -232,11 +579,9 @@ class RaiseDeadSpell(Spell):
     def endSpell(self):
         pass
 
-    async def spellFunction(self, unit):
+    async def apply(self, unit):
         taskMgr.remove("taskShootingTrajectoryDrawLine")
 
-        if not await self._attempt(unit):
-            return
         old_ranks = (unit.unit.nmodels - 1) // unit.unit.files
 
         # Roll D3 for number of models raised

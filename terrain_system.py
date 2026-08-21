@@ -86,6 +86,11 @@ TERRAIN_RULES = {
         'going': 'impassable',
         'blocks_line_of_sight': True,
     },
+    'pillar_of_fire': {
+        # A Magical Vortex, conjured mid-battle and gone when the spell ends.
+        'going': 'difficult',
+        'blocks_line_of_sight': False,
+    },
 }
 
 # Colours used to tint the terrain overlay (RGBA, alpha < 1 → translucent)
@@ -95,6 +100,7 @@ _TERRAIN_COLORS = {
     'river':  Vec4(0.10, 0.20, 0.60, 0.45),
     'marsh':  Vec4(0.30, 0.30, 0.10, 0.40),
     'house':  Vec4(0.45, 0.20, 0.15, 0.60),
+    'pillar_of_fire': Vec4(0.95, 0.35, 0.05, 0.65),
 }
 
 _TERRAIN_COLLISION_MASK = {
@@ -103,6 +109,7 @@ _TERRAIN_COLLISION_MASK = {
     'river':  BitMask32.bit(22),
     'marsh':  BitMask32.bit(23),
     'house':  CM.TERRAIN_IMPASSABLE,
+    'pillar_of_fire': BitMask32.bit(23),
 }
 
 _TERRAIN_MODEL_PATHS = {
@@ -110,10 +117,12 @@ _TERRAIN_MODEL_PATHS = {
     'hill':   "models/hills.bam",
     'river':  "models/hills.bam",
     'marsh':  "models/hills.bam",
+    'pillar_of_fire': "models/hills.bam",
 }
 
 # Integer id handed to the terrain shader (see shaders/terrain.frag).
-_TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3}
+_TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3,
+                    'pillar_of_fire': 3}
 
 # Water is drawn as a flat animated surface instead of a raised mesh.
 _WATER_TYPES = {'river', 'marsh'}
@@ -126,7 +135,7 @@ _HILL_LIFT = 0.02
 
 # Vertical scale per type — hills rise, forests sit low, water is nearly flat.
 _TERRAIN_HEIGHT = {'forest': 2.0, 'hill': 4.0, 'river': 0.3, 'marsh': 0.4,
-                   'house': 4.5}
+                   'house': 4.5, 'pillar_of_fire': 2.5}
 
 # Cached, shared GLSL shader instance (loaded once on first use).
 _TERRAIN_SHADER = None
@@ -1083,6 +1092,13 @@ class TerrainManager:
               f"{center.y:.0f}) size {width:.0f}×{height:.0f}  "
               f"— {piece.description}")
         return piece
+
+    def remove_terrain(self, piece):
+        """Take a single piece off the board again, for terrain conjured
+        mid-battle such as a Magical Vortex."""
+        if piece in self.terrain_pieces:
+            self.terrain_pieces.remove(piece)
+            piece.destroy()
 
     def clear(self):
         for piece in self.terrain_pieces:

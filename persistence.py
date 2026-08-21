@@ -11,6 +11,7 @@ import shutil
 from datetime import datetime
 
 from characters import join_unit
+from spell_system import load_spells, save_spells
 
 
 def _clean_weapon(weapon):
@@ -50,6 +51,7 @@ def save_game_state(game, filename=None):
         'current_player': game.roundCounter.current_player,
         'max_rounds': game.roundCounter.max_rounds,
         'ai_player2_active': game.AIplayer2.active,
+        'spells_in_play': save_spells(game),
         'units': [],
     }
 
@@ -313,6 +315,16 @@ def load_game_state(game, filename):
         character = unit_map.get(char_name) if char_name else None
         if host is not None and character is not None:
             join_unit(game, character, host)
+
+    # Spells still in play: a hex, a ward or a vortex outlives the turn it was
+    # cast in, so it has to come back or the save silently ends it.
+    for spell in list(game.fsm.endOfTurnSpells):
+        spell.endSpell()
+    game.fsm.endOfTurnSpells = []
+    for spell in list(getattr(game, 'remainsInPlay', [])):
+        spell.endSpell()
+    game.remainsInPlay = []
+    load_spells(game, game_state.get('spells_in_play'), unit_map)
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
     # offset is derived rather than saved, so a unit restored onto a hill would

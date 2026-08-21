@@ -55,7 +55,8 @@ from collision_masks import CollisionMask as CM
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
 from game_fsm import GamePhaseFSM
 from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
-                          Spell, dispel_result, is_dispelled, may_attempt)
+                          Spell, dispel_result, is_dispelled, may_attempt,
+                          spell_class, spell_readout)
 from persistence import save_game_state, load_game_state
 from characters import JOIN_TAG
 from combat_resolution import CombatResolver
@@ -266,6 +267,10 @@ class MyApp(ShowBase):
 
         self.setActiveUnitTask=self.taskLoopStrategy
         self.setActiveUnitTaskName="taskLoopStrategy"
+
+        # Spells that Remain in Play: they outlive the turn they were cast in
+        # and act again at every Start of Turn until dispelled.
+        self.remainsInPlay = []
 
         self.fsm = GamePhaseFSM(self)
         self.combat = CombatResolver(self)
@@ -964,9 +969,9 @@ class MyApp(ShowBase):
         _cast = getattr(self.unitToMove, 'spellsCastThisTurn', [])
         _spent = getattr(self.unitToMove, 'cannotCastThisTurn', False)
         spellChoices = self.castableSpells(self.unitToMove)
-        # A spell out of the catalogue has no coded effect yet.
-        spellClasses = [_wizard.spells[n].get('class') or CatalogueSpell
-                        for n in spellChoices]
+        # A spell the catalogue knows the wording of but the engine does not.
+        spellClasses = [_wizard.spells[n].get('class') or spell_class(n)
+                        or CatalogueSpell for n in spellChoices]
         if not spellChoices:
             if _spent:
                 print(f"[Magic] {self.unitToMove.unit.name} may cast no more "
@@ -981,7 +986,9 @@ class MyApp(ShowBase):
         
         
         spellchoice = await taskMgr.add(
-            self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True))
+            self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True,
+                               descriptions=self.spellDescriptions(_wizard,
+                                                                   spellChoices)))
 
         print("Chosen spell: ", spellchoice)
         if spellchoice not in spellChoices:
@@ -996,8 +1003,15 @@ class MyApp(ShowBase):
             spellchoice, self.fsm.activeSpell.get('casting_value') or 12,
             self.fsm.endOfTurnSpells,
             wizard_level=_level,
-            effect=self.fsm.activeSpell.get('effect', ''))
+            effect=self.fsm.activeSpell.get('effect', ''),
+            game=self, caster=self.unitToMove)
         self.fsm.castingUnit = self.unitToMove
+        self.debugTextInfo.setText(
+            spell_readout(spellchoice, self.fsm.activeSpell))
+
+        if self.fsm.spellClassToCast.targets_ground:
+            self.beginGroundTargeting(self.fsm.spellInstanceToCast)
+            return task.done
 
         # 'Self' and 'Combat' spells have no measured range to draw an arc for.
         radius = self.fsm.activeSpell.get('range')
@@ -1407,31 +1421,54 @@ class MyApp(ShowBase):
             if result3.hasHit():
                 selected_unit = self.getSelectedUnit(result3.getNode())
                 print("Selected magic target:",selected_unit.unit.name)
-                spell = self.fsm.spellInstanceToCast
-                caster = getattr(self.fsm, 'castingUnit', self.unitToMove)
-                # The attempt is spent whether or not the spell goes off.
-                caster.spellsCastThisTurn.append(spell.name)
-                await spell.spellFunction(selected_unit)
-                if getattr(spell, 'no_more_spells', False):
-                    caster.cannotCastThisTurn = True
-                if getattr(spell, 'casting', 0) and not getattr(spell, 'perfect', False):
-                    await self.dispelAttempt(spell, caster)
+                await self.resolveSpell(selected_unit)
 
-                #selected_unit.bodyNP.setCollideMask(BitMask32.bit(1))
-                #self.checkArrows(BitMask32.bit(1))
-                if self.roundCounter.current_player == 1:
-                    self.roundCounter.request('PlayerOne')
-                else:
-                    self.roundCounter.request('PlayerTwo')
-                # Casting is a detour, not a phase of its own: go back.
-                self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
-                                         "StrategyPhase"))
+    def spellDescriptions(self, wizard, names) -> dict:
+        """name -> readout, for the spell-selection menu."""
+        return {n: spell_readout(n, wizard.spells.get(n)) for n in names}
+
+    async def resolveSpell(self, target):
+        """Cast the chosen spell at *target* — a unit, or a ground point for a
+        Magical Vortex — and hand the phase back."""
+        spell = self.fsm.spellInstanceToCast
+        caster = getattr(self.fsm, 'castingUnit', self.unitToMove)
+        # The attempt is spent whether or not the spell goes off.
+        caster.spellsCastThisTurn.append(spell.name)
+        await spell.spellFunction(target)
+        if getattr(spell, 'no_more_spells', False):
+            caster.cannotCastThisTurn = True
+        if self.roundCounter.current_player == 1:
+            self.roundCounter.request('PlayerOne')
+        else:
+            self.roundCounter.request('PlayerTwo')
+        # Casting is a detour, not a phase of its own: go back.
+        self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', "StrategyPhase"))
+
+    def beginGroundTargeting(self, spell):
+        """A Magical Vortex is placed on the board, not cast at a unit, so the
+        click has to come off the ground rather than off a targetable body."""
+        reach = getattr(spell, 'RANGE', 12.0)
+        self.drawRangeRing(self.unitToMove.bodyNP.getPos(), reach,
+                           color=(1, 0.4, 0.1, 0.8))
+        self.debugTextInfo.setText(
+            f"{spell.name}: click a point within {reach:.0f}\"")
+        self.ignore('mouse1')
+        self.accept('mouse1', self._onGroundSpellClick)
+
+    def _onGroundSpellClick(self):
+        if self.awaitingChoice:
+            return
+        point = Point3(self.mousePosOnGround)
+        self.ignore('mouse1')
+        taskMgr.add(self.resolveSpell(point))
 
     async def dispelAttempt(self, spell, caster):
-        """Offer the opposing side a dispel attempt (Rulebook p. 110).
+        """Offer the opposing side its Dispel attempt (Rulebook p. 110).
 
         A Wizard on the other side attempts a Wizardly dispel, adding half its
-        Level; anyone else trusts to fate and adds nothing.
+        Level; anyone else trusts to fate and adds nothing. Returns True if the
+        spell is stopped — which is *before* its effect is worked out, so there
+        is nothing to undo.
         """
         foes = (self.player2Units if caster in self.player1Units
                 else self.player1Units)
@@ -1445,12 +1482,10 @@ class MyApp(ShowBase):
         if is_dispelled(result, spell.casting):
             print(f"[Magic] {kind}: {values} = {result} beats {spell.casting} "
                   f"-> {spell.name} is dispelled.")
-            spell.endSpell()
-            if spell in self.fsm.endOfTurnSpells:
-                self.fsm.endOfTurnSpells.remove(spell)
-        else:
-            print(f"[Magic] {kind}: {values} = {result} does not beat "
-                  f"{spell.casting} -> {spell.name} holds.")
+            return True
+        print(f"[Magic] {kind}: {values} = {result} does not beat "
+              f"{spell.casting} -> {spell.name} holds.")
+        return False
 
     def shootAt(self, attackerUnit, defenderUnit):
         attacker = attackerUnit.unit
@@ -1881,8 +1916,9 @@ class MyApp(ShowBase):
             return
         self.movement.moveUnit(unit)
 
-    async def makeChoiceNew(self, choices, position, cancellable=False):
-        cyn = Choice(choices, position, cancellable)
+    async def makeChoiceNew(self, choices, position, cancellable=False,
+                            descriptions=None):
+        cyn = Choice(choices, position, cancellable, descriptions)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')

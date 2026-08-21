@@ -216,6 +216,9 @@ class GamePhaseFSM(FSM):
         )
         print("Entering Strategy Phase")
         self.game.setGroundOverlay(False)
+        # Start of Turn: a Magical Vortex drifts before anything else happens.
+        for spell in list(getattr(self.game, 'remainsInPlay', [])):
+            spell.scatter(self.game)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
             unit.panicTestedThisPhase = False
@@ -331,9 +334,11 @@ class GamePhaseFSM(FSM):
             # game back there.
             unit.spellsCastThisTurn = []
             unit.cannotCastThisTurn = False
-        for spell in self.end_of_turn_spells:
-            spell.endSpell()
-        self.end_of_turn_spells = []
+        for spell in list(self.end_of_turn_spells):
+            spell.ticks_remaining -= 1
+            if spell.ticks_remaining <= 0:
+                spell.endSpell()
+                self.end_of_turn_spells.remove(spell)
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies = []
@@ -370,6 +375,9 @@ class GamePhaseFSM(FSM):
         self.game.setGroundOverlay(False)
         taskMgr.remove("taskMagicArcUpdate")
         taskMgr.remove("taskShootingTrajectoryDrawLine")
+        if getattr(self.game, 'rangeRing', None):
+            self.game.rangeRing.removeNode()
+            self.game.rangeRing = None
         # The aim line is only drawn once a spell has been chosen.
         if getattr(self.game, 'trajectoryLine', None) is not None:
             self.game.trajectoryLine.removeNode()
