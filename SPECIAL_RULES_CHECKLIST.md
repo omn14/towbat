@@ -214,8 +214,32 @@ army-agnostic and would benefit every faction.
       the code that ignored them, and are gone; `blocks_line_of_sight` was
       likewise ignored (hills were flagged False yet blocked) and now drives
       `los_block_point`.
-      LEFTOVER: linear obstacles are not represented at all, and hills owe
-      Vantage Point (fire with one extra rank).
+      LEFTOVER: linear obstacles are not represented at all.
+- [x] Hills (Rulebook p. 271) — Beyond the Crest was already right: a hill
+      blocks sight only when neither model is upon it, which is what
+      `los_block_point` does (the same rule as a wood's Arboreal Gloom, hence
+      one function for both).
+      Vantage Point: a unit fires with one additional rank
+      (`firing_rank_count`, `simulate_battle(..., extra_ranks=1)`), and the
+      rules that let rear ranks fire stack, so on a hill a Volley Fire unit
+      shoots with its front rank, the whole second and half of the third.
+      The unit must be *entirely* on the hill to claim any of it (Official FAQ
+      1.5.3), which bites because hills are organic shapes — a unit on the rim
+      usually has a model hanging off. `MovementSystem.entirelyOnHill` counts
+      the unit's own model nodes, sharing `modelsInTerrain` with the Disrupted
+      check.
+      Line of sight, all three cases: a unit on a hill sees over units on lower
+      ground; on the *same* hill it sees over only those closer to the bottom,
+      the top being the hill's centre (`terrain_system.sees_over`, Official FAQ
+      1.5.3); and a unit entirely on a hill can be seen across or through
+      intervening units by anyone. That last one does not fit the shooting arc,
+      which is clipped target-agnostically, so `markHillTargets` re-marks such
+      units as targetable afterwards. Only units are seen over — a wood or
+      another hill in the way still blocks.
+      LEFTOVER: the arc overlay is still drawn clipped short of a hill-standing
+      target even though it can be shot; the magenta target highlight is the
+      only cue. The FAQ also calls the battlefield edge a hill's top, for hills
+      that run off the table; only the centre is modelled.
 - [x] Impassable terrain (Rulebook p. 270) — a `house` terrain type, built as a
       procedural medieval timber-framed building (plaster walls, corner posts
       and a mid rail, gabled roof with overhanging eaves, stone chimney, door

@@ -486,22 +486,50 @@ class MovementSystem:
         self.applyWounds(unit, wounds)
         return wounds
 
-    def updateDisrupted(self, unit) -> bool:
-        """Recompute whether *unit* stands in enough difficult terrain to lose
-        its Rank Bonus. Counts the unit's own model nodes, so it measures the
-        models rather than the footprint box."""
+    def modelsInTerrain(self, unit, predicate):
+        """(models standing in terrain matching *predicate*, models in the unit).
+
+        Counts the unit's own model nodes, so it measures the models the rules
+        talk about rather than the footprint box.
+        """
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None or unit.model.isEmpty():
-            return False
+            return 0, 0
         children = unit.model.getChildren()
         inside = sum(1 for c in children
-                     if any(t.disrupts for t in tm.get_all_terrain_at(c.getPos(render))))
+                     if any(predicate(t) for t in tm.get_all_terrain_at(c.getPos(render))))
+        return inside, len(children)
+
+    def updateDisrupted(self, unit) -> bool:
+        """Recompute whether *unit* stands in enough difficult terrain to lose
+        its Rank Bonus (Rulebook p. 269)."""
+        inside, total = self.modelsInTerrain(unit, lambda t: t.disrupts)
         was = getattr(unit, 'isDisrupted', False)
-        unit.isDisrupted = is_disrupted(inside, len(children))
+        unit.isDisrupted = is_disrupted(inside, total)
         if unit.isDisrupted != was:
             print(f"{unit.unit.name} is {'now' if unit.isDisrupted else 'no longer'} "
-                  f"Disrupted ({inside}/{len(children)} models in difficult terrain)")
+                  f"Disrupted ({inside}/{total} models in difficult terrain)")
         return unit.isDisrupted
+
+    def entirelyOnHill(self, unit) -> bool:
+        """True if every model of *unit* stands on a hill.
+
+        A unit must be entirely on the hill to claim any of its benefits
+        (Official FAQ 1.5.3), which matters here because hills are organic
+        shapes: a unit parked on the rim usually has a model hanging off.
+        """
+        inside, total = self.modelsInTerrain(unit, lambda t: t.terrain_type == 'hill')
+        return total > 0 and inside == total
+
+    def hillUnderUnit(self, unit):
+        """The hill *unit* stands entirely on, or None."""
+        if not self.entirelyOnHill(unit):
+            return None
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None:
+            return None
+        return next((t for t in tm.get_all_terrain_at(unit.bodyNP.getPos())
+                     if t.terrain_type == 'hill'), None)
 
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():

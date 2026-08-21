@@ -306,7 +306,25 @@ def impact_hit_report(unit1, unit2):
             f"save {save_str}"]
 
 
-def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0):
+def firing_rank_count(files: int, nmodels: int, extra_ranks: int = 0,
+                      volley_fire: bool = False) -> int:
+    """How many models of a unit may shoot.
+
+    Only the front rank shoots normally; rules that let the rear ranks fire
+    stack (Rulebook p. 137). Vantage Point adds a whole rank for a unit on a
+    hill, and Volley Fire then adds half of the rank below that.
+    """
+    if files <= 0 or nmodels <= 0:
+        return 0
+    firing = min(files * (1 + max(0, extra_ranks)), nmodels)
+    if volley_fire:
+        next_rank = min(files, nmodels - firing)
+        firing += (next_rank + 1) // 2
+    return firing
+
+
+def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
+                    extra_ranks: int = 0):
 
     # how many attacks
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
@@ -340,10 +358,9 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0):
         # Multiple Shots: fire multiple by default (-1 To Hit); dice count is
         # rolled separately for each firing model.
         unit1.model.firing_multiple = bool(w.get('ranged_shots_dice')) or (w.get('ranged_shots') or 1) > 1
-        firing_models = min(unit1.files, unit1.nmodels)  # front rank
-        if any(r.get('volley_fire') for r in unit1.model.special_rules):
-            second_rank = min(unit1.files, max(0, unit1.nmodels - firing_models))
-            firing_models += (second_rank + 1) // 2  # half of the second rank
+        firing_models = firing_rank_count(
+            unit1.files, unit1.nmodels, extra_ranks,
+            any(r.get('volley_fire') for r in unit1.model.special_rules))
         attacks = sum(unit1.model.roll_ranged_shots() for _ in range(firing_models))
 
     for rule in unit1.model.special_rules:

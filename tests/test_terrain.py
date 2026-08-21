@@ -15,13 +15,16 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from panda3d.core import BitMask32  # noqa: E402
+from panda3d.core import BitMask32, Point3  # noqa: E402
 
 import terrain_system as ts  # noqa: E402
+from battleFunctions import firing_rank_count  # noqa: E402
 from collision_masks import CollisionMask as CM  # noqa: E402
 from models import model  # noqa: E402
+from movement_system import MovementSystem  # noqa: E402
 from psychology import rank_bonus  # noqa: E402
 from special_rules import charge_roll  # noqa: E402
+from terrain_system import sees_over  # noqa: E402
 
 
 class TestCategories(unittest.TestCase):
@@ -188,6 +191,85 @@ class TestImpassableTerrain(unittest.TestCase):
         for kind in ('forest', 'hill', 'river', 'marsh'):
             self.assertTrue((CM.MOVE_BLOCKERS & ts._TERRAIN_COLLISION_MASK[kind])
                             == BitMask32.allOff(), kind)
+
+
+class TestVantagePoint(unittest.TestCase):
+    """A unit entirely on a hill fires with one additional rank (p. 271)."""
+
+    class _Movement:
+        """MovementSystem.entirelyOnHill with the node walk stubbed out."""
+        def __init__(self, inside, total):
+            self._counts = (inside, total)
+
+        def modelsInTerrain(self, unit, predicate):
+            return self._counts
+
+        entirelyOnHill = MovementSystem.entirelyOnHill
+
+    def test_a_unit_wholly_on_the_hill_claims_it(self):
+        self.assertTrue(self._Movement(20, 20).entirelyOnHill(None))
+
+    def test_a_unit_partly_on_the_hill_claims_nothing(self):
+        # Official FAQ 1.5.3: "To claim the benefits of being on a hill, a unit
+        # must be entirely on the hill." Hills are organic shapes, so a unit on
+        # the rim usually has a model hanging off.
+        self.assertFalse(self._Movement(19, 20).entirelyOnHill(None))
+
+    def test_a_unit_off_the_hill_claims_nothing(self):
+        self.assertFalse(self._Movement(0, 20).entirelyOnHill(None))
+
+    def test_a_unit_with_no_models(self):
+        self.assertFalse(self._Movement(0, 0).entirelyOnHill(None))
+
+    def test_only_the_front_rank_shoots_on_flat_ground(self):
+        self.assertEqual(firing_rank_count(5, 20), 5)
+
+    def test_a_hill_adds_a_whole_rank(self):
+        self.assertEqual(firing_rank_count(5, 20, extra_ranks=1), 10)
+
+    def test_volley_fire_adds_half_the_next_rank(self):
+        self.assertEqual(firing_rank_count(5, 20, volley_fire=True), 8)
+
+    def test_they_stack(self):
+        # Front rank + the full second (Vantage Point) + half of the third.
+        self.assertEqual(
+            firing_rank_count(5, 20, extra_ranks=1, volley_fire=True), 13)
+
+    def test_a_unit_cannot_field_more_shooters_than_it_has(self):
+        self.assertEqual(firing_rank_count(5, 7, extra_ranks=1), 7)
+        self.assertEqual(
+            firing_rank_count(5, 7, extra_ranks=1, volley_fire=True), 7)
+        self.assertEqual(firing_rank_count(5, 3, extra_ranks=1), 3)
+
+    def test_nothing_to_shoot_with(self):
+        self.assertEqual(firing_rank_count(5, 0), 0)
+        self.assertEqual(firing_rank_count(0, 5), 0)
+
+
+class TestSeeingOverUnitsOnTheSameHill(unittest.TestCase):
+    """A unit closer to a hill's top sees over one closer to its bottom, and
+    never the other way round (Official FAQ 1.5.3). The top is the centre."""
+
+    TOP = (0.0, 0.0)
+
+    def test_the_higher_unit_sees_over_the_lower(self):
+        self.assertTrue(sees_over((2.0, 0.0), (6.0, 0.0), self.TOP))
+
+    def test_the_lower_unit_does_not_see_over_the_higher(self):
+        self.assertFalse(sees_over((6.0, 0.0), (2.0, 0.0), self.TOP))
+
+    def test_units_at_the_same_height_block_each_other(self):
+        # Neither is closer to the bottom, so no exception applies.
+        self.assertFalse(sees_over((3.0, 0.0), (0.0, 3.0), self.TOP))
+        self.assertFalse(sees_over((3.0, 0.0), (3.0, 0.0), self.TOP))
+
+    def test_the_top_is_measured_from_the_hills_centre(self):
+        top = (10.0, -4.0)
+        self.assertTrue(sees_over((11.0, -4.0), (16.0, -4.0), top))
+        self.assertFalse(sees_over((16.0, -4.0), (11.0, -4.0), top))
+
+    def test_it_takes_any_indexable_position(self):
+        self.assertTrue(sees_over(Point3(2, 0, 9), Point3(6, 0, 3), Point3(0, 0, 0)))
 
 
 class TestChargingThroughDifficultTerrain(unittest.TestCase):

@@ -146,6 +146,17 @@ def is_disrupted(models_in_terrain: int, models: int) -> bool:
     return models_in_terrain * DISRUPT_FRACTION >= models
 
 
+def sees_over(shooter_pos, blocker_pos, hill_center) -> bool:
+    """True if a unit on a hill can see over another unit on the same hill.
+
+    Only a unit closer to the bottom can be seen over; the hill's top is its
+    centre (Official FAQ 1.5.3). Positions need only be indexable as (x, y).
+    """
+    def to_top(p):
+        return math.hypot(p[0] - hill_center[0], p[1] - hill_center[1])
+    return to_top(blocker_pos) > to_top(shooter_pos)
+
+
 def dangerous_terrain_wounds(features: int, models: int, damage='1') -> int:
     """Wounds a unit suffers crossing *features* dangerous terrain features.
 

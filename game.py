@@ -59,7 +59,7 @@ from persistence import save_game_state, load_game_state
 from characters import JOIN_TAG
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
-from terrain_system import TerrainManager
+from terrain_system import TerrainManager, sees_over
 from psychology import (PsychologySystem, select_general, select_battle_standard,
                        command_range)
 from tutorial_system import TutorialManager
@@ -70,6 +70,9 @@ import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 loadPrcFileData('', 'show-frame-rate-meter true')
+
+# Weapon ranges are written in inches; the board is three world units per inch.
+WORLD_UNITS_PER_INCH = 3.0
 
 
 class MyApp(ShowBase):
@@ -969,16 +972,41 @@ class MyApp(ShowBase):
 
         return inside
 
+    def targetUnderMouse(self, mask=BitMask32.bit(3)):
+        """The targetable unit the mouse is over, or None."""
+        if not base.mouseWatcherNode.hasMouse():
+            return None
+        pMouse = base.mouseWatcherNode.getMouse()
+        pFrom, pTo = Point3(), Point3()
+        base.camLens.extrude(pMouse, pFrom, pTo)
+        pFrom = render.getRelativePoint(base.cam, pFrom)
+        pTo = render.getRelativePoint(base.cam, pTo)
+        result = self.world.rayTestClosest(pFrom, pTo, mask)
+        return self.getSelectedUnit(result.getNode()) if result.hasHit() else None
+
     def taskShootingTrajectoryDrawLine(self, task):
-        if self.checkIfInsidePolygon(self.mousePosOnGround, self.coordsToWorld(self.shootingArcPoints)):
-            weapon = self.unitToMove.unit.model.equipedWeapon or {}
-            half = weapon.get('ranged_range', 0) * 1.5
-            dist = (self.unitToMove.bodyNP.getPos() - self.mousePosOnGround).length()
-            long_range = bool(half and dist > half)
-            color = (1, 0.35, 0.35, 1) if long_range else (0.35, 1, 0.35, 1)
-            self.trajectoryLine = self.drawProjectileTrajectory(
-                self.unitToMove.bodyNP.getPos(), self.mousePosOnGround, color=color)
-            self.debugTextInfo.setText("LONG RANGE  (-1 To Hit)" if long_range else "Short range")
+        # Aim at whatever targetable unit is under the mouse, even where the arc
+        # was clipped short of it — a unit on a hill is seen over the ones in
+        # front of it, so the arc alone would not show what is being aimed at.
+        target = self.targetUnderMouse()
+        if target is not None:
+            aim = target.bodyNP.getPos()
+        elif self.checkIfInsidePolygon(self.mousePosOnGround,
+                                       self.coordsToWorld(self.shootingArcPoints)):
+            aim = self.mousePosOnGround
+        else:
+            return task.cont
+        weapon = self.unitToMove.unit.model.equipedWeapon or {}
+        half = weapon.get('ranged_range', 0) * 1.5
+        dist = (self.unitToMove.bodyNP.getPos() - aim).length()
+        long_range = bool(half and dist > half)
+        color = (1, 0.35, 0.35, 1) if long_range else (0.35, 1, 0.35, 1)
+        self.trajectoryLine = self.drawProjectileTrajectory(
+            self.unitToMove.bodyNP.getPos(), aim, color=color)
+        readout = "LONG RANGE  (-1 To Hit)" if long_range else "Short range"
+        if target is not None:
+            readout = f"{target.unit.name}  —  {readout}"
+        self.debugTextInfo.setText(readout)
         return task.cont
 
     def drawRangeRing(self, center, radius, segments=64, color=(1, 1, 0, 0.8)):
@@ -1054,22 +1082,24 @@ class MyApp(ShowBase):
     def checkArrowsTerrain(self,mask=BitMask32.bit(3)):
         shooter = self.unitToMove
         pFrom = Point3(shooter.bodyNP.getX(), shooter.bodyNP.getY(), 0)
-        # On a hill the shooter is elevated: it can see over units, but woods
-        # (and other hills) still block sight.
-        on_hill = False
-        _st = self.terrain_manager.get_terrain_at(shooter.bodyNP.getPos())
-        if _st is not None and _st.terrain_type == 'hill':
-            on_hill = True
-        # Precompute unit-footprint blockers once. On a hill, only units also on
-        # a hill block (lower units are seen over); otherwise all units block.
+        # On a hill the shooter is elevated: it sees over units on lower ground,
+        # but woods (and other hills) still block sight. A unit must be
+        # *entirely* on the hill to claim the benefit (Official FAQ 1.5.3).
+        hill = self.movement.hillUnderUnit(shooter)
+        # Precompute unit-footprint blockers once.
         candidates = []
         for unit in self.units:
             if unit is shooter:
                 continue
             up = unit.bodyNP.getPos()
-            if on_hill:
-                ut = self.terrain_manager.get_terrain_at(up)
-                if ut is None or ut.terrain_type != 'hill':
+            if hill is not None:
+                on_hills = [t for t in self.terrain_manager.get_all_terrain_at(up)
+                            if t.terrain_type == 'hill']
+                if not on_hills:
+                    continue                      # seen over from the high ground
+                # On the same hill, only a unit nearer its top blocks.
+                if hill in on_hills and sees_over(shooter.bodyNP.getPos(), up,
+                                                  hill.center):
                     continue
             radius = max(getattr(unit, 'unitWidth', 3.0),
                          getattr(unit, 'unitHeight', 3.0)) / 2.0
@@ -1120,11 +1150,47 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result.getNode()).setCollideMask(mask)
                         #self.toCleanup.append(np)
                         hit = True
+        hit = self.markHillTargets(mask) or hit
         if not hit:
             print(f"[Shooting] no targets in {self.unitToMove.unit.name}'s arc.")
             #self.ground.setShaderInput("isActive", False)
             if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
                 taskMgr.remove("taskShootingTrajectoryDrawLine")
+
+    def markHillTargets(self, mask=BitMask32.bit(3)):
+        """Vantage Point: a unit entirely on a hill is seen across or through
+        other units, so it stays targetable even where the arc was clipped
+        short of it (Rulebook p. 271). Only units are seen over; a wood or
+        another hill in the way still blocks.
+        """
+        shooter = self.unitToMove
+        weapon = shooter.unit.model.equipedWeapon or {}
+        reach = (weapon.get('ranged_range') or 0) * WORLD_UNITS_PER_INCH
+        if reach <= 0:
+            return False
+        origin = shooter.bodyNP.getPos()
+        pFrom = Point3(origin.x, origin.y, 0)
+        marked = False
+        for unit in self.units:
+            if unit is shooter or unit.bodyNP.isEmpty():
+                continue
+            up = unit.bodyNP.getPos()
+            if (up - origin).length() > reach:
+                continue
+            if not self.movement.entirelyOnHill(unit):
+                continue
+            pTo = Point3(up.x, up.y, 0)
+            block = self.terrain_manager.los_block_point(pFrom, pTo)
+            if block is not None and \
+               (block - pFrom).lengthSquared() < (pTo - pFrom).lengthSquared():
+                continue
+            for c in unit.bodyNP.node().getChildren():
+                if "Model" in c.getName():
+                    NodePath.anyPath(c).setColor(1, 0, 1, 1)
+            unit.bodyNP.setCollideMask(mask)
+            marked = True
+        return marked
+
     # ─── Camera & UI ──────────────────────────────────────────────────────
 
     def cameraShake(self, intensity=1.0, duration=0.5):
@@ -1288,8 +1354,11 @@ class MyApp(ShowBase):
         attacker.model.target_skirmisher = (defender.model.is_skirmisher()
                                              and defender.model.unit_strength() == 1)
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
+        # Vantage Point: a unit entirely on a hill fires with one extra rank.
+        extra_ranks = 1 if self.movement.entirelyOnHill(attackerUnit) else 0
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
-              f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})")
+              f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})"
+              f"{'  | on a hill: +1 firing rank' if extra_ranks else ''}")
         # A joined character with a missile weapon replaces one unit shooter and
         # fires with its own profile.
         joinedRule = next((r for r in attacker.model.special_rules
@@ -1303,7 +1372,8 @@ class MyApp(ShowBase):
         origFiles = attacker.files
         if charShooter and origFiles > 1:
             attacker.files -= 1
-        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
+        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(
+            attacker, defender, charge=False, extra_ranks=extra_ranks)
         attacker.files = origFiles
         self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
         if charShooter:

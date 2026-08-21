@@ -35,14 +35,14 @@
     {
       "type": "house",
       "center": [4, -2, 0],
-      "width": 11,
-      "height": 8
+      "width": 6,
+      "height": 4
     },
     {
       "type": "house",
       "center": [-6, 4, 0],
-      "width": 7,
-      "height": 11
+      "width": 3,
+      "height": 5
     }
   ]
 }
