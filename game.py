@@ -11,7 +11,7 @@ from panda3d.core import (
     GraphicsPipe, GraphicsOutput, LQuaterniond, LVector3d,
     OrthographicLens, Camera, RenderState, TextureStage,
     FrameBufferProperties, WindowProperties, TransparencyAttrib,
-    PStatClient, loadPrcFileData,
+    PStatClient, loadPrcFileData, AntialiasAttrib,
 )
 
 # ─── Panda3D Bullet Physics ─────────────────────────────────────────────────
@@ -71,6 +71,9 @@ import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 loadPrcFileData('', 'show-frame-rate-meter true')
+# Must be set before the window opens, or the framebuffer has no MSAA samples
+# to use and every edge stays stair-stepped.
+loadPrcFileData('', 'framebuffer-multisample 1\nmultisamples 4')
 
 # Weapon ranges are written in inches; the board is three world units per inch.
 WORLD_UNITS_PER_INCH = 3.0
@@ -82,6 +85,7 @@ class MyApp(ShowBase):
 
     def __init__(self):
         super().__init__()
+        render.setAntialias(AntialiasAttrib.MAuto)
 
         # Enable PStats profiling
         #PStatClient.connect()

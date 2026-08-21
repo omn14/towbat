@@ -303,6 +303,49 @@ _HOUSE_WINDOW = (0.14, 0.12, 0.10, 1.0)
 _HOUSE_STONE = (0.55, 0.52, 0.47, 1.0)
 
 
+def _gable_face(b, x, sx, points, color):
+    """A flat polygon on the gable end at *x*, given as (y, z) points wound
+    counter-clockwise seen from +x, and re-wound so its normal faces outward.
+
+    Without this the far gable is lit as though it faced into the house.
+    """
+    order = list(points) if sx > 0 else list(reversed(points))
+    verts = [(x, y, z) for y, z in order]
+    (b.tri if len(verts) == 3 else b.quad)(*verts, color)
+
+
+def _gable_brace(b, x, sx, start, end, half_width):
+    """A diagonal timber on the gable face at *x*, from (y, z) to (y, z)."""
+    (ay, az), (by, bz) = start, end
+    dy, dz = by - ay, bz - az
+    length = math.hypot(dy, dz) or 1.0
+    ny, nz = -dz / length * half_width, dy / length * half_width
+    _gable_face(b, x, sx, [(ay + ny, az + nz), (by + ny, bz + nz),
+                           (by - ny, bz - nz), (ay - ny, az - nz)],
+                _HOUSE_TIMBER)
+
+
+def _spans_between(lo, hi, openings):
+    """What is left of the span *lo*..*hi* after cutting out *openings*.
+
+    A timber rail runs the length of a wall but stops at each door and window
+    rather than crossing it.
+    """
+    spans = [(lo, hi)]
+    for o_lo, o_hi in sorted(openings):
+        kept = []
+        for s_lo, s_hi in spans:
+            if o_hi <= s_lo or o_lo >= s_hi:
+                kept.append((s_lo, s_hi))
+                continue
+            if s_lo < o_lo:
+                kept.append((s_lo, o_lo))
+            if o_hi < s_hi:
+                kept.append((o_hi, s_hi))
+        spans = kept
+    return [(a, z) for a, z in spans if z - a > 1e-6]
+
+
 def _house_geom(length, breadth, height):
     """A timber-framed house with a gabled roof, centred on the origin.
 
@@ -318,27 +361,76 @@ def _house_geom(length, breadth, height):
     ridge = height
     eave = min(hw, hd) * 0.16              # roof overhang
     sill = wall * 0.06                     # stone footing
+    post = min(hw, hd) * 0.09
+    prox = 0.03                            # sit trim just proud of the plaster
 
     b.box(-hw, hw, -hd, hd, 0.0, sill, _HOUSE_STONE)
     b.box(-hw, hw, -hd, hd, sill, wall, _HOUSE_PLASTER)
 
-    # Corner posts and a mid rail, the timber frame that dates the building.
-    post = min(hw, hd) * 0.09
+    # Corner posts, the timber frame that dates the building.
     for sx in (-1, 1):
         for sy in (-1, 1):
             b.box(sx * hw - post, sx * hw + post, sy * hd - post, sy * hd + post,
                   sill, wall, _HOUSE_TIMBER)
-    rail = wall * 0.55
-    for sy in (-1, 1):
-        b.box(-hw, hw, sy * hd - 0.02, sy * hd + 0.02,
-              rail - post * 0.6, rail + post * 0.6, _HOUSE_TIMBER)
 
-    # Gable ends: the wall triangle between the eaves and the ridge, at the
-    # ends of the ridge.
+    # Door and shuttered windows along the front.
+    dw, dh = hw * 0.16, wall * 0.66
+    ww = hw * 0.13
+    win_lo, win_hi = wall * 0.42, wall * 0.74
+    win_x = [sx * hw * 0.55 for sx in (-1, 1)]
+    b.quad((-dw, -hd - prox, 0.0), (dw, -hd - prox, 0.0),
+           (dw, -hd - prox, dh), (-dw, -hd - prox, dh), _HOUSE_DOOR)
+    for cx in win_x:
+        b.quad((cx - ww, -hd - prox, win_lo), (cx + ww, -hd - prox, win_lo),
+               (cx + ww, -hd - prox, win_hi), (cx - ww, -hd - prox, win_hi),
+               _HOUSE_WINDOW)
+
+    # Mid rail, half way from the ground to the window sills, stopping either
+    # side of every opening it would otherwise cross.
+    rail = win_lo * 0.5
+    openings = [(-dw, dw)] + [(cx - ww, cx + ww) for cx in win_x]
+    for sy in (-1, 1):
+        spans = _spans_between(-hw, hw, openings) if sy < 0 else [(-hw, hw)]
+        for x_lo, x_hi in spans:
+            b.box(x_lo, x_hi, sy * hd - 0.02, sy * hd + 0.02,
+                  rail - post * 0.6, rail + post * 0.6, _HOUSE_TIMBER)
+
+    # Gable ends: the wall triangle between the eaves and the ridge, framed
+    # with a tie beam, braces and a king post, and lit by a small window.
+    # Each layer stands a little further proud so no two share a plane.
     for sx in (-1, 1):
         x = sx * hw
-        b.tri((x, -hd, wall), (x, hd, wall), (x, 0.0, ridge), _HOUSE_PLASTER)
-        b.tri((x, hd, wall), (x, -hd, wall), (x, 0.0, ridge), _HOUSE_PLASTER)
+        gable = ridge - wall
+        _gable_face(b, x, sx, [(-hd, wall), (hd, wall), (0.0, ridge)],
+                    _HOUSE_PLASTER)
+
+        xg = x + sx * prox * 0.5
+        _gable_face(b, xg, sx, [(-ww * 0.9, wall + gable * 0.12),
+                                (ww * 0.9, wall + gable * 0.12),
+                                (ww * 0.9, wall + gable * 0.44),
+                                (-ww * 0.9, wall + gable * 0.44)], _HOUSE_WINDOW)
+        _gable_face(b, xg, sx, [(-ww, win_lo), (ww, win_lo),
+                                (ww, win_hi), (-ww, win_hi)], _HOUSE_WINDOW)
+
+        xt = x + sx * prox
+        _gable_face(b, xt, sx, [(-hd, wall - post * 0.6), (hd, wall - post * 0.6),
+                                (hd, wall + post * 0.6), (-hd, wall + post * 0.6)],
+                    _HOUSE_TIMBER)                              # tie beam
+        for sy in (-1, 1):                                      # corner studs
+            _gable_face(b, xt, sx, [(sy * hd - post, sill), (sy * hd + post, sill),
+                                    (sy * hd + post, wall), (sy * hd - post, wall)],
+                        _HOUSE_TIMBER)
+
+        xb = x + sx * prox * 1.5
+        for sy in (-1, 1):
+            _gable_brace(b, xb, sx, (sy * hd * 0.74, wall),
+                         (sy * post * 0.4, wall + gable * 0.60), post * 0.5)
+
+        _gable_face(b, x + sx * prox * 2.0, sx,
+                    [(-post * 0.5, wall + gable * 0.55),
+                     (post * 0.5, wall + gable * 0.55),
+                     (post * 0.5, ridge), (-post * 0.5, ridge)],
+                    _HOUSE_TIMBER)                              # king post
 
     # Roof: two slopes meeting at the ridge, overhanging all four sides.
     x0, x1 = -hw - eave, hw + eave
@@ -347,22 +439,13 @@ def _house_geom(length, breadth, height):
            _HOUSE_ROOF)
     b.quad((x1, y1, wall), (x0, y1, wall), (x0, 0.0, ridge), (x1, 0.0, ridge),
            _HOUSE_ROOF)
-    # Undersides, so the eaves are not see-through from below.
-    b.quad((x1, y0, wall), (x0, y0, wall), (x0, 0.0, ridge), (x1, 0.0, ridge),
-           _HOUSE_ROOF_DARK)
-    b.quad((x0, y1, wall), (x1, y1, wall), (x1, 0.0, ridge), (x0, 0.0, ridge),
-           _HOUSE_ROOF_DARK)
-
-    # Door and shuttered windows along the front.
-    dw, dh = hw * 0.16, wall * 0.66
-    b.quad((-dw, -hd - 0.03, 0.0), (dw, -hd - 0.03, 0.0),
-           (dw, -hd - 0.03, dh), (-dw, -hd - 0.03, dh), _HOUSE_DOOR)
-    ww = hw * 0.13
-    for sx in (-1, 1):
-        cx = sx * hw * 0.55
-        b.quad((cx - ww, -hd - 0.03, wall * 0.42), (cx + ww, -hd - 0.03, wall * 0.42),
-               (cx + ww, -hd - 0.03, wall * 0.74), (cx - ww, -hd - 0.03, wall * 0.74),
-               _HOUSE_WINDOW)
+    # Undersides, dropped by the roof's thickness: coplanar with the slopes
+    # they would z-fight and show through as dark patches.
+    t = ridge * 0.03
+    b.quad((x1, y0, wall - t), (x0, y0, wall - t), (x0, 0.0, ridge - t),
+           (x1, 0.0, ridge - t), _HOUSE_ROOF_DARK)
+    b.quad((x0, y1, wall - t), (x1, y1, wall - t), (x1, 0.0, ridge - t),
+           (x0, 0.0, ridge - t), _HOUSE_ROOF_DARK)
 
     # Chimney, rising against one gable end.
     cw = min(hw, hd) * 0.15
@@ -469,11 +552,12 @@ class TerrainPiece:
                                  _TERRAIN_HEIGHT.get('house', 4.0)))
         self.visual = render.attachNewNode(node)
         self.visual.setPos(self.center.x, self.center.y, _HILL_LIFT)
-        # The ridge is built along X; turn it if the footprint is the deeper way
-        # round, and jitter slightly so a row of houses is not stamped out.
-        seed = int(self.center.x * 131 + self.center.y * 17)
-        turn = 90.0 if self.height > self.width else 0.0
-        self.visual.setH(turn + random.Random(seed).uniform(-6.0, 6.0))
+        # The trim is flat decals on the walls; two-sided saves winding each
+        # one per face just to keep it from being culled.
+        self.visual.setTwoSided(True)
+        # The ridge is built along X; turn it if the footprint is the deeper
+        # way round. Buildings sit square to the board.
+        self.visual.setH(90.0 if self.height > self.width else 0.0)
         self.visual.flattenStrong()
 
     def _create_mesh_visual(self):
