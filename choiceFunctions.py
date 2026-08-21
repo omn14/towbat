@@ -4,8 +4,10 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 from direct.interval.IntervalGlobal import Parallel, Sequence, LerpPosInterval
 
+from collision_masks import CollisionMask as CM
+
 class Choice:
-    def __init__(self, choices,pos):
+    def __init__(self, choices, pos, cancellable=False):
         self.num_choices = len(choices)
         self.choices = choices
         self.choiceMade = False
@@ -19,6 +21,8 @@ class Choice:
         #self.ma = taskMgr.add(self.mouseActivate, "mouseActivateTask")
         self.helper1 = DirectObject()
         self.helper1.accept('mouse1', self.onMouseClick)
+        if cancellable:
+            self.helper1.accept('mouse3', self.onCancel)
         #self.old = messenger.whoAccepts('mouse1')
         #base.accept("mouse1", self.onMouseClick)
 
@@ -26,6 +30,7 @@ class Choice:
         #taskMgr.remove("mouseActivateTask")
         self.choiceMade = True
         self.helper1.ignore('mouse1')
+        self.helper1.ignore('mouse3')
         
         for box in self.boxes:
             if box.isEmpty():
@@ -45,7 +50,13 @@ class Choice:
             self.choice = self.hitbox.getName()
             #base.messenger.send('choice-made', [self.hitbox.getName()])
             taskMgr.add(self.cleanup())
-            
+    def onCancel(self):
+        """Right-click closes the menu without choosing; the caller sees None."""
+        print("Choice cancelled")
+        self.choice = None
+        self.hitbox = None
+        taskMgr.add(self.cleanup())
+
     def mouseActivate(self,task):
         #print("Choice activated")
         if base.mouseWatcherNode.hasMouse():
@@ -60,7 +71,9 @@ class Choice:
             pTo = render.getRelativePoint(base.cam, pTo)
 
             # Perform ray test
-            result = base.world.rayTestClosest(pFrom, pTo, BitMask32.bit(31))
+            # The menu cubes have their own bit: the board-edge ghosts are all
+            # named 'Ghost', and picking one would be read as a choice.
+            result = base.world.rayTestClosest(pFrom, pTo, CM.MENU_CHOICE)
             
             if result.hasHit():
                 hit_node = result.getNode()
@@ -93,7 +106,7 @@ class Choice:
         rigidbody = BulletRigidBodyNode(name)
         rigidbody.setMass(0)
         rigidbody.addShape(shape)
-        rigidbody.setIntoCollideMask(BitMask32.bit(31))  # Set collide mask
+        rigidbody.setIntoCollideMask(CM.MENU_CHOICE)  # Set collide mask
         
         # Configure bullet-like properties
         #rigidbody.setFriction(0.2)

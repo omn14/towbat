@@ -100,6 +100,9 @@ class GamePhaseFSM(FSM):
         """Handle click on the phase-advance menu cube."""
         if not base.mouseWatcherNode.hasMouse():
             return
+        # A click belongs to an open choice menu, not to the phase cube.
+        if getattr(self.game, 'awaitingChoice', False):
+            return
 
         pMouse = base.mouseWatcherNode.getMouse()
         pFrom = Point3()
@@ -323,6 +326,11 @@ class GamePhaseFSM(FSM):
         for unit in self.game.units:
             unit.chargedThisTurn = False
             unit.chargeDistance = 0.0
+            # A Wizard's casting allowance is per turn. Resetting it on entry
+            # to the Strategy phase would refill it every time a spell sent the
+            # game back there.
+            unit.spellsCastThisTurn = []
+            unit.cannotCastThisTurn = False
         for spell in self.end_of_turn_spells:
             spell.endSpell()
         self.end_of_turn_spells = []
@@ -343,6 +351,9 @@ class GamePhaseFSM(FSM):
         self.game.debugText.setText("Casting a spell")
         self.activeSpell = None
         self.spellFunctionToCast = None
+        # Casting is a detour from whichever phase asked for it; a spell's type
+        # decides the phase it may be cast in, so remember where to go back to.
+        self.phaseBeforeSpell = self.PHASES[self.current_phase_index]
         taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
         self.game.setActiveUnitTask = self.game.taskMagicArcUpdate
         self.game.setActiveUnitTaskName = "taskMagicArcUpdate"
@@ -359,7 +370,9 @@ class GamePhaseFSM(FSM):
         self.game.setGroundOverlay(False)
         taskMgr.remove("taskMagicArcUpdate")
         taskMgr.remove("taskShootingTrajectoryDrawLine")
-        self.game.trajectoryLine.removeNode()
+        # The aim line is only drawn once a spell has been chosen.
+        if getattr(self.game, 'trajectoryLine', None) is not None:
+            self.game.trajectoryLine.removeNode()
 
     def enterCampaignPhase(self):
         """Show campaign map, hide battle scene."""

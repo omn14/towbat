@@ -54,7 +54,8 @@ from collision_masks import CollisionMask as CM
 
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
 from game_fsm import GamePhaseFSM
-from spell_system import DevilsVisitSpell, RaiseDeadSpell
+from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
+                          Spell, dispel_result, is_dispelled, may_attempt)
 from persistence import save_game_state, load_game_state
 from characters import JOIN_TAG
 from combat_resolution import CombatResolver
@@ -163,6 +164,7 @@ class MyApp(ShowBase):
         self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
         self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
         self.accept('f7', self.terrain_manager.toggle_debug)  # F7 toggles river water-detection band
+        self.accept('c', self.castSpell)  # C casts with the selected Wizard
         self.accept('wheel_up', self.zoomIn)  # Mouse wheel forward zooms in
         self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)
@@ -493,6 +495,20 @@ class MyApp(ShowBase):
             if armour:
                 model_instance.set_armour(armour)
 
+            # The roster resolves a Wizard's chosen Lore of Magic into spells.
+            spells = army_unit_data.get('spells') or []
+            if spells:
+                model_instance.spells = {s['name']: dict(s) for s in spells}
+                level = int(army_unit_data.get('wizard_level') or 1)
+                if not model_instance.is_wizard():
+                    model_instance.special_rules.append({
+                        'name': f'Wizard Level {level}',
+                        'description': ('This model may attempt to cast as many '
+                                        'spells a turn as its Level of Wizardry.'),
+                        'tag': 'wizard',
+                        'wizard': True,
+                        'wizard_level': level})
+
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
             unit_graphics = unitGraphics(
                 self, graphics_name, model_info['path'], unit_instance,
@@ -820,7 +836,7 @@ class MyApp(ShowBase):
                 taskMgr.add(self.rallyUnit(self.unitToMove), "rallyUnitTask")
             #return task.done
 
-        if any(rule.get('wizard',False) for rule in self.unitToMove.unit.model.special_rules):
+        if self.castableSpells(self.unitToMove):
             self.fsm.request("SpellPhase")
 
         return task.done
@@ -886,6 +902,44 @@ class MyApp(ShowBase):
         self.checkArrows()
         return task.done
     
+    def castingPhase(self):
+        """The spell phase matching the game phase, since a spell's type says
+        when it may be cast (Rulebook p. 108)."""
+        return {'StrategyPhase': 'strategy', 'MovementPhase': 'movement',
+                'ShootingPhase': 'shooting', 'CombatPhase': 'combat'}.get(
+                    self.fsm.PHASES[self.fsm.current_phase_index], 'strategy')
+
+    def castableSpells(self, unit):
+        """Names of the spells *unit* may still attempt in the current phase."""
+        m = unit.unit.model
+        if not m.is_wizard():
+            return []
+        phase = self.castingPhase()
+        level = m.wizard_level(1)
+        cast = getattr(unit, 'spellsCastThisTurn', [])
+        spent = getattr(unit, 'cannotCastThisTurn', False)
+        return [name for name, spell in m.spells.items()
+                if spell.get('phase') == phase
+                and may_attempt(cast, name, level, spent)]
+
+    def castSpell(self):
+        """Enter the Spell phase with the selected Wizard.
+
+        Bound to a key rather than the click, because only the Strategy phase's
+        click is free — the others are busy moving, shooting and fighting.
+        """
+        unit = getattr(self, 'unitToMove', None)
+        if unit is None:
+            return
+        if not unit.unit.model.is_wizard():
+            print(f"[Magic] {unit.unit.name} is not a Wizard.")
+            return
+        if not self.castableSpells(unit):
+            print(f"[Magic] {unit.unit.name} has no {self.castingPhase()}-phase "
+                  f"spells it may still cast.")
+            return
+        self.fsm.request("SpellPhase")
+
     async def taskMagicArcUpdate(self, task):
         for unit in self.units:
             unit.model.setColor(unit.color)
@@ -900,30 +954,50 @@ class MyApp(ShowBase):
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
             print("Unit has no equiped weapon equipped, cant shoot.")
             return task.done """
-        r=False
-        spellChoices = []
-        spellClasses = []
-        for spell in self.unitToMove.unit.model.spells:
-            if self.unitToMove.unit.model.spells.get(spell).get('phase') == 'strategy':
-                spellChoices.append(spell)
-                spellClasses.append(self.unitToMove.unit.model.spells.get(spell).get('class'))
-                r=True
-        if not r:
-            print("Unit has no strategy phase spells, cant cast.")
+        _wizard = self.unitToMove.unit.model
+        _phase = self.castingPhase()
+        _level = _wizard.wizard_level(1)
+        _cast = getattr(self.unitToMove, 'spellsCastThisTurn', [])
+        _spent = getattr(self.unitToMove, 'cannotCastThisTurn', False)
+        spellChoices = self.castableSpells(self.unitToMove)
+        # A spell out of the catalogue has no coded effect yet.
+        spellClasses = [_wizard.spells[n].get('class') or CatalogueSpell
+                        for n in spellChoices]
+        if not spellChoices:
+            if _spent:
+                print(f"[Magic] {self.unitToMove.unit.name} may cast no more "
+                      f"spells this turn.")
+            elif len(_cast) >= max(1, _level):
+                print(f"[Magic] {self.unitToMove.unit.name} has already "
+                      f"attempted {len(_cast)} spell(s), its Level of Wizardry.")
+            else:
+                print(f"[Magic] {self.unitToMove.unit.name} has no "
+                      f"{_phase}-phase spells left to cast.")
             return task.done
         
         
-        spellchoice = await taskMgr.add(self.makeChoiceNew(spellChoices, Vec3(-20,0,10)))
+        spellchoice = await taskMgr.add(
+            self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True))
 
         print("Chosen spell: ", spellchoice)
+        if spellchoice not in spellChoices:
+            print("[Magic] casting cancelled.")
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
+                                     "StrategyPhase"))
+            return task.done
         index = spellChoices.index(spellchoice)
         self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
         self.fsm.spellClassToCast = spellClasses[index]
-        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(spellchoice, self.fsm.activeSpell.get('casting_value',12),self.fsm.endOfTurnSpells)
-        #self.fsm.endOfTurnSpells.append(self.fsm.spellInstanceToCast)
+        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(
+            spellchoice, self.fsm.activeSpell.get('casting_value') or 12,
+            self.fsm.endOfTurnSpells,
+            wizard_level=_level,
+            effect=self.fsm.activeSpell.get('effect', ''))
+        self.fsm.castingUnit = self.unitToMove
 
-        radius = self.fsm.activeSpell.get('range',18)
-        #radius = self.coordsToLocal([Vec2(radius,0)])[0].x
+        # 'Self' and 'Combat' spells have no measured range to draw an arc for.
+        radius = self.fsm.activeSpell.get('range')
+        radius = radius if isinstance(radius, (int, float)) else 18
         radius = radius/(2*50)
 
 
@@ -1329,10 +1403,15 @@ class MyApp(ShowBase):
             if result3.hasHit():
                 selected_unit = self.getSelectedUnit(result3.getNode())
                 print("Selected magic target:",selected_unit.unit.name)
-                # Implement spell casting logic here
-                #await taskMgr.add(self.raiseDead(selected_unit))
-                #await taskMgr.add(self.fsm.spellFunctionToCast(selected_unit))
-                await self.fsm.spellInstanceToCast.spellFunction(selected_unit)
+                spell = self.fsm.spellInstanceToCast
+                caster = getattr(self.fsm, 'castingUnit', self.unitToMove)
+                # The attempt is spent whether or not the spell goes off.
+                caster.spellsCastThisTurn.append(spell.name)
+                await spell.spellFunction(selected_unit)
+                if getattr(spell, 'no_more_spells', False):
+                    caster.cannotCastThisTurn = True
+                if getattr(spell, 'casting', 0) and not getattr(spell, 'perfect', False):
+                    await self.dispelAttempt(spell, caster)
 
                 #selected_unit.bodyNP.setCollideMask(BitMask32.bit(1))
                 #self.checkArrows(BitMask32.bit(1))
@@ -1340,7 +1419,34 @@ class MyApp(ShowBase):
                     self.roundCounter.request('PlayerOne')
                 else:
                     self.roundCounter.request('PlayerTwo')
-                self.fsm.request("StrategyPhase")
+                # Casting is a detour, not a phase of its own: go back.
+                self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
+                                         "StrategyPhase"))
+
+    async def dispelAttempt(self, spell, caster):
+        """Offer the opposing side a dispel attempt (Rulebook p. 110).
+
+        A Wizard on the other side attempts a Wizardly dispel, adding half its
+        Level; anyone else trusts to fate and adds nothing.
+        """
+        foes = (self.player2Units if caster in self.player1Units
+                else self.player1Units)
+        dispeller = max((u for u in foes if u.unit.model.is_wizard()),
+                        key=lambda u: u.unit.model.wizard_level(0), default=None)
+        level = dispeller.unit.model.wizard_level(0) if dispeller else 0
+        kind = f"Wizardly dispel by {dispeller.unit.name}" if dispeller else "Fated dispel"
+        total, values = await Spell._roll_casting_dice(
+            position_base=Vec3(-20, 0, 10))
+        result = dispel_result(values, level, wizardly=dispeller is not None)
+        if is_dispelled(result, spell.casting):
+            print(f"[Magic] {kind}: {values} = {result} beats {spell.casting} "
+                  f"-> {spell.name} is dispelled.")
+            spell.endSpell()
+            if spell in self.fsm.endOfTurnSpells:
+                self.fsm.endOfTurnSpells.remove(spell)
+        else:
+            print(f"[Magic] {kind}: {values} = {result} does not beat "
+                  f"{spell.casting} -> {spell.name} holds.")
 
     def shootAt(self, attackerUnit, defenderUnit):
         attacker = attackerUnit.unit
@@ -1733,8 +1839,8 @@ class MyApp(ShowBase):
             return
         self.movement.moveUnit(unit)
 
-    async def makeChoiceNew(self, choices, position):
-        cyn = Choice(choices, position)
+    async def makeChoiceNew(self, choices, position, cancellable=False):
+        cyn = Choice(choices, position, cancellable)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')

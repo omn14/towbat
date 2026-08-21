@@ -42,7 +42,9 @@
                 "Shield",
                 "Barding",
                 "Light Armour"
-            ]
+            ],
+            "spells": [],
+            "wizard_level": null
         },
         {
             "name": "Master Mage",
@@ -66,7 +68,73 @@
                 "Magical Attacks",
                 "Magic Resistance (-1)"
             ],
-            "armour": []
+            "armour": [],
+            "spells": [
+                {
+                    "name": "Fireball",
+                    "type": "Magic Missile",
+                    "phase": "shooting",
+                    "casting_value": 8,
+                    "range": 24,
+                    "effect": "The target enemy unit suffers 2D6 Strength 4 hits, each with an AP of -. This Spell has the Flaming Attacks special rule.",
+                    "number": 1
+                },
+                {
+                    "name": "Curse of Arrow Attraction",
+                    "type": "Hex",
+                    "phase": "strategy",
+                    "casting_value": 7,
+                    "range": 21,
+                    "effect": "Until your next Start of Turn sub-phase, you may re-roll any rolls To Hit of a natural 1 when shooting at the target enemy unit.",
+                    "number": 2
+                },
+                {
+                    "name": "Pillar of Fire",
+                    "type": "Magical Vortex",
+                    "phase": "shooting",
+                    "casting_value": 9,
+                    "range": 12,
+                    "effect": "Remains in Play. Place a small (3\") blast template so tat its central hole is within 12\" of the caster. Whilst in play, the template is treated as difficult terrain. The template scatters D6\" during every Start of Turn sub- phase (see page 95). Any enemy unit that moves through the template, or that the template moves over, suffers D3+3 Strength 3 hits, each with an AP of -2. These hits have the Flaming Attacks special rule.",
+                    "number": 3
+                },
+                {
+                    "name": "Arcane Urgency",
+                    "type": "Conveyance",
+                    "phase": "movement",
+                    "casting_value": 9,
+                    "range": 15,
+                    "effect": "If the target friendly unit is not fleeing and has moved during this Movement phase, it may immediately move again.",
+                    "number": 4
+                },
+                {
+                    "name": "Oaken Shield",
+                    "type": "Enchantment",
+                    "phase": "strategy",
+                    "casting_value": 7,
+                    "range": "Self",
+                    "effect": "Until your next Start of Turn sub-phase, the caster and any unit they have joined gain 5+ Ward save against any wounds suffered.",
+                    "number": 5
+                },
+                {
+                    "name": "Curse of Cowardly Flight",
+                    "type": "Hex",
+                    "phase": "strategy",
+                    "casting_value": 8,
+                    "range": 15,
+                    "effect": "The target enemy unit must immediately make a Panic test. If the target unit automatically passes any Panic tests it is required to make for any reason, it must still make this test and, should it fail, it will Give Ground.",
+                    "number": 6
+                },
+                {
+                    "name": "Hammerhand",
+                    "type": "Assailment",
+                    "phase": "combat",
+                    "casting_value": 7,
+                    "range": "Combat",
+                    "effect": "A single enemy unit the caster is engaged in combat with suffers 2D3 Strength 4 hits, each with an AP of -2.",
+                    "number": null
+                }
+            ],
+            "wizard_level": 2
         },
         {
             "name": "State Missile Trooper",
@@ -107,7 +175,9 @@
                 "Detachment",
                 "Regimental Unit"
             ],
-            "armour": []
+            "armour": [],
+            "spells": [],
+            "wizard_level": null
         },
         {
             "name": "State Trooper",
@@ -149,7 +219,9 @@
             ],
             "armour": [
                 "Light Armour"
-            ]
+            ],
+            "spells": [],
+            "wizard_level": null
         },
         {
             "name": "Demigryph Knight",
@@ -194,7 +266,9 @@
                 "Barding",
                 "Shield",
                 "Full Plate Armour"
-            ]
+            ],
+            "spells": [],
+            "wizard_level": null
         },
         {
             "name": "War Wagon",
@@ -313,7 +387,9 @@
             ],
             "armour": [
                 "Armour Value : 3+"
-            ]
+            ],
+            "spells": [],
+            "wizard_level": null
         }
     ]
 }

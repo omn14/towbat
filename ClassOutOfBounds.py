@@ -5,6 +5,8 @@
 from panda3d.bullet import BulletBoxShape, BulletGhostNode
 from panda3d.core import Vec3, BitMask32
 
+from collision_masks import CollisionMask as CM
+
 
 
 
@@ -13,7 +15,7 @@ class OutOfBounds:
     def __init__(self,Game):
         print("OutOfBounds initialized")
         self.game = Game
-        self.mask = BitMask32.bit(31)
+        self.mask = CM.OUT_OF_BOUNDS
         self.northBoundry=self.boundry((0,48/2+5,0),Vec3(72/2, 5, 5))
         self.southBoundry=self.boundry((0,-48/2-5,0),Vec3(72/2, 5, 5))
         self.westBoundry=self.boundry((-72/2-5,0,0),Vec3(5, 68/2, 5))

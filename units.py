@@ -102,6 +102,8 @@ class unitGraphics(FSM):
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
         self.isDisrupted=False       # a quarter or more of the models in difficult terrain: no Rank Bonus
+        self.spellsCastThisTurn=[]   # a Wizard may attempt each spell once, and only Level of them
+        self.cannotCastThisTurn=False  # spent by a Miscast result of 8+
         self.isGeneral=False         # army commander; radiates Inspiring Presence
         self.isBSB=False             # carries the Battle Standard (Hold Your Ground)
         self.woundsOnModel=0         # unsaved wounds on the current multi-wound model

@@ -17,8 +17,9 @@ import argparse
 import json
 import math
 import os
+import re
 
-from battlescribe import slugify, weapon_from_profile
+from battlescribe import slugify, spell_from_profile, weapon_from_profile
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FILES = 5  # default frontage when the roster has no formation info
@@ -116,6 +117,35 @@ def _collect_special_rules(selection: dict, out: list) -> None:
         _collect_special_rules(sub, out)
 
 
+def _collect_spells(selection: dict, out: list) -> None:
+    """Gather the spells a Wizard knows. The roster resolves the chosen Lore of
+    Magic into Spell profiles, so the whole lore comes across with its rules."""
+    for p in selection.get("profiles", []):
+        if p.get("typeName") == "Spell" and p.get("name"):
+            chars = {c["name"]: c.get("$text", "") for c in p.get("characteristics", [])}
+            out.append(spell_from_profile(p["name"], chars))
+    for sub in selection.get("selections", []):
+        _collect_spells(sub, out)
+
+
+def _wizard_level(selection: dict):
+    """A Wizard's Level of Wizardry, taken from its 'Wizard Level N' upgrade.
+
+    Levels 1 and 2 are often the profile's own, with only an upgrade to 3 or 4
+    listed, so a wizard with spells but no upgrade counts as Level 1.
+    """
+    best = None
+    def walk(sel):
+        nonlocal best
+        m = re.match(r"wizard level\s*(\d+)", str(sel.get("name", "")).strip(), re.I)
+        if m:
+            best = max(best or 0, int(m.group(1)))
+        for sub in sel.get("selections", []):
+            walk(sub)
+    walk(selection)
+    return best
+
+
 def _primary_category(unit: dict):
     for cat in unit.get("categories", []):
         if cat.get("primary"):
@@ -156,6 +186,13 @@ def import_roster(path: str) -> dict:
             armour: list = []
             _collect_armour(unit, armour)
             armour = list(dict.fromkeys(armour))
+            spells: list = []
+            _collect_spells(unit, spells)
+            spells = [s for s in spells
+                      if not (s["name"] in seen or seen.add(s["name"]))]
+            level = _wizard_level(unit)
+            if spells and not level:
+                level = 1
             units.append({
                 "name": _primary_model_name(unit),
                 "faction": faction_slug,
@@ -169,6 +206,8 @@ def import_roster(path: str) -> dict:
                 "weapons": weapons,
                 "special_rules": special_rules,
                 "armour": armour,
+                "spells": spells,
+                "wizard_level": level,
             })
 
     return {"budget": limit or total, "faction": faction_slug, "units": units}

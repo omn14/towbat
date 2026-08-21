@@ -51,8 +51,12 @@ class CollisionMask:
     SWEEP_TARGET     = BitMask32.bit(9)   # "other units" during a sweep test
     SWEEP_SELF       = BitMask32.bit(30)  # current unit excluded from sweep
 
+    # ── menus ───────────────────────────────────────────────────
+    MENU_CHOICE      = BitMask32.bit(29)  # the floating choice-menu cubes
+
     # ── environment ─────────────────────────────────────────────
     BOUNDARY         = BitMask32.bit(11)  # table-edge boundary walls
+    OUT_OF_BOUNDS    = BitMask32.bit(31)  # the four board-edge ghost volumes
     TERRAIN_FOREST          = BitMask32.bit(20)  # terrain ghost nodes (forest, hill…)
     TERRAIN_HILL            = BitMask32.bit(21)  # terrain ghost nodes (hill)
     TERRAIN_RIVER           = BitMask32.bit(22)  # terrain ghost nodes (river)

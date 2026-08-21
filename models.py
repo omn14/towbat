@@ -166,6 +166,7 @@ class model:
             self.attach_beasts(model(part['name'], ""), part.get('count', 1))
         self.attack_roll = 0
         self.wound_roll = 0
+        self.spells = {}       # name -> spell dict; only Wizards have any
 
     def reset_characteristics(self):
         if self._base_characteristics is not None:
@@ -346,6 +347,18 @@ class model:
         crew = self.get_crew()
         source = crew if crew is not None else self
         return stat_int(source.characteristics, 'S', default)
+
+    def is_wizard(self) -> bool:
+        return any(isinstance(r, dict) and r.get('wizard')
+                   for r in self.special_rules)
+
+    def wizard_level(self, default: int = 0) -> int:
+        """Level of Wizardry, which sets how many spells may be cast a turn and
+        adds half itself to a Casting roll (Rulebook p. 106-108)."""
+        for rule in self.special_rules:
+            if isinstance(rule, dict) and rule.get('wizard'):
+                return int(rule.get('wizard_level') or 1)
+        return default
 
     def is_skirmisher(self) -> bool:
         """True if the model has the Skirmishers special rule."""

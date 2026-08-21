@@ -361,6 +361,82 @@ def _weapon_profiles(root: ET.Element) -> list:
     return out
 
 
+# ── Spells (Rulebook p. 106) ──────────────────────────────────────────────
+
+# A spell's Type decides the phase it may be cast in (Rulebook p. 108).
+SPELL_PHASES = {
+    'enchantment': 'strategy',
+    'hex': 'strategy',
+    'conveyance': 'movement',
+    'magic missile': 'shooting',
+    'magical vortex': 'shooting',
+    'assailment': 'combat',
+    'prayer': 'strategy',
+}
+
+
+def _casting_value(text):
+    """Leading casting value of a spell: '8+' -> 8. A boosted spell writes both
+    versions as '8+/11+'; the basic one is what the engine casts."""
+    m = re.search(r"(\d+)", str(text or ""))
+    return int(m.group(1)) if m else None
+
+
+def _spell_range(text):
+    """A spell's range in inches, or the string 'Self'/'Combat' when it has no
+    measured range. Returns None when the data gives none."""
+    s = str(text or "").strip()
+    low = s.lower()
+    if low.startswith("self"):
+        return "Self"
+    if low.startswith("combat"):
+        return "Combat"
+    m = re.search(r"(\d+)", s.replace("D6", "").replace("d6", ""))
+    return int(m.group(1)) if m else None
+
+
+def spell_from_profile(name: str, chars: dict) -> dict:
+    """Convert a BattleScribe Spell profile into the game's spell dict."""
+    kind = (chars.get("Type") or "").strip()
+    number = chars.get("Number") or ""
+    return {
+        "name": name,
+        "type": kind,
+        "phase": SPELL_PHASES.get(kind.lower(), "strategy"),
+        "casting_value": _casting_value(chars.get("Casting Value")),
+        "range": _spell_range(chars.get("Range")),
+        "effect": (chars.get("Effect") or "").strip(),
+        # The seventh spell of a lore is its signature and carries no number.
+        "number": int(number) if str(number).strip().isdigit() else None,
+    }
+
+
+def _spell_lores(cat_path: str) -> dict:
+    """Map lore name -> list of game spell dicts for one catalogue.
+
+    Each Lore of Magic is a shared infoGroup holding its spells; the eight full
+    lores hold seven, six numbered and a signature.
+    """
+    try:
+        root = ET.parse(cat_path).getroot()
+    except ET.ParseError:
+        return {}
+    out: dict = {}
+    for group in root.iter():
+        if _tag(group) != "infoGroup":
+            continue
+        spells = []
+        for profile in group.iter():
+            if _tag(profile) != "profile" or profile.get("typeName") != "Spell":
+                continue
+            chars = {c.get("name"): (c.text or "").strip()
+                     for c in profile.iter() if _tag(c) == "characteristic"}
+            spells.append(spell_from_profile(profile.get("name", "Spell"), chars))
+        if spells:
+            out.setdefault(group.get("name") or "Unknown Lore", spells)
+    return out
+
+
 def _index_entries_by_name(root: ET.Element) -> dict:
     """Map selectionEntry name -> element, for following entryLinks."""
     out: dict = {}
@@ -561,6 +637,9 @@ class Catalogue:
         self.weapons_by_slug: dict = {}
         # Special Rule profile descriptions by slug (army-specific abilities).
         self.rule_desc_by_slug: dict = {}
+        # Lore of Magic name -> its spells, and every spell by slug.
+        self.lores: dict = {}
+        self.spells_by_slug: dict = {}
         self.factions: dict = {}
         self._load()
 
@@ -602,8 +681,14 @@ class Catalogue:
                 self.weapons_by_slug.setdefault(slugify(w["name"]), w)
             for name, desc in _rule_descriptions(path).items():
                 self.rule_desc_by_slug.setdefault(slugify(name), desc)
+            for lore, spells in _spell_lores(path).items():
+                self.lores.setdefault(lore, spells)
+                for s in spells:
+                    self.spells_by_slug.setdefault(slugify(s["name"]), s)
         print(f"[battlescribe] loaded {len(self.by_slug)} models, "
-              f"{len(self.weapons_by_slug)} weapons across {len(self.factions)} factions")
+              f"{len(self.weapons_by_slug)} weapons, "
+              f"{len(self.spells_by_slug)} spells in {len(self.lores)} lores "
+              f"across {len(self.factions)} factions")
 
     def characteristics(self, name: str):
         """Return a fresh characteristics dict for a display name, or None."""
@@ -616,6 +701,18 @@ class Catalogue:
         """Return a fresh game weapon dict for a weapon name, or None."""
         record = self.weapons_by_slug.get(slugify(name))
         return copy.deepcopy(record) if record else None
+
+    def spell(self, name: str):
+        """Return a fresh game spell dict for a spell name, or None."""
+        record = self.spells_by_slug.get(slugify(name))
+        return copy.deepcopy(record) if record else None
+
+    def lore(self, name: str):
+        """Return a Lore of Magic's spells by lore name, or None."""
+        for lore, spells in self.lores.items():
+            if slugify(lore) == slugify(name):
+                return copy.deepcopy(spells)
+        return None
 
     def rule_description(self, name: str):
         """Return the catalogue description for a Special Rule name, or None.

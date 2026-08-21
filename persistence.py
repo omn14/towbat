@@ -92,6 +92,9 @@ def save_game_state(game, filename=None):
             # Enough to reconstruct the unit on load if it is missing.
             'model_name': unit.unit.model.name,
             'weapons': [_clean_weapon(w) for w in unit.unit.model.weapons.values()],
+            'spells': [_clean_weapon(s) for s in
+                       getattr(unit.unit.model, 'spells', {}).values()],
+            'wizard_level': unit.unit.model.wizard_level(0),
             'mount': (unit.unit.model.get_mount().name
                       if unit.unit.model.is_mounted() else None),
             # Character joined to this unit's front rank, if any.
@@ -226,6 +229,8 @@ def load_game_state(game, filename):
             'ranks': unit_data['ranks'],
             'mount': unit_data.get('mount'),
             'weapons': unit_data.get('weapons', []),
+            'spells': unit_data.get('spells', []),
+            'wizard_level': unit_data.get('wizard_level'),
         }
         game._create_unit(spec, unit_data.get('player', 1), unit_data['name'])
 
@@ -275,6 +280,15 @@ def load_game_state(game, filename):
 
         if unit_data['equipped_weapon']:
             unit.unit.model.equip_weapon(unit_data['equipped_weapon'])
+
+        # A coded spell keeps its class; saves only carry the data.
+        for spell in unit_data.get('spells') or []:
+            known = unit.unit.model.spells.get(spell['name'])
+            if known is None:
+                unit.unit.model.spells[spell['name']] = dict(spell)
+            else:
+                for key, value in spell.items():
+                    known.setdefault(key, value)
 
         unit.isInCombatWith = []
         unit.isInCombatFlank = []
