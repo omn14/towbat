@@ -226,7 +226,7 @@ class MyApp(ShowBase):
 
 
         self.unitToMove=self.player1Units[0]
-        self.accept('mouse3', self.moveUnit,[self.unitToMove])
+        self.accept('mouse3', self.onRightClick,[self.unitToMove])
         #self.messenger.toggleVerbose()
         self.roundCounter = RoundCounter(self,16)
 
@@ -646,7 +646,7 @@ class MyApp(ShowBase):
 
     def drawProjectileTrajectory(self,startPos,endPos,n=20,color=(1,0,0,1)):
         # Remove existing trajectory line if it exists
-        if hasattr(self, 'trajectoryLine'):
+        if getattr(self, 'trajectoryLine', None) is not None:
             self.trajectoryLine.removeNode()
         
         line_segs = LineSegs()
@@ -1371,7 +1371,7 @@ class MyApp(ShowBase):
                         elif unit_name == self.goblins.unitName:
                             self.unitToMove = self.goblins
                             print(f"Selected unit: {self.goblins.unitName}") """
-                        self.accept('mouse3', self.moveUnit,[self.unitToMove])
+                        self.accept('mouse3', self.onRightClick,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
                         self.debugTextUnit.setText(f"Selected unit: {self.unitToMove.unitName}\nStats: {self.unitToMove.unit.model.characteristics}")
@@ -1834,8 +1834,46 @@ class MyApp(ShowBase):
     def drawRectangle(self, center=Point3(0, 0, 0), width=5, height=3, color=(1, 0, 0, 1)):
         return self.movement.drawRectangle(center, width, height, color)
 
+    def onRightClick(self, unit):
+        """Right-click backs out of aiming, or commits a plotted move."""
+        if self.awaitingChoice:
+            return          # an open choice menu handles its own right-click
+        if self.isAiming():
+            self.cancelAiming()
+            return
+        self.moveUnit(unit)
+
+    def isAiming(self):
+        """True while a shooting or spell target is being picked."""
+        return taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine")
+
+    def cancelAiming(self):
+        """Drop the arc, the aim line and every target mark."""
+        taskMgr.remove("taskShootingTrajectoryDrawLine")
+        if getattr(self, 'trajectoryLine', None) is not None:
+            self.trajectoryLine.removeNode()
+            self.trajectoryLine = None
+        if getattr(self, 'rangeRing', None) is not None:
+            self.rangeRing.removeNode()
+            self.rangeRing = None
+        self.setGroundOverlay(False)
+        self.shootingArcPoints = []
+        for u in self.units:
+            u.model.setColor(u.color)
+            u.bodyNP.setCollideMask(BitMask32.bit(u.bitmask))
+        print("[Aim] cancelled.")
+        # Casting is a detour from another phase; shooting is not.
+        if self.fsm.state == "SpellPhase":
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
+                                     "StrategyPhase"))
+
     def moveUnit(self, unit):
         if self.awaitingChoice:
+            return
+        # Right-click commits a plotted move. Without the move arc running
+        # there is nothing plotted, and the stale arcPoint would teleport the
+        # unit — as it did when right-clicking while aiming or casting.
+        if not taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             return
         self.movement.moveUnit(unit)
 
@@ -2076,7 +2114,7 @@ class MyApp(ShowBase):
         # Keep the active unit and its binding valid.
         if self.player1Units:
             self.unitToMove = self.player1Units[0]
-            self.accept('mouse3', self.moveUnit, [self.unitToMove])
+            self.accept('mouse3', self.onRightClick, [self.unitToMove])
         return len(player_units)
 
     # ─── Tutorial ─────────────────────────────────────────────────────
