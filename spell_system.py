@@ -462,9 +462,16 @@ class PillarOfFireSpell(Spell):
     def burn_units_between(self, game, start, end):
         """Hit every enemy unit the template covered on its way from *start*
         to *end*."""
+        from characters import friendly_units
         for other in self.enemies(game):
             if self.caught(other, start, end):
                 self.burn(other)
+        # Only enemy units burn, which reads as a bug when the template drifts
+        # back over the caster's own line and nothing happens.
+        for own in friendly_units(game, self.caster):
+            if not own.bodyNP.isEmpty() and self.caught(own, start, end):
+                print(f"   {own.unit.name} is passed over but is friendly to "
+                      f"the caster — {self.name} burns enemy units only.")
 
     def caught(self, unit, start, end) -> bool:
         """Whether any of *unit*'s models lie under the template's path.

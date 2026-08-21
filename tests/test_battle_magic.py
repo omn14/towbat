@@ -6,6 +6,8 @@ and matched back to the catalogue by name.
 """
 
 import asyncio
+import contextlib
+import io
 import json
 import math
 import os
@@ -532,16 +534,35 @@ class TestTheTemplateScatteringOverAUnit(unittest.TestCase):
             burned.clear()
             unit = self._at(*covered)
             self.spell.enemies = lambda game, u=unit: [u]
-            self.spell.burn_units_between(None, Point3(0, 0, 0),
+            self.spell.burn_units_between(self._game(), Point3(0, 0, 0),
                                           Point3(20, 0, 0))
             self.assertEqual(burned, [unit])
+
+    def test_the_casters_own_side_is_not_burned(self):
+        # "Any *enemy* unit": a template that drifts back over its caster's
+        # line does nothing, which reads as a bug without the note it prints.
+        burned = []
+        self.spell.burn = burned.append
+        friend = self._at((10, 0))
+        friend.bodyNP = SimpleNamespace(isEmpty=lambda: False)
+        friend.unit = SimpleNamespace(name='Battle Wizard')
+        self.spell.enemies = lambda game: []
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.spell.burn_units_between(self._game(friendlies=[friend]),
+                                          Point3(0, 0, 0), Point3(20, 0, 0))
+        self.assertEqual(burned, [])
+        self.assertIn('friendly to the caster', out.getvalue())
+
+    def _game(self, friendlies=()):
+        return SimpleNamespace(player1Units=list(friendlies), player2Units=[])
 
     def test_a_unit_out_of_the_path_is_left_alone(self):
         burned = []
         self.spell.burn = burned.append
         unit = self._at((10, 9), (10, 10))
         self.spell.enemies = lambda game: [unit]
-        self.spell.burn_units_between(None, Point3(0, 0, 0), Point3(20, 0, 0))
+        self.spell.burn_units_between(self._game(), Point3(0, 0, 0),
+                                      Point3(20, 0, 0))
         self.assertEqual(burned, [])
 
 
