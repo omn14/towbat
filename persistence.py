@@ -300,6 +300,13 @@ def load_game_state(game, filename):
         if host is not None and character is not None:
             join_unit(game, character, host)
 
+    # Each model sits on the terrain surface, not at its unit's own Z. That
+    # offset is derived rather than saved, so a unit restored onto a hill would
+    # otherwise stand at ground level, inside the hill.
+    for unit in game.units:
+        if not unit.model.isEmpty():
+            game.movement.alignModelsToHillNormal(unit)
+
     print(f"Game loaded from {filename}")
     game.debugTextUnit.setText(f"Loaded: {filename}")
 
