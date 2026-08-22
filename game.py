@@ -58,6 +58,7 @@ from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
                           Spell, dispel_result, is_dispelled, may_attempt,
                           spell_class, spell_readout)
 from persistence import save_game_state, load_game_state
+from rules_log import rule_log, rule_skipped
 from characters import JOIN_TAG, enemy_units
 from combat_resolution import CombatResolver
 from movement_system import MovementSystem
@@ -1499,7 +1500,16 @@ class MyApp(ShowBase):
                                              and defender.model.unit_strength() == 1)
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
         # Vantage Point: a unit entirely on a hill fires with one extra rank.
-        extra_ranks = 1 if self.movement.entirelyOnHill(attackerUnit) else 0
+        _on_hill, _models = self.movement.modelsInTerrain(
+            attackerUnit, lambda t: t.terrain_type == 'hill')
+        extra_ranks = 1 if _models and _on_hill == _models else 0
+        if extra_ranks:
+            rule_log('Vantage Point', attackerUnit,
+                     f"entirely on a hill ({_on_hill}/{_models} models) "
+                     f"-> fires with 1 extra rank")
+        elif _on_hill:
+            rule_skipped('Vantage Point', attackerUnit,
+                         f"only {_on_hill}/{_models} models are on the hill")
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
               f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})"
               f"{'  | on a hill: +1 firing rank' if extra_ranks else ''}")

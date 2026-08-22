@@ -75,7 +75,8 @@ class TwoHandedShieldTests(unittest.TestCase):
         m.set_armour(["Heavy Armour", "Shield"])
         m.equip_weapon("hand weapon")
         self.assertFalse(m.melee_weapon_requires_two_hands())
-        self.assertEqual(m.melee_armour_save(), 4)
+        # The shield stands, and Parry improves the 4+ to a 3+.
+        self.assertEqual(m.melee_armour_save(), 3)
 
     def test_no_shield_unaffected(self):
         m = model("State Trooper", "")
@@ -83,6 +84,72 @@ class TwoHandedShieldTests(unittest.TestCase):
         m.weapons["Great Weapon"] = self._greatweapon()
         m.equip_weapon("Great Weapon")
         self.assertEqual(m.melee_armour_save(), 5)
+
+
+class ParryTests(unittest.TestCase):
+    """Parry — Rulebook p. 190. Infantry fighting with a hand weapon and a
+    shield improve their armour value by 1, to a maximum of 3+."""
+
+    @staticmethod
+    def _trooper(armour, weapon="hand weapon"):
+        m = model("State Trooper", "")       # regular infantry
+        m.set_armour(armour)
+        m.equip_weapon(weapon)
+        return m
+
+    def test_a_hand_weapon_and_shield_improve_the_save(self):
+        m = self._trooper(["Light Armour", "Shield"])   # 5+
+        self.assertTrue(m.parry_applies())
+        self.assertEqual(m.melee_armour_save(), 4)
+
+    def test_it_stops_at_three_up(self):
+        m = self._trooper(["Full Plate Armour", "Shield"])   # 3+
+        self.assertEqual(m.melee_armour_save(), 3)
+
+    def test_a_better_save_is_not_made_worse(self):
+        m = self._trooper(["Full Plate Armour", "Shield", "Barding"])  # 2+
+        self.assertEqual(m.melee_armour_save(), 2)
+
+    def test_a_shield_alone_still_parries(self):
+        m = self._trooper(["Shield"])        # 6+
+        self.assertEqual(m.melee_armour_save(), 5)
+
+    def test_no_shield_no_parry(self):
+        m = self._trooper(["Heavy Armour"])
+        self.assertFalse(m.parry_applies())
+        self.assertEqual(m.melee_armour_save(), 5)
+
+    def test_a_two_handed_weapon_cannot_parry(self):
+        # It loses the shield's bonus outright, so there is nothing to improve.
+        m = self._trooper(["Heavy Armour", "Shield"])
+        m.weapons["Great Weapon"] = {"name": "Great Weapon", "tag": "combat",
+                                     "special_rules": ["Requires Two Hands"]}
+        m.equip_weapon("Great Weapon")
+        self.assertFalse(m.parry_applies())
+        self.assertEqual(m.melee_armour_save(), 5)
+
+    def test_another_one_handed_weapon_does_not_parry(self):
+        # The rule asks for a hand weapon specifically, not any one-hander.
+        m = self._trooper(["Heavy Armour", "Shield"])
+        m.weapons["Halberd"] = {"name": "Halberd", "tag": "combat"}
+        m.equip_weapon("Halberd")
+        self.assertFalse(m.parry_applies())
+        self.assertEqual(m.melee_armour_save(), 4)
+
+    def test_only_the_troop_types_that_have_it(self):
+        # Heavy infantry parry; a light chariot does not.
+        black_orc = model("Black Orc", "")
+        black_orc.set_armour(["Heavy Armour", "Shield"])
+        self.assertTrue(black_orc.parry_applies())
+        chariot = model("Goblin Wolf Chariot", "")
+        chariot.set_armour(["Heavy Armour", "Shield"])
+        self.assertFalse(chariot.parry_applies())
+
+    def test_shooting_is_unaffected(self):
+        # Parry is a close combat rule; the stored save is what shooting uses.
+        m = self._trooper(["Light Armour", "Shield"])
+        self.assertEqual(m.armor_save, 5)
+        self.assertEqual(m.melee_armour_save(), 4)
 
 
 if __name__ == "__main__":

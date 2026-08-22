@@ -167,21 +167,43 @@ class MeleeStrengthTests(unittest.TestCase):
     def test_halberd_strength_always_on(self):
         m = model("State Trooper", ""); m.give_weapon("Halberd")
         m.charging = False
+        m.equip_best_melee()
         self.assertEqual(m.melee_strength_bonus(), 1)
         m.charging = True
+        m.equip_best_melee()
         self.assertEqual(m.melee_strength_bonus(), 1)
 
     def test_lance_strength_charge_only(self):
         m = model("Demigryph Knight", ""); m.give_weapon("Lance")
         m.charging = False
+        m.equip_best_melee()
         self.assertEqual(m.melee_strength_bonus(), 0)
         m.charging = True
+        m.equip_best_melee()
         self.assertEqual(m.melee_strength_bonus(), 2)
+
+    def test_a_weapon_that_is_carried_but_not_used_gives_nothing(self):
+        # Owning a halberd is not wielding one. The bonuses used to be taken
+        # from the best weapon a model owned, so a State Trooper told to fight
+        # with its hand weapon still swung at the halberd's Strength and AP.
+        m = model("State Trooper", ""); m.give_weapon("Halberd")
+        m.charging = True
+        m.equip_weapon("hand weapon")
+        self.assertEqual(m.melee_strength_bonus(), 0)
+        self.assertEqual(m.melee_ap(), 0)
+        self.assertEqual(m.armour_bane_for_attack(), 0)
+
+    def test_a_ranged_weapon_is_no_help_in_melee(self):
+        m = model("State Missile Trooper", ""); m.give_weapon("Handgun")
+        m.equip_weapon("Handgun")
+        self.assertEqual(m.melee_strength_bonus(), 0)
+        self.assertEqual(m.melee_ap(), 0)
 
     def test_apply_melee_strength(self):
         m = model("State Trooper", ""); m.give_weapon("Halberd")
         base = int(m.characteristics["S"])
         m.charging = False
+        m.equip_best_melee()
         m.apply_melee_strength()
         self.assertEqual(int(m.characteristics["S"]), base + 1)
 
@@ -190,15 +212,19 @@ class MeleeApTests(unittest.TestCase):
     def test_halberd_ap_conditional(self):
         m = model("State Trooper", ""); m.give_weapon("Halberd")
         m.charging = False
+        m.equip_best_melee()
         self.assertEqual(m.melee_ap(), 1)
         m.charging = True
+        m.equip_best_melee()
         self.assertEqual(m.melee_ap(), 2)
 
     def test_lance_ap_charge_only(self):
         m = model("Demigryph Knight", ""); m.give_weapon("Lance")
         m.charging = False
+        m.equip_best_melee()
         self.assertEqual(m.melee_ap(), 0)
         m.charging = True
+        m.equip_best_melee()
         self.assertEqual(m.melee_ap(), 2)
 
 
@@ -226,6 +252,7 @@ class ArmourBaneCombatTests(unittest.TestCase):
     def test_bonus_on_natural_six(self):
         with mock.patch("battleFunctions.random.randint", return_value=6), quiet():
             m = model("State Trooper", ""); m.give_weapon("Halberd")
+            m.equip_best_melee()
             simulate_attack(m, model("State Trooper", ""))
         # not charging: melee AP 1 + Armour Bane 1 on the natural 6 = 2
         self.assertEqual(m.attack_AP, 2)
@@ -233,6 +260,7 @@ class ArmourBaneCombatTests(unittest.TestCase):
     def test_no_bonus_on_non_six(self):
         with mock.patch("battleFunctions.random.randint", return_value=4), quiet():
             m = model("State Trooper", ""); m.give_weapon("Halberd")
+            m.equip_best_melee()
             simulate_attack(m, model("State Trooper", ""))
         self.assertEqual(m.attack_AP, m.melee_ap())  # AP 1, no armour bane
 
@@ -333,6 +361,7 @@ class ChargeCombatIntegrationTests(unittest.TestCase):
     def test_defender_gets_always_on_strength(self):
         # Halberd S+1 applies even when defending (not charging).
         defender = model("State Trooper", ""); defender.give_weapon("Halberd")
+        defender.equip_best_melee()
         seen = {}
         real_to_wound = simulate_battle.__globals__["to_wound"]
 

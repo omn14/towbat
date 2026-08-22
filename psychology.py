@@ -299,13 +299,17 @@ def stubborn_available(unit) -> bool:
 
 
 MAX_RANK_BONUS = 2
+# The rules are written around regular infantry, so that is the fallback for a
+# troop type the table does not know.
+MODELS_PER_RANK = 5
 
 
 def rank_bonus(unit, disrupted: bool = False) -> int:
     """Combat result points a formed unit claims for its ranks.
 
-    One per rank behind the first, except that a rank short of the unit's
-    frontage does not count. Skirmishers claim none, a Disrupted unit claims
+    One per rank behind the first. A rank only counts if it holds at least the
+    troop type's models per rank, which is also why a unit narrower than that
+    claims nothing at all. Skirmishers claim none, a Disrupted unit claims
     none, and each troop type caps what it can claim -- a heavy chariot cannot
     form ranks at all.
     """
@@ -315,9 +319,12 @@ def rank_bonus(unit, disrupted: bool = False) -> int:
     cap = model.max_rank_bonus(MAX_RANK_BONUS)
     if cap <= 0:
         return 0
+    per_rank = model.models_per_rank(MODELS_PER_RANK)
+    if per_rank <= 0 or unit.files < per_rank:
+        return 0
     bonus = unit.ranks - 1
     remainder = unit.nmodels % unit.files if unit.files else 0
-    if 0 < remainder < 4:
+    if 0 < remainder < per_rank:
         bonus -= 1
     return max(0, min(bonus, cap))
 

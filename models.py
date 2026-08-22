@@ -18,6 +18,9 @@ ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_
 # Table scale: 1 game unit == 1 inch == 25.4 mm (a 6'x4' table is 72x48 units).
 MM_PER_UNIT = 25.4
 
+# Parry improves an armour value by 1, but never past this (Rulebook p. 190).
+PARRY_BEST_SAVE = 3
+
 
 def _find_json_file(filename: str) -> str:
     """Search army_units/ subfolders for a characteristics JSON file.
@@ -279,6 +282,14 @@ class model:
     def max_rank_bonus(self, default: int) -> int:
         return troop_types.max_rank_bonus(self.troop_type(), default)
 
+    def models_per_rank(self, default: int) -> int:
+        return troop_types.models_per_rank(self.troop_type(), default)
+
+    def starting_wounds(self, default: int = 1) -> int:
+        """Wounds as printed, before anything on the table wounded it."""
+        base = self._base_characteristics or self.characteristics
+        return stat_int(base, 'W', default)
+
     def has_all_round_vision(self) -> bool:
         """360° vision arc for shooting and casting: Firing Platform (p. 194)
         for a chariot, and Skirmishers, who have no formed facing."""
@@ -420,23 +431,39 @@ class model:
         return any('requires two hands' in str(r).lower()
                    for r in (w.get('special_rules') or []))
 
+    def has_shield(self) -> bool:
+        return any(str(a).strip().lower() == 'shield' for a in (self.armour or []))
+
+    def uses_hand_weapon(self) -> bool:
+        """True if the active melee weapon is a plain hand weapon."""
+        w = self.equipedWeapon
+        return bool(w) and str(w.get('name', '')).strip().lower() == 'hand weapon'
+
+    def parry_applies(self) -> bool:
+        """Parry (Rulebook p. 190): infantry fighting with a hand weapon and a
+        shield deflect blows with it."""
+        return (self.troop_type_rule('Parry') and self.has_shield()
+                and self.uses_hand_weapon())
+
     def melee_armour_save(self) -> int:
-        """Armour save used in melee; a two-handed weapon disables the shield.
-        Based on the stored save so hard-coded units keep their value; only the
-        shield's +1 is removed when a two-handed weapon is in use."""
+        """Armour save used in melee; a two-handed weapon disables the shield,
+        and Parry improves the value for a hand weapon and shield.
+        Based on the stored save so hard-coded units keep their value."""
         save = self.armor_save
-        has_shield = any(str(a).strip().lower() == 'shield'
-                         for a in (self.armour or []))
-        if has_shield and self.melee_weapon_requires_two_hands():
-            save = min(7, save + 1)  # lose the shield's improvement
+        if self.has_shield() and self.melee_weapon_requires_two_hands():
+            return min(7, save + 1)  # lose the shield's improvement
+        if self.parry_applies():
+            # Improves by 1 but no further than 3+, and a better save stands.
+            return min(save, max(PARRY_BEST_SAVE, save - 1))
         return save
 
     def unit_strength(self) -> int:
         """Unit Strength per model. The troop type decides it where the rulebook
-        value is known (a heavy chariot is US5); otherwise mounted models count
-        as US2 and everything else as US1."""
+        value is known (a heavy chariot is US5, a monster is worth its starting
+        Wounds); otherwise mounted models count as US2 and everything else US1."""
         return troop_types.unit_strength(self.troop_type(),
-                                         2 if self.is_mounted() else 1)
+                                         2 if self.is_mounted() else 1,
+                                         self.starting_wounds())
 
     def get_movement(self, default: int = 0) -> int:
         """Movement value; mounted units always use their mount's Movement."""
@@ -484,17 +511,24 @@ class model:
         dice = w.get('ranged_shots_dice')
         return roll_dice_expr(dice) if dice else (w.get('ranged_shots') or 1)
 
+    def active_melee_weapon(self) -> dict:
+        """The melee weapon this model is actually fighting with.
+
+        A charge-only weapon (Lance) is not in use outside a charge, and a
+        ranged weapon is never used in melee; both fall back to bare hands.
+        """
+        w = self.equipedWeapon or {}
+        if w.get('tag') == 'ranged':
+            return {}
+        if w.get('charge_only') and not self.charging:
+            return {}
+        return w
+
     def melee_strength_bonus(self) -> int:
-        """Strength bonus of the active melee weapon. Charge-only weapons (Lance)
-        count only while charging; others (Halberd, Great Weapon) are always on."""
-        best = 0
-        for w in self.weapons.values():
-            if w.get('tag') == 'ranged':
-                continue
-            if w.get('charge_only') and not self.charging:
-                continue
-            best = max(best, w.get('strength_bonus', 0))
-        return best
+        """Strength bonus of the equipped melee weapon. Charge-only weapons
+        (Lance) count only while charging; others (Halberd, Great Weapon) are
+        always on."""
+        return self.active_melee_weapon().get('strength_bonus', 0)
 
     def apply_melee_strength(self):
         """Add the active melee weapon's Strength bonus once per combat.
@@ -505,32 +539,17 @@ class model:
         return bonus
 
     def melee_ap(self) -> int:
-        """AP penetration of the active melee weapon; charge value while charging."""
-        best = 0
-        for w in self.weapons.values():
-            if w.get('tag') == 'ranged':
-                continue
-            if w.get('charge_only') and not self.charging:
-                continue
-            ap = w.get('ap_penetration', 0)
-            if self.charging and w.get('ap_penetration_charge') is not None:
-                ap = w['ap_penetration_charge']
-            best = max(best, ap)
-        return best
+        """AP penetration of the equipped melee weapon; charge value while charging."""
+        w = self.active_melee_weapon()
+        if self.charging and w.get('ap_penetration_charge') is not None:
+            return w['ap_penetration_charge']
+        return w.get('ap_penetration', 0)
 
     def armour_bane_for_attack(self) -> int:
-        """Armour Bane (X) of the weapon used for the current attack.
-        Ranged uses the equipped weapon; melee uses the best applicable weapon
-        (charge-only weapons count only while charging)."""
+        """Armour Bane (X) of the weapon used for the current attack."""
         if self.equipedWeapon and self.equipedWeapon.get('tag') == 'ranged':
             return armour_bane_x(self.equipedWeapon.get('special_rules', []))
-        best = 0
-        for w in self.weapons.values():
-            if w.get('tag') == 'ranged':
-                continue
-            if w.get('charge_only') and not self.charging:
-                continue
-            best = max(best, armour_bane_x(w.get('special_rules', [])))
+        return armour_bane_x(self.active_melee_weapon().get('special_rules', []))
         return best
 
     def equip_best_melee(self) -> str:

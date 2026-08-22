@@ -158,12 +158,13 @@ class TestResolution(unittest.TestCase):
         self.assertEqual(unsaved, 0)
 
     def test_scythed_wheels_cut_through_light_armour(self):
-        # Light armour + shield is a 5+; a heavy chariot's AP-2 makes it a 7+.
+        # Light armour + shield is a 5+, improved to 4+ by Parry; a heavy
+        # chariot's AP-2 takes that back to 6+.
         armoured = model("Goblin", "")
         armoured.set_armour(["light armour", "shield"])
-        self.assertEqual(armoured.melee_armour_save(), 5)
+        self.assertEqual(armoured.melee_armour_save(), 4)
         self.assertEqual(self.wagon.impact_hit_ap(), 2)
-        with mock.patch('battleFunctions.random.randint', return_value=6):
+        with mock.patch('battleFunctions.random.randint', return_value=5):
             hits, wounds, saves, unsaved = resolve_impact_hits(
                 self.charger, _unit(armoured, nmodels=20, files=5, ranks=4))
         self.assertEqual(saves, 0)

@@ -4,6 +4,12 @@ Tracks weapon and unit special rules from the BattleScribe catalogues. Rules
 carry only *keywords* in the data; the coded effects live in `special_rules.py`,
 `battleFunctions.py`, `combat_resolution.py`, and `models.py`.
 
+**Every rule that fires has to say so.** Use `rules_log.rule_log` when a rule
+changes an outcome and `rules_log.rule_skipped` when one could have applied but
+did not, carrying the numbers that decided it. Nothing in this engine is
+visible on screen, so a rule that works and a rule that was never coded look
+identical without the log. See `.github/copilot-instructions.md`.
+
 ## Done
 - [x] Armour Bane (X) — natural 6 to wound improves that attack's AP by X
 - [x] Lance / charge-only melee (strength & AP bonus only while charging)
@@ -141,9 +147,150 @@ army-agnostic and would benefit every faction.
 - [ ] Borne Aloft — Shieldbearers (4 models on one base)
 - [ ] Royal Guard — army-list allowance (list-building, not runtime)
 
+## Troop Types in Detail (Rulebook p. 188-197)
+
+A troop type's rules are the one thing the catalogue never states: nothing in
+the `.cat`/`.gst` mentions Parry or Lumbering, and a model is meant to have
+them purely because its Troop Type reads "Regular Infantry" or "Heavy Chariot".
+`troop_types.py` is that missing table, and all thirteen rows are now in it —
+532 of the 533 model entries in the catalogues resolve (the one that does not
+is a `Special Feature`, which is terrain).
+
+Five main categories, each with sub-categories. A sub-category follows its
+parent's rules unless it states otherwise, so "infantry" in a rule means
+monstrous infantry and swarms too.
+
+| Troop Type | Models/Rank | Max Rank | US | Special Rules |
+| --- | --- | --- | --- | --- |
+| Regular Infantry | 5 | +2 | 1 | Press of Battle, Massed Infantry, Parry |
+| Heavy Infantry | 4 | +2 | 1 | Steady in the Ranks, Press of Battle, Massed Infantry, Parry |
+| Monstrous Infantry | 3 | +2 | 3 | Clumsy |
+| Swarms | - | - | 3 | Insignificant, No One Cares, Undisciplined |
+| Light Cavalry | 5 | +1 | 2 | Split Profile (Cavalry), Cavalry Support |
+| Heavy Cavalry | 4 | +1 | 2 | Split Profile (Cavalry), Cavalry Support |
+| Monstrous Cavalry | 3 | +1 | 3 | Split Profile (Cavalry), Clumsy |
+| War Beasts | 5 | +1 | 1 | Undisciplined |
+| Light Chariots | 3 | +1 | 3 | Split Profile (Chariots), Iron Shod Wheels, Churning Wheels, Firing Platform |
+| Heavy Chariots | - | - | 5 | Split Profile (Chariots), Scythed Wheels, Lumbering, Iron Shod Wheels, Firing Platform |
+| Monstrous Creatures | - | - | =W | Ridden Monster, Lumbering |
+| Behemoths | - | - | =W | Ridden Monster, Lumbering, Thunderstomp |
+| War Machines | - | - | =W | Split Profile (War Machine), "We're Not Paid to Fight", Weapon of War |
+
+### Phase 1 — fill in the table — DONE
+- [x] All thirteen rows in `TROOP_TYPES`. Before this only the two chariot
+      rows existed, so **every other unit in the game had the wrong Unit
+      Strength and no rank cap**: monstrous infantry counted as US1 instead of
+      US3, cavalry claimed +2 Rank Bonus instead of +1, a Giant was US1.
+      That feeds Overwhelmed, nearby-friend Panic and pursuit routs.
+- [x] Unit Strength "As Starting Wounds" for monsters and war machines. The
+      table cannot hold a number for these, so `AS_STARTING_WOUNDS` is a
+      sentinel and `unit_strength(troop_type, default, wounds)` resolves it
+      against `model.starting_wounds()` — read from the pristine profile, so
+      a wounded Giant is still US6.
+- [x] Models per rank now means something. `psychology.rank_bonus` hard-coded
+      "a trailing rank of fewer than 4 does not count", which was a stand-in
+      for this very column. It reads `models_per_rank` per troop type, and a
+      unit narrower than its own models per rank claims no Rank Bonus at all,
+      which is what the rulebook's table means by that number.
+- [x] Singular/plural aliases — the catalogue writes 'War beast' and 'War
+      beasts', 'Monstrous creature' and 'Monstrous Creatures'.
+
+### Phase 2 — rules with a hook already in place
+- [x] Parry — DONE (p. 190): a model with the rule fighting with a hand weapon
+      *and* a shield improves its armour value by 1, to a maximum of 3+.
+      `model.parry_applies()` gates on the troop type, a shield in the armour
+      list and the *equipped* melee weapon being a plain hand weapon;
+      `melee_armour_save()` applies `min(save, max(3, save - 1))`, so a 2+ is
+      never made worse and a 3+ gains nothing. Shooting is untouched — it uses
+      the stored `armor_save`. A two-handed weapon already dropped the shield
+      entirely, so it cannot parry either.
+      Regular and heavy infantry have it, which is most of the game: goblins in
+      light armour and shield went from a 5+ to a 4+ in melee, and two existing
+      tests had to be re-baselined because of it.
+      Logged once per exchange rather than once per save roll, and the negative
+      case is logged too — a unit that could parry but swung a great weapon
+      instead says so, because that is the question a player actually asks.
+      The weapon choice now decides the stats: see "the equipped weapon is the
+      one you fight with" under Loose ends.
+- [ ] Massed Infantry — if your side has the higher total Unit Strength and
+      includes at least one unit with this rule, +1 combat result.
+      `psychology.unit_strength_total` and the combat result sum in
+      `combat_resolution` are both there.
+- [ ] Undisciplined — cannot use the General's Inspiring Presence nor the
+      Battle Standard's "Hold Your Ground". A gate in
+      `PsychologySystem.leadership_of` / `battle_standard_of`. Swarms and war
+      beasts.
+- [ ] No One Cares — swarms never cause Panic in friendly units, whatever
+      happens to them. A gate in the nearby-friend-destroyed and
+      flees-combat panic causes.
+- [ ] Clumsy / Churning Wheels — a unit with the rule may only be joined by a
+      character that also has it. Both are one check in `characters.join_unit`,
+      which already refuses some joins.
+- [ ] Press of Battle — except on the turn it charged, a unit in combat order
+      has a fighting rank *two* ranks deep. `simulate_battle` already computes
+      a supporting rank; this changes which models are in the fighting rank
+      rather than adding a bonus.
+- [ ] Cavalry Support — when a cavalry model makes a supporting attack, only
+      the rider attacks, not the mount. Needs the supporting-attack maths in
+      `simulate_battle` to know rider from mount, which `get_mount()` gives it.
+
+### Phase 3 — rules that need something built first
+- [ ] Steady in the Ranks — heavy infantry in Close or Open Order is not
+      Disrupted by a flank or rear engagement unless the enemy has US 10+.
+      BLOCKED: the engine's `isDisrupted` only ever means "a quarter of the
+      models are in difficult terrain"; **flank/rear Disruption does not exist
+      at all**, which is a missing core rule in its own right.
+- [ ] Thunderstomp — a behemoth's Stomp Attacks have AP -2, and cannot be used
+      against another monster. BLOCKED: Stomp Attacks are not implemented.
+- [ ] Iron Shod Wheels — treats difficult terrain as dangerous, treats linear
+      obstacles as impassable, and loses D3 Wounds on a failed Dangerous
+      Terrain test. The D3 half is ready (`dangerousTerrainTests(damage='D3')`);
+      the difficult-as-dangerous half is a small change to `crosses_difficult`
+      / `dangerous_between`; the obstacle half is BLOCKED on linear obstacles.
+- [ ] Insignificant — line of sight is drawn across a swarm as if it were not
+      there, and swarms are ignored when targeting enemy characters. Needs the
+      unit-blocking half of line of sight, which `markHillTargets` and the arc
+      clipping only half model.
+- [ ] Split Profile (Cavalry) — rider and mount each use their own WS/BS/S/I/A
+      and weapons; enemies roll To Hit against the *rider's* WS; Impact Hits
+      and Stomp use the mount's Strength; the armour save uses the rider's
+      value; the model dies when the rider does. The chariot split profile
+      already does the equivalent (`defending_ws`, `CombatResolver.chariotParts`),
+      so this is largely reuse — but it changes every mounted unit in the game,
+      so it wants its own pass.
+
+### Phase 4 — war machines
+Their three rules are a self-contained block and would suit being done with the
+existing `cannon_fire.py` / `bombardment.py` work.
+- [ ] Split Profile (War Machine) — crew's Toughness and Wounds in combat, the
+      machine's when not; -1 Attack per Wound the crew has lost; armour save
+      from the crew; either element at zero Wounds removes the model.
+- [ ] "We're Not Paid to Fight" — a war machine that Breaks and flees from
+      combat is destroyed outright. Fall Back and Give Ground are normal.
+- [ ] Weapon of War — cannot march, declare a charge or pursue; -1 to any Flee
+      roll (minimum 1); may pivot freely about its centre immediately before
+      shooting without that counting as moving; may follow up as normal.
+
+### Not part of this section
+Ridden Monster is listed for monstrous creatures and behemoths but is defined
+under Characters, so it belongs with that work rather than here.
+
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
+- [x] The equipped weapon is the one you fight with — `melee_strength_bonus`,
+      `melee_ap` and `armour_bane_for_attack` all said "the active melee
+      weapon" in their docstrings and then looped over *every* melee weapon the
+      model owned, taking the best. So a State Trooper carrying a halberd swung
+      at the halberd's S+1 and AP-2 even when the player picked the hand weapon
+      from the combat menu, and the report printed the equipped weapon's name
+      beside the best weapon's numbers — which is how it was spotted.
+      All three now read `active_melee_weapon()`, which is the equipped weapon,
+      or bare hands if that is ranged or a charge-only weapon out of a charge.
+      Seven tests had encoded the old behaviour by giving a model a weapon and
+      never equipping it; they equip now, as combat does.
+      This also settles Parry's "the player chooses" clause: choosing the hand
+      weapon actually means fighting with it.
 - [x] Casting allowance survives a save — `spellsCastThisTurn` and
       `cannotCastThisTurn` were the only per-unit turn flags `persistence.py`
       never wrote, so loading left whatever the running session had: a spell
@@ -207,7 +354,9 @@ army-agnostic and would benefit every faction.
       LEFTOVER: Lumbering (pivot 90° about centre, cannot join or be joined),
       and Iron Shod Wheels, which needs linear obstacles and "difficult counts
       as dangerous for me"; the D3 damage hook is already in place
-      (`dangerousTerrainTests(..., damage='D3')`).
+      (`dangerousTerrainTests(..., damage='D3')`). The table now covers all
+      thirteen troop types — see "Troop Types in Detail" above for the rules
+      each one grants and the plan for coding them.
 - [x] Categories of terrain (Rulebook p. 269-270) — what a piece *is* is now
       separate from what it *looks like*, because the rulebook is explicit that
       a wood "might be classed as difficult, dangerous or even impassable

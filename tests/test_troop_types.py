@@ -28,11 +28,77 @@ class TestNormalising(unittest.TestCase):
         raw = "Regular infantry (skink handlers), war beasts (salamanders)"
         self.assertEqual(troop_types.normalise(raw), "regular infantry")
 
+    def test_singular_and_plural_reach_the_same_row(self):
+        # The catalogue writes several of these both ways round.
+        for a, b in (("War beast", "War beasts"),
+                     ("Monstrous creature", "Monstrous Creatures"),
+                     ("Behemoth", "Behemoths"),
+                     ("War machine", "War Machines"),
+                     ("Light chariot", "Light chariots")):
+            self.assertEqual(troop_types.normalise(a), troop_types.normalise(b))
+            self.assertIsNotNone(troop_types.properties(a), a)
+
     def test_nothing_is_empty(self):
         self.assertEqual(troop_types.normalise(None), "")
 
 
+class TestEveryTroopTypeIsInTheTable(unittest.TestCase):
+    """The catalogue never states a troop type's rules, so the table is the
+    only source. A type missing from it silently falls back to the engine's
+    old guesses -- US1, or US2 if mounted -- which is wrong for most of them."""
+
+    def test_the_catalogue_resolves(self):
+        cat = get_catalogue()
+        missing = set()
+        total = resolved = 0
+        for rec in cat.by_slug.values():
+            raw = (rec.get('Troop Type') or '').strip()
+            if not raw:
+                continue
+            total += 1
+            if troop_types.properties(raw) is None:
+                # 'Special Feature' is a terrain entry, not a model.
+                if troop_types.normalise(raw) != 'special feature':
+                    missing.add(raw)
+            else:
+                resolved += 1
+        self.assertEqual(missing, set())
+        self.assertGreater(resolved, 500)
+
+    def test_all_thirteen_types_are_present(self):
+        self.assertEqual(len(troop_types.TROOP_TYPES), 13)
+
+
 class TestTheTable(unittest.TestCase):
+
+    def test_regular_infantry(self):
+        self.assertEqual(troop_types.unit_strength("Regular infantry", 9), 1)
+        self.assertEqual(troop_types.models_per_rank("Regular infantry", 9), 5)
+        self.assertEqual(troop_types.max_rank_bonus("Regular infantry", 9), 2)
+
+    def test_heavy_infantry_ranks_four_wide(self):
+        self.assertEqual(troop_types.models_per_rank("Heavy infantry", 9), 4)
+        self.assertEqual(troop_types.unit_strength("Heavy infantry", 9), 1)
+
+    def test_monstrous_infantry_is_worth_three(self):
+        self.assertEqual(troop_types.unit_strength("Monstrous infantry", 9), 3)
+        self.assertEqual(troop_types.models_per_rank("Monstrous infantry", 9), 3)
+
+    def test_cavalry(self):
+        self.assertEqual(troop_types.unit_strength("Light cavalry", 9), 2)
+        self.assertEqual(troop_types.unit_strength("Heavy cavalry", 9), 2)
+        self.assertEqual(troop_types.unit_strength("Monstrous cavalry", 9), 3)
+        for kind in ("Light cavalry", "Heavy cavalry", "Monstrous cavalry"):
+            self.assertEqual(troop_types.max_rank_bonus(kind, 9), 1)
+
+    def test_war_beasts_are_worth_one(self):
+        self.assertEqual(troop_types.unit_strength("War beasts", 9), 1)
+        self.assertEqual(troop_types.max_rank_bonus("War beasts", 9), 1)
+
+    def test_swarms_cannot_form_ranks(self):
+        self.assertEqual(troop_types.unit_strength("Swarms", 9), 3)
+        self.assertEqual(troop_types.models_per_rank("Swarms", 9), 0)
+        self.assertEqual(troop_types.max_rank_bonus("Swarms", 9), 0)
 
     def test_heavy_chariots(self):
         self.assertEqual(troop_types.unit_strength("Heavy Chariot", 1), 5)
@@ -43,8 +109,9 @@ class TestTheTable(unittest.TestCase):
         self.assertEqual(troop_types.max_rank_bonus("Light chariot", 2), 1)
 
     def test_an_unknown_type_keeps_the_default(self):
-        self.assertEqual(troop_types.unit_strength("Regular infantry", 1), 1)
-        self.assertEqual(troop_types.max_rank_bonus("Regular infantry", 2), 2)
+        self.assertEqual(troop_types.unit_strength("Wandering Minstrel", 7), 7)
+        self.assertEqual(troop_types.max_rank_bonus("Wandering Minstrel", 7), 7)
+        self.assertEqual(troop_types.models_per_rank("Wandering Minstrel", 7), 7)
 
     def test_the_rules_a_troop_type_grants(self):
         self.assertTrue(troop_types.has_rule("Heavy Chariot", "Scythed Wheels"))
@@ -56,8 +123,61 @@ class TestTheTable(unittest.TestCase):
         self.assertFalse(troop_types.has_rule("Light Chariot", "Lumbering"))
         self.assertFalse(troop_types.has_rule("Regular infantry", "Firing Platform"))
 
+    def test_the_infantry_rules(self):
+        for kind in ("Regular infantry", "Heavy infantry"):
+            for rule in ("Press of Battle", "Massed Infantry", "Parry"):
+                self.assertTrue(troop_types.has_rule(kind, rule), f"{kind}/{rule}")
+        # Steady in the Ranks is heavy infantry only.
+        self.assertTrue(troop_types.has_rule("Heavy infantry", "Steady in the Ranks"))
+        self.assertFalse(troop_types.has_rule("Regular infantry", "Steady in the Ranks"))
+
+    def test_the_big_and_clumsy_share_a_rule(self):
+        self.assertTrue(troop_types.has_rule("Monstrous infantry", "Clumsy"))
+        self.assertTrue(troop_types.has_rule("Monstrous cavalry", "Clumsy"))
+        self.assertFalse(troop_types.has_rule("Heavy cavalry", "Clumsy"))
+
+    def test_the_undisciplined(self):
+        self.assertTrue(troop_types.has_rule("Swarms", "Undisciplined"))
+        self.assertTrue(troop_types.has_rule("War beasts", "Undisciplined"))
+
+    def test_monsters_and_war_machines(self):
+        self.assertTrue(troop_types.has_rule("Behemoth", "Thunderstomp"))
+        self.assertFalse(troop_types.has_rule("Monstrous creature", "Thunderstomp"))
+        self.assertTrue(troop_types.has_rule("Behemoth", "Lumbering"))
+        self.assertTrue(troop_types.has_rule("War machine", "Weapon of War"))
+        self.assertTrue(troop_types.has_rule("War machine", "We're Not Paid to Fight"))
+
     def test_split_profile_is_named_with_its_qualifier(self):
         self.assertTrue(troop_types.has_rule("Heavy Chariot", "Split Profile"))
+        self.assertTrue(troop_types.has_rule("Heavy cavalry", "Split Profile"))
+        self.assertTrue(troop_types.has_rule("War machine", "Split Profile"))
+
+
+class TestUnitStrengthFromWounds(unittest.TestCase):
+    """Monsters and war machines are worth their *starting* Wounds."""
+
+    def test_a_monster_is_worth_its_wounds(self):
+        self.assertEqual(troop_types.unit_strength("Behemoth", 1, wounds=6), 6)
+        self.assertEqual(troop_types.unit_strength("Monstrous creature", 1,
+                                                   wounds=4), 4)
+        self.assertEqual(troop_types.unit_strength("War machine", 1, wounds=3), 3)
+
+    def test_without_a_profile_it_falls_back(self):
+        self.assertEqual(troop_types.unit_strength("Behemoth", 7), 7)
+
+    def test_a_fixed_row_ignores_wounds(self):
+        self.assertEqual(troop_types.unit_strength("Heavy Chariot", 1, wounds=6), 5)
+
+    def test_a_real_giant(self):
+        giant = model("Giant", "")
+        self.assertEqual(troop_types.normalise(giant.troop_type()), "behemoth")
+        self.assertEqual(giant.starting_wounds(), 6)
+        self.assertEqual(giant.unit_strength(), 6)
+
+    def test_wounds_taken_do_not_change_it(self):
+        giant = model("Giant", "")
+        giant.characteristics['W'] = 1
+        self.assertEqual(giant.unit_strength(), 6)
 
 
 class TestTheModelReportsThem(unittest.TestCase):
@@ -128,6 +248,33 @@ class TestRankBonus(unittest.TestCase):
         m = model("Zombie", "")
         m.special_rules.append({'name': 'Skirmishers', 'skirmish': True})
         self.assertEqual(rank_bonus(self._unit(m, 20, 5, 4)), 0)
+
+    def test_a_rank_needs_the_troop_types_models_per_rank(self):
+        # Heavy infantry rank four wide, so a trailing rank of 4 counts for
+        # them where it would not for regular infantry.
+        orc = model("Orc Boy", "")           # regular infantry, 5 per rank
+        black = model("Black Orc", "")       # heavy infantry, 4 per rank
+        self.assertEqual(rank_bonus(self._unit(orc, 14, 5, 3)), 1)
+        self.assertEqual(rank_bonus(self._unit(black, 12, 4, 3)), 2)
+
+    def test_a_unit_narrower_than_its_models_per_rank_claims_none(self):
+        # No rank holds five models, so no rank counts at all.
+        orc = model("Orc Boy", "")
+        self.assertEqual(rank_bonus(self._unit(orc, 12, 4, 3)), 0)
+
+    def test_monstrous_infantry_rank_three_wide(self):
+        troll = model("Troll", "")
+        troll.characteristics['Troop Type'] = 'Monstrous infantry'
+        self.assertEqual(rank_bonus(self._unit(troll, 9, 3, 3)), 2)
+        self.assertEqual(rank_bonus(self._unit(troll, 8, 3, 3)), 1)
+
+    def test_a_swarm_claims_none(self):
+        m = model("Zombie", "")
+        m.characteristics['Troop Type'] = 'Swarms'
+        self.assertEqual(rank_bonus(self._unit(m, 20, 5, 4)), 0)
+
+    def test_a_behemoth_claims_none(self):
+        self.assertEqual(rank_bonus(self._unit(model("Giant", ""), 1, 1, 1)), 0)
 
 
 class TestRuleDescriptions(unittest.TestCase):

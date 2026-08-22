@@ -1,5 +1,6 @@
 import random
 from toHitAndToWound import *
+from rules_log import rule_log, rule_skipped
 
 
 # ── Combat report (debug printout) ─────────────────────────────────────────
@@ -424,6 +425,16 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     total_wounds = 0
     suffered_wounds = 0
     saves_made = 0
+    # Reported once for the exchange, not once per save roll.
+    if unit2.model.parry_applies():
+        rule_log('Parry', unit2, f"hand weapon and shield: armour "
+                                 f"{unit2.model.armor_save}+ -> "
+                                 f"{unit2.model.melee_armour_save()}+ in melee")
+    elif unit2.model.troop_type_rule('Parry') and unit2.model.has_shield():
+        rule_skipped('Parry', unit2,
+                     f"fighting with "
+                     f"{(unit2.model.equipedWeapon or {}).get('name', 'nothing')}, "
+                     f"not a hand weapon")
     for i in range(attacks1):
         hit,wound = simulate_attack(unit1.model, unit2.model)
         if hit:
