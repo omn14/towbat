@@ -40,8 +40,11 @@ from special_rules import (board_edge_distance, charge_roll, max_charge_range,
                            max_pursuit_range, should_use_swiftstride,
                            unit_has_swiftstride)
 from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcome,
-                       overwhelmed, rank_bonus, should_reroll_break,
-                       should_use_stubborn, stubborn_available, unit_strength_total)
+                       massed_infantry_bonus, overwhelmed, rank_bonus,
+                       should_reroll_break, should_use_stubborn,
+                       side_unit_strength, stubborn_available,
+                       unit_strength_total)
+from rules_log import rule_log
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -749,6 +752,30 @@ class CombatResolver:
               f"-> {saves_made} saved -> {total_wounds} slain "
               f"({defenderUnit.unit.name})")
 
+    @staticmethod
+    def printCombatResult(rows, totals, unit_strengths):
+        """Itemise the combat result so a draw or a rout can be read back.
+
+        *rows* is label -> (player 1 points, player 2 points). A line the
+        rulebook never awarded is still worth showing as a zero: the question
+        after a lost combat is usually which bonus the other side had.
+        """
+        p1_total, p2_total = totals
+        p1_us, p2_us = unit_strengths
+        width = max(len(label) for label in rows)
+        print(f"\n   {'Combat result':<{width}}  Player 1  Player 2")
+        print(f"   {'-' * (width + 20)}")
+        for label, (p1, p2) in rows.items():
+            print(f"   {label:<{width}}  {p1:>8}  {p2:>8}")
+        print(f"   {'-' * (width + 20)}")
+        print(f"   {'TOTAL':<{width}}  {p1_total:>8}  {p2_total:>8}")
+        print(f"   {'(Unit Strength)':<{width}}  {p1_us:>8}  {p2_us:>8}")
+        if p1_total == p2_total:
+            print("   -> drawn combat")
+        else:
+            winner = 1 if p1_total > p2_total else 2
+            print(f"   -> Player {winner} wins by {abs(p1_total - p2_total)}")
+
     # ─── Impact Hits ──────────────────────────────────────────────────────
 
     def impactHits(self, modRemoveSequence):
@@ -999,19 +1026,37 @@ class CombatResolver:
             modRemoveSequence.append(
                 Func(self.game.applyWounds, attackerUnit, combWounds))
 
+        engaged = set(self.game.attackers) | set(self.game.defenders)
+        p1_units = [u for u in engaged if u in self.game.player1Units]
+        p2_units = [u for u in engaged if u in self.game.player2Units]
+        # Wounds are everything banked so far bar the Impact Hits.
+        p1_wounds = player1_score - impact1
+        p2_wounds = player2_score - impact2
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
-        engaged = set(self.game.attackers) | set(self.game.defenders)
-        player1_standard = battle_standard_bonus(
-            [u for u in engaged if u in self.game.player1Units])
-        player2_standard = battle_standard_bonus(
-            [u for u in engaged if u in self.game.player2Units])
+        player1_standard = battle_standard_bonus(p1_units)
+        player2_standard = battle_standard_bonus(p2_units)
         player1_score += player1_standard
         player2_score += player2_standard
-        if player1_standard or player2_standard:
-            print(f"Battle Standard combat result bonus: "
-                  f"P1 +{player1_standard}, P2 +{player2_standard}")
-        print(f"Player 2 score: {player2_score}, Player 1 score: {player1_score}")
+        p1_us = side_unit_strength(p1_units)
+        p2_us = side_unit_strength(p2_units)
+        player1_massed = massed_infantry_bonus(p1_units, p1_us, p2_us)
+        player2_massed = massed_infantry_bonus(p2_units, p2_us, p1_us)
+        player1_score += player1_massed
+        player2_score += player2_massed
+        for who, bonus, us, other in (('Player 1', player1_massed, p1_us, p2_us),
+                                      ('Player 2', player2_massed, p2_us, p1_us)):
+            if bonus:
+                rule_log('Massed Infantry', who,
+                         f"Unit Strength {us} against {other} -> +1 combat result")
+        self.printCombatResult(
+            {'Wounds caused': (p1_wounds, p2_wounds),
+             'Impact Hits': (impact1, impact2),
+             'Flank / rear': (player1_flank_bonus, player2_flank_bonus),
+             'Rank Bonus': (player1_rank_bonus, player2_rank_bonus),
+             'Battle Standard': (player1_standard, player2_standard),
+             'Massed Infantry': (player1_massed, player2_massed)},
+            (player1_score, player2_score), (p1_us, p2_us))
         await self.game.attackSequence
         await modRemoveSequence
 

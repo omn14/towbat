@@ -272,6 +272,26 @@ def select_battle_standard(units):
     return bearers[0]
 
 
+def side_unit_strength(units_on_side) -> int:
+    """Total Unit Strength of every live unit fighting on this side."""
+    return sum(unit_strength_total(u) for u in units_on_side
+               if not u.bodyNP.isEmpty())
+
+
+def massed_infantry_bonus(units_on_side, own_us: int, enemy_us: int) -> int:
+    """Combat result point for weight of numbers (Rulebook p. 190).
+
+    The side needs both the higher Unit Strength *and* a unit with the rule;
+    numbers alone are not enough, and neither is having the infantry.
+    """
+    if own_us <= enemy_us:
+        return 0
+    for u in units_on_side:
+        if u.unit.model.troop_type_rule('Massed Infantry'):
+            return 1
+    return 0
+
+
 def battle_standard_bonus(units_on_side) -> int:
     """Combat result points from a Battle Standard fighting on this side.
 

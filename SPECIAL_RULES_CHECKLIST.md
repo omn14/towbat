@@ -212,10 +212,19 @@ monstrous infantry and swarms too.
       instead says so, because that is the question a player actually asks.
       The weapon choice now decides the stats: see "the equipped weapon is the
       one you fight with" under Loose ends.
-- [ ] Massed Infantry — if your side has the higher total Unit Strength and
-      includes at least one unit with this rule, +1 combat result.
-      `psychology.unit_strength_total` and the combat result sum in
-      `combat_resolution` are both there.
+- [x] Massed Infantry — DONE (p. 190): a side with the *higher* total Unit
+      Strength that includes at least one unit with the rule claims +1 combat
+      result. Both halves are needed — numbers without the infantry, or the
+      infantry without the numbers, claim nothing, and an equal Unit Strength
+      is not "higher". Worth one point however many such units are present.
+      `psychology.massed_infantry_bonus` / `side_unit_strength`; a destroyed
+      unit contributes nothing to the total.
+      The combat result is now printed as a table instead of
+      `Player 2 score: 3, Player 1 score: 2`, itemising wounds, Impact Hits,
+      flank/rear, Rank Bonus, Battle Standard and Massed Infantry for both
+      sides, with each side's Unit Strength beneath the total — because that is
+      what this rule turns on. Zeroes are shown too: after a lost combat the
+      question is usually which bonus the *other* side had.
 - [ ] Undisciplined — cannot use the General's Inspiring Presence nor the
       Battle Standard's "Hold Your Ground". A gate in
       `PsychologySystem.leadership_of` / `battle_standard_of`. Swarms and war

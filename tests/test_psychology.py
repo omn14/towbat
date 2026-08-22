@@ -19,6 +19,7 @@ from psychology import (  # noqa: E402
     command_range, effective_leadership, select_general, is_character_unit,
     COMMAND_RANGE, LARGE_TARGET_COMMAND_RANGE,
     select_battle_standard, is_battle_standard_unit, battle_standard_bonus,
+    massed_infantry_bonus, side_unit_strength,
     should_reroll_break,
 )
 
@@ -649,8 +650,68 @@ class InspiringPresenceTests(unittest.TestCase):
 BSB_RULE = {'name': 'Battle Standard Bearer', 'battle_standard': True}
 
 
+class MassedInfantryTests(unittest.TestCase):
+    """Massed Infantry — Rulebook p. 190. Weight of numbers is worth a combat
+    result point, but only to a side that has both the numbers and the rule."""
+
+    @staticmethod
+    def _unit(name, us=1, nmodels=10, massed=True, empty=False):
+        model = SimpleNamespace(
+            unit_strength=lambda: us,
+            troop_type_rule=lambda rule: massed and rule == 'Massed Infantry')
+        return SimpleNamespace(
+            unitName=name,
+            bodyNP=SimpleNamespace(isEmpty=lambda: empty),
+            unit=SimpleNamespace(name=name, model=model, nmodels=nmodels))
+
+    def test_the_bigger_side_with_the_rule_claims_it(self):
+        side = [self._unit('Spearmen')]
+        self.assertEqual(massed_infantry_bonus(side, 20, 10), 1)
+
+    def test_numbers_alone_are_not_enough(self):
+        side = [self._unit('Trolls', massed=False)]
+        self.assertEqual(massed_infantry_bonus(side, 20, 10), 0)
+
+    def test_the_rule_alone_is_not_enough(self):
+        side = [self._unit('Spearmen')]
+        self.assertEqual(massed_infantry_bonus(side, 10, 20), 0)
+
+    def test_equal_unit_strength_claims_nothing(self):
+        # "a higher Unit Strength than the other" -- a tie is not higher.
+        side = [self._unit('Spearmen')]
+        self.assertEqual(massed_infantry_bonus(side, 15, 15), 0)
+
+    def test_one_unit_with_the_rule_is_enough(self):
+        side = [self._unit('Trolls', massed=False), self._unit('Spearmen')]
+        self.assertEqual(massed_infantry_bonus(side, 20, 10), 1)
+
+    def test_it_is_only_ever_one_point(self):
+        side = [self._unit('Spearmen'), self._unit('Halberdiers')]
+        self.assertEqual(massed_infantry_bonus(side, 40, 5), 1)
+
+    def test_an_empty_side_claims_nothing(self):
+        self.assertEqual(massed_infantry_bonus([], 20, 10), 0)
+
+
+class SideUnitStrengthTests(unittest.TestCase):
+
+    _unit = staticmethod(MassedInfantryTests._unit)
+
+    def test_it_totals_every_unit(self):
+        side = [self._unit('a', us=1, nmodels=20),
+                self._unit('b', us=2, nmodels=5)]
+        self.assertEqual(side_unit_strength(side), 30)
+
+    def test_a_destroyed_unit_counts_for_nothing(self):
+        side = [self._unit('a', us=1, nmodels=20),
+                self._unit('gone', us=3, nmodels=5, empty=True)]
+        self.assertEqual(side_unit_strength(side), 20)
+
+    def test_nothing_left(self):
+        self.assertEqual(side_unit_strength([]), 0)
+
+
 class BattleStandardTests(unittest.TestCase):
-    """The Battle Standard: Hold Your Ground and the combat result bonus."""
 
     _unit = staticmethod(InspiringPresenceTests._unit)
     _psy = staticmethod(InspiringPresenceTests._psy)
