@@ -386,24 +386,30 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
     deep: the spear rank is pushed back to the third, not absorbed into the
     second. Both are denied on the turn the model charged.
 
-    Casualties suffered earlier in the phase come off the *fighting rank*
-    first: a model removed before it could attack cannot attack, and neither
-    can the model that stepped forward to replace it (Stepping Forward, p. 102
-    and p. 150). Only casualties in excess of the whole fighting rank reduce
-    supporting attacks (Excess Casualties, p. 150).
+    `casualties` are the models lost earlier in this phase, already gone from
+    `unit.nmodels`. They cost the unit a *second* attacker only where a model
+    behind the fighting rank stepped into the gap, since neither the slain nor
+    the model that replaced it may attack (Stepping Forward, p. 102 and p. 150).
+    A unit no deeper than its own fighting rank has nobody to step forward, so
+    its fighting rank simply narrows.
     """
     m = unit.model
     A = stat_value(m.characteristics.get('A'))
     files = max(0, unit.files)
     spare = max(0, unit.nmodels)
-    lost = max(0, casualties)
+    fallen = max(0, casualties)
+    press = m.troop_type_rule('Press of Battle') and not charge
+
+    # Only models that were behind the fighting rank can have stepped into it.
+    behind = max(0, spare + fallen - files * (2 if press else 1))
+    stepped = min(fallen, behind)
 
     def survivors(rank: int) -> int:
-        """Models of a rank still able to attack once the fallen and the models
-        that stepped into their place are taken off it."""
-        nonlocal lost
-        able = max(0, rank - lost)
-        lost -= rank - able
+        """Models of a rank still able to attack once those that stepped
+        forward into it are taken off."""
+        nonlocal stepped
+        able = max(0, rank - stepped)
+        stepped -= rank - able
         return able
 
     front = min(files, spare)
@@ -413,7 +419,7 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
     if fighting < front:
         rule_log('Stepping Forward', unit,
                  f"{front - fighting} of {front} models in the fighting rank "
-                 f"fell or stepped up to replace the fallen and cannot attack: "
+                 f"stepped up over the {fallen} fallen and cannot attack: "
                  f"{fighting} attack instead of {front}")
 
     if charge:
@@ -422,7 +428,6 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
         return attacks
 
     weapon = (m.equipedWeapon or {}).get('name', 'bare hands')
-    press = m.troop_type_rule('Press of Battle')
 
     if press:
         rank = min(spare, files)

@@ -280,26 +280,36 @@ monstrous infantry and swarms too.
       and was **the opposite of what the engine did**. Casualties are removed
       from the back of a unit, and the code took that literally: the front rank
       always swung at full strength and the casualty count was subtracted from
-      the *supporting* rank. The rulebook is explicit that removing from the
-      back is only bookkeeping — "models removed as casualties before having a
-      chance to attack, and models that stepped forward during the current
-      phase, cannot attack ... you can tell at a glance how many models have
-      been removed from the fighting rank" (Set Casualties Aside, p. 150).
-      So casualties come off the *fighting rank* first, and only the excess
-      beyond it reduces supporting attacks (Excess Casualties, p. 150). A
-      20-strong spear unit five wide that loses 7 to the charge now answers
-      with 8 attacks, not 15: the whole front rank is gone or stepping over the
-      fallen, Press of Battle's second rank is down to 3, and the spear rank is
-      untouched because the fighting rank absorbed everything.
+      the *supporting* rank. Removing from the back is only bookkeeping —
+      "models removed as casualties before having a chance to attack, and
+      models that stepped forward during the current phase, cannot attack"
+      (Set Casualties Aside, p. 150).
+      The clause that decides the arithmetic is the combat-phase one: a model
+      cannot attack in a phase in which it *stepped forward into the fighting
+      rank*. The slain model is already gone from `nmodels`, so a casualty
+      costs a **second** attacker only where a model behind the fighting rank
+      stepped into the gap. A unit no deeper than its own fighting rank has
+      nobody to step forward and its fighting rank simply narrows: 10 Jade
+      Warriors five wide are two ranks, both of them fighting rank under Press
+      of Battle, so losing one leaves nine models and nine attacks. A first
+      pass deducted the casualty from the rank as well as from `nmodels` and
+      reported eight — caught from a game log.
+      A deep unit pays twice over, which is the point of the rule: 20 State
+      Troopers five wide that lose two answer with 8 attacks, not 10, because
+      two models from the rear ranks are clambering over the fallen.
       `battleFunctions.melee_attacks` is now the single place attack counts are
-      worked out, for chargers and defenders alike, and it deducts front rank,
-      then the Press of Battle rank, then supporting attacks in that order.
-      Losses come off a whole model at a time, so a two-Attack model that falls
-      costs the unit both of its attacks.
-      NOTE: which part of a two-deep fighting rank loses models first is not
-      spelled out. Taking them off the front rank is the reading used here,
+      worked out, for chargers and defenders alike, and it takes the steppers
+      off the front rank, then the Press of Battle rank, then supporting
+      attacks. Losses come off a whole model at a time, so a two-Attack model
+      that steps forward costs the unit both of its attacks.
+      NOTE: which part of a two-deep fighting rank the steppers land in is not
+      spelled out. Filling the front rank first is the reading used here,
       because that is where models are in base contact and where the rulebook
       says the casualties fall; it is the harsher of the two readings.
+      LEFTOVER: the cascade is deliberately not modelled — a model shuffling
+      from the fourth rank into the third has also stepped forward by the
+      wording on p. 102, but the combat rule speaks only of stepping into the
+      fighting rank, so the supporting rank is left alone.
       LEFTOVER: Simultaneous Combat (p. 146) says casualties do *not* reduce
       the attacks of enemy models with the same Initiative value. The engine
       has no Initiative ordering at all — the charger always strikes first and

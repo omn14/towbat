@@ -356,58 +356,59 @@ class TestPressOfBattle(unittest.TestCase):
 
 
 class TestSteppingForward(unittest.TestCase):
-    """Casualties come off the *fighting rank*, not the back of the unit: the
-    slain and the models that stepped up to replace them cannot attack this
-    phase (p. 102, p. 150). Only the excess reaches supporting attacks."""
+    """A casualty costs a second attacker only where a model behind the
+    fighting rank stepped into the gap (p. 102, p. 150). `nmodels` is already
+    net of the casualties, so these units are the survivors."""
 
-    def _unit(self, m, nmodels=20, files=5):
+    def _unit(self, m, nmodels, files=5):
         return SimpleNamespace(model=m, nmodels=nmodels, files=files,
                                ranks=nmodels // files, name="test unit")
 
-    def _spearmen(self, nmodels=20):
+    def _spearmen(self, nmodels):
         m = model("State Trooper", "")
         w = get_catalogue().weapon("Thrusting spear")
         m.weapons[w['name']] = w
         m.equip_weapon(w['name'])
         m.charging = False
-        return self._unit(m, nmodels=nmodels)
+        return self._unit(m, nmodels)
 
-    def test_casualties_come_off_the_fighting_rank_first(self):
-        unit = self._unit(model("State Trooper", ""))
+    def test_a_two_rank_unit_has_nobody_to_step_forward(self):
+        """5x2 with Press of Battle is all fighting rank: losing one leaves
+        nine models and nine attacks, not eight."""
+        unit = self._unit(model("Jade Warrior", ""), nmodels=9)
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=1), 9)
+
+    def test_a_single_rank_unit_has_nobody_to_step_forward(self):
+        unit = self._unit(model("Goblin Wolf Rider", ""), nmodels=4)
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=1), 4)
+
+    def test_a_deep_unit_pays_twice_for_each_casualty(self):
+        """Ranks 3 and 4 are behind the fighting rank, so two models step up
+        and the front rank loses them as well as the two slain."""
+        unit = self._unit(model("State Trooper", ""), nmodels=18)
         self.assertEqual(melee_attacks(unit, charge=False, casualties=2), 8)
 
-    def test_losing_the_whole_front_rank_leaves_the_second_fighting(self):
-        unit = self._unit(model("State Trooper", ""))
-        self.assertEqual(melee_attacks(unit, charge=False, casualties=5), 5)
-
-    def test_the_fighting_rank_is_two_deep_before_the_excess_bites(self):
-        """Press of Battle means ten models must fall before the spear rank is
-        touched at all."""
-        unit = self._spearmen()
-        self.assertEqual(melee_attacks(unit, charge=False, casualties=5), 10)
-        self.assertEqual(melee_attacks(unit, charge=False, casualties=10), 5)
-
-    def test_excess_casualties_reduce_supporting_attacks(self):
-        unit = self._spearmen()
-        self.assertEqual(melee_attacks(unit, charge=False, casualties=12), 3)
+    def test_steppers_come_off_the_fighting_rank_before_the_spears(self):
+        unit = self._spearmen(13)
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=7), 6)
 
     def test_casualties_reduce_a_charging_unit_too(self):
-        unit = self._unit(model("State Trooper", ""))
+        unit = self._unit(model("State Trooper", ""), nmodels=18)
         self.assertEqual(melee_attacks(unit, charge=True, casualties=2), 3)
 
     def test_a_wiped_out_unit_makes_no_attacks(self):
-        unit = self._spearmen()
+        unit = self._spearmen(0)
         self.assertEqual(melee_attacks(unit, charge=False, casualties=20), 0)
 
     def test_full_attacks_are_lost_a_whole_model_at_a_time(self):
-        """A Crypt Ghoul has two Attacks, so a casualty in the fighting rank
-        costs the unit that model's whole profile, not a single attack."""
+        """A Crypt Ghoul has two Attacks, so a model that steps forward costs
+        the unit that whole profile, not a single attack."""
         m = model("Crypt Ghoul", "")
         A = int(m.characteristics['A'])
         self.assertGreater(A, 1)
-        unit = self._unit(m, nmodels=8, files=4)
-        self.assertEqual(melee_attacks(unit, charge=True), 4 * A)
-        self.assertEqual(melee_attacks(unit, charge=True, casualties=1), 3 * A)
+        self.assertEqual(melee_attacks(self._unit(m, 8, files=4), charge=True), 4 * A)
+        self.assertEqual(
+            melee_attacks(self._unit(m, 7, files=4), charge=True, casualties=1), 3 * A)
 
 
 if __name__ == "__main__":
