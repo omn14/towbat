@@ -445,6 +445,22 @@ class model:
         return (self.troop_type_rule('Parry') and self.has_shield()
                 and self.uses_hand_weapon())
 
+    def fights_in_extra_rank(self) -> bool:
+        """True if the equipped melee weapon allows a supporting attack.
+
+        The rule lives on the weapon as 'Fight in Extra Rank' (Rulebook p. 169)
+        — a spear or polearm has it, bare hands do not.
+
+        This reads equipedWeapon rather than active_melee_weapon(): a cavalry
+        spear is charge-only for Strength and AP, but its extra rank works the
+        other way round, being denied on the turn the wielder charged.
+        """
+        w = self.equipedWeapon or {}
+        if w.get('tag') == 'ranged':
+            return False
+        return any('fight in extra rank' in str(r).lower()
+                   for r in (w.get('special_rules') or []))
+
     def melee_armour_save(self) -> int:
         """Armour save used in melee; a two-handed weapon disables the shield,
         and Parry improves the value for a hand weapon and shield.

@@ -235,13 +235,82 @@ monstrous infantry and swarms too.
 - [ ] Clumsy / Churning Wheels — a unit with the rule may only be joined by a
       character that also has it. Both are one check in `characters.join_unit`,
       which already refuses some joins.
-- [ ] Press of Battle — except on the turn it charged, a unit in combat order
-      has a fighting rank *two* ranks deep. `simulate_battle` already computes
-      a supporting rank; this changes which models are in the fighting rank
-      rather than adding a bonus.
+- [x] Press of Battle — DONE (p. 190). `simulate_battle` was already giving the
+      rank behind the front rank one attack per model, but it gave it to
+      *everyone*, which is Press of Battle applied universally. The maths moved
+      into `battleFunctions.extra_rank_attacks`, which grants it only to a
+      troop type that has the rule (regular and heavy infantry). The "except on
+      the turn it charged" exception needed no code: the extra ranks were only
+      ever counted in the non-charging branch.
+      Gating on the troop type alone would have silently taken the extra rank
+      away from spearmen, so the weapon half went in with it: the .gst gives a
+      thrusting spear and a cavalry spear the `Fight in Extra Rank` rule ("a
+      model with this special rule may make a supporting attack", p. 169), read
+      by `model.fights_in_extra_rank()`. That deliberately reads `equipedWeapon`
+      and not `active_melee_weapon()` — a cavalry spear is charge-only for
+      Strength and AP, but its extra rank works the other way round, being
+      denied on the turn the wielder charged, so the usual charge-only fallback
+      to bare hands would have been backwards here.
+      **The two rules stack rather than overlap**, which is the whole point of
+      keeping the fighting rank and supporting attacks apart. Press of Battle
+      deepens the *fighting rank* to two ranks; Fight in Extra Rank lets the
+      rank directly behind the fighting rank support it, and p. 145 bars a
+      model that is itself in a fighting rank from making a supporting attack.
+      So the spear rank is pushed back to the third rank rather than absorbed
+      into the second, and infantry with thrusting spears fight three ranks
+      deep: 20 models five wide make 5 full-Attack + 5 + 5. Cavalry with a
+      cavalry spear have no Press of Battle, so their spears support from the
+      second rank and they fight two deep. A first pass collapsed both rules
+      into a single second rank and undercounted spear-armed infantry by a
+      whole rank.
+      None of these models are in base contact, so they attack once each
+      whatever their Attacks characteristic says (p. 146) — which is what the
+      old code did, so the numbers only changed for units whose rank claim was
+      wrong.
+      LEFTOVER: a polearm also denies a supporting attack on the charge turn,
+      but the .gst carries no `Fight in Extra Rank` on it and its own note is
+      prose only, so a polearm currently grants no extra rank at all.
+      LEFTOVER: the "within a number of inches equal to its Movement of the
+      enemy unit" clause is unmodelled; the extra ranks are always assumed
+      close enough. Base-to-base geometry is not tracked at this level.
+      LEFTOVER: supporting attacks cannot be made against a flank or rear, and
+      Press of Battle needs the unit to be in Combat Order. Neither is checked
+      — combat facing does not reach `simulate_battle`.
+- [x] Stepping Forward — DONE (p. 102 and p. 150). Fell out of Press of Battle
+      and was **the opposite of what the engine did**. Casualties are removed
+      from the back of a unit, and the code took that literally: the front rank
+      always swung at full strength and the casualty count was subtracted from
+      the *supporting* rank. The rulebook is explicit that removing from the
+      back is only bookkeeping — "models removed as casualties before having a
+      chance to attack, and models that stepped forward during the current
+      phase, cannot attack ... you can tell at a glance how many models have
+      been removed from the fighting rank" (Set Casualties Aside, p. 150).
+      So casualties come off the *fighting rank* first, and only the excess
+      beyond it reduces supporting attacks (Excess Casualties, p. 150). A
+      20-strong spear unit five wide that loses 7 to the charge now answers
+      with 8 attacks, not 15: the whole front rank is gone or stepping over the
+      fallen, Press of Battle's second rank is down to 3, and the spear rank is
+      untouched because the fighting rank absorbed everything.
+      `battleFunctions.melee_attacks` is now the single place attack counts are
+      worked out, for chargers and defenders alike, and it deducts front rank,
+      then the Press of Battle rank, then supporting attacks in that order.
+      Losses come off a whole model at a time, so a two-Attack model that falls
+      costs the unit both of its attacks.
+      NOTE: which part of a two-deep fighting rank loses models first is not
+      spelled out. Taking them off the front rank is the reading used here,
+      because that is where models are in base contact and where the rulebook
+      says the casualties fall; it is the harsher of the two readings.
+      LEFTOVER: Simultaneous Combat (p. 146) says casualties do *not* reduce
+      the attacks of enemy models with the same Initiative value. The engine
+      has no Initiative ordering at all — the charger always strikes first and
+      always thins the defender. That is usually right by accident, since a
+      charge grants +1 Initiative per inch moved to a maximum of +3 (p. 146),
+      but a defender with equal or higher Initiative should be striking back at
+      full strength and currently does not.
 - [ ] Cavalry Support — when a cavalry model makes a supporting attack, only
       the rider attacks, not the mount. Needs the supporting-attack maths in
       `simulate_battle` to know rider from mount, which `get_mount()` gives it.
+      `extra_rank_attacks` is now the one place this has to happen.
 
 ### Phase 3 — rules that need something built first
 - [ ] Steady in the Ranks — heavy infantry in Close or Open Order is not

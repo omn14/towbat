@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import troop_types  # noqa: E402
 from battlescribe import get_catalogue  # noqa: E402
+from battleFunctions import melee_attacks  # noqa: E402
 from models import model  # noqa: E402
 from psychology import MAX_RANK_BONUS, rank_bonus  # noqa: E402
 
@@ -289,6 +290,124 @@ class TestRuleDescriptions(unittest.TestCase):
 
     def test_army_specific_rules_still_load(self):
         self.assertTrue(get_catalogue().rule_description("Choppas"))
+
+
+class TestPressOfBattle(unittest.TestCase):
+    """Press of Battle (p. 190) deepens the fighting rank; Fight in Extra Rank
+    (p. 169) supports it from behind. They stack, because a model in a fighting
+    rank may not make a supporting attack (p. 145). A State Trooper has A1, so
+    the totals below are also the model counts."""
+
+    def _unit(self, m, nmodels=20, files=5):
+        return SimpleNamespace(model=m, nmodels=nmodels, files=files,
+                               ranks=nmodels // files, name="test unit")
+
+    def _armed(self, model_name, weapon_name):
+        m = model(model_name, "")
+        w = get_catalogue().weapon(weapon_name)
+        self.assertIsNotNone(w, weapon_name)
+        m.weapons[w['name']] = w
+        m.equip_weapon(w['name'])
+        m.charging = False
+        return m
+
+    def test_regular_infantry_has_the_rule(self):
+        self.assertTrue(model("State Trooper", "").troop_type_rule('Press of Battle'))
+
+    def test_cavalry_does_not(self):
+        self.assertFalse(model("Goblin Wolf Rider", "").troop_type_rule('Press of Battle'))
+
+    def test_infantry_fights_two_ranks_deep_bare_handed(self):
+        unit = self._unit(model("State Trooper", ""))
+        self.assertEqual(melee_attacks(unit, charge=False), 10)
+
+    def test_infantry_with_spears_fights_three_ranks_deep(self):
+        """Press of Battle takes ranks 1-2, so the spears support from rank 3."""
+        unit = self._unit(self._armed("State Trooper", "Thrusting spear"))
+        self.assertEqual(melee_attacks(unit, charge=False), 15)
+
+    def test_only_the_front_rank_fights_on_the_charge(self):
+        unit = self._unit(self._armed("State Trooper", "Thrusting spear"))
+        self.assertEqual(melee_attacks(unit, charge=True), 5)
+
+    def test_cavalry_bare_handed_fights_one_rank(self):
+        unit = self._unit(model("Goblin Wolf Rider", ""), nmodels=10)
+        self.assertEqual(melee_attacks(unit, charge=False), 5)
+
+    def test_a_cavalry_spear_buys_one_rank_not_two(self):
+        unit = self._unit(self._armed("Goblin Wolf Rider", "Cavalry spear"), nmodels=10)
+        self.assertEqual(melee_attacks(unit, charge=False), 10)
+
+    def test_a_spear_is_charge_only_for_strength_but_not_for_the_rank(self):
+        """The cavalry spear's S/AP work only on the charge; its extra rank
+        works only off it. Both must read from the same equipped weapon."""
+        m = self._armed("Goblin Wolf Rider", "Cavalry spear")
+        self.assertEqual(m.melee_strength_bonus(), 0)  # not charging
+        self.assertTrue(m.fights_in_extra_rank())
+
+    def test_a_halberd_grants_no_extra_rank(self):
+        self.assertFalse(self._armed("State Trooper", "Halberd").fights_in_extra_rank())
+
+    def test_a_shallow_unit_cannot_fill_the_ranks_it_is_owed(self):
+        """Three ranks' worth of rules, only one rank of models to fill them."""
+        unit = self._unit(self._armed("State Trooper", "Thrusting spear"),
+                          nmodels=8, files=5)
+        self.assertEqual(melee_attacks(unit, charge=False), 8)
+
+
+class TestSteppingForward(unittest.TestCase):
+    """Casualties come off the *fighting rank*, not the back of the unit: the
+    slain and the models that stepped up to replace them cannot attack this
+    phase (p. 102, p. 150). Only the excess reaches supporting attacks."""
+
+    def _unit(self, m, nmodels=20, files=5):
+        return SimpleNamespace(model=m, nmodels=nmodels, files=files,
+                               ranks=nmodels // files, name="test unit")
+
+    def _spearmen(self, nmodels=20):
+        m = model("State Trooper", "")
+        w = get_catalogue().weapon("Thrusting spear")
+        m.weapons[w['name']] = w
+        m.equip_weapon(w['name'])
+        m.charging = False
+        return self._unit(m, nmodels=nmodels)
+
+    def test_casualties_come_off_the_fighting_rank_first(self):
+        unit = self._unit(model("State Trooper", ""))
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=2), 8)
+
+    def test_losing_the_whole_front_rank_leaves_the_second_fighting(self):
+        unit = self._unit(model("State Trooper", ""))
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=5), 5)
+
+    def test_the_fighting_rank_is_two_deep_before_the_excess_bites(self):
+        """Press of Battle means ten models must fall before the spear rank is
+        touched at all."""
+        unit = self._spearmen()
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=5), 10)
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=10), 5)
+
+    def test_excess_casualties_reduce_supporting_attacks(self):
+        unit = self._spearmen()
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=12), 3)
+
+    def test_casualties_reduce_a_charging_unit_too(self):
+        unit = self._unit(model("State Trooper", ""))
+        self.assertEqual(melee_attacks(unit, charge=True, casualties=2), 3)
+
+    def test_a_wiped_out_unit_makes_no_attacks(self):
+        unit = self._spearmen()
+        self.assertEqual(melee_attacks(unit, charge=False, casualties=20), 0)
+
+    def test_full_attacks_are_lost_a_whole_model_at_a_time(self):
+        """A Crypt Ghoul has two Attacks, so a casualty in the fighting rank
+        costs the unit that model's whole profile, not a single attack."""
+        m = model("Crypt Ghoul", "")
+        A = int(m.characteristics['A'])
+        self.assertGreater(A, 1)
+        unit = self._unit(m, nmodels=8, files=4)
+        self.assertEqual(melee_attacks(unit, charge=True), 4 * A)
+        self.assertEqual(melee_attacks(unit, charge=True, casualties=1), 3 * A)
 
 
 if __name__ == "__main__":

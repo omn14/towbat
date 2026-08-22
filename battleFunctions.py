@@ -371,6 +371,85 @@ def firing_rank_count(files: int, nmodels: int, extra_ranks: int = 0,
     return firing
 
 
+def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
+    """Attacks a unit makes in one round of combat.
+
+    A model in base contact attacks with its full Attacks characteristic; a
+    model that can fight but is not in base contact attacks once, whatever its
+    profile says (Rulebook p. 146).
+
+    Which ranks may fight is two separate rules that stack rather than overlap.
+    Press of Battle makes the fighting rank *two* ranks deep (p. 190), and
+    Fight in Extra Rank lets the rank directly behind the fighting rank make
+    supporting attacks (p. 169) — which a model already in a fighting rank may
+    not do (p. 145). Infantry with thrusting spears therefore fight three ranks
+    deep: the spear rank is pushed back to the third, not absorbed into the
+    second. Both are denied on the turn the model charged.
+
+    Casualties suffered earlier in the phase come off the *fighting rank*
+    first: a model removed before it could attack cannot attack, and neither
+    can the model that stepped forward to replace it (Stepping Forward, p. 102
+    and p. 150). Only casualties in excess of the whole fighting rank reduce
+    supporting attacks (Excess Casualties, p. 150).
+    """
+    m = unit.model
+    A = stat_value(m.characteristics.get('A'))
+    files = max(0, unit.files)
+    spare = max(0, unit.nmodels)
+    lost = max(0, casualties)
+
+    def survivors(rank: int) -> int:
+        """Models of a rank still able to attack once the fallen and the models
+        that stepped into their place are taken off it."""
+        nonlocal lost
+        able = max(0, rank - lost)
+        lost -= rank - able
+        return able
+
+    front = min(files, spare)
+    spare -= front
+    fighting = survivors(front)
+    attacks = A * fighting
+    if fighting < front:
+        rule_log('Stepping Forward', unit,
+                 f"{front - fighting} of {front} models in the fighting rank "
+                 f"fell or stepped up to replace the fallen and cannot attack: "
+                 f"{fighting} attack instead of {front}")
+
+    if charge:
+        if m.troop_type_rule('Press of Battle'):
+            rule_skipped('Press of Battle', unit, "it charged this turn")
+        return attacks
+
+    weapon = (m.equipedWeapon or {}).get('name', 'bare hands')
+    press = m.troop_type_rule('Press of Battle')
+
+    if press:
+        rank = min(spare, files)
+        spare -= rank
+        able = survivors(rank)
+        attacks += able
+        rule_log('Press of Battle', unit,
+                 f"fighting rank is two deep: {able} model(s) in the second "
+                 f"rank attack once each")
+
+    if m.fights_in_extra_rank():
+        rank = min(spare, files)
+        spare -= rank
+        able = survivors(rank)
+        attacks += able
+        rule_log('Fight in Extra Rank', unit,
+                 f"{weapon}: rank {2 + press} supports the fighting rank with "
+                 f"{able} attack(s)")
+    elif spare:
+        why = f"{weapon} grants no supporting attack"
+        if not press:
+            why += " and the troop type has no Press of Battle"
+        rule_skipped('Fight in Extra Rank', unit,
+                     f"{spare} model(s) behind the fighting rank idle: {why}")
+    return attacks
+
+
 def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                     extra_ranks: int = 0):
 
@@ -383,23 +462,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
         for rule in unit1.model.special_rules:
             if rule.get('charge'):
                 rule['charge'](unit1.model)
-            else:
-                attacks = stat_value(unit1.model.characteristics.get('A')) * unit1.files #front rank attacks
-        attacks = stat_value(unit1.model.characteristics.get('A')) * unit1.files
-        if attacks >= stat_value(unit1.model.characteristics.get('A')) *unit1.nmodels: 
-            attacks = stat_value(unit1.model.characteristics.get('A')) *unit1.nmodels # cannot attack more than you have models in front rank
-    else: #defends
-        A = stat_value(unit1.model.characteristics.get('A'))
-        attacks = A * unit1.files  # front rank fights with full Attacks
-        if attacks >= A * unit1.nmodels:
-            attacks = A * unit1.nmodels  # fewer models than a full front rank
-        else:
-            # The second rank adds one supporting attack per model (a full rank
-            # if the unit is deep enough).  Casualties are taken from the back
-            # and thin the supporting rank first, so each one costs an attack.
-            second_rank = min(unit1.files, unit1.nmodels - unit1.files)
-            second_rank = max(0, second_rank - max(0, casualties))
-            attacks += second_rank
+    attacks = melee_attacks(unit1, charge, casualties)
     
     if unit1.model.equipedWeapon.get('tag') == 'ranged':
         w = unit1.model.equipedWeapon

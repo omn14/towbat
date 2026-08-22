@@ -940,8 +940,9 @@ class CombatResolver:
                 defenderUnit.unit.files -= 1
             # The charging unit fights with its charge bonus (and front rank
             # only); everyone else fights as normal (front + supporting rank).
-            # Casualties suffered this round (charger struck first) thin the
-            # supporting rank of a unit that strikes back.
+            # Casualties suffered this round (charger struck first) come off
+            # the fighting rank of a unit that strikes back: the slain and the
+            # models that stepped into their place cannot attack.
             casualties = max(0, self._combatStartModels.get(
                 id(defenderUnit.unit), defenderUnit.unit.nmodels) - defenderUnit.unit.nmodels)
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
