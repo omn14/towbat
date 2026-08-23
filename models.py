@@ -637,13 +637,8 @@ class SaurusWarrior(model):
          """
         self.AP = 0  # Example Armor Penetration value for Saurus Warriors
 
-        self.weapons.update({
-            'spear': {'name': 'spear'},
-            'halberd': {'name': 'halberd',
-                        'description': '+1 Strength in combat.',
-                        'tag': 'combat',
-                        'to_modify_stat': lambda model_instance: setattr(model_instance, 'AP', model_instance.AP + 1)}
-        })
+        self.give_weapon('Thrusting spear')
+        self.give_weapon('Halberd')
 
 class NightGoblin(model):
     def __init__(self, name: str, url: str):
@@ -673,16 +668,7 @@ class NightGoblin(model):
                                       'to_hit': lambda roll,model_instance: reroll1d6(roll,[1],True)})
         """
 
-        self.weapons.update({
-            'short bow': {'name': 'short bow',
-                          'description': 'weaker ranged weapon',
-                          'tag': 'ranged',
-                          'ranged_range': 12,
-                          'ranged_shots': 1,
-                          'ranged_strength': 3,
-                          'ranged_AP': 0,
-                          'volley_fire': True}
-        })
+        self.give_weapon('Shortbow')
 
 class MountedKnightOfTheRealm(model):
     def __init__(self, name: str, url: str, mountUnit: model = None):
@@ -699,14 +685,7 @@ class MountedKnightOfTheRealm(model):
 
         self.AP = 0  # Example Armor Penetration value for Mounted Knights of the Realm
 
-        self.weapons.update({
-            'lance': {'name': 'lance',
-                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
-                      'tag': 'combat',
-                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1),
-                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 2, -99) },
-            'sword': {'name': 'sword'}
-        })
+        self.give_weapon('Lance')
 
 class BretonnianWarhorse(model):
     def __init__(self, name: str, url: str):
@@ -766,14 +745,7 @@ class GoblinWolfRider(model):
         self.AP = 0  # Example Armor Penetration value for Goblin Wolf Riders
         self.armor_save = 6  # Example improved armor save for Goblin Wolf Riders
 
-        self.weapons.update({
-            'cavalry spear': {'name': 'cavalry spear',
-                      'description': 'This model adds +1 to its Armor Penetration (AP) and Strength (S) when it charges.',
-                      'tag': 'combat',
-                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
-                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
-            'sword': {'name': 'sword'}
-        })
+        self.give_weapon('Cavalry spear')
 
 class SkeletalSteed(model):
     def __init__(self, name: str, url: str):
@@ -813,14 +785,7 @@ class BlackKnight(model):
         self.AP = 0  # Example Armor Penetration value for Black Knights
         self.armor_save = 4  # Example improved armor save for Black Knights
 
-        self.weapons.update({
-            'lance': {'name': 'lance',
-                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
-                      'tag': 'combat',
-                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 2)*1),
-                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 2, -99) },
-            'sword': {'name': 'sword'}
-        })
+        self.give_weapon('Lance')
 
 class Zombie(model):
     def __init__(self, name: str, url: str):
@@ -871,14 +836,7 @@ class JadeWarrior(model):
         self.AP = 0  # Example Armor Penetration value for Jade Warriors
         self.armor_save = 3  # Example improved armor save for Jade Warriors
 
-        self.weapons.update({
-            'halberd': {'name': 'halberd',
-                        'description': 'This model adds +1 to its Armor Penetration (AP) when it charges.',
-                        'tag': 'combat',
-                        'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
-                        'to_modify_stat': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99),
-                        'to_modify_stat': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1) }
-        })
+        self.give_weapon('Halberd')
 
 class CathayanWarhorse(model):
     def __init__(self, name: str, url: str):
@@ -905,14 +863,7 @@ class JadeLancer(model):
         self.AP = 0  # Example Armor Penetration value for Jade Lancers
         self.armor_save = 3  # Example improved armor save for Jade Lancers
 
-        self.weapons.update({
-            'lance': {'name': 'cathayan lance',
-                      'description': 'This model adds +2 to its Armor Penetration (AP) when it charges.',
-                      'tag': 'combat',
-                      'charge': lambda model_instance: setattr(model_instance, 'AP', (model_instance.AP + 1)*1),
-                      'charge': lambda model_instance: plusSTAT(model_instance, 'S', 1, -99) },
-            'sword': {'name': 'sword'}
-        })
+        self.give_weapon('Cathayan lance')
 
 class Necromancer(model):
     def __init__(self, name: str, url: str, spells: dict = None):
@@ -961,12 +912,7 @@ class OrcBoarBoy(model):
         self.AP = 0
         self.armor_save = 4
 
-        self.weapons.update({
-            'cavalry spear': {'name': 'cavalry spear',
-                              'description': '+1 S when charging.',
-                              'tag': 'combat',
-                              'charge': lambda mi: plusSTAT(mi, 'S', 1, -99)},
-        })
+        self.give_weapon('Cavalry spear')
 
 class Troll(model):
     """Anvil — regeneration and 3 wounds make them nearly impossible to shift."""
@@ -1027,12 +973,7 @@ class GraveGuard(model):
         self.AP = 0
         self.armor_save = 4
 
-        self.weapons.update({
-            'great weapon': {'name': 'great weapon',
-                             'description': '+2 Strength, strikes last.',
-                             'tag': 'combat',
-                             'to_modify_stat': lambda mi: plusSTAT(mi, 'S', 2, -99)},
-        })
+        self.give_weapon('Great weapon')
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1048,27 +989,8 @@ class PeasantBowman(model):
                                    'tag': 'special'})
         self.AP = 0
 
-        self.weapons.update({
-            'longbow': {'name': 'longbow',
-                        'description': 'Standard ranged weapon.',
-                        'tag': 'ranged',
-                        'ranged_range': 24,
-                        'ranged_shots': 1,
-                        'ranged_strength': 3,
-                        'ranged_AP': 0,
-                        'volley_fire': True},
-        })
-
-        self.weapons.update({
-            'short bow': {'name': 'short bow',
-                          'description': 'weaker ranged weapon',
-                          'tag': 'ranged',
-                          'ranged_range': 12,
-                          'ranged_shots': 1,
-                          'ranged_strength': 3,
-                          'ranged_AP': 0,
-                          'volley_fire': True}
-        })
+        self.give_weapon('Longbow')
+        self.give_weapon('Shortbow')
 
 class GrailKnight(model):
     """Hammer (Fast) — the elite of Bretonnia, blessed by the Lady."""
@@ -1087,13 +1009,7 @@ class GrailKnight(model):
         self.AP = 0
         self.armor_save = 2
 
-        self.weapons.update({
-            'lance': {'name': 'lance',
-                      'description': '+2 S when charging.',
-                      'tag': 'combat',
-                      'charge': lambda mi: plusSTAT(mi, 'S', 2, -99)},
-            'sword': {'name': 'sword'},
-        })
+        self.give_weapon('Lance')
 
 class BattlePilgrim(model):
     """Anvil — fanatical peasants with Stubborn and decent Leadership."""
@@ -1122,11 +1038,7 @@ class PeasantSpearman(model):
                                    'tag': 'special'})
         self.AP = 0
 
-        self.weapons.update({
-            'spear': {'name': 'spear',
-                      'description': 'Fight in extra rank.',
-                      'tag': 'combat'},
-        })
+        self.give_weapon('Thrusting spear')
 
 class IronHailGunner(model):
     """Basic (Shooting) — handgun-armed Cathayan infantry."""
@@ -1138,16 +1050,7 @@ class IronHailGunner(model):
         self.AP = 0
         self.armor_save = 5
 
-        self.weapons.update({
-            'handgun': {'name': 'iron hail handgun',
-                        'description': 'Armour-piercing firearm.',
-                        'tag': 'ranged',
-                        'ranged_range': 24,
-                        'ranged_shots': 1,
-                        'ranged_strength': 4,
-                        'ranged_AP': 1,
-                        'volley_fire': False},
-        })
+        self.give_weapon('Iron hail gun')
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1163,16 +1066,7 @@ class Skink(model):
                                    'tag': 'special'})
         self.AP = 0
 
-        self.weapons.update({
-            'blowpipe': {'name': 'blowpipe',
-                         'description': 'Short-ranged poisoned missile weapon.',
-                         'tag': 'ranged',
-                         'ranged_range': 12,
-                         'ranged_shots': 2,
-                         'ranged_strength': 3,
-                         'ranged_AP': 0,
-                         'volley_fire': False},
-        })
+        self.give_weapon('Blowpipe')
 
 class TempleGuard(model):
     """Anvil — Stubborn elite Saurus guarding the temple-cities."""
@@ -1188,12 +1082,7 @@ class TempleGuard(model):
         self.AP = 0
         self.armor_save = 4
 
-        self.weapons.update({
-            'halberd': {'name': 'halberd',
-                        'description': '+1 Strength in combat.',
-                        'tag': 'combat',
-                        'to_modify_stat': lambda mi: plusSTAT(mi, 'S', 1, -99)},
-        })
+        self.give_weapon('Halberd')
 
 class ColdOne(model):
     def __init__(self, name: str, url: str):
@@ -1217,9 +1106,4 @@ class ColdOneRider(model):
         self.AP = 0
         self.armor_save = 3
 
-        self.weapons.update({
-            'cavalry spear': {'name': 'cavalry spear',
-                              'description': '+1 S when charging.',
-                              'tag': 'combat',
-                              'charge': lambda mi: plusSTAT(mi, 'S', 1, -99)},
-        })
+        self.give_weapon('Cavalry spear')
