@@ -40,8 +40,8 @@ from special_rules import (board_edge_distance, charge_roll, max_charge_range,
                            max_pursuit_range, should_use_swiftstride,
                            unit_has_swiftstride)
 from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcome,
-                       massed_infantry_bonus, overwhelmed, rank_bonus,
-                       should_reroll_break, should_use_stubborn,
+                       massed_infantry_bonus, obb_distance, overwhelmed,
+                       rank_bonus, should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
 from post_combat import (GIVE_GROUND, fall_back_roll, flee_direction, flee_roll,
@@ -52,6 +52,9 @@ from rules_log import rule_log, rule_skipped
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
 SWIFTSTRIDE_DIE_COLOR = (0.85, 0.05, 0.05, 1)
+
+# A unit that Broke or Fell Back must end up this far from the enemy (p. 154).
+ONE_INCH_APART = 1.0
 
 
 class CombatResolver:
@@ -1264,7 +1267,7 @@ class CombatResolver:
         if restraint_test(ld, dice):
             rule_log('Restrain & Reform', winner,
                      f"Restraint test {dice} = {sum(dice)} vs Ld {ld} -> holds "
-                     f"its ground")
+                     f"its ground, and reforms once the enemy has drawn off")
             winner.request("Idle")
             return 'restrain'
         rule_log('Restrain & Reform', winner,
@@ -1335,31 +1338,98 @@ class CombatResolver:
         direction = Vec3(dx, dy, 0)
 
         kind = 'flee' if outcome == 'break' else 'fall back'
-        bonus = await self.swiftstrideChoice(
+        spent = getattr(loserUnit, 'fledThisPhase', False)
+        bonus = False if spent else await self.swiftstrideChoice(
             loserUnit, kind, distance_to_edge=board_edge_distance(pos.x, pos.y))
         dice = await self.rollMoveDice(loserUnit, 3 if bonus else 2, bonus)
-        distance = flee_roll(dice) if outcome == 'break' else fall_back_roll(dice)
-        print(f"{loserUnit.unit.name} {kind}s {distance}\" away from "
-              f"{winner.unit.name} (highest Unit Strength): {dice}")
+        distance = (flee_roll(dice, spent) if outcome == 'break'
+                    else fall_back_roll(dice, spent))
+        if spent:
+            rule_log('The Limits of Endurance', loserUnit,
+                     f"has already fled this phase, so it {kind}s 0\" instead "
+                     f"of {sum(dice)}\"")
+        else:
+            print(f"{loserUnit.unit.name} {kind}s {distance}\" away from "
+                  f"{winner.unit.name} (highest Unit Strength): {dice}")
+        loserUnit.fledThisPhase = True
 
         await self.game.fallBack2(loserUnit.bodyNP, direction, length=distance * 1.0,
                                   rally=(outcome == 'fall_back'),
                                   flee=(outcome == 'break'))
+        self.nudgeOneInchApart(loserUnit, direction)
         # The state is set after the move, as it was before the four passes:
         # a unit that Falls Back rallies at the end of it and is not fleeing.
         loserUnit.request("IsFleeing" if outcome == 'break' else "Moved")
+
+    def nudgeOneInchApart(self, loserUnit, direction):
+        """1" Apart (p. 154): a unit that Broke or Fell Back and is still in
+        base contact is nudged apart by the smallest amount that restores the
+        1" rule.
+
+        The existing fall-back contact test only resolves overlap, which leaves
+        the two touching rather than an inch clear. In practice this fires for a
+        unit that fled 0" under The Limits of Endurance, one whose move was
+        blocked, or one still close to an enemy other than the one it ran from.
+        """
+        psy = getattr(self.game, 'psychology', None)
+        if psy is None or loserUnit.bodyNP.isEmpty():
+            return
+        enemies = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
+        if not enemies:
+            return
+        step = Vec3(direction)
+        step.z = 0
+        if step.length() < 1e-6:
+            return
+        step.normalize()
+
+        def gap():
+            return min(obb_distance(psy._unit_box(loserUnit), psy._unit_box(e))
+                       for e in enemies)
+
+        moved = 0.0
+        for _ in range(3):
+            short = ONE_INCH_APART - gap()
+            if short <= 0:
+                break
+            # Never shove the unit into terrain or a friend to make the room:
+            # the sweep ignores the enemies it is backing away from.
+            clear = self.game.sweepTest(loserUnit, step, short)
+            room = short * clear
+            if room < 0.05:
+                break
+            loserUnit.bodyNP.setPos(loserUnit.bodyNP.getPos() + step * room)
+            moved += room
+
+        left = gap()
+        if moved:
+            rule_log('1" Apart', loserUnit,
+                     f"still too close after falling back: nudged {moved:.1f}\" "
+                     f"further, leaving {left:.1f}\"")
+        elif left < ONE_INCH_APART:
+            rule_skipped('1" Apart', loserUnit,
+                         f"only {left:.1f}\" clear, and there is nowhere to "
+                         f"give — terrain or a friend is directly behind it")
 
     # ─── Post-Combat: pass 4, the pursuits ────────────────────────────────
 
     async def pursuitPass(self, outcomes, responses):
         """Pursuit moves are made one at a time, once every loser has moved
-        (p. 156)."""
+        (p. 156).
+
+        A unit that restrained reforms here rather than at the moment it
+        declared: the reform is a move, and until the loser has drawn off the
+        two are still nose to nose with no room to turn in.
+        """
         outcome_of = {id(u): o for u, o in outcomes}
         for r in responses:
-            if r['action'] != 'pursue':
-                continue
             winner, target = r['winner'], r['target']
             if winner.bodyNP.isEmpty():
+                continue
+            if r['action'] == 'restrain':
+                await self.freeReform(winner)
+                continue
+            if r['action'] != 'pursue':
                 continue
             if self.stillEngaged(winner, exclude=target):
                 rule_skipped('Pursuit', winner,

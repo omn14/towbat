@@ -51,6 +51,15 @@ identical without the log. See `.github/copilot-instructions.md`.
 - [ ] Immune to Psychology
 - [ ] Fear
 - [ ] Terror
+- [ ] **Necromantic Undead / Nehekharan Undead** — every undead unit carries one
+      of these and neither does anything. It matters now: deleting the
+      hand-written model subclasses took away the invented `Fearless`
+      (`Unbreakable: True`) they had been leaning on, so Zombies, Skeletons,
+      Dire Wolves, Black Knights, Crypt Ghouls and Grave Guard take Break tests
+      and flee like anything else. Losing Unbreakable is correct — undead do
+      not have it in this edition — but the rule that replaces it, crumbling,
+      is not coded, so at the moment they have nothing at all in its place.
+      First thing to fix before playing an undead army.
 - [x] Stubborn — see General rules below
 
 ## General (core `.gst`) rules — TODO
@@ -419,27 +428,39 @@ charge path was quietly handling it — check there before believing an absence.
       A pursuit that does not reach is not a failure; the unit still moves its
       full roll and halts.
 
-### Phase 3 — catching, the two gaps left in it
-- [ ] The free reform a pursuer may attempt after running an enemy down
-      (p. 157). `game.startFreeReform` already exists.
-- [ ] "During the next turn, the pursuing unit counts as having charged"
-      (p. 157). Catching a unit that Fell Back sets `chargedThisTurn`, but
-      `exitCombatPhase` clears that flag at the end of the very phase it was
-      set, so it is gone before the combat it applies to is fought. Needs a
-      separate "counts as charged next turn" flag, persisted.
+### Phase 3 — catching — DONE
+- [x] The free reform a pursuer may attempt after running an enemy down
+      (p. 157). `freeReform()` wraps the existing interactive reform in
+      something awaitable so the sequence does not run on while the player is
+      still placing the unit; the AI declines, having no way to answer.
+- [x] "During the next turn, the pursuing unit counts as having charged"
+      (p. 157). Catching a unit that Fell Back set `chargedThisTurn`, but
+      `exitCombatPhase` clears that at the end of the very phase it was set, so
+      the claim was gone before the combat it applies to was fought.
+      `countsAsChargedNextTurn` carries it over and is promoted at the end of
+      the phase, taking `chargeDistance` with it so Impact Hits keep their 3"
+      test. Persisted, and `test_persistence` now derives its flag list from
+      `units.py` so the next one cannot be forgotten.
 
 ### Phase 4 — the rest, cheapest first
-- [ ] The free reform on a *passed* Restraint test (p. 156) — currently the unit
-      just holds its ground.
-- [ ] The Limits of Endurance (p. 133) — one flee move per phase; a second is 0"
+- [x] The free reform on a *passed* Restraint test (p. 156) — the unit held its
+      ground but was not offered the reform the rule grants it. The reform is
+      taken in pass 4 with the other post-combat moves, not at the moment the
+      unit declares in pass 2: a declaration is not a move, and until the loser
+      has drawn off the two are still nose to nose with no room to turn in.
+- [x] The Limits of Endurance (p. 133) — one flee move per phase; a second is 0"
       and does not pivot. A Fall Back "moves exactly like a fleeing unit"
-      (p. 134), so it counts as one. Found in play: a unit that lost a combat,
-      fell back 6", then failed a Panic test from a nearby friend fled a second
-      time on a fresh 2D6. Needs a `fledThisPhase` flag, reset per phase and
-      persisted — an unpersisted per-unit turn flag has bitten this project
-      before.
-- [ ] 1" Apart (p. 154) — nudge apart by the smallest amount if a unit that
-      Broke or Fell Back is still in base contact after moving.
+      (p. 134), so it spends the allowance too. Found in play: a unit that lost
+      a combat, fell back 6", then failed a Panic test from a nearby friend
+      fled a second time on a fresh 2D6. `fledThisPhase` is reset at every phase
+      entry beside the Panic allowance, persisted, and folded into
+      `flee_roll` / `fall_back_roll` so the distance is decided in one place.
+      Swiftstride's die is not offered for a move that cannot go anywhere.
+- [x] 1" Apart (p. 154) — `nudgeOneInchApart` pushes a unit that Broke or Fell
+      Back the smallest distance that leaves it an inch clear. The existing
+      `fallBackContactTest` only resolves overlap, which leaves the two
+      touching; this measures edge to edge with `obb_distance`, the same
+      oriented-box maths the Leadership bubbles use.
 - [ ] Overrun (p. 156) — a unit that destroys its enemy outright may make a
       pursuit move straight forward without pivoting, or restrain and reform.
 - [ ] Pursuit into an obstacle (p. 157) — stop on contact with a friendly unit

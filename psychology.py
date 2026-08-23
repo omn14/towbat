@@ -567,6 +567,7 @@ class PsychologySystem:
         # A fleeing unit's Flee roll is 2D6; Fall Back in Good Order discards
         # the lowest (Rulebook p. 134). Giving Ground is a flat 2".
         d1, d2 = random.randint(1, 6), random.randint(1, 6)
+        spent = outcome != 'give_ground' and getattr(unit, 'fledThisPhase', False)
         if outcome == 'give_ground':
             distance = GIVE_GROUND
         elif outcome == 'fall_back':
@@ -575,12 +576,21 @@ class PsychologySystem:
             distance = d1 + d2
         # Panic flees resolve without a prompt, so Swiftstride's optional die is
         # taken on the same policy the AI uses.
-        if outcome != 'give_ground' and unit_has_swiftstride(unit) and should_use_swiftstride(
+        if not spent and outcome != 'give_ground' and unit_has_swiftstride(unit) and should_use_swiftstride(
                 'flee', board_edge_distance(up.x, up.y)):
             bonus = random.randint(1, 6)
             distance += bonus
             print(f"[Panic] {unit.unit.name} adds Swiftstride +{bonus} to its "
                   f"Flee roll.")
+        if spent:
+            # The Limits of Endurance (p. 133): one flee move per phase, and a
+            # second covers nothing.
+            print(f"[Panic] {unit.unit.name} has already fled this phase — "
+                  f"The Limits of Endurance, so it moves 0\" instead of "
+                  f"{distance}\".")
+            distance = 0
+        if outcome != 'give_ground':
+            unit.fledThisPhase = True
         self._start_flee_move(unit, direction, distance, outcome, on_done)
 
     def _start_flee_move(self, unit, direction: Vec3, distance: float, outcome, on_done):

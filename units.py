@@ -101,6 +101,7 @@ class unitGraphics(FSM):
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
+        self.fledThisPhase=False         # one flee move per phase (The Limits of Endurance)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
         self.isDisrupted=False       # a quarter or more of the models in difficult terrain: no Rank Bonus
         self.spellsCastThisTurn=[]   # a Wizard may attempt each spell once, and only Level of them

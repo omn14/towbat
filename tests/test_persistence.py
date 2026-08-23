@@ -22,8 +22,9 @@ from persistence import save_game_state  # noqa: E402
 TURN_FLAGS = (
     'hasMovedThisTurn', 'hasAttackedThisTurn', 'attemptedRallyThisTurn',
     'chargedThisTurn', 'countsAsChargedNextTurn', 'chargeDistance',
-    'cannotChargeThisTurn', 'panicTestedThisPhase', 'usedStubborn',
-    'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn', 'cannotCastThisTurn',
+    'cannotChargeThisTurn', 'panicTestedThisPhase', 'fledThisPhase',
+    'usedStubborn', 'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn',
+    'cannotCastThisTurn',
 )
 
 

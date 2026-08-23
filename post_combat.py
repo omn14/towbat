@@ -24,22 +24,27 @@ __all__ = [
 
 # ─── Distances ────────────────────────────────────────────────────────────
 
-def flee_roll(dice) -> int:
+def flee_roll(dice, already_fled: bool = False) -> int:
     """A Flee roll is 2D6 summed (p. 132).
 
     Swiftstride's bonus die is one of *dice* and is added like the rest -- a
     Flee roll discards nothing.
+
+    The Limits of Endurance (p. 133): a unit only ever makes one flee move in a
+    phase, so a second one covers 0" and does not pivot.
     """
-    return sum(dice)
+    return 0 if already_fled else sum(dice)
 
 
-def fall_back_roll(dice) -> int:
+def fall_back_roll(dice, already_fled: bool = False) -> int:
     """Fall Back in Good Order rolls 2D6 and discards the lowest (p. 134).
 
     That is the Charge roll's arithmetic, Swiftstride's added die included, so
-    it is the same function rather than a second copy of it.
+    it is the same function rather than a second copy of it. A Fall Back moves
+    "exactly like a fleeing unit", so it is a flee move for the purposes of The
+    Limits of Endurance and it is spent by one.
     """
-    return charge_roll(dice)
+    return 0 if already_fled else charge_roll(dice)
 
 
 def pursuit_roll(dice) -> int:

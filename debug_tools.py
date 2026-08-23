@@ -300,6 +300,7 @@ class DebugTools(DirectObject):
             unit.cannotChargeThisTurn = False
             unit.isChargingMove = False
             unit.panicTestedThisPhase = False
+            unit.fledThisPhase = False
             unit.usedStubborn = False
             unit.madePursuitChoice = False
             unit.startOfPhaseModels = unit.unit.nmodels

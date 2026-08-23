@@ -38,6 +38,23 @@ class TestDistances(unittest.TestCase):
         self.assertEqual(GIVE_GROUND, 2.0)
 
 
+class TestTheLimitsOfEndurance(unittest.TestCase):
+    """One flee move per phase; a second covers 0" and does not pivot
+    (p. 133). A Fall Back moves exactly like a fleeing unit, so it counts."""
+
+    def test_a_first_flee_rolls_normally(self):
+        self.assertEqual(flee_roll([4, 5], already_fled=False), 9)
+
+    def test_a_second_flee_covers_nothing(self):
+        self.assertEqual(flee_roll([4, 5], already_fled=True), 0)
+
+    def test_a_second_fall_back_covers_nothing(self):
+        self.assertEqual(fall_back_roll([4, 5], already_fled=True), 0)
+
+    def test_even_a_swiftstride_die_cannot_revive_it(self):
+        self.assertEqual(flee_roll([6, 6, 6], already_fled=True), 0)
+
+
 class TestWhoTheLoserFleesFrom(unittest.TestCase):
     """The Greater the Danger (p. 133): the highest Unit Strength, not the
     average of the enemies."""

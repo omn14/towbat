@@ -222,6 +222,7 @@ class GamePhaseFSM(FSM):
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
             unit.panicTestedThisPhase = False
+            unit.fledThisPhase = False
             unit.startOfPhaseModels = unit.unit.nmodels
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn = False
@@ -242,6 +243,7 @@ class GamePhaseFSM(FSM):
         )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
+            unit.fledThisPhase = False
             unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName = "taskLoopPathTowardsMouse"
@@ -280,6 +282,7 @@ class GamePhaseFSM(FSM):
         )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
+            unit.fledThisPhase = False
             unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskShootingArcUpdate
         self.game.setActiveUnitTaskName = "taskShootingArcUpdate"
@@ -317,6 +320,7 @@ class GamePhaseFSM(FSM):
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn = False
             unit.panicTestedThisPhase = False
+            unit.fledThisPhase = False
             # Combat-start size, for the nearby-friend-destroyed US>=5 gate.
             unit.startOfPhaseModels = unit.unit.nmodels
             self.game.movement.updateDisrupted(unit)
