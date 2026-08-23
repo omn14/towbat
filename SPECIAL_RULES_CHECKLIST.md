@@ -363,6 +363,111 @@ existing `cannon_fire.py` / `bombardment.py` work.
 Ridden Monster is listed for monstrous creatures and behemoths but is defined
 under Characters, so it belongs with that work rather than here.
 
+## Post-Combat: Break Test, Follow Up & Pursuit (Rulebook p. 144-157)
+
+The fourth sub-phase of a combat, and the one the engine had least of. The
+rulebook resolves it in four passes over the *whole* combat (p. 156): every
+Break test is made, then every winning unit declares what it will do and which
+losing unit it is going after, then the losers move, and only then are the
+pursuit moves made, one at a time.
+
+Much of the pursuit *move* was already right, in a place that is easy to miss:
+a pursuit is resolved through the charge machinery (`chargeInterval`, with
+`maxmove = 0` and `chdist = sum(chdice)`), which is where its own 2D6 is rolled,
+where Swiftstride's die is added rather than discarded, and where the wheel, the
+align and the contact test happen. That is also where a fleeing unit that is
+caught is run down. Twice during this work a rule was called missing when the
+charge path was quietly handling it — check there before believing an absence.
+
+### Done
+- [x] The four passes — `breakTestPass`, `declarePass`, `loserMovePass`,
+      `pursuitPass` in `combat_resolution.py`. The engine used to do all four
+      per losing unit inside one loop, so in a combat with two losing units the
+      first fled and was pursued before the second had taken its Break test.
+      A side effect worth naming: nearby-friend Panic is measured "before it
+      moves" (p. 161), which is only true now that no loser moves until every
+      Break test is made.
+- [x] `post_combat.py` — the arithmetic, with no Panda3D in it, so it tests
+      without a window: `flee_roll` / `fall_back_roll` / `pursuit_roll`,
+      `flees_from`, `flee_direction`, `give_ground_direction`, `restraint_test`,
+      `winner_response`, `catch_outcome`, `may_pursue`. `fall_back_roll`
+      delegates to `special_rules.charge_roll` rather than keeping a second copy
+      of "2D6 discard the lowest", which is the same arithmetic.
+- [x] Flee direction — a Break or a Fall Back runs directly away from the
+      winning unit with the **highest Unit Strength**, chosen at random between
+      equals (The Greater the Danger, p. 133; p. 154). Every outcome used to use
+      `fleeDirectionMultUnits`, which averages the direction away from all the
+      winners. That function is still right for Give Ground, which really does
+      move as directly as possible away from *all* of them (p. 155), so the two
+      are now separate functions instead of one shared by accident.
+- [x] Restrain & Reform is a **Leadership test** (p. 156), not the free choice
+      the menu offered: electing to hold back can fail and force the move.
+- [x] Still Engaged (p. 156) — a winner still in base contact with another enemy
+      does not follow up or pursue.
+- [x] Surrounded (p. 155) — a Give Ground with nowhere to go reports itself and
+      stays locked rather than silently moving 0".
+- [x] Declaring a target — with more than one losing unit the winner is asked
+      which it is chasing, before any Flee roll is made (p. 156).
+- [x] Three ~90-line copy-pasted coroutines replaced by `giveGroundMove`,
+      `fleeMove` and `pursuitMove`, plus `rollMoveDice` for the dice loop that
+      existed in triplicate. Removed with them: dead `if x: pass` branches, and
+      a variable `FBIGFromCombat` printed for every pursuer while only ever
+      assigning it for the loser — which is why two units used to report the
+      same dice, one of them the unit that was running away.
+- [x] Wording: the menu said "Persuit" whether the answer was a Follow Up or a
+      Pursuit, and a pursuit that did not reach reported "Charge fell short".
+      A pursuit that does not reach is not a failure; the unit still moves its
+      full roll and halts.
+
+### Phase 3 — catching, the two gaps left in it
+- [ ] The free reform a pursuer may attempt after running an enemy down
+      (p. 157). `game.startFreeReform` already exists.
+- [ ] "During the next turn, the pursuing unit counts as having charged"
+      (p. 157). Catching a unit that Fell Back sets `chargedThisTurn`, but
+      `exitCombatPhase` clears that flag at the end of the very phase it was
+      set, so it is gone before the combat it applies to is fought. Needs a
+      separate "counts as charged next turn" flag, persisted.
+
+### Phase 4 — the rest, cheapest first
+- [ ] The free reform on a *passed* Restraint test (p. 156) — currently the unit
+      just holds its ground.
+- [ ] The Limits of Endurance (p. 133) — one flee move per phase; a second is 0"
+      and does not pivot. A Fall Back "moves exactly like a fleeing unit"
+      (p. 134), so it counts as one. Found in play: a unit that lost a combat,
+      fell back 6", then failed a Panic test from a nearby friend fled a second
+      time on a fresh 2D6. Needs a `fledThisPhase` flag, reset per phase and
+      persisted — an unpersisted per-unit turn flag has bitten this project
+      before.
+- [ ] 1" Apart (p. 154) — nudge apart by the smallest amount if a unit that
+      Broke or Fell Back is still in base contact after moving.
+- [ ] Overrun (p. 156) — a unit that destroys its enemy outright may make a
+      pursuit move straight forward without pivoting, or restrain and reform.
+- [ ] Pursuit into an obstacle (p. 157) — stop on contact with a friendly unit
+      or impassable terrain.
+- [ ] Pursuit into a Fresh Enemy (p. 157) — counts as charging, wheeling to
+      maximise contact and to align. Check what `chargeInterval` already does
+      before writing any of it.
+- [ ] Pursuit into a New Combat (p. 157) — against an enemy already engaged in a
+      combat not yet fought this phase, the pursuer joins that combat counting
+      as charged, cannot pursue again, and automatically restrains and reforms
+      with no Restraint test.
+- [ ] Peril tests (p. 133) — a D6 for each model that flees through an enemy
+      unit, losing a Wound on a 1-3.
+- [ ] Pursuit off the Battlefield (p. 157) — removed but *not* destroyed,
+      returning in the next Compulsory Moves sub-phase as reinforcements.
+      BLOCKED: no reinforcement mechanism exists.
+- [ ] Surrounded, the rest of it (p. 155) — the units stay locked, but "fight
+      another round exactly as if the combat had been a draw" is not modelled.
+- [ ] Give Ground moves 1.9", not 2" — `crashFraction` multiplies by 0.95 even
+      on a clear path, as a margin against immediately re-contacting. Predates
+      this work.
+
+### Not in this section
+Whether a unit that Falls Back in Good Order panics its friends was checked and
+is correct as coded: the rulebook is explicit that it does, because "amidst the
+clamour of battle, friendly units are seldom able to tell the difference"
+(p. 161).
+
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
