@@ -327,8 +327,12 @@ class GamePhaseFSM(FSM):
         self.game.roundCounter.update_round_display()
         # The charge bonus lasts only the turn of the charge.
         for unit in self.game.units:
-            unit.chargedThisTurn = False
-            unit.chargeDistance = 0.0
+            # A pursuer that caught a unit which fell back counts as charging in
+            # the turn that locked combat is fought, which is the next one.
+            unit.chargedThisTurn = unit.countsAsChargedNextTurn
+            unit.countsAsChargedNextTurn = False
+            if not unit.chargedThisTurn:
+                unit.chargeDistance = 0.0
             # A Wizard's casting allowance is per turn. Resetting it on entry
             # to the Strategy phase would refill it every time a spell sent the
             # game back there.

@@ -296,6 +296,7 @@ class DebugTools(DirectObject):
             unit.hasAttackedThisTurn = False
             unit.attemptedRallyThisTurn = False
             unit.chargedThisTurn = False
+            unit.countsAsChargedNextTurn = False
             unit.cannotChargeThisTurn = False
             unit.isChargingMove = False
             unit.panicTestedThisPhase = False

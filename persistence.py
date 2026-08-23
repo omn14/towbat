@@ -69,6 +69,7 @@ def save_game_state(game, filename=None):
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
+            'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
@@ -260,6 +261,7 @@ def load_game_state(game, filename):
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
+        unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)

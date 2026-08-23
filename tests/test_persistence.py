@@ -7,6 +7,7 @@ casting allowance, a unit that has already charged, and so on.
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -20,9 +21,9 @@ from persistence import save_game_state  # noqa: E402
 # save; anything missing keeps whatever the running session happened to have.
 TURN_FLAGS = (
     'hasMovedThisTurn', 'hasAttackedThisTurn', 'attemptedRallyThisTurn',
-    'chargedThisTurn', 'chargeDistance', 'cannotChargeThisTurn',
-    'panicTestedThisPhase', 'usedStubborn', 'isDisrupted', 'woundsOnModel',
-    'spellsCastThisTurn', 'cannotCastThisTurn',
+    'chargedThisTurn', 'countsAsChargedNextTurn', 'chargeDistance',
+    'cannotChargeThisTurn', 'panicTestedThisPhase', 'usedStubborn',
+    'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn', 'cannotCastThisTurn',
 )
 
 
@@ -85,6 +86,20 @@ class TestSavingTurnState(unittest.TestCase):
         saved = self._save()
         for flag in TURN_FLAGS:
             self.assertIn(flag, saved, f"{flag} is not saved")
+
+    def test_the_flag_list_has_not_fallen_behind_the_unit(self):
+        """TURN_FLAGS is hand-written, so a flag added to `units.py` slips past
+        the test above unnoticed. Anything named like a per-turn flag on a real
+        unit has to be listed here, and so saved."""
+        import units
+        source = open(units.__file__, encoding='utf-8').read()
+        named = set(re.findall(
+            r'self\.(\w*(?:ThisTurn|ThisPhase|NextTurn))\s*=', source))
+        missing = named - set(TURN_FLAGS)
+        self.assertFalse(
+            missing,
+            f"per-turn flags on the unit that are neither listed nor saved: "
+            f"{sorted(missing)}")
 
     def test_a_wizards_spent_spells_are_recorded(self):
         # Reloading used to leave the running session's list in place, so a

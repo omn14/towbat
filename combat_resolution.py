@@ -381,7 +381,8 @@ class CombatResolver:
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
                 maxmove = _stat_int(rule['mountUnit'].model.characteristics, 'M')
-        if unit.state == "IsPursuing":
+        wasPursuing = unit.state == "IsPursuing"
+        if wasPursuing:
             maxmove = 0
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
@@ -570,6 +571,9 @@ class CombatResolver:
 
         if defenderUnit.state == "IsFleeing":
             print("Contact detected between fleeing unit and pursuer!")
+            rule_log('Catching the Curs!', unit,
+                     f"caught the fleeing {defenderUnit.unit.name} and hacked "
+                     f"it to pieces")
             self.game.world.removeRigidBody(defenderUnit.bodyNP.node())
             defenderUnit.model.removeNode()
             defenderUnit.bodyNP.removeNode()
@@ -581,6 +585,7 @@ class CombatResolver:
             unit.request("Moved")
             for terning in terninger:
                 terning.remove(self.game.world)
+            await self.freeReform(unit)
             return
 
         unit.request("InCombat")
@@ -588,6 +593,15 @@ class CombatResolver:
         unit.chargedThisTurn = True
         # Impact Hits need to know the charge covered 3" or more (p. 172).
         unit.chargeDistance = float(self.game.moveArceDistance)
+        if wasPursuing:
+            # Catching the Curs! (p. 157): the two are locked together and this
+            # combat is fought *next* turn, which is when the pursuer counts as
+            # having charged. chargedThisTurn is cleared at the end of this
+            # phase, so the claim has to be carried over separately.
+            unit.countsAsChargedNextTurn = True
+            rule_log('Catching the Curs!', unit,
+                     f"caught {defenderUnit.unit.name}, which fell back: locked "
+                     f"together, and counts as charging next turn")
         self.game.movement.dangerousTerrainTests(unit, oposUnit,
                                                  unit.bodyNP.getPos())
 
@@ -1415,6 +1429,20 @@ class CombatResolver:
         for terning in dice:
             terning.remove(self.game.world)
         return values
+
+    async def freeReform(self, unit):
+        """A free reform, awaited so the caller does not run on while the
+        player is still placing the unit (p. 156, p. 157).
+
+        The AI has no way to answer the interactive prompt, so it declines.
+        """
+        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+            return
+        rule_log('Free Reform', unit, "may reform after the pursuit")
+        finished = []
+        self.game.startFreeReform(unit, on_done=lambda: finished.append(True))
+        while not finished:
+            await Task.pause(0.1)
 
     def fleesFrom(self, loserUnit):
         """The winner a Break or Fall Back runs directly away from: the highest
