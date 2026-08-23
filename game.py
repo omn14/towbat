@@ -375,44 +375,45 @@ class MyApp(ShowBase):
 
     # ─── Unit Construction ────────────────────────────────────────────────
 
-    # Unit display name → model path, class and default colour.
+    # Unit display name → model path and default colour. Everything else about
+    # a unit comes from the catalogue.
     UNIT_MODEL_MAPPING = {
         # ── Bretonnia ──────────────────────────────────────────────
-        'Man at Arms':                  {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
-        'Man_at_Arm':                   {'path': 'models/bret_bowmen.bam',      'class': model,                  'color': (1, 0, 0, 1)},
-        'Mounted Knight of the Realm':  {'path': 'models/bret_knight.bam',      'class': MountedKnightOfTheRealm,'color': (1, 0, 0, 1)},
-        'Pegasus Knight':               {'path': 'models/bret_knight.bam',      'class': PegasusKnight,          'color': (1, 0, 0, 1)},
-        'Grail Knight':                 {'path': 'models/bret_knight.bam',      'class': GrailKnight,            'color': (1, 0, 0, 1)},
-        'Peasant Bowman':               {'path': 'models/bret_bowmen.bam',      'class': PeasantBowman,          'color': (1, 0, 0, 1)},
-        'Battle Pilgrim':               {'path': 'models/bret_bowmen.bam',      'class': BattlePilgrim,          'color': (1, 0, 0, 1)},
+        'Man at Arms':                  {'path': 'models/bret_bowmen.bam',      'color': (1, 0, 0, 1)},
+        'Man_at_Arm':                   {'path': 'models/bret_bowmen.bam',      'color': (1, 0, 0, 1)},
+        'Mounted Knight of the Realm':  {'path': 'models/bret_knight.bam',      'color': (1, 0, 0, 1)},
+        'Pegasus Knight':               {'path': 'models/bret_knight.bam',      'color': (1, 0, 0, 1)},
+        'Grail Knight':                 {'path': 'models/bret_knight.bam',      'color': (1, 0, 0, 1)},
+        'Peasant Bowman':               {'path': 'models/bret_bowmen.bam',      'color': (1, 0, 0, 1)},
+        'Battle Pilgrim':               {'path': 'models/bret_bowmen.bam',      'color': (1, 0, 0, 1)},
         # ── Grand Cathay ───────────────────────────────────────────
-        'Jade Warrior':                 {'path': 'models/jade_warrior.bam',     'class': JadeWarrior,            'color': (1, 1, 0, 1)},
-        'Jade Lancer':                  {'path': 'models/jade_lancer.bam',      'class': JadeLancer,             'color': (1, 1, 0, 1)},
-        'Peasant Spearman':             {'path': 'models/jade_warrior.bam',     'class': PeasantSpearman,        'color': (1, 1, 0, 1)},
-        'Iron Hail Gunner':             {'path': 'models/jade_warrior.bam',     'class': IronHailGunner,         'color': (1, 1, 0, 1)},
+        'Jade Warrior':                 {'path': 'models/jade_warrior.bam',     'color': (1, 1, 0, 1)},
+        'Jade Lancer':                  {'path': 'models/jade_lancer.bam',      'color': (1, 1, 0, 1)},
+        'Peasant Spearman':             {'path': 'models/jade_warrior.bam',     'color': (1, 1, 0, 1)},
+        'Iron Hail Gunner':             {'path': 'models/jade_warrior.bam',     'color': (1, 1, 0, 1)},
         # ── Orc & Goblin Tribes ────────────────────────────────────
-        'Night Goblin':                 {'path': 'models/goblin_archers.bam',   'class': NightGoblin,            'color': (0, 1, 0, 1)},
-        'Goblin Wolf Rider':            {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
-        'Orc Boyz':                     {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
-        'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'class': OrcBoyz,                'color': (0, 1, 0, 1)},
-        'Black Orc':                    {'path': 'models/goblin_archers.bam',   'class': BlackOrc,               'color': (0, 1, 0, 1)},
-        'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
-        'Boar Boy':                     {'path': 'models/goblin_wolfriders.bam','class': OrcBoarBoy,             'color': (0, 1, 0, 1)},
-        'Wolf Rider':                   {'path': 'models/goblin_wolfriders.bam','class': GoblinWolfRider,        'color': (0, 1, 0, 1)},
-        'Troll':                        {'path': 'models/goblin_archers.bam',   'class': Troll,                  'color': (0, 1, 0, 1)},
+        'Night Goblin':                 {'path': 'models/goblin_archers.bam',   'color': (0, 1, 0, 1)},
+        'Goblin Wolf Rider':            {'path': 'models/goblin_wolfriders.bam','color': (0, 1, 0, 1)},
+        'Orc Boyz':                     {'path': 'models/goblin_archers.bam',   'color': (0, 1, 0, 1)},
+        'Orc Boy':                      {'path': 'models/goblin_archers.bam',   'color': (0, 1, 0, 1)},
+        'Black Orc':                    {'path': 'models/goblin_archers.bam',   'color': (0, 1, 0, 1)},
+        'Orc Boar Boy':                 {'path': 'models/goblin_wolfriders.bam','color': (0, 1, 0, 1)},
+        'Boar Boy':                     {'path': 'models/goblin_wolfriders.bam','color': (0, 1, 0, 1)},
+        'Wolf Rider':                   {'path': 'models/goblin_wolfriders.bam','color': (0, 1, 0, 1)},
+        'Troll':                        {'path': 'models/goblin_archers.bam',   'color': (0, 1, 0, 1)},
         # ── Vampire Counts ─────────────────────────────────────────
-        'Black Knight':                 {'path': 'models/black_knights.bam',    'class': BlackKnight,            'color': (0, 0, 1, 1)},
-        'Zombie':                       {'path': 'models/zombies.bam',          'class': Zombie,                 'color': (0, 0, 1, 1)},
-        'Dire Wolf':                    {'path': 'models/dire_wolves.bam',      'class': DireWolf,               'color': (0, 0, 1, 1)},
-        'Necromancer':                  {'path': 'models/zombies.bam',          'class': Necromancer,            'color': (0, 0, 1, 1)},
-        'Skeleton Warrior':             {'path': 'models/zombies.bam',          'class': SkeletonWarrior,        'color': (0, 0, 1, 1)},
-        'Crypt Ghoul':                  {'path': 'models/zombies.bam',          'class': CryptGhoul,             'color': (0, 0, 1, 1)},
-        'Grave Guard':                  {'path': 'models/black_knights.bam',    'class': GraveGuard,             'color': (0, 0, 1, 1)},
+        'Black Knight':                 {'path': 'models/black_knights.bam',    'color': (0, 0, 1, 1)},
+        'Zombie':                       {'path': 'models/zombies.bam',          'color': (0, 0, 1, 1)},
+        'Dire Wolf':                    {'path': 'models/dire_wolves.bam',      'color': (0, 0, 1, 1)},
+        'Necromancer':                  {'path': 'models/zombies.bam',          'color': (0, 0, 1, 1)},
+        'Skeleton Warrior':             {'path': 'models/zombies.bam',          'color': (0, 0, 1, 1)},
+        'Crypt Ghoul':                  {'path': 'models/zombies.bam',          'color': (0, 0, 1, 1)},
+        'Grave Guard':                  {'path': 'models/black_knights.bam',    'color': (0, 0, 1, 1)},
         # ── Lizardmen ──────────────────────────────────────────────
-        'Saurus Warrior':               {'path': 'models/jade_warrior.bam',     'class': SaurusWarrior,          'color': (0, 1, 1, 1)},
-        'Skink':                        {'path': 'models/goblin_archers.bam',   'class': Skink,                  'color': (0, 1, 1, 1)},
-        'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'class': TempleGuard,            'color': (0, 1, 1, 1)},
-        'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'class': ColdOneRider,           'color': (0, 1, 1, 1)},
+        'Saurus Warrior':               {'path': 'models/jade_warrior.bam',     'color': (0, 1, 1, 1)},
+        'Skink':                        {'path': 'models/goblin_archers.bam',   'color': (0, 1, 1, 1)},
+        'Temple Guard':                 {'path': 'models/jade_warrior.bam',     'color': (0, 1, 1, 1)},
+        'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'color': (0, 1, 1, 1)},
     }
 
     # Every unit in a player's army shares one colour.
@@ -438,17 +439,14 @@ class MyApp(ShowBase):
         Shared by the army loader and save-game restore. Returns the
         unitGraphics, or None if creation failed.
         """
-        mounted_classes = [JadeLancer, MountedKnightOfTheRealm, GoblinWolfRider, BlackKnight,
-                           PegasusKnight, GrailKnight, OrcBoarBoy, ColdOneRider]
         unit_name = army_unit_data['name']
         nmodels = army_unit_data['nmodels']
         files = army_unit_data['files']
         ranks = army_unit_data['ranks']
         model_info = self.UNIT_MODEL_MAPPING.get(unit_name, {
-            'path': 'models/jade_warrior.bam', 'class': model, 'color': (0.5, 0.5, 0.5, 1)})
+            'path': 'models/jade_warrior.bam', 'color': (0.5, 0.5, 0.5, 1)})
         player_color = self.PLAYER_COLORS.get(player_num, (0.5, 0.5, 0.5, 1))
         try:
-            model_class = model_info['class']
             # Prefer the mount named in the army data; fall back to the default map.
             mount_name = army_unit_data.get('mount') or self.MOUNT_NAME_MAP.get(unit_name)
             mount_unit = None
@@ -456,10 +454,7 @@ class MyApp(ShowBase):
                 mount_model = model(mount_name, "")
                 mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
 
-            if model_class in mounted_classes:
-                model_instance = model_class(unit_name, "", mountUnit=mount_unit)
-            else:
-                model_instance = model_class(unit_name, "")
+            model_instance = model(unit_name, "")
 
             # Attach a data-driven mount to any unit that didn't already get one.
             # A chariot's draught beasts are listed as a mount in the roster but
