@@ -1889,6 +1889,11 @@ class MyApp(ShowBase):
         if self.isAiming():
             self.cancelAiming()
             return
+        # Without the move arc running the player has plotted nothing, and the
+        # stale arcPoint would teleport the unit — as it did when
+        # right-clicking while aiming or casting.
+        if not taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
+            return
         self.moveUnit(unit)
 
     def isAiming(self):
@@ -1916,12 +1921,11 @@ class MyApp(ShowBase):
                                      "StrategyPhase"))
 
     def moveUnit(self, unit):
+        """Commit the path plotted by pathTowardsMouse.
+
+        Pursuit and the AI plot with explicit coordinates rather than the mouse,
+        so this must not require the interactive move arc to be running."""
         if self.awaitingChoice:
-            return
-        # Right-click commits a plotted move. Without the move arc running
-        # there is nothing plotted, and the stale arcPoint would teleport the
-        # unit — as it did when right-clicking while aiming or casting.
-        if not taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             return
         self.movement.moveUnit(unit)
 

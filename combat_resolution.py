@@ -1234,10 +1234,15 @@ class CombatResolver:
 
         persuingUnit = []
         persuingUnit.append(loserUnit)
-        for i, unit in enumerate(loserUnit.isInCombatWith):
+        # Iterate a copy: a unit that has already been asked is dropped from
+        # isInCombatWith below, and removing from the list being walked skips
+        # whichever unit follows it.
+        for unit in list(loserUnit.isInCombatWith):
             if unit.madePursuitChoice:
-                loserUnit.isInCombatWith.remove(unit)
-                loserUnit.isInCombatFlank.remove(loserUnit.isInCombatFlank[i])
+                i = loserUnit.isInCombatWith.index(unit)
+                loserUnit.isInCombatWith.pop(i)
+                if i < len(loserUnit.isInCombatFlank):
+                    loserUnit.isInCombatFlank.pop(i)
                 loserUnit.request("Idle")
                 continue
             unit.madePursuitChoice = True
