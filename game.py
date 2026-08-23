@@ -1996,15 +1996,6 @@ class MyApp(ShowBase):
     async def verySimpleBattle(self, task):
         return await self.combat.verySimpleBattle(task)
 
-    async def GiveGroundFromCombat(self, loserUnit):
-        return await self.combat.GiveGroundFromCombat(loserUnit)
-
-    async def FBIGFromCombat(self, loserUnit):
-        return await self.combat.FBIGFromCombat(loserUnit)
-
-    async def fleeFromCombat(self, loserUnit):
-        return await self.combat.fleeFromCombat(loserUnit)
-
     # ─── Flee, Pursuit & Rally (delegates to MovementSystem) ────────────
 
     def checkFleeCaught(self, fleeUnit, pursuerUnit, task):

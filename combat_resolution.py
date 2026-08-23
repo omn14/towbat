@@ -44,7 +44,10 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
-from rules_log import rule_log
+from post_combat import (GIVE_GROUND, fall_back_roll, flee_direction, flee_roll,
+                         flees_from, give_ground_direction, restraint_test,
+                         winner_response)
+from rules_log import rule_log, rule_skipped
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -53,9 +56,6 @@ SWIFTSTRIDE_DIE_COLOR = (0.85, 0.05, 0.05, 1)
 
 class CombatResolver:
     """Encapsulates all combat resolution logic for the game."""
-
-    # A unit that Gives Ground moves 2" away, and the winner Follows Up 2".
-    GIVE_GROUND = 2.0
 
     def __init__(self, game):
         self.game = game
@@ -511,7 +511,14 @@ class CombatResolver:
         if chdist < self.game.moveArceDistance:
             for terning in terninger:
                 terning.remove(self.game.world)
-            print("Charge fell short \u2014 unit did not reach the enemy.")
+            if unit.state == "IsPursuing":
+                # Not a failure: a pursuit that does not reach still moves its
+                # full roll, and the quarry simply gets away (p. 156).
+                print(f"Pursuit of {chdist}\" did not catch the enemy "
+                      f"({self.game.moveArceDistance:.1f}\" away) — "
+                      f"the unit advances and halts.")
+            else:
+                print("Charge fell short \u2014 unit did not reach the enemy.")
             self.game.movement.dangerousTerrainTests(unit, oposUnit,
                                                      unit.bodyNP.getPos())
             unit.request("Moved")
@@ -1079,14 +1086,36 @@ class CombatResolver:
                     loserUnits.append(atu)
             diff = player2_score - player1_score
 
+        # Follow Up & Pursuit (p. 156) is four passes over the whole combat, not
+        # one loser at a time: every Break test is made, then every winner
+        # declares and names its quarry, then the losers move, and only then do
+        # the pursuits run. Interleaving them gave the wrong answer as soon as a
+        # combat had two losing units.
+        outcomes = await self.breakTestPass(loserUnits, diff)
+        responses = await self.declarePass(outcomes)
+        await self.loserMovePass(outcomes, responses)
+        await self.pursuitPass(outcomes, responses)
+
+        self.game.resolvingCombat = False
+        messenger.send('unit-move-complete')
+        return task.done
+
+    # ─── Post-Combat: pass 1, the Break tests ─────────────────────────────
+
+    async def breakTestPass(self, loserUnits, diff):
+        """Every losing unit takes its Break test (p. 154).
+
+        Returns ``[(unit, outcome)]`` and moves nothing: the winners have to
+        declare before any of these units budge.
+        """
+        outcomes = []
         for loserUnit in loserUnits:
             if loserUnit.bodyNP.isEmpty():
                 continue
 
             if any(rule.get('Unbreakable', False) for rule in loserUnit.unit.model.special_rules):
                 print(f"{loserUnit.unit.name} is Unbreakable and does not flee!, only gives ground.")
-                await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask",
-                                   extraArgs=[loserUnit], appendTask=False)
+                outcomes.append((loserUnit, 'give_ground'))
                 continue
 
             ld = _stat_int(loserUnit.unit.model.characteristics, 'Ld', 7)
@@ -1113,8 +1142,7 @@ class CombatResolver:
                     print(f"{loserUnit.unit.name} is Stubborn and refuses its Break "
                           f"test — Falls Back in Good Order.")
                     self.notifyFleesCombat(loserUnit)
-                    await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
-                                       extraArgs=[loserUnit], appendTask=False)
+                    outcomes.append((loserUnit, 'fall_back'))
                     continue
 
             ldDice = await self.rollBreakDice()
@@ -1141,31 +1169,212 @@ class CombatResolver:
                           f"(Hold Your Ground: {bsb.unit.name}): {ldDice} "
                           f"sum {sum(ldDice)} -> {outcome}")
 
-            if outcome == 'break':
-                print("losing unit flees from combat!")
+            if outcome in ('break', 'fall_back'):
+                print("losing unit flees from combat!" if outcome == 'break'
+                      else "losing unit FBIG!")
                 self.notifyFleesCombat(loserUnit)
-                await taskMgr.add(self.fleeFromCombat, "fleeFromCombatTask",
-                                   extraArgs=[loserUnit], appendTask=False)
-            elif outcome == 'fall_back':
-                print("losing unit FBIG!")
-                self.notifyFleesCombat(loserUnit)
-                await taskMgr.add(self.FBIGFromCombat, "fleeFromCombatTask",
-                                   extraArgs=[loserUnit], appendTask=False)
             else:
                 print("losing unit gives ground!")
-                await taskMgr.add(self.GiveGroundFromCombat, "fleeFromCombatTask",
-                                   extraArgs=[loserUnit], appendTask=False)
+            outcomes.append((loserUnit, outcome))
+        return outcomes
 
-        for loserUnit in loserUnits:
+    # ─── Post-Combat: pass 2, the winners declare ─────────────────────────
+
+    def stillEngaged(self, unit, exclude=None):
+        """Still Engaged (p. 156): base contact with any enemy other than the
+        one it is going after stops a follow up or a pursuit."""
+        for other in list(unit.isInCombatWith):
+            if other is exclude or other.bodyNP.isEmpty():
+                continue
+            if self.game.world.contactTestPair(
+                    unit.bodyNP.node(), other.bodyNP.node()).getNumContacts():
+                return True
+        return False
+
+    async def declarePass(self, outcomes):
+        """Each winner declares restrain, follow up or pursue — and which unit
+        it is after — before any loser moves or rolls (p. 156).
+
+        Returns ``[{'winner', 'target', 'action'}]``.
+        """
+        responses = []
+        declared = []
+        for loserUnit, outcome in outcomes:
+            for winner in list(loserUnit.isInCombatWith):
+                if winner.bodyNP.isEmpty() or any(winner is w for w in declared):
+                    continue
+                declared.append(winner)
+
+                targets = [(u, o) for u, o in outcomes
+                           if any(winner is w for w in u.isInCombatWith)]
+                if not targets:
+                    continue
+                if len(targets) > 1:
+                    names = [u.unitName + '\nChase' for u, _ in targets]
+                    picked = await taskMgr.add(
+                        self.game.makeChoiceNew(names, Vec3(0, 0, 10)))
+                    target, targetOutcome = next(
+                        (u, o) for (u, o), n in zip(targets, names) if n == picked)
+                else:
+                    target, targetOutcome = targets[0]
+
+                move = winner_response(targetOutcome)
+                action = await self.restrainChoice(winner, target, move)
+                responses.append({'winner': winner, 'target': target,
+                                  'action': action})
+        return responses
+
+    async def restrainChoice(self, winner, target, move):
+        """Restrain & Reform (p. 156) is a Leadership test, not a free choice:
+        a unit that elects to hold back and fails must go anyway."""
+        verb = 'Follow up' if move == 'follow_up' else 'Pursue'
+        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+            chosen = move
+        else:
+            options = [winner.unitName + '\n' + verb,
+                       winner.unitName + '\nRestrain']
+            selected = await taskMgr.add(
+                self.game.makeChoiceNew(options, Vec3(0, 0, 10)))
+            chosen = move if selected == options[0] else 'restrain'
+
+        if chosen != 'restrain':
+            print(f"{winner.unit.name} chooses to {verb.lower()} "
+                  f"{target.unit.name}!")
+            return move
+
+        ld = _stat_int(winner.unit.model.characteristics, 'Ld', 7)
+        psy = getattr(self.game, 'psychology', None)
+        if psy is not None:
+            ld, _ = psy.leadership_of(winner)
+        dice = await self.rollBreakDice()
+        if restraint_test(ld, dice):
+            rule_log('Restrain & Reform', winner,
+                     f"Restraint test {dice} = {sum(dice)} vs Ld {ld} -> holds "
+                     f"its ground")
+            winner.request("Idle")
+            return 'restrain'
+        rule_log('Restrain & Reform', winner,
+                 f"Restraint test {dice} = {sum(dice)} vs Ld {ld} -> fails, and "
+                 f"must {'follow up' if move == 'follow_up' else 'pursue'} "
+                 f"{target.unit.name}")
+        return move
+
+    # ─── Post-Combat: pass 3, the losers move ─────────────────────────────
+
+    async def loserMovePass(self, outcomes, responses):
+        """Give Ground, Fall Back in Good Order and Flee, in that order.
+
+        A Give Ground and the Follow Up answering it are the same 2" in the same
+        direction, so they move together: keeping them in one interval means the
+        two stay in base contact by construction, with no separation test to
+        push the follower back out again.
+        """
+        for loserUnit, outcome in outcomes:
             if loserUnit.bodyNP.isEmpty():
                 continue
-            loserUnit.madePursuitChoice = False
-            for unit in loserUnit.isInCombatWith:
-                unit.madePursuitChoice = False
+            if outcome == 'give_ground':
+                followers = [r['winner'] for r in responses
+                             if r['target'] is loserUnit and r['action'] == 'follow_up']
+                await self.giveGroundMove(loserUnit, followers)
+            else:
+                await self.fleeMove(loserUnit, outcome)
 
-        self.game.resolvingCombat = False
-        messenger.send('unit-move-complete')
-        return task.done
+    async def giveGroundMove(self, loserUnit, followers):
+        """The loser backs off 2" and anyone following up comes with it."""
+        winners = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
+        direction = self.giveGroundDirection(loserUnit, winners)
+        moving = [loserUnit] + [f for f in followers if not f.bodyNP.isEmpty()]
+
+        crashFraction = 1.0
+        for unit in moving:
+            crashFraction = min(crashFraction,
+                                self.game.sweepTest(unit, direction, GIVE_GROUND) * .95)
+        step = direction * (GIVE_GROUND * crashFraction)
+        if step.length() < 0.05:
+            # Surrounded (p. 155): a loser that cannot break contact stays put
+            # and the combat is fought again as though it had been a draw.
+            rule_log('Surrounded', loserUnit,
+                     "cannot break contact, so it stays locked in place and "
+                     "fights again next turn")
+            return
+
+        self.game.attackSequence2 = Parallel()
+        for unit in moving:
+            print(f"{unit.unit.name} moves {step.length():.1f}\" "
+                  f"({'gives ground' if unit is loserUnit else 'follows up'})")
+            self.game.attackSequence2.append(
+                LerpPosInterval(unit.bodyNP, duration=1.0,
+                                pos=unit.bodyNP.getPos() + step,
+                                blendType='easeInOut'))
+        if not self.game.attackSequence.isPlaying():
+            await self.game.attackSequence2
+
+    async def fleeMove(self, loserUnit, outcome):
+        """Break or Fall Back: away from the single strongest winner, at a
+        distance the outcome decides."""
+        winner = self.fleesFrom(loserUnit)
+        if winner is None:
+            return
+        pos = loserUnit.bodyNP.getPos()
+        wpos = winner.bodyNP.getPos()
+        dx, dy = flee_direction((pos.x, pos.y), (wpos.x, wpos.y))
+        direction = Vec3(dx, dy, 0)
+
+        kind = 'flee' if outcome == 'break' else 'fall back'
+        bonus = await self.swiftstrideChoice(
+            loserUnit, kind, distance_to_edge=board_edge_distance(pos.x, pos.y))
+        dice = await self.rollMoveDice(loserUnit, 3 if bonus else 2, bonus)
+        distance = flee_roll(dice) if outcome == 'break' else fall_back_roll(dice)
+        print(f"{loserUnit.unit.name} {kind}s {distance}\" away from "
+              f"{winner.unit.name} (highest Unit Strength): {dice}")
+
+        await self.game.fallBack2(loserUnit.bodyNP, direction, length=distance * 1.0,
+                                  rally=(outcome == 'fall_back'),
+                                  flee=(outcome == 'break'))
+        # The state is set after the move, as it was before the four passes:
+        # a unit that Falls Back rallies at the end of it and is not fleeing.
+        loserUnit.request("IsFleeing" if outcome == 'break' else "Moved")
+
+    # ─── Post-Combat: pass 4, the pursuits ────────────────────────────────
+
+    async def pursuitPass(self, outcomes, responses):
+        """Pursuit moves are made one at a time, once every loser has moved
+        (p. 156)."""
+        outcome_of = {id(u): o for u, o in outcomes}
+        for r in responses:
+            if r['action'] != 'pursue':
+                continue
+            winner, target = r['winner'], r['target']
+            if winner.bodyNP.isEmpty():
+                continue
+            if self.stillEngaged(winner, exclude=target):
+                rule_skipped('Pursuit', winner,
+                             "still in base contact with another enemy")
+                continue
+            if target.bodyNP.isEmpty():
+                continue
+            await self.pursuitMove(winner, target, outcome_of.get(id(target)))
+
+    async def pursuitMove(self, winner, target, outcome):
+        """Pivot to face the quarry and run the pursuit through the charge
+        machinery, which rolls the 2D6, sums it, and handles the wheel, the
+        align and the contact — the same things a charge needs."""
+        targetPos = target.bodyNP.getPos()
+        rFrom = winner.bodyNP.getHpr()
+        winner.bodyNP.lookAt(targetPos)
+        rTo = winner.bodyNP.getHpr()
+        winner.bodyNP.setHpr(rFrom)
+        await LerpPosHprInterval(winner.bodyNP, duration=0.5,
+                                 pos=winner.bodyNP.getPos(), hpr=rTo,
+                                 blendType='easeInOut')
+
+        winner.request("IsPursuing")
+        winner.hasMovedThisTurn = False
+        self.game.autoCharge = True
+        self.game.autoHold = True
+        self.game.pathTowardsMouse(winner, targetPos.x, targetPos.y)
+        self.game.moveUnit(winner)
+        await Wait(5.0)
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
 
@@ -1184,6 +1393,43 @@ class CombatResolver:
         for terning in terningerLd:
             terning.remove(self.game.world)
         return values
+
+    async def rollMoveDice(self, unit, count, swiftstride=False):
+        """Roll the physical dice of a Flee, Fall Back or Pursuit roll.
+
+        The Swiftstride die is thrown last and in its own colour, because it is
+        added rather than being one of the two the roll may discard between.
+        """
+        dice = []
+        for i in range(count):
+            swift = swiftstride and i == count - 1
+            dice.append(Dice(self.game.world,
+                             position=unit.bodyNP.getPos() + Vec3(-20 + i * 4, 0, 10),
+                             size=1.0,
+                             body_color=SWIFTSTRIDE_DIE_COLOR if swift else None))
+        for terning in dice:
+            terning.roll()
+        await taskMgr.add(checkDice, "checkDiceTaskPersuit" + str(unit.unitName),
+                          extraArgs=[dice], appendTask=True)
+        values = [terning.currentValue for terning in dice]
+        for terning in dice:
+            terning.remove(self.game.world)
+        return values
+
+    def fleesFrom(self, loserUnit):
+        """The winner a Break or Fall Back runs directly away from: the highest
+        Unit Strength, settled at random between equals (p. 133)."""
+        winners = [(u, unit_strength_total(u))
+                   for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
+        return flees_from(winners)
+
+    def giveGroundDirection(self, loserUnit, winners):
+        """Give Ground backs away from every unit engaging it at once, so this
+        is not the same direction a flee would take (p. 155)."""
+        pos = loserUnit.bodyNP.getPos()
+        others = [(w.bodyNP.getPos().x, w.bodyNP.getPos().y) for w in winners]
+        dx, dy = give_ground_direction((pos.x, pos.y), others)
+        return Vec3(dx, dy, 0)
 
     def chariotParts(self, hostUnit):
         """A chariot's crew and beasts as fighting units of their own.
@@ -1226,274 +1472,3 @@ class CombatResolver:
                                 and any(w in u.isInCombatWith for w in winners)]
         return overwhelmed(sum(unit_strength_total(u) for u in winners),
                            sum(unit_strength_total(u) for u in losers))
-
-    async def GiveGroundFromCombat(self, loserUnit):
-        direction = self.game.fleeDirectionMultUnits(
-            loserUnit,
-            [self.game.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
-
-        persuingUnit = []
-        persuingUnit.append(loserUnit)
-        # Iterate a copy: a unit that has already been asked is dropped from
-        # isInCombatWith below, and removing from the list being walked skips
-        # whichever unit follows it.
-        for unit in list(loserUnit.isInCombatWith):
-            if unit.madePursuitChoice:
-                i = loserUnit.isInCombatWith.index(unit)
-                loserUnit.isInCombatWith.pop(i)
-                if i < len(loserUnit.isInCombatFlank):
-                    loserUnit.isInCombatFlank.pop(i)
-                loserUnit.request("Idle")
-                continue
-            unit.madePursuitChoice = True
-            persuitOrNot = [unit.unitName + '\nPersuit', unit.unitName + '\nRestrain']
-            selected_choice = await taskMgr.add(
-                self.game.makeChoiceNew(persuitOrNot, Vec3(0, 0, 10)))
-            print(f"Selected choice: {selected_choice}")
-            if selected_choice == persuitOrNot[0]:
-                print(f"{unit.unit.name} chooses to pursue!")
-                persuingUnit.append(unit)
-
-        # Giving Ground and the Follow Up are the same 2" in the same direction,
-        # so both ends are worked out up front and moved together: the units
-        # keep base contact by construction, with no separation test between
-        # them to push the follower back out again.
-        crashFraction = 1.0
-        for unit in persuingUnit:
-            crashFraction = min(crashFraction,
-                                self.game.sweepTest(unit, direction, self.GIVE_GROUND) * .95)
-        step = direction * (self.GIVE_GROUND * crashFraction)
-        self.game.attackSequence2 = Parallel()
-        for unit in persuingUnit:
-            print(f"{unit.unit.name} moves {step.length():.1f}\" "
-                  f"({'gives ground' if unit is loserUnit else 'follows up'})")
-            self.game.attackSequence2.append(
-                LerpPosInterval(unit.bodyNP, duration=1.0,
-                                pos=unit.bodyNP.getPos() + step,
-                                blendType='easeInOut'))
-
-        if not self.game.attackSequence.isPlaying():
-            await self.game.attackSequence2
-
-    # ─── Post-Combat: Fall Back In Good Order ─────────────────────────────
-
-    async def FBIGFromCombat(self, loserUnit):
-        direction = self.game.fleeDirectionMultUnits(
-            loserUnit,
-            [self.game.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
-        persuitDiceTasks = []
-        persuitDiceDices = []
-        persuingUnit = []
-
-        self.game.attackSequence2 = Sequence()
-        for unit in loserUnit.isInCombatWith:
-            persuitOrNot = [unit.unitName + '\nPersuit', unit.unitName + '\nRestrain']
-            selected_choice = await taskMgr.add(
-                self.game.makeChoiceNew(persuitOrNot, Vec3(0, 0, 10)))
-            print(f"Selected choice: {selected_choice}")
-            if selected_choice == persuitOrNot[0]:
-                print(f"{unit.unit.name} chooses to pursue!")
-                unit.request("IsPursuing")
-                persuingUnit.append(unit)
-            else:
-                print(f"{unit.unit.name} chooses to restrain.")
-                unit.request("Idle")
-
-        if len(persuingUnit) == 0:
-            print("No units chose to pursue, ending FBIG.")
-            loserUnit.request("Idle")
-
-        persuingUnit.append(loserUnit)
-
-        loserPos = loserUnit.bodyNP.getPos()
-        fbigBonus = await self.swiftstrideChoice(
-            loserUnit, 'fall back',
-            distance_to_edge=board_edge_distance(loserPos.x, loserPos.y))
-        for i, unit in enumerate(persuingUnit):
-            if unit != loserUnit:
-                continue
-            terningerPersuit = []
-            for j in range(3 if fbigBonus else 2):
-                swift = fbigBonus and j == 2
-                terning = Dice(self.game.world,
-                               position=unit.bodyNP.getPos() + Vec3(-20 + j * 4, 0, 10), size=1.0,
-                               body_color=SWIFTSTRIDE_DIE_COLOR if swift else None)
-                terningerPersuit.append(terning)
-            for terning in terningerPersuit:
-                terning.roll()
-
-            persuitDiceTasks.append(
-                taskMgr.add(checkDice,
-                            "checkDiceTaskPersuit" + str(loserUnit.unitName),
-                            extraArgs=[terningerPersuit], appendTask=True))
-            persuitDiceDices.append(terningerPersuit)
-
-        for task in persuitDiceTasks:
-            await task
-
-        maxmove = max([terning.currentValue for terning in persuitDiceDices[-1]])
-        for i in range(len(persuingUnit) - 1, -1, -1):
-            unit = persuingUnit[i]
-
-            if unit == loserUnit:
-                persuitDices = persuitDiceDices[0]
-                persuit_results = [terning.currentValue for terning in persuitDices]
-                # Fall Back in Good Order discards the lowest of the first two
-                # dice; the Swiftstride die is added on top of the one kept.
-                persuit_score = max(persuit_results[:2]) + sum(persuit_results[2:])
-            else:
-                pass
-            print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
-
-            print(f"{unit.unit.name} successfully pursues the fleeing unit!")
-            if unit != loserUnit:
-                pass
-            else:
-                self.game.attackSequence2.append(
-                    Func(self.game.fallBack, unit.bodyNP, direction,
-                         length=persuit_score * 1.0, rally=True))
-            self.game.attackSequence2.append(Wait(0.7))
-        for dices in persuitDiceDices:
-            for terning in dices:
-                terning.remove(self.game.world)
-
-        self.game.attackSequence2.append(Wait(2 * (len(persuingUnit) - 1)))
-        await self.game.attackSequence2
-        
-        for i in range(0, len(persuingUnit) - 1):
-            unit = persuingUnit[i]
-            rFrom = unit.bodyNP.getHpr()
-            unit.bodyNP.lookAt(loserUnit.bodyNP)
-            rTo = unit.bodyNP.getHpr()
-            unit.bodyNP.setHpr(rFrom)
-            rotation_interval = LerpPosHprInterval(
-                unit.bodyNP,
-                duration=0.5,
-                pos=unit.bodyNP.getPos(),
-                hpr=rTo,
-                blendType='easeInOut'
-            )
-            await rotation_interval
-            unit.request("IsPursuing")
-            unit.hasMovedThisTurn = False
-            opos = unit.bodyNP.getPos() - direction
-            orot = unit.bodyNP.getHpr()
-            self.game.autoCharge = True
-            self.game.autoHold = True
-            self.game.pathTowardsMouse(unit, loserUnit.bodyNP.getPos().x, loserUnit.bodyNP.getPos().y)
-            self.game.moveUnit(unit)
-            await Wait(5.0)
-        loserUnit.request("Moved")
-
-    # ─── Post-Combat: Flee ────────────────────────────────────────────────
-
-    async def fleeFromCombat(self, loserUnit):
-        direction = self.game.fleeDirectionMultUnits(
-            loserUnit,
-            [self.game.getSelectedUnit(u.bodyNP.node()) for u in loserUnit.isInCombatWith])
-        persuitDiceTasks = []
-        persuitDiceDices = []
-        persuingUnit = []
-
-        self.game.attackSequence2 = Sequence()
-        for unit in loserUnit.isInCombatWith:
-            if unit.madePursuitChoice:
-                continue
-            unit.madePursuitChoice = True
-            persuitOrNot = [unit.unitName + '\nPersuit', unit.unitName + '\nRestrain']
-            selected_choice = await taskMgr.add(
-                self.game.makeChoiceNew(persuitOrNot, Vec3(0, 0, 10)))
-            print(f"Selected choice: {selected_choice}")
-            unit.request("Idle")
-            if selected_choice == persuitOrNot[0]:
-                print(f"{unit.unit.name} chooses to pursue!")
-                unit.request("IsPursuing")
-                persuingUnit.append(unit)
-
-        persuingUnit.append(loserUnit)
-
-        loserPos = loserUnit.bodyNP.getPos()
-        fleeBonus = await self.swiftstrideChoice(
-            loserUnit, 'flee',
-            distance_to_edge=board_edge_distance(loserPos.x, loserPos.y))
-        for i, unit in enumerate(persuingUnit):
-            if unit != loserUnit:
-                continue
-            terningerPersuit = []
-            for j in range(3 if fleeBonus else 2):
-                swift = fleeBonus and j == 2
-                terning = Dice(self.game.world,
-                               position=unit.bodyNP.getPos() + Vec3(-20 + j * 4, 0, 10), size=1.0,
-                               body_color=SWIFTSTRIDE_DIE_COLOR if swift else None)
-                terningerPersuit.append(terning)
-            for terning in terningerPersuit:
-                terning.roll()
-
-            persuitDiceTasks.append(
-                taskMgr.add(checkDice,
-                            "checkDiceTaskPersuit" + str(loserUnit.unitName),
-                            extraArgs=[terningerPersuit], appendTask=True))
-            persuitDiceDices.append(terningerPersuit)
-
-        for task in persuitDiceTasks:
-            await task
-        for i in range(len(persuingUnit) - 1, -1, -1):
-            unit = persuingUnit[i]
-
-            if unit == loserUnit:
-                persuitDices = persuitDiceDices[0]
-                persuit_results = [terning.currentValue for terning in persuitDices]
-                # A Flee roll sums its dice, Swiftstride's included.
-                persuit_score = sum(persuit_results)
-                print(f"Persuit dice results for {unit.unit.name}: {persuit_results}, total: {persuit_score}")
-
-                print(f"{unit.unit.name} successfully pursues the fleeing unit!")
-                await self.game.fallBack2(unit.bodyNP, direction, length=persuit_score * 1.0, flee=True)
-            else:
-                pass
-
-        for dices in persuitDiceDices:
-            for terning in dices:
-                terning.remove(self.game.world)
-
-        loserUnit.request("IsFleeing")
-
-        for n, persuing in enumerate(persuingUnit):
-            if persuing == loserUnit:
-                continue
-            taskMgr.doMethodLater(
-                1.7 * (len(persuingUnit) - 1), self.game.checkFleeCaught,
-                "checkFleeCaughtTask" + str(n),
-                extraArgs=[loserUnit, persuing], appendTask=True)
-
-        if not self.game.attackSequence.isPlaying():
-            await self.game.attackSequence2
-
-        for n, persuing in enumerate(persuingUnit):
-            if taskMgr.hasTaskNamed("checkFleeCaughtTask" + str(n)):
-                taskMgr.remove("checkFleeCaughtTask" + str(n))
-
-        loserPos = loserUnit.bodyNP.getPos()
-        for i in range(0, len(persuingUnit) - 1):
-            unit = persuingUnit[i]
-            rFrom = unit.bodyNP.getHpr()
-            unit.bodyNP.lookAt(loserPos)
-            rTo = unit.bodyNP.getHpr()
-            unit.bodyNP.setHpr(rFrom)
-            rotation_interval = LerpPosHprInterval(
-                unit.bodyNP,
-                duration=0.5,
-                pos=unit.bodyNP.getPos(),
-                hpr=rTo,
-                blendType='easeInOut'
-            )
-            await rotation_interval
-            unit.request("IsPursuing")
-            unit.hasMovedThisTurn = False
-            opos = unit.bodyNP.getPos() - direction
-            orot = unit.bodyNP.getHpr()
-            self.game.autoCharge = True
-            self.game.autoHold = True
-            self.game.pathTowardsMouse(unit, loserPos.x, loserPos.y)
-            self.game.moveUnit(unit)
-            await Wait(5.0)
