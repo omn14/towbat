@@ -14,7 +14,7 @@ All methods operate on the game instance passed during construction.
 import math
 from types import SimpleNamespace
 
-from panda3d.core import Vec2, Vec3, NodePath
+from panda3d.core import Vec2, Vec3, NodePath, TransformState, BitMask32
 
 
 def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
@@ -44,8 +44,9 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        rank_bonus, should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
-from post_combat import (GIVE_GROUND, fall_back_roll, flee_direction, flee_roll,
-                         flees_from, give_ground_direction, restraint_test,
+from post_combat import (GIVE_GROUND, facing_vector, fall_back_roll,
+                         flee_direction, flee_roll, flees_from,
+                         give_ground_direction, pursuit_roll, restraint_test,
                          winner_response)
 from rules_log import rule_log, rule_skipped
 
@@ -65,6 +66,7 @@ class CombatResolver:
         # Dice state used during charge/flee intervals
         self.terningerCharge = []
         self.terningerFlee = []
+        self.reformInProgress = False
 
     # ─── Contact Detection ────────────────────────────────────────────────
 
@@ -75,6 +77,18 @@ class CombatResolver:
             if 'UnitCollision-' in contact.getNode1().getName():
                 return contact
         return None
+
+    def removeUnitFromPlay(self, unit):
+        """Take a run-down unit off the board, node and bookkeeping alike."""
+        self.game.world.removeRigidBody(unit.bodyNP.node())
+        unit.model.removeNode()
+        unit.bodyNP.removeNode()
+        if unit in self.game.units:
+            self.game.units.remove(unit)
+        if unit in self.game.player1Units:
+            self.game.player1Units.remove(unit)
+        if unit in self.game.player2Units:
+            self.game.player2Units.remove(unit)
 
     # ─── Charge & Charge Reaction ─────────────────────────────────────────
 
@@ -533,6 +547,10 @@ class CombatResolver:
         if defenderUnit in self.game.player1Units:
             if unit in self.game.player1Units:
                 print("Both units belong to Player 1, cannot enter combat.")
+                if wasPursuing:
+                    rule_log('Pursuit into an Obstacle', unit,
+                             f"halted against {defenderUnit.unit.name}, a "
+                             f"friendly unit")
                 direction = unit.bodyNP.getPos() - defenderNP.getPos()
                 direction.normalize()
                 self.game.fallBackContactTest(unit.bodyNP, direction * .3)
@@ -544,6 +562,10 @@ class CombatResolver:
         if defenderUnit in self.game.player2Units:
             if unit in self.game.player2Units:
                 print("Both units belong to Player 2, cannot enter combat.")
+                if wasPursuing:
+                    rule_log('Pursuit into an Obstacle', unit,
+                             f"halted against {defenderUnit.unit.name}, a "
+                             f"friendly unit")
                 direction = unit.bodyNP.getPos() - defenderNP.getPos()
                 direction.normalize()
                 self.game.fallBackContactTest(unit.bodyNP, direction * .3)
@@ -553,38 +575,21 @@ class CombatResolver:
                 unit.request("Moved")
                 return
 
-        parent = unit.bodyNP.getParent()
-        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
-        newnode.setPos(self.game.playerNP.getPos())
-        newnode.setHpr(unit.bodyNP.getHpr())
-        unit.bodyNP.wrtReparentTo(newnode)
+        await self.alignToEnemy(unit, angleToRotate, 0.5 * durIntConst)
 
-        finalHpr = (newnode.getH() + angleToRotate, newnode.getP(), newnode.getR())
-        rotation_interval = LerpPosHprInterval(
-            newnode,
-            duration=0.5 * durIntConst,
-            pos=newnode.getPos(),
-            hpr=finalHpr,
-            blendType='easeInOut'
-        )
-
-        await rotation_interval
-        unit.bodyNP.wrtReparentTo(parent)
-        newnode.removeNode()
+        # A pursuer often reaches something other than the unit it set off
+        # after, and the two cases read identically on the board.
+        quarry = getattr(unit, 'pursuitQuarry', None)
+        strayed = wasPursuing and quarry is not None and defenderUnit is not quarry
+        escaped = (f", and {quarry.unit.name} is not caught" if strayed else "")
 
         if defenderUnit.state == "IsFleeing":
             print("Contact detected between fleeing unit and pursuer!")
-            rule_log('Catching the Curs!', unit,
+            rule_log('Pursuit into a Fleeing Enemy' if strayed
+                     else 'Catching the Curs!', unit,
                      f"caught the fleeing {defenderUnit.unit.name} and hacked "
-                     f"it to pieces")
-            self.game.world.removeRigidBody(defenderUnit.bodyNP.node())
-            defenderUnit.model.removeNode()
-            defenderUnit.bodyNP.removeNode()
-            self.game.units.remove(defenderUnit)
-            if defenderUnit in self.game.player1Units:
-                self.game.player1Units.remove(defenderUnit)
-            if defenderUnit in self.game.player2Units:
-                self.game.player2Units.remove(defenderUnit)
+                     f"it to pieces{escaped}")
+            self.removeUnitFromPlay(defenderUnit)
             unit.request("Moved")
             for terning in terninger:
                 terning.remove(self.game.world)
@@ -597,14 +602,37 @@ class CombatResolver:
         # Impact Hits need to know the charge covered 3" or more (p. 172).
         unit.chargeDistance = float(self.game.moveArceDistance)
         if wasPursuing:
-            # Catching the Curs! (p. 157): the two are locked together and this
-            # combat is fought *next* turn, which is when the pursuer counts as
-            # having charged. chargedThisTurn is cleared at the end of this
-            # phase, so the claim has to be carried over separately.
-            unit.countsAsChargedNextTurn = True
-            rule_log('Catching the Curs!', unit,
-                     f"caught {defenderUnit.unit.name}, which fell back: locked "
-                     f"together, and counts as charging next turn")
+            joins, whyNot = (self.joinsCombatThisPhase(defenderUnit) if strayed
+                             else (False, ""))
+            if joins:
+                # Pursuit into a New Combat (p. 157): the enemy has not fought
+                # yet, so the pursuer joins that combat and fights again in it
+                # — chargedThisTurn already stands — but may not pursue out of
+                # it, restraining and reforming for free instead.
+                # Its attack for this phase is spent, and the attack loop skips
+                # anyone carrying that, so the allowance has to be given back.
+                unit.hasAttackedThisTurn = False
+                unit.cannotPursueThisTurn = True
+                rule_log('Pursuit into a New Combat', unit,
+                         f"joined {defenderUnit.unit.name}'s unfought combat by "
+                         f"its {flank}: fights again this phase counting as "
+                         f"charged, and may not pursue again{escaped}")
+            elif strayed:
+                # Catching the Curs! and Pursuit into a New Combat (p. 157)
+                # agree: locked together and fought *next* turn, which is when
+                # the pursuer counts as having charged. chargedThisTurn is
+                # cleared at the end of this phase, so the claim has to be
+                # carried over separately.
+                unit.countsAsChargedNextTurn = True
+                rule_log('Pursuit into a Fresh Enemy', unit,
+                         f"ran into {defenderUnit.unit.name}'s {flank} instead: "
+                         f"locked together and fought next turn, counting as "
+                         f"charged, because {whyNot}{escaped}")
+            else:
+                unit.countsAsChargedNextTurn = True
+                rule_log('Catching the Curs!', unit,
+                         f"caught {defenderUnit.unit.name}, which fell back: "
+                         f"locked together, and counts as charging next turn")
         self.game.movement.dangerousTerrainTests(unit, oposUnit,
                                                  unit.bodyNP.getPos())
 
@@ -713,6 +741,75 @@ class CombatResolver:
         defenderUnit.updateTextNode()
 
     # ─── Flank Detection ──────────────────────────────────────────────────
+
+    async def alignToEnemy(self, unit, angleToRotate, duration=0.5):
+        """Wheel to align, pivoting about the point of contact (p. 157)."""
+        parent = unit.bodyNP.getParent()
+        newnode = render.attachNewNode(f"Temp-{unit.unitName}")
+        newnode.setPos(self.game.playerNP.getPos())
+        newnode.setHpr(unit.bodyNP.getHpr())
+        unit.bodyNP.wrtReparentTo(newnode)
+        await LerpPosHprInterval(
+            newnode,
+            duration=duration,
+            pos=newnode.getPos(),
+            hpr=(newnode.getH() + angleToRotate, newnode.getP(), newnode.getR()),
+            blendType='easeInOut'
+        )
+        unit.bodyNP.wrtReparentTo(parent)
+        newnode.removeNode()
+
+    async def alignAndClose(self, unit, defenderNP, angleToRotate, duration=0.5):
+        """Wheel to align and close back up to base contact (p. 157).
+
+        A charge arrives already wheeled onto the enemy's face, so it can turn
+        about the point of contact. An overrun arrives head-on at whatever
+        angle it happened to be facing, and turning about a touching corner
+        swings the rest of the unit away from the enemy instead of onto it.
+        So the final pose is worked out first — back off far enough to turn
+        freely, take the new facing, then sweep straight back up to contact —
+        and the unit is animated to it in one move.
+        """
+        startPos, startHpr = unit.bodyNP.getPos(), unit.bodyNP.getHpr()
+        toward = defenderNP.getPos() - startPos
+        toward.z = 0
+        if toward.length() < 1e-4:
+            return
+        toward.normalize()
+
+        half = unit.bodyNP.node().getShape(0).getHalfExtentsWithMargin()
+        scale = unit.bodyNP.getScale()
+        clearance = math.hypot(half.x * scale.x, half.y * scale.y)
+
+        endHpr = Vec3(startHpr.x + angleToRotate, startHpr.y, startHpr.z)
+        backPos = startPos - toward * clearance
+        frac, _hit = self.game.movement.sweepTestDir(
+            unit, TransformState.makePosHpr(backPos, endHpr), toward,
+            clearance * 2, mask=BitMask32.bit(9), pass_over=False)
+        endPos = (backPos + toward * (clearance * 2 * frac)
+                  if frac < 1.0 else startPos)
+
+        await LerpPosHprInterval(unit.bodyNP, duration=duration, pos=endPos,
+                                 hpr=endHpr, blendType='easeInOut')
+
+    def joinsCombatThisPhase(self, enemy):
+        """Pursuit into a New Combat (p. 157): the pursuer fights again only if
+        the enemy was already engaged when the phase began and that combat has
+        not been fought yet. `hasAttackedThisTurn` is set on every unit in a
+        combat as it is resolved, so it doubles as "this combat has been
+        fought".
+
+        Returns ``(joins, why_not)`` — three conditions decline this rule and
+        they are indistinguishable on the board, so the caller has to be able
+        to say which one did.
+        """
+        if not getattr(enemy, 'startOfPhaseEngaged', False):
+            return False, "it was not in a combat when this phase began"
+        if enemy.hasAttackedThisTurn:
+            return False, "its combat has already been fought this phase"
+        if not any(not u.bodyNP.isEmpty() for u in enemy.isInCombatWith):
+            return False, "the combat it began the phase in is already over"
+        return True, ""
 
     def getFlankFromContact(self, unit, contact):
         flank = "front"
@@ -875,7 +972,6 @@ class CombatResolver:
     async def _verySimpleBattleInner(self, task):
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
-        flank = self.game.unitToMove.isInCombatFlank[0]
         engagedWith = [x.unitName for x in self.game.unitToMove.isInCombatWith]
 
         selected_choice = await taskMgr.add(self.game.makeChoiceNew(engagedWith, Vec3(0, 0, 10)))
@@ -887,6 +983,14 @@ class CombatResolver:
         attackerUnit = self.game.getSelectedUnit(attacker.node())
         defenderUnit = self.game.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels
+        # A unit's own isInCombatFlank entry is the facing *it* is engaged on,
+        # so the facing being struck has to be read from the defender's side,
+        # indexed by this attacker rather than by whichever engagement is first.
+        try:
+            flank = defenderUnit.isInCombatFlank[
+                defenderUnit.isInCombatWith.index(attackerUnit)]
+        except (ValueError, IndexError):
+            flank = 'front'
         print(f"{attackerUnit.unit.name} attacks {defenderUnit.unit.name} in {flank}!")
         # Fight with each model's best melee weapon (not a bare hand weapon) so
         # its stats and hooks come from the actually-equipped weapon. The
@@ -1052,6 +1156,11 @@ class CombatResolver:
                 Func(self.game.applyWounds, attackerUnit, combWounds))
 
         engaged = set(self.game.attackers) | set(self.game.defenders)
+        # Who was fighting whom, taken before any casualty is removed: a unit
+        # that dies puts each of its foes back to Idle on the way out, which
+        # clears their isInCombatWith, so afterwards there is nothing left to
+        # say who has just been left with an empty space in front of them.
+        foesBefore = {id(u): list(u.isInCombatWith) for u in engaged}
         p1_units = [u for u in engaged if u in self.game.player1Units]
         p2_units = [u for u in engaged if u in self.game.player2Units]
         # Wounds are everything banked so far bar the Impact Hits.
@@ -1084,6 +1193,10 @@ class CombatResolver:
             (player1_score, player2_score), (p1_us, p2_us))
         await self.game.attackSequence
         await modRemoveSequence
+
+        # A unit that wiped out its enemy overruns instead of taking any part
+        # in the Break test sub-phase, which is why this comes first (p. 156).
+        await self.overrunPass(engaged, foesBefore)
 
         self.game.attackSequence2 = Sequence()
         loserUnits = []
@@ -1244,7 +1357,17 @@ class CombatResolver:
     async def restrainChoice(self, winner, target, move):
         """Restrain & Reform (p. 156) is a Leadership test, not a free choice:
         a unit that elects to hold back and fails must go anyway."""
-        verb = 'Follow up' if move == 'follow_up' else 'Pursue'
+        verb = {'follow_up': 'Follow up', 'overrun': 'Overrun'}.get(move, 'Pursue')
+        quarry = f" {target.unit.name}" if target is not None else ""
+        if move != 'follow_up' and getattr(winner, 'cannotPursueThisTurn', False):
+            # Pursuit into a New Combat (p. 157): a unit that joined a combat
+            # mid-phase restrains and reforms with no Restraint test.
+            rule_log('Pursuit into a New Combat', winner,
+                     f"already joined a new combat this turn, so it may not "
+                     f"{verb.lower()}{quarry}: restrains and reforms with no "
+                     f"Restraint test")
+            winner.request("Idle")
+            return 'restrain'
         if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
             chosen = move
         else:
@@ -1255,8 +1378,7 @@ class CombatResolver:
             chosen = move if selected == options[0] else 'restrain'
 
         if chosen != 'restrain':
-            print(f"{winner.unit.name} chooses to {verb.lower()} "
-                  f"{target.unit.name}!")
+            print(f"{winner.unit.name} chooses to {verb.lower()}{quarry}!")
             return move
 
         ld = _stat_int(winner.unit.model.characteristics, 'Ld', 7)
@@ -1272,9 +1394,129 @@ class CombatResolver:
             return 'restrain'
         rule_log('Restrain & Reform', winner,
                  f"Restraint test {dice} = {sum(dice)} vs Ld {ld} -> fails, and "
-                 f"must {'follow up' if move == 'follow_up' else 'pursue'} "
-                 f"{target.unit.name}")
+                 f"must {verb.lower()}{quarry}")
         return move
+
+    # ─── Post-Combat: Overrun ─────────────────────────────────────────────
+
+    async def overrunPass(self, engaged, foesBefore):
+        """Overrun (p. 156) is offered before the Break test sub-phase, to any
+        unit that has just wiped out everything it was fighting.
+
+        *foesBefore* is the engagement map from before the casualties were
+        taken off, because a destroyed unit clears its foes' combat lists.
+        """
+        for winner in list(engaged):
+            if winner.bodyNP.isEmpty():
+                continue
+            foes = foesBefore.get(id(winner)) or []
+            if not foes or any(not u.bodyNP.isEmpty() for u in foes):
+                continue            # it was fighting nothing, or something survived
+            action = await self.restrainChoice(winner, None, 'overrun')
+            if action == 'restrain':
+                winner.request("Idle")
+                await self.freeReform(winner)
+            else:
+                await self.overrunMove(winner)
+
+    async def overrunMove(self, winner):
+        """A normal pursuit move, but directly forwards and without pivoting
+        (p. 156)."""
+        pos = winner.bodyNP.getPos()
+        bonus = await self.swiftstrideChoice(
+            winner, 'pursuit', distance_to_edge=board_edge_distance(pos.x, pos.y))
+        dice = await self.rollMoveDice(winner, 3 if bonus else 2, bonus)
+        rolled = pursuit_roll(dice)
+
+        heading = facing_vector(winner.bodyNP.getH())
+        forward = Vec3(heading[0], heading[1], 0)
+        # Whatever is in the way stops the move here; which of the p. 157 cases
+        # it turns into depends on what was hit, and that is read off the
+        # contact once the unit has arrived.
+        clear = self.game.sweepTest(winner, forward, rolled)
+        moved = rolled * clear
+
+        rule_log('Overrun', winner,
+                 f"destroyed everything it was fighting: {dice} = {rolled}\" "
+                 f"straight ahead, no pivot"
+                 + ("" if clear >= 1.0 else
+                    f", halted after {moved:.1f}\" by what is in front of it"))
+        winner.request("Moved")          # leaving InCombat clears the stale foe list
+        if moved > 0.05:
+            await LerpPosInterval(winner.bodyNP, duration=1.0,
+                                  pos=pos + forward * moved,
+                                  blendType='easeInOut')
+        if clear < 1.0:
+            await self.overrunContact(winner, moved)
+
+    async def overrunContact(self, winner, moved):
+        """Resolve whatever an overrun ran into (p. 157).
+
+        An overrun is a normal pursuit move, so the pursuit cases apply to it:
+        a friend or impassable terrain simply stops it, a fleeing enemy is run
+        down, and a fresh enemy is charged.
+        """
+        c = self.game.checkUnitContactSmall(winner)
+        if c is None:
+            rule_log('Pursuit into an Obstacle', winner,
+                     "halted against impassable terrain")
+            return
+        blockerNP = render.find(f"**/{c.getNode1().getName()}")
+        blocker = self.game.getSelectedUnit(blockerNP.node())
+        if blocker is None:
+            return
+
+        if (winner in self.game.player1Units) == (blocker in self.game.player1Units):
+            rule_log('Pursuit into an Obstacle', winner,
+                     f"halted against {blocker.unit.name}, a friendly unit")
+            return
+
+        if blocker.state == "IsFleeing":
+            rule_log('Pursuit into a Fleeing Enemy', winner,
+                     f"overran into the fleeing {blocker.unit.name} and ran it "
+                     f"down")
+            self.removeUnitFromPlay(blocker)
+            await self.freeReform(winner)
+            return
+
+        flank, angleToRotate = self.getFlankFromContact(winner, c)
+        # The flank is read before the wheel, from the contact as it was made.
+        await self.alignAndClose(winner, blockerNP, angleToRotate)
+
+        # "That combat has not yet been fought" decides whether this becomes a
+        # fight this phase or a lock until the next turn.
+        joins, whyNot = self.joinsCombatThisPhase(blocker)
+
+        winner.request("InCombat")
+        winner.isInCombat = True
+        if blocker.state != "InCombat":
+            blocker.request("InCombat")
+        blocker.isInCombat = True
+        winner.isInCombatWith.append(blocker)
+        winner.isInCombatFlank.append("front")
+        blocker.isInCombatWith.append(winner)
+        blocker.isInCombatFlank.append(flank)
+        winner.updateTextNode()
+        blocker.updateTextNode()
+
+        if joins:
+            # Pursuit into a New Combat (p. 157).
+            winner.chargedThisTurn = True
+            winner.chargeDistance = moved
+            # Its attack for this phase is spent, and the attack loop skips
+            # anyone carrying that, so the allowance has to be given back.
+            winner.hasAttackedThisTurn = False
+            winner.cannotPursueThisTurn = True
+            rule_log('Pursuit into a New Combat', winner,
+                     f"overran into {blocker.unit.name}'s unfought combat by "
+                     f"its {flank}: fights again this phase counting as "
+                     f"charged, and may not pursue again")
+        else:
+            winner.countsAsChargedNextTurn = True
+            rule_log('Pursuit into a Fresh Enemy', winner,
+                     f"overran into {blocker.unit.name}'s {flank}, wheeling to "
+                     f"align: locked together and fought next turn, counting "
+                     f"as charged, because {whyNot}")
 
     # ─── Post-Combat: pass 3, the losers move ─────────────────────────────
 
@@ -1454,11 +1696,15 @@ class CombatResolver:
 
         winner.request("IsPursuing")
         winner.hasMovedThisTurn = False
+        # The charge machinery resolves whatever the pursuer actually reaches,
+        # and needs this to tell the quarry from a fresh enemy (p. 157).
+        winner.pursuitQuarry = target
         self.game.autoCharge = True
         self.game.autoHold = True
         self.game.pathTowardsMouse(winner, targetPos.x, targetPos.y)
         self.game.moveUnit(winner)
         await Wait(5.0)
+        winner.pursuitQuarry = None
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
 
@@ -1508,11 +1754,21 @@ class CombatResolver:
         """
         if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
             return
-        rule_log('Free Reform', unit, "may reform after the pursuit")
-        finished = []
-        self.game.startFreeReform(unit, on_done=lambda: finished.append(True))
-        while not finished:
+        # Two can fall due at once: a pursuer that catches its quarry reforms
+        # from the charge task, which the post-combat pass does not await, so it
+        # has already moved on to the next unit's reform. The player can only
+        # place one at a time, so they queue.
+        while self.reformInProgress:
             await Task.pause(0.1)
+        self.reformInProgress = True
+        try:
+            rule_log('Free Reform', unit, "may reform after the pursuit")
+            finished = []
+            self.game.startFreeReform(unit, on_done=lambda: finished.append(True))
+            while not finished:
+                await Task.pause(0.1)
+        finally:
+            self.reformInProgress = False
 
     def fleesFrom(self, loserUnit):
         """The winner a Break or Fall Back runs directly away from: the highest

@@ -24,7 +24,7 @@ TURN_FLAGS = (
     'chargedThisTurn', 'countsAsChargedNextTurn', 'chargeDistance',
     'cannotChargeThisTurn', 'panicTestedThisPhase', 'fledThisPhase',
     'usedStubborn', 'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn',
-    'cannotCastThisTurn',
+    'cannotCastThisTurn', 'cannotPursueThisTurn',
 )
 
 
@@ -47,7 +47,7 @@ def _unit(name='Battle Wizard'):
         unitName=name, bodyNP=body, state='Idle', color=(1, 0, 0, 1),
         isInCombat=False, isDeployed=True, isInCombatWith=[],
         isInCombatFlank=[], joinedCharacter=None, isGeneral=False, isBSB=False,
-        startOfBattleModels=1, startOfPhaseModels=1,
+        startOfBattleModels=1, startOfPhaseModels=1, startOfPhaseEngaged=False,
         unit=SimpleNamespace(nmodels=1, files=1, ranks=1, model=_model()),
     )
     for flag in TURN_FLAGS:

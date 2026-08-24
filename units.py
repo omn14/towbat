@@ -97,6 +97,7 @@ class unitGraphics(FSM):
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
         self.countsAsChargedNextTurn=False  # caught a unit that fell back; the locked combat is fought next turn
+        self.cannotPursueThisTurn=False  # joined a new combat mid-phase; restrains and reforms instead (p. 157)
         self.chargeDistance=0.0      # inches actually covered by that charge (Impact Hits need 3"+)
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
@@ -111,6 +112,7 @@ class unitGraphics(FSM):
         self.woundsOnModel=0         # unsaved wounds on the current multi-wound model
         self.startOfBattleModels=self.unit.nmodels  # drives the 50% flee/fall-back split
         self.startOfPhaseModels=self.unit.nmodels  # drives the 25% heavy-casualties check
+        self.startOfPhaseEngaged=False  # was already fighting when the phase began (p. 157)
         self.endedInUnit=False
         self.tacticalRole=None      # set by AI: e.g. {'role': 'CHARGE', 'target': '...', 'reason': '...'}
         self.madePursuitChoice=False

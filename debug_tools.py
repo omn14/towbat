@@ -354,6 +354,10 @@ class DebugTools(DirectObject):
             target.isInCombatFlank.append(flank)
         unit.updateTextNode()
         target.updateTextNode()
+        # Rules that ask whether a combat predates the phase (Pursuit into a
+        # New Combat) would otherwise read a hand-made engagement as brand new.
+        unit.startOfPhaseEngaged = True
+        target.startOfPhaseEngaged = True
         print(f"[debug] {unit.unitName} engaged {target.unitName} ({flank})")
 
     def disengage(self):
@@ -368,10 +372,12 @@ class DebugTools(DirectObject):
                     other.isInCombatFlank.pop(index)
             if not other.isInCombatWith:
                 other.request("Idle")
+                other.startOfPhaseEngaged = False
             other.updateTextNode()
         unit.isInCombatWith = []
         unit.isInCombatFlank = []
         unit.request("Idle")
+        unit.startOfPhaseEngaged = False
         unit.updateTextNode()
         print(f"[debug] {unit.unitName} disengaged")
 

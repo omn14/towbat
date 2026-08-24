@@ -323,6 +323,9 @@ class GamePhaseFSM(FSM):
             unit.fledThisPhase = False
             # Combat-start size, for the nearby-friend-destroyed US>=5 gate.
             unit.startOfPhaseModels = unit.unit.nmodels
+            # Pursuit into a New Combat asks whether the enemy was *already*
+            # fighting when the phase began, which pursuits themselves change.
+            unit.startOfPhaseEngaged = unit.isInCombat
             self.game.movement.updateDisrupted(unit)
 
     def exitCombatPhase(self):
@@ -337,6 +340,7 @@ class GamePhaseFSM(FSM):
             unit.countsAsChargedNextTurn = False
             if not unit.chargedThisTurn:
                 unit.chargeDistance = 0.0
+            unit.cannotPursueThisTurn = False
             # A Wizard's casting allowance is per turn. Resetting it on entry
             # to the Strategy phase would refill it every time a spell sent the
             # game back there.

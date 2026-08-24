@@ -9,8 +9,8 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from post_combat import (  # noqa: E402
-    GIVE_GROUND, catch_outcome, fall_back_roll, flee_direction, flee_roll,
-    flees_from, give_ground_direction, may_pursue, pursuit_roll,
+    GIVE_GROUND, catch_outcome, facing_vector, fall_back_roll, flee_direction,
+    flee_roll, flees_from, give_ground_direction, may_pursue, pursuit_roll,
     restraint_test, winner_response,
 )
 
@@ -98,6 +98,23 @@ class TestDirection(unittest.TestCase):
 
     def test_stacked_positions_do_not_divide_by_zero(self):
         self.assertEqual(flee_direction((3, 3), (3, 3)), (0.0, 0.0))
+
+    def test_a_unit_faces_up_the_board_at_zero_heading(self):
+        dx, dy = facing_vector(0)
+        self.assertAlmostEqual(dx, 0.0)
+        self.assertAlmostEqual(dy, 1.0)
+
+    def test_heading_turns_anticlockwise(self):
+        """An Overrun runs along this and may not pivot, so a flipped sign
+        would send the unit backwards through the enemy it just destroyed."""
+        dx, dy = facing_vector(90)
+        self.assertAlmostEqual(dx, -1.0)
+        self.assertAlmostEqual(dy, 0.0)
+
+    def test_facing_is_a_unit_vector(self):
+        for h in (0, 37, 90, 180, 270, 359):
+            dx, dy = facing_vector(h)
+            self.assertAlmostEqual(math.hypot(dx, dy), 1.0)
 
 
 class TestTheWinnersChoice(unittest.TestCase):

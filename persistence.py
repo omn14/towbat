@@ -72,6 +72,7 @@ def save_game_state(game, filename=None):
             'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
+            'cannotPursueThisTurn': getattr(unit, 'cannotPursueThisTurn', False),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'fledThisPhase': getattr(unit, 'fledThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
@@ -83,6 +84,7 @@ def save_game_state(game, filename=None):
             'woundsOnModel': getattr(unit, 'woundsOnModel', 0),
             'startOfBattleModels': getattr(unit, 'startOfBattleModels', unit.unit.nmodels),
             'startOfPhaseModels': getattr(unit, 'startOfPhaseModels', unit.unit.nmodels),
+            'startOfPhaseEngaged': getattr(unit, 'startOfPhaseEngaged', False),
             'isDeployed': unit.isDeployed,
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
@@ -265,6 +267,7 @@ def load_game_state(game, filename):
         unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
+        unit.cannotPursueThisTurn = unit_data.get('cannotPursueThisTurn', False)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.fledThisPhase = unit_data.get('fledThisPhase', False)
         unit.usedStubborn = unit_data.get('usedStubborn', False)
@@ -279,6 +282,7 @@ def load_game_state(game, filename):
         unit.woundsOnModel = unit_data.get('woundsOnModel', 0)
         unit.startOfBattleModels = unit_data.get('startOfBattleModels', unit.unit.nmodels)
         unit.startOfPhaseModels = unit_data.get('startOfPhaseModels', unit.unit.nmodels)
+        unit.startOfPhaseEngaged = unit_data.get('startOfPhaseEngaged', False)
         unit.isDeployed = unit_data['isDeployed']
 
         unit.unit.nmodels = unit_data['nmodels']

@@ -17,7 +17,7 @@ from special_rules import charge_roll
 
 __all__ = [
     'GIVE_GROUND', 'flee_roll', 'fall_back_roll', 'pursuit_roll',
-    'flees_from', 'flee_direction', 'give_ground_direction',
+    'flees_from', 'flee_direction', 'give_ground_direction', 'facing_vector',
     'restraint_test', 'winner_response', 'catch_outcome', 'may_pursue',
 ]
 
@@ -85,6 +85,17 @@ def flees_from(candidates, rng=None):
 def flee_direction(loser_xy, winner_xy):
     """Directly away from the one winner that broke the unit (p. 154)."""
     return _away(loser_xy, winner_xy)
+
+
+def facing_vector(heading_deg: float):
+    """The way a unit is pointing, as a unit vector.
+
+    Panda3D's heading turns anticlockwise from +Y, which is the convention the
+    charge code uses to walk a unit forward. An Overrun moves along this and
+    nothing else -- it may not pivot (p. 156).
+    """
+    h = math.radians(heading_deg)
+    return (-math.sin(h), math.cos(h))
 
 
 def give_ground_direction(loser_xy, winner_xys):

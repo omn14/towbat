@@ -330,6 +330,23 @@ monstrous infantry and swarms too.
       the rider attacks, not the mount. Needs the supporting-attack maths in
       `simulate_battle` to know rider from mount, which `get_mount()` gives it.
       `extra_rank_attacks` is now the one place this has to happen.
+- [ ] Dividing Attacks / Fighting on Multiple Fronts (p. 147) — a unit engaged
+      in more than one of its arcs has **more than one fighting rank**: its
+      front rank and the file engaged in the flank both fight, and each model
+      attacks an enemy it is in base contact with.
+      The engine resolves combat strictly pairwise — `attackers[i]` strikes
+      `defenders[i]` — and a unit appears in that list once, so a unit fought
+      on two fronts strikes one enemy at full strength and the other not at
+      all. Seen in play once Pursuit into a New Combat started putting a second
+      unit onto an already-engaged enemy: Jade Warriors engaged to the front by
+      Longbeards and in the flank by Hammerers made all 10 attacks against the
+      Hammerers and none against the Longbeards.
+      Predates this work — any multiple-unit combat has it — but it was hard to
+      notice before, because the second front usually arrived by charge in the
+      Movement phase and both fights were fought separately.
+      `battleFunctions.melee_attacks` takes one unit and one charge flag, so it
+      would need to know the facings engaged; the combat facing does not reach
+      it today, which is the same blocker the Press of Battle leftovers name.
 
 ### Phase 3 — rules that need something built first
 - [ ] Steady in the Ranks — heavy infantry in Close or Open Order is not
@@ -433,6 +450,12 @@ charge path was quietly handling it — check there before believing an absence.
       (p. 157). `freeReform()` wraps the existing interactive reform in
       something awaitable so the sequence does not run on while the player is
       still placing the unit; the AI declines, having no way to answer.
+      Reforms queue on `reformInProgress`. Two can fall due at once and did in
+      play: a pursuer that catches its quarry reforms from the charge task,
+      which `pursuitPass` does not await, so the pass had already moved on and
+      started the next unit's reform. Both prompts were live together and the
+      player could only place one. Awaiting one caller is not enough when the
+      other reform is reached down a task the caller never waits for.
 - [x] "During the next turn, the pursuing unit counts as having charged"
       (p. 157). Catching a unit that Fell Back set `chargedThisTurn`, but
       `exitCombatPhase` clears that at the end of the very phase it was set, so
@@ -461,17 +484,113 @@ charge path was quietly handling it — check there before believing an absence.
       `fallBackContactTest` only resolves overlap, which leaves the two
       touching; this measures edge to edge with `obb_distance`, the same
       oriented-box maths the Leadership bubbles use.
-- [ ] Overrun (p. 156) — a unit that destroys its enemy outright may make a
-      pursuit move straight forward without pivoting, or restrain and reform.
-- [ ] Pursuit into an obstacle (p. 157) — stop on contact with a friendly unit
-      or impassable terrain.
-- [ ] Pursuit into a Fresh Enemy (p. 157) — counts as charging, wheeling to
-      maximise contact and to align. Check what `chargeInterval` already does
-      before writing any of it.
-- [ ] Pursuit into a New Combat (p. 157) — against an enemy already engaged in a
-      combat not yet fought this phase, the pursuer joins that combat counting
-      as charged, cannot pursue again, and automatically restrains and reforms
-      with no Restraint test.
+- [x] Overrun (p. 156) — a unit that destroys its enemy outright, before the
+      Break test sub-phase, may attempt to restrain and reform or overrun: a
+      normal pursuit move (2D6 summed, Swiftstride's die added) but directly
+      forwards and without pivoting. `overrunPass` runs before the Break tests,
+      because a unit whose enemy is gone takes no part in them; it fires for a
+      winner whose `isInCombatWith` still lists units but all of them are
+      destroyed. Restraining is the same Leadership test as anywhere else, so
+      electing to hold back can fail and force the overrun.
+      The move sweeps first, which covers Pursuit into an Obstacle (p. 157) for
+      this case: it stops at a friendly unit or impassable terrain rather than
+      running through. Leaving `InCombat` clears the stale foe list through the
+      FSM's own `exitInCombat`, so nothing has to unpick it by hand.
+      The heading maths moved to `post_combat.facing_vector` to be tested: a
+      flipped sign would send the unit backwards through the enemy it had just
+      destroyed, which nothing but a game would have caught.
+      An overrun *is* a normal pursuit move, so `overrunContact` resolves what
+      it ran into by the pursuit cases on p. 157 rather than just halting. The
+      sweep only reports how far it got, so what was hit is read afterwards
+      from the contact: a friend or terrain stops it, a fleeing enemy is run
+      down and a free reform offered, and a fresh enemy is engaged with
+      `countsAsChargedNextTurn`.
+      LEFTOVER: no wheel to maximise contact before the align.
+- [x] Pursuit into a Fresh Enemy (p. 157) — a pursuer that reaches an enemy
+      other than its quarry counts as charging *that* unit, and the quarry is
+      not caught. The move itself was already right and had been since the
+      charge machinery was reused for pursuits: `moveUnit` hands a pursuer's
+      contact to `chargeAndChargeReaction` whatever it hit, so `chargeInterval`
+      engages whoever is actually there and never touches the quarry. What was
+      wrong was the report — it announced `Catching the Curs!` and claimed to
+      have caught a unit "which fell back", naming the wrong unit and the wrong
+      rule. `chargeInterval` cannot see past the contact it was handed, so
+      `pursuitMove` leaves the quarry on `unit.pursuitQuarry` for it to compare
+      against, and the two cases now log apart. This is the third time a rule
+      turned out to be handled by the charge path already and only the logging
+      was missing.
+      Done for an overrun too, in `overrunContact`.
+      Both paths wheel to align, but not by the same means. A charge arrives
+      already wheeled onto the enemy's face, so `chargeInterval` can turn about
+      the point of contact held on `playerNP` — that block is now `alignToEnemy`
+      rather than being buried mid-method. Reusing it for the overrun looked
+      right and was not: an overrun arrives head-on at whatever angle it was
+      facing, so turning about a touching corner swings the unit *away* from
+      the enemy and leaves it out of base contact. Caught in play — it appeared
+      to rotate about its own bottom-left corner, which is exactly what it was
+      doing. `alignAndClose` works the final pose out first instead: back off by
+      the base's diagonal, take the new facing, sweep straight back up to
+      contact, then animate to that pose in one move. `sweepTestDir` is used
+      rather than `sweepTest` because `sweepTest` re-orients the shape to face
+      the direction of travel, which is not the aligned heading.
+      LEFTOVER: no wheel to *maximise contact* before the align, on either
+      path — the unit engages wherever it happened to touch.
+- [x] Pursuit into a Fleeing Enemy (p. 157) — run down exactly as if caught by
+      a charging unit, then the pursuer may reform. `chargeInterval`'s Catching
+      the Curs! branch already did this for any fleeing unit it touched; it now
+      says which rule ran it down and notes when the quarry got away. The
+      overrun path shares the removal through `removeUnitFromPlay`.
+- [x] Pursuit into an obstacle (p. 157) — stop on contact with a friendly unit
+      or impassable terrain. The friendly half was happening silently in
+      `chargeInterval`'s "both units belong to Player N" guard, which reads as
+      a rejected charge rather than a rule; it logs as one for a pursuer now.
+      LEFTOVER: impassable terrain does not stop a pursuit — the sweep the
+      overrun uses is not on this path, which moves through
+      `pathTowardsMouse`/`moveUnit`.
+- [x] Pursuit into a New Combat (p. 157) — both branches. If the enemy reached
+      was already engaged when the phase began *and* that combat has not been
+      fought yet, the pursuer joins it, fights again in it counting as charged,
+      and may not pursue out of it — restraining and reforming with no
+      Restraint test. Otherwise the two are locked until the next turn, carried
+      by `countsAsChargedNextTurn`.
+      The snapshot it needs turned out to be half-built already:
+      `hasAttackedThisTurn` is set on every unit in a combat as that combat is
+      resolved, so it doubles as "this combat has been fought". Only the other
+      half was missing — whether the enemy was engaged *before* the phase
+      began, which pursuits themselves change — so `startOfPhaseEngaged` is
+      taken in `enterCombatPhase` beside `startOfPhaseModels`. Both halves are
+      in `joinsCombatThisPhase`.
+      "Cannot pursue again this turn" is `cannotPursueThisTurn`, cleared in
+      `exitCombatPhase` with the other per-turn charge flags and persisted.
+      The gate sits in `restrainChoice`, which both the pursuit and the overrun
+      declaration go through, so neither can slip past it; a Follow Up is not a
+      pursuit and is left alone.
+      Corrected on the way: the first pass logged this rule as *skipped* every
+      time a pursuer reached a fresh enemy, which contradicted the line above
+      it — that line announces the locked-together outcome, and that outcome
+      *is* this rule's "Otherwise" branch. A rule reported as not claimed when
+      it had just fired is worse than no line at all.
+      Corrected once the branch actually fired in a game: the pursuer joined
+      the combat and was then skipped when it was fought, because the attack
+      loop passes over anyone with `hasAttackedThisTurn` and it had spent that
+      winning its own combat. Joining gives the allowance back, which is what
+      "will fight again when that combat is fought" asks for. The join happens
+      after the current combat's attack loop has run, so returning it cannot
+      make the unit strike twice in the fight it has just won.
+      SUSPECT: `hasAttackedThisTurn` is a rough proxy for "this combat has been
+      fought". `self.game.attackers` is built from the chosen defender's whole
+      engagement list, so resolving one combat marks every unit connected to it,
+      including units whose own fight has not been chosen yet. It errs towards
+      the locked-until-next-turn branch, which is the safe way to be wrong, but
+      a proper "combats fought this phase" record would be better.
+      All three declining conditions log which one it was, because they look
+      identical on the board and the first game after this went in could not be
+      read to find out. That paid for itself immediately: the rule was
+      declining because the engagement had been made with the debug `e` key,
+      which set `isInCombat` and both combat lists but not
+      `startOfPhaseEngaged`, so a hand-made combat read as brand new. The debug
+      engage/disengage keys maintain it now — a tool that fabricates state has
+      to fabricate all of it, or it tests something other than the game.
 - [ ] Peril tests (p. 133) — a D6 for each model that flees through an enemy
       unit, losing a Wound on a 1-3.
 - [ ] Pursuit off the Battlefield (p. 157) — removed but *not* destroyed,
