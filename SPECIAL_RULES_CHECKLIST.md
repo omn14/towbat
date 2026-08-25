@@ -597,8 +597,29 @@ charge path was quietly handling it — check there before believing an absence.
       `startOfPhaseEngaged`, so a hand-made combat read as brand new. The debug
       engage/disengage keys maintain it now — a tool that fabricates state has
       to fabricate all of it, or it tests something other than the game.
-- [ ] Peril tests (p. 133) — a D6 for each model that flees through an enemy
-      unit, losing a Wound on a 1-3.
+- [x] Peril tests (p. 133) — a D6 for each model that flees *through* an enemy
+      unit, losing a Wound on a 1-3, with no limit on how many a single move
+      calls for. `perilTests` winds each model node back by the move's
+      displacement to get the path it swept, and
+      `post_combat.segment_crosses_box` says whether that path went through an
+      enemy's footprint — the enemy's own facing turns the box, so a unit
+      presenting its flank is a different obstacle from one facing the runner.
+      A model that ends up inside counts as having gone through.
+      The same page moves the 1" rule off the unit it was fighting and onto
+      *any* enemy: a flee move that ends within 1" of one carries on until it is
+      clear. `nudgeOneInchApart` measured against `isInCombatWith` alone, which
+      is both too narrow and empty by the time a unit has fled, so it reads
+      every enemy on the board now (`enemiesOf`).
+      The negative case is deliberately *not* logged. Crossing nobody is not
+      the rule declining, it is the rule never being reached, and a line on
+      every flee in the game would bury the ones that matter.
+      Both flee paths run them: the post-combat `fleeMove`, and the Panic and
+      charge-reaction flees in `psychology._start_flee_move`, which calls
+      through `game.combat` rather than growing a second copy. A Give Ground is
+      excluded — it is 2" backwards and runs through nobody. A Fall Back is
+      not, because it "moves exactly like a fleeing unit" (p. 134).
+      A unit can be wiped out by its own Peril tests, so the flee sequence
+      checks for that before rallying it or offering it a reform.
 - [ ] Pursuit off the Battlefield (p. 157) — removed but *not* destroyed,
       returning in the next Compulsory Moves sub-phase as reinforcements.
       BLOCKED: no reinforcement mechanism exists.

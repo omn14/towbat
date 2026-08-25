@@ -19,8 +19,44 @@ __all__ = [
     'GIVE_GROUND', 'flee_roll', 'fall_back_roll', 'pursuit_roll',
     'flees_from', 'flee_direction', 'give_ground_direction', 'facing_vector',
     'restraint_test', 'winner_response', 'catch_outcome', 'may_pursue',
-    'nearest_corner',
+    'nearest_corner', 'segment_crosses_box', 'peril_wounds',
 ]
+
+
+def segment_crosses_box(start, end, box) -> bool:
+    """Whether the path from *start* to *end* passes through *box*, given as
+    ``(cx, cy, half_x, half_y, heading)`` in degrees.
+
+    A model that ends up inside counts as having gone through it, which is what
+    the Peril test asks (p. 133).
+    """
+    cx, cy, half_x, half_y, heading = box
+    h = math.radians(heading)
+    cos_h, sin_h = math.cos(h), math.sin(h)
+
+    def local(p):
+        dx, dy = p[0] - cx, p[1] - cy
+        return (dx * cos_h + dy * sin_h, -dx * sin_h + dy * cos_h)
+
+    (x0, y0), (x1, y1) = local(start), local(end)
+    lo, hi = 0.0, 1.0
+    for p0, p1, half in ((x0, x1, half_x), (y0, y1, half_y)):
+        d = p1 - p0
+        if abs(d) < 1e-9:
+            if abs(p0) > half:
+                return False        # parallel to this pair of sides and outside
+            continue
+        t0, t1 = (-half - p0) / d, (half - p0) / d
+        lo, hi = max(lo, min(t0, t1)), min(hi, max(t0, t1))
+        if lo > hi:
+            return False
+    return True
+
+
+def peril_wounds(dice) -> int:
+    """Wounds from a set of Peril tests: a model escapes on a 4+ and loses a
+    single Wound on a 1-3 (p. 133)."""
+    return sum(1 for d in dice if d <= 3)
 
 
 def nearest_corner(corners, half_x: float, half_y: float) -> int:

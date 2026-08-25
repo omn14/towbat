@@ -11,8 +11,43 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from post_combat import (  # noqa: E402
     GIVE_GROUND, catch_outcome, facing_vector, fall_back_roll, flee_direction,
     flee_roll, flees_from, give_ground_direction, may_pursue, nearest_corner,
-    pursuit_roll, restraint_test, winner_response,
+    peril_wounds, pursuit_roll, restraint_test, segment_crosses_box,
+    winner_response,
 )
+
+
+class TestPeril(unittest.TestCase):
+    """An enemy 4" wide and 2" deep sitting at the origin, facing +y."""
+
+    BOX = (0.0, 0.0, 2.0, 1.0, 0.0)
+
+    def test_a_model_that_runs_straight_through_tests(self):
+        self.assertTrue(segment_crosses_box((0, -5), (0, 5), self.BOX))
+
+    def test_a_model_that_passes_wide_does_not(self):
+        self.assertFalse(segment_crosses_box((6, -5), (6, 5), self.BOX))
+
+    def test_a_model_that_stops_short_does_not(self):
+        self.assertFalse(segment_crosses_box((0, -5), (0, -2), self.BOX))
+
+    def test_a_model_that_ends_inside_counts_as_through(self):
+        self.assertTrue(segment_crosses_box((0, -5), (0, 0), self.BOX))
+
+    def test_a_diagonal_that_clips_a_corner_tests(self):
+        self.assertTrue(segment_crosses_box((-4, -3), (0, 0.5), self.BOX))
+
+    def test_the_enemy_facing_turns_the_footprint(self):
+        # Turned 90 degrees the same enemy is 2" wide and 4" deep, so a path
+        # 3" out to the side now misses where before it would have crossed.
+        turned = (0.0, 0.0, 2.0, 1.0, 90.0)
+        self.assertFalse(segment_crosses_box((3, -5), (3, 5), turned))
+        self.assertTrue(segment_crosses_box((0, -5), (0, 5), turned))
+
+    def test_a_four_or_more_escapes_and_a_one_to_three_wounds(self):
+        self.assertEqual(peril_wounds([1, 2, 3, 4, 5, 6]), 3)
+
+    def test_no_tests_no_wounds(self):
+        self.assertEqual(peril_wounds([]), 0)
 
 
 class TestPivotCorner(unittest.TestCase):

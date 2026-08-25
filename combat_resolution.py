@@ -12,6 +12,7 @@ All methods operate on the game instance passed during construction.
 """
 
 import math
+import random
 from types import SimpleNamespace
 
 from panda3d.core import Vec2, Vec3, Point3, NodePath
@@ -46,8 +47,9 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        unit_strength_total)
 from post_combat import (GIVE_GROUND, facing_vector, fall_back_roll,
                          flee_direction, flee_roll, flees_from,
-                         give_ground_direction, nearest_corner, pursuit_roll,
-                         restraint_test, winner_response)
+                         give_ground_direction, nearest_corner, peril_wounds,
+                         pursuit_roll, restraint_test, segment_crosses_box,
+                         winner_response)
 from rules_log import rule_log, rule_skipped
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
@@ -1586,13 +1588,63 @@ class CombatResolver:
                   f"{winner.unit.name} (highest Unit Strength): {dice}")
         loserUnit.fledThisPhase = True
 
+        before = Vec3(loserUnit.bodyNP.getPos())
         await self.game.fallBack2(loserUnit.bodyNP, direction, length=distance * 1.0,
                                   rally=(outcome == 'fall_back'),
                                   flee=(outcome == 'break'))
         self.nudgeOneInchApart(loserUnit, direction)
+        self.perilTests(loserUnit, loserUnit.bodyNP.getPos() - before)
         # The state is set after the move, as it was before the four passes:
         # a unit that Falls Back rallies at the end of it and is not fleeing.
-        loserUnit.request("IsFleeing" if outcome == 'break' else "Moved")
+        if not loserUnit.bodyNP.isEmpty():
+            loserUnit.request("IsFleeing" if outcome == 'break' else "Moved")
+
+    def enemiesOf(self, unit):
+        """Every enemy unit still on the board."""
+        ours = unit in self.game.player1Units
+        return [u for u in self.game.units
+                if u is not unit and not u.bodyNP.isEmpty()
+                and (u in self.game.player1Units) != ours]
+
+    def perilTests(self, unit, displacement):
+        """Peril tests (p. 133): a D6 for each model that fled *through* an
+        enemy unit, losing a Wound on a 1-3.
+
+        The models all shift by the same vector, so winding each one back by it
+        gives the path it swept. There is no limit to how many tests a single
+        move can call for.
+        """
+        psy = getattr(self.game, 'psychology', None)
+        if psy is None or unit.bodyNP.isEmpty() or unit.model.isEmpty():
+            return
+        if displacement.length() < 0.05:
+            return
+        boxes = [(psy._unit_box(f), f) for f in self.enemiesOf(unit)]
+        if not boxes:
+            return
+
+        through = {}
+        for child in unit.model.getChildren():
+            end = child.getPos(render)
+            start = end - displacement
+            for box, foe in boxes:
+                if segment_crosses_box((start.x, start.y), (end.x, end.y), box):
+                    through[id(foe)] = through.get(id(foe), 0) + 1
+                    break
+        if not through:
+            # Crossing nobody is not the rule declining, it is the rule never
+            # being reached, so there is nothing to report.
+            return
+
+        tests = sum(through.values())
+        dice = [random.randint(1, 6) for _ in range(tests)]
+        wounds = peril_wounds(dice)
+        names = ', '.join(f.unit.name for _, f in boxes if id(f) in through)
+        rule_log('Peril tests', unit,
+                 f"{tests} model(s) fled through {names}: {dice} -> "
+                 f"{wounds} wound(s) on a 1-3")
+        if wounds:
+            self.game.movement.applyWounds(unit, wounds)
 
     def nudgeOneInchApart(self, loserUnit, direction):
         """1" Apart (p. 154): a unit that Broke or Fell Back and is still in
@@ -1603,11 +1655,14 @@ class CombatResolver:
         the two touching rather than an inch clear. In practice this fires for a
         unit that fled 0" under The Limits of Endurance, one whose move was
         blocked, or one still close to an enemy other than the one it ran from.
+
+        Every enemy counts, not only the one it was fighting: a flee move that
+        ends within 1" of *any* enemy carries on until it is clear (p. 133).
         """
         psy = getattr(self.game, 'psychology', None)
         if psy is None or loserUnit.bodyNP.isEmpty():
             return
-        enemies = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
+        enemies = self.enemiesOf(loserUnit)
         if not enemies:
             return
         step = Vec3(direction)

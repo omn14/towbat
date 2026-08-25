@@ -617,12 +617,20 @@ class PsychologySystem:
 
         def after_move(task=None):
             unit.updateTextNode()
+            if outcome != 'give_ground':
+                # Fleeing through an enemy is perilous (p. 133), and a Fall
+                # Back moves exactly like a flee (p. 134). A Give Ground is 2"
+                # backwards and runs through nobody.
+                resolver = getattr(self.game, 'combat', None)
+                if resolver is not None:
+                    resolver.perilTests(unit, Vec3(final - start))
+            gone = unit.bodyNP.isEmpty()
             if outcome == 'give_ground':
                 # The unit never lost its nerve, so there is nothing to rally
                 # from and nobody it can be said to have fled through.
                 print(f"[Panic] {unit.unit.name} Gives Ground.")
                 on_done()
-            elif outcome == 'fall_back':
+            elif outcome == 'fall_back' and not gone:
                 # Auto-rally: regain composure, cannot charge this turn.
                 unit.request("Idle")
                 unit.cannotChargeThisTurn = True
@@ -632,7 +640,8 @@ class PsychologySystem:
                       f"rallies — free reform (cannot charge this turn).")
                 self.game.startFreeReform(unit, on_done=lambda: self._after_unit_done(unit, passed, on_done))
             else:
-                print(f"[Panic] {unit.unit.name} Flees!")
+                if not gone:
+                    print(f"[Panic] {unit.unit.name} Flees!")
                 self._after_unit_done(unit, passed, on_done)
 
         interval = LerpPosInterval(unit.bodyNP, 1.0, final, blendType='easeInOut')
