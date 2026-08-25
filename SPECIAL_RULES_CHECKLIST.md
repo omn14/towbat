@@ -663,9 +663,19 @@ charge path was quietly handling it — check there before believing an absence.
       The log carries how far it could actually have gone and who it is still
       stuck against, because "locked in place" and "the rule never fired" look
       identical on the board.
-- [ ] Give Ground moves 1.9", not 2" — `crashFraction` multiplies by 0.95 even
-      on a clear path, as a margin against immediately re-contacting. Predates
-      this work.
+- [x] Give Ground moves 2", not 1.9" — `crashFraction` multiplied the sweep's
+      hit fraction by 0.95 whether or not the sweep hit anything, so every
+      Give Ground in the game was short. The 5% is a margin against coming to
+      rest touching what was struck and re-contacting on the next test, which
+      is only meaningful when something *was* struck: `sweepTest` returns 1.0
+      for a clear path, and that is now taken in full. Predates this work.
+      It also removes a coupling this section had just introduced: `surrounded`
+      measures the step *after* the margin, so a Give Ground that should barely
+      break contact could have been judged Surrounded on the strength of a
+      fudge factor. With a clear 2" it cannot.
+      LEFTOVER: untested. The margin needs a real Bullet sweep to reach, so it
+      is two lines of arithmetic behind the same async/`render` boundary that
+      `alignToEnemy` sits behind.
 
 ### Not in this section
 Whether a unit that Falls Back in Good Order panics its friends was checked and

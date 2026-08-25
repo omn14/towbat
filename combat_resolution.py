@@ -63,6 +63,10 @@ ONE_INCH_APART = 1.0
 # actually broke contact (p. 155).
 CONTACT_GAP = 0.05
 
+# A move halted by a sweep stops this fraction short of what it struck, so it
+# does not come to rest touching it and re-contact on the next test.
+CRASH_MARGIN = 0.05
+
 
 class CombatResolver:
     """Encapsulates all combat resolution logic for the game."""
@@ -1546,8 +1550,11 @@ class CombatResolver:
 
         crashFraction = 1.0
         for unit in moving:
+            hit = self.game.sweepTest(unit, direction, GIVE_GROUND)
+            # Stop short only of something actually struck, so that a clear
+            # path gives the full 2" the rule asks for.
             crashFraction = min(crashFraction,
-                                self.game.sweepTest(unit, direction, GIVE_GROUND) * .95)
+                                hit if hit >= 1.0 else hit * (1.0 - CRASH_MARGIN))
         step = direction * (GIVE_GROUND * crashFraction)
         if self.surrounded(loserUnit, winners, step):
             return
