@@ -283,8 +283,6 @@ class MyApp(ShowBase):
         # Developer tools; inert unless WH_DEBUG is set or --debug is passed.
         self.debug_tools = DebugTools(self) if debug_enabled() else None
         self.accept('t', self.start_tutorial)
-        # Debug: force a Panic test on the selected unit (Phase 0 wiring).
-        self.accept('shift-p', lambda: self.psychology.panic_test(self.unitToMove, cause="debug"))
 
         self.fsm.request("DeployPhase")
 

@@ -55,6 +55,10 @@ HELP_TEXT = """
   shift-e      disengage selected unit
   k            remove 1 model  (shift-k removes 5)
 
+  Psychology
+  p            force a Panic test on the selected unit
+  shift-p      the same test, compulsory (an exempt unit Gives Ground)
+
   Special rules
   shift-b / n  cycle the rule under test
   shift-g      grant it to the selected unit
@@ -150,6 +154,8 @@ class DebugTools(DirectObject):
         self.accept("shift-e", self.disengage)
         self.accept("k", self.kill_models, [1])
         self.accept("shift-k", self.kill_models, [5])
+        self.accept("p", self.force_panic, [False])
+        self.accept("shift-p", self.force_panic, [True])
         self.accept("shift-b", self.cycle_rule, [-1])
         self.accept("shift-n", self.cycle_rule, [1])
         self.accept("shift-g", self.grant_rule)
@@ -163,8 +169,8 @@ class DebugTools(DirectObject):
     def _unbind(self):
         for event in ("h", "g", "z", "x", "shift-z", "shift-x",
                       "b", "n", "shift-b", "shift-n", "r", "e", "shift-e", "k",
-                      "shift-k", "shift-g", "shift-d", "i", "shift-i", "y",
-                      "f8", "shift-f8"):
+                      "shift-k", "p", "shift-p", "shift-g", "shift-d", "i",
+                      "shift-i", "y", "f8", "shift-f8"):
             self.ignore(event)
         for arrow in ("arrow_up", "arrow_down", "arrow_left", "arrow_right"):
             self.ignore(arrow)
@@ -388,6 +394,20 @@ class DebugTools(DirectObject):
         name = unit.unitName
         self.game.movement.removeModelsFromUnit(unit, count)
         print(f"[debug] removed {count} model(s) from {name}")
+
+    # ─── Psychology ───────────────────────────────────────────────────────
+
+    def force_panic(self, compulsory):
+        """Put the selected unit through a Panic test with no cause behind it."""
+        unit = self.selected
+        if unit is None:
+            return
+        cause = "the debug key, compulsory" if compulsory else "the debug key"
+        print(f"[debug] forcing a Panic test on {unit.unitName}")
+        self.game.psychology.panic_test(unit, cause=cause, compulsory=compulsory)
+        if self.game.psychology._panic_hold:
+            print("[debug] Panic tests are held while a combat resolves — "
+                  "this one is queued and will run when the combat ends")
 
     # ─── Special rules ────────────────────────────────────────────────────
 

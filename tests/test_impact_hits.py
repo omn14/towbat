@@ -224,8 +224,9 @@ class TestChargeConditions(unittest.TestCase):
         return self.resolver.impactHits(Sequence())
 
     def test_a_charge_of_three_inches_or_more_causes_them(self):
-        p1, p2 = self._run()
-        self.assertGreater(p1, 0)
+        with mock.patch('battleFunctions.random.randint', return_value=6):
+            p1, _ = self._run()
+        self.assertEqual(p1, 7)   # D6+1 = 7 hits, every one of them wounding
         self.assertLess(self.target.unit.nmodels, 20)
 
     def test_a_short_charge_causes_none(self):
