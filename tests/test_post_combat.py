@@ -9,12 +9,45 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from post_combat import (  # noqa: E402
-    GIVE_GROUND, catch_outcome, facing_vector, fall_back_roll, flee_direction,
-    flee_roll, flees_from, give_ground_direction, may_pursue, nearest_corner,
-    peril_wounds, pursuit_roll, restraint_test, segment_crosses_box,
-    winner_response,
+    GIVE_GROUND, catch_outcome, detour_angles, facing_vector, fall_back_roll,
+    flee_direction, flee_roll, flees_from, give_ground_direction, may_pursue,
+    nearest_corner, peril_wounds, pursuit_roll, restraint_test,
+    segment_crosses_box, turn_direction, winner_response,
 )
 from combat_resolution import CombatResolver  # noqa: E402
+
+
+class TestFleeingThroughTerrain(unittest.TestCase):
+    """Impassable terrain is gone around "by the shortest possible route"
+    (p. 133)."""
+
+    def test_no_detour_is_offered_first(self):
+        self.assertEqual(next(detour_angles()), 0.0)
+
+    def test_smaller_turns_come_before_larger_ones(self):
+        sizes = [abs(a) for a in detour_angles()]
+        self.assertEqual(sizes, sorted(sizes))
+
+    def test_each_size_is_tried_both_ways(self):
+        angles = list(detour_angles(max_turn=10.0, step=5.0))
+        self.assertEqual(angles, [0.0, 5.0, -5.0, 10.0, -10.0])
+
+    def test_it_does_not_turn_further_than_asked(self):
+        self.assertLessEqual(max(abs(a) for a in detour_angles()), 90.0)
+
+    def test_a_quarter_turn_anticlockwise(self):
+        x, y = turn_direction((1.0, 0.0), 90.0)
+        self.assertAlmostEqual(x, 0.0)
+        self.assertAlmostEqual(y, 1.0)
+
+    def test_a_negative_turn_goes_the_other_way(self):
+        x, y = turn_direction((1.0, 0.0), -90.0)
+        self.assertAlmostEqual(x, 0.0)
+        self.assertAlmostEqual(y, -1.0)
+
+    def test_turning_preserves_length(self):
+        x, y = turn_direction((0.6, 0.8), 37.0)
+        self.assertAlmostEqual(math.hypot(x, y), 1.0)
 
 
 def _unit(name, box):

@@ -19,8 +19,33 @@ __all__ = [
     'GIVE_GROUND', 'flee_roll', 'fall_back_roll', 'pursuit_roll',
     'flees_from', 'flee_direction', 'give_ground_direction', 'facing_vector',
     'restraint_test', 'winner_response', 'catch_outcome', 'may_pursue',
-    'nearest_corner', 'segment_crosses_box', 'peril_wounds',
+    'nearest_corner', 'segment_crosses_box', 'peril_wounds', 'detour_angles',
+    'turn_direction',
 ]
+
+
+def detour_angles(max_turn: float = 90.0, step: float = 5.0):
+    """Turns to try when fleeing round impassable terrain, shortest first.
+
+    "It must pivot around its centre in order to move around it by the shortest
+    possible route" (p. 133) -- so the smallest turn that gets past wins, and
+    each size is offered to both sides before a larger one is considered. 0 is
+    first: a clear path is no detour at all.
+    """
+    yield 0.0
+    turn = step
+    while turn <= max_turn + 1e-9:
+        yield turn
+        yield -turn
+        turn += step
+
+
+def turn_direction(direction, degrees: float):
+    """*direction* as ``(x, y)``, rotated *degrees* anticlockwise."""
+    a = math.radians(degrees)
+    cos_a, sin_a = math.cos(a), math.sin(a)
+    x, y = direction
+    return (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
 
 
 def segment_crosses_box(start, end, box) -> bool:

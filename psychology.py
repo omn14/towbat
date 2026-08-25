@@ -598,6 +598,11 @@ class PsychologySystem:
         (queued) and, for a fall back, the rally + free reform — calling
         *on_done* only when this unit's whole sequence is finished."""
         start = unit.bodyNP.getPos()
+        resolver = getattr(self.game, 'combat', None)
+        if resolver is not None and outcome != 'give_ground':
+            # A Give Ground is not a flee: it stops at terrain rather than
+            # going round it (p. 155).
+            direction = resolver.fleeAroundImpassable(unit, direction, distance)
         final, passed = self._flee_until_clear(unit, start, direction, distance)
         final.z = start.z
         # Face the flee direction (heading only — keep the body upright).
@@ -621,8 +626,8 @@ class PsychologySystem:
                 # Fleeing through an enemy is perilous (p. 133), and a Fall
                 # Back moves exactly like a flee (p. 134). A Give Ground is 2"
                 # backwards and runs through nobody.
-                resolver = getattr(self.game, 'combat', None)
                 if resolver is not None:
+                    resolver.fleeTerrainTests(unit, start, final)
                     resolver.perilTests(unit, Vec3(final - start))
             gone = unit.bodyNP.isEmpty()
             if outcome == 'give_ground':

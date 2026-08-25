@@ -15,7 +15,9 @@ import math
 import random
 from types import SimpleNamespace
 
-from panda3d.core import Vec2, Vec3, Point3, NodePath
+from panda3d.core import Vec2, Vec3, Point3, NodePath, TransformState
+
+from collision_masks import CollisionMask as CM
 
 
 def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
@@ -45,11 +47,11 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        rank_bonus, should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
-from post_combat import (GIVE_GROUND, facing_vector, fall_back_roll,
-                         flee_direction, flee_roll, flees_from,
+from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
+                         fall_back_roll, flee_direction, flee_roll, flees_from,
                          give_ground_direction, nearest_corner, peril_wounds,
                          pursuit_roll, restraint_test, segment_crosses_box,
-                         winner_response)
+                         turn_direction, winner_response)
 from rules_log import rule_log, rule_skipped
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
@@ -1625,12 +1627,17 @@ class CombatResolver:
                   f"{winner.unit.name} (highest Unit Strength): {dice}")
         loserUnit.fledThisPhase = True
 
+        direction = self.fleeAroundImpassable(loserUnit, direction, distance)
         before = Vec3(loserUnit.bodyNP.getPos())
         await self.game.fallBack2(loserUnit.bodyNP, direction, length=distance * 1.0,
                                   rally=(outcome == 'fall_back'),
                                   flee=(outcome == 'break'))
         self.nudgeOneInchApart(loserUnit, direction)
-        self.perilTests(loserUnit, loserUnit.bodyNP.getPos() - before)
+        after = Vec3(loserUnit.bodyNP.getPos())
+        # A unit can be finished off by the ground it ran over, so the position
+        # is taken before the tests that might remove it.
+        self.fleeTerrainTests(loserUnit, before, after)
+        self.perilTests(loserUnit, after - before)
         # The state is set after the move, as it was before the four passes:
         # a unit that Falls Back rallies at the end of it and is not fleeing.
         if not loserUnit.bodyNP.isEmpty():
@@ -1642,6 +1649,59 @@ class CombatResolver:
         return [u for u in self.game.units
                 if u is not unit and not u.bodyNP.isEmpty()
                 and (u in self.game.player1Units) != ours]
+
+    def impassableAhead(self, unit, direction, distance):
+        """Whether the unit's own base, turned to face *direction*, meets
+        impassable terrain within *distance*.
+
+        A swept box and not a centre line: a unit is wider than the line
+        through the middle of it, and a house its centre misses is a house its
+        flank still walks into. Only terrain is in the mask -- a fleeing unit
+        goes *through* units, which is what the Peril tests are for.
+        """
+        body = unit.bodyNP
+        pos, hpr = body.getPos(), body.getHpr()
+        body.lookAt(pos + direction)
+        fleeHpr = body.getHpr()
+        body.setHpr(hpr)
+        fraction, _ = self.game.movement.sweepTestDir(
+            unit, TransformState.makePosHpr(pos, fleeHpr), direction, distance,
+            mask=CM.TERRAIN_IMPASSABLE, pass_over=False)
+        return fraction < 1.0
+
+    def fleeAroundImpassable(self, unit, direction, distance):
+        """Fleeing Through Terrain (p. 133): impassable terrain is gone around,
+        "by the shortest possible route", not run through.
+        """
+        if unit.bodyNP.isEmpty() or distance < 0.05:
+            return direction
+        if unit.unit.model.is_flying():
+            return direction
+        if not self.impassableAhead(unit, direction, distance):
+            return direction
+        for turn in detour_angles():
+            if turn == 0.0:
+                continue
+            x, y = turn_direction((direction.x, direction.y), turn)
+            candidate = Vec3(x, y, 0)
+            if self.impassableAhead(unit, candidate, distance):
+                continue
+            rule_log('Fleeing Through Terrain', unit,
+                     f"impassable terrain blocks its {distance}\" flee, so it "
+                     f"pivots {abs(turn):.0f} deg "
+                     f"{'left' if turn > 0 else 'right'} to go around it")
+            return candidate
+        rule_log('Fleeing Through Terrain', unit,
+                 f"impassable terrain blocks every route within 90 deg either "
+                 f"way, so its {distance}\" flee runs straight into it")
+        return direction
+
+    def fleeTerrainTests(self, unit, from_pos, to_pos):
+        """A flee takes no Movement penalty from difficult or dangerous terrain
+        but still makes the Dangerous Terrain tests (p. 133)."""
+        if unit.bodyNP.isEmpty():
+            return
+        self.game.movement.dangerousTerrainTests(unit, from_pos, to_pos)
 
     def perilTests(self, unit, displacement):
         """Peril tests (p. 133): a D6 for each model that fled *through* an

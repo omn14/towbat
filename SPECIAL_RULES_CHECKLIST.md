@@ -629,6 +629,55 @@ charge path was quietly handling it — check there before believing an absence.
       not, because it "moves exactly like a fleeing unit" (p. 134).
       A unit can be wiped out by its own Peril tests, so the flee sequence
       checks for that before rallying it or offering it a reform.
+- [x] Fleeing Through Terrain (p. 133) — three clauses, and only one of them
+      needed much.
+      "Without suffering any negative modifiers to its Movement characteristic"
+      was already true, by construction rather than by intent: a Flee roll is
+      2D6 summed and a Fall Back is 2D6 discarding the lowest, neither adds
+      Movement, and `fallBack2` moves the distance it is handed without
+      consulting the terrain. Checked rather than assumed — `charge_roll` does
+      take a `difficult` flag that discards the *highest* die, and
+      `fall_back_roll` delegates to it, so the wrong default there would have
+      quietly shortened every Fall Back over rough ground.
+      "It must make any Dangerous Terrain tests required" was missing on both
+      flee paths, though the machinery was already there and already used by
+      normal moves and charges. `fleeTerrainTests` is a thin wrapper on
+      `dangerousTerrainTests` that exists so the two flee paths call one thing.
+      "Should a fleeing unit come into contact with impassable terrain, it must
+      pivot around its centre in order to move around it by the shortest
+      possible route" — `fleeAroundImpassable` reads "shortest" as the smallest
+      pivot that gets past, offering each turn to both sides before trying a
+      larger one, which is `post_combat.detour_angles`. The angle sequence and
+      the rotation are pure and tested; only the "is this way blocked?" question
+      needs the board.
+      Corrected from a game log: the first pass asked `get_terrain_between`,
+      which samples the **centre line** at 1" intervals. A 10 degree pivot over
+      a 3" flee moves that line about half an inch, enough to step it off the
+      corner of a house while the unit's flank walks straight into the wall —
+      and the log cheerfully announced it had gone around. A unit is wider than
+      the line through the middle of it. `impassableAhead` now sweeps the
+      unit's own box, turned to the heading it will flee on, against
+      `TERRAIN_IMPASSABLE` alone; units are left out of the mask deliberately,
+      because a fleeing unit goes *through* those and that is what the Peril
+      tests are for.
+      `tests/harness_flee_terrain.py` is what settled it — a real unit box and
+      a real impassable body offscreen, printing blocked/clear for every
+      candidate turn and re-testing the direction finally chosen. It shows the
+      shape of the answer as well as its correctness: a 5" unit with a 6" house
+      two inches off its nose has no small way past, because pivoting about its
+      centre sweeps its own corners into the wall, so it turns the full 90
+      degrees and runs along the frontage. Drastic, but it is what "pivot about
+      its centre by the shortest possible route" means for a wide unit.
+      A Give Ground is excluded: it is not a flee, and stops at terrain rather
+      than going round it (p. 155).
+      LEFTOVER: nothing stops a fleeing unit at impassable terrain, so when
+      every route within 90 degrees either way is blocked it says so and then
+      runs straight through the building. Going round is now right; being
+      stopped by it was never modelled and still is not.
+      LEFTOVER: the detour is measured over the flee distance, but
+      `psychology._flee_until_clear` may carry the unit further than that
+      looking for a spot clear of other units, and the extra ground is not
+      re-tested.
 - [ ] Pursuit off the Battlefield (p. 157) — removed but *not* destroyed,
       returning in the next Compulsory Moves sub-phase as reinforcements.
       BLOCKED: no reinforcement mechanism exists.
