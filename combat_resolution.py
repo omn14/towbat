@@ -59,6 +59,10 @@ SWIFTSTRIDE_DIE_COLOR = (0.85, 0.05, 0.05, 1)
 # A unit that Broke or Fell Back must end up this far from the enemy (p. 154).
 ONE_INCH_APART = 1.0
 
+# Bases this close are still touching, for deciding whether a Give Ground
+# actually broke contact (p. 155).
+CONTACT_GAP = 0.05
+
 
 class CombatResolver:
     """Encapsulates all combat resolution logic for the game."""
@@ -1526,6 +1530,7 @@ class CombatResolver:
         for loserUnit, outcome in outcomes:
             if loserUnit.bodyNP.isEmpty():
                 continue
+            loserUnit.surroundedThisPhase = False
             if outcome == 'give_ground':
                 followers = [r['winner'] for r in responses
                              if r['target'] is loserUnit and r['action'] == 'follow_up']
@@ -1544,12 +1549,7 @@ class CombatResolver:
             crashFraction = min(crashFraction,
                                 self.game.sweepTest(unit, direction, GIVE_GROUND) * .95)
         step = direction * (GIVE_GROUND * crashFraction)
-        if step.length() < 0.05:
-            # Surrounded (p. 155): a loser that cannot break contact stays put
-            # and the combat is fought again as though it had been a draw.
-            rule_log('Surrounded', loserUnit,
-                     "cannot break contact, so it stays locked in place and "
-                     "fights again next turn")
+        if self.surrounded(loserUnit, winners, step):
             return
 
         self.game.attackSequence2 = Parallel()
@@ -1562,6 +1562,34 @@ class CombatResolver:
                                 blendType='easeInOut'))
         if not self.game.attackSequence.isPlaying():
             await self.game.attackSequence2
+
+    def surrounded(self, loserUnit, winners, step):
+        """Surrounded (p. 155): the Give Ground cannot break contact, so nobody
+        moves and the combat is fought again next turn as if it had been drawn.
+
+        Measured against where the winners stand now, not where a Follow Up
+        will put them: a follower closing the gap again is a later choice, not
+        a failure to break away. The unit that cannot move at all is only the
+        obvious case -- one shoved half an inch by terrain and still touching
+        is surrounded just the same.
+        """
+        psy = getattr(self.game, 'psychology', None)
+        if psy is None or not winners:
+            return False
+        cx, cy, hx, hy, heading = psy._unit_box(loserUnit)
+        after = (cx + step.x, cy + step.y, hx, hy, heading)
+        stuck = [w for w in winners
+                 if obb_distance(after, psy._unit_box(w)) <= CONTACT_GAP]
+        if not stuck:
+            return False
+        names = ', '.join(w.unit.name for w in stuck)
+        rule_log('Surrounded', loserUnit,
+                 f"can give only {step.length():.1f}\" of its 2\" and would "
+                 f"still be in base contact with {names}, so nobody moves: "
+                 f"locked in place, fighting again next turn as if the combat "
+                 f"had been a draw")
+        loserUnit.surroundedThisPhase = True
+        return True
 
     async def fleeMove(self, loserUnit, outcome):
         """Break or Fall Back: away from the single strongest winner, at a
@@ -1717,6 +1745,13 @@ class CombatResolver:
             if winner.bodyNP.isEmpty():
                 continue
             if r['action'] == 'restrain':
+                if getattr(target, 'surroundedThisPhase', False):
+                    # A drawn combat grants no reform, and the two are still
+                    # nose to nose with no room to turn in anyway (p. 155).
+                    rule_skipped('Restrain & Reform', winner,
+                                 f"{target.unit.name} is Surrounded and never "
+                                 f"drew off, so the combat continues as a draw")
+                    continue
                 await self.freeReform(winner)
                 continue
             if r['action'] != 'pursue':

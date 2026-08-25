@@ -632,8 +632,37 @@ charge path was quietly handling it — check there before believing an absence.
 - [ ] Pursuit off the Battlefield (p. 157) — removed but *not* destroyed,
       returning in the next Compulsory Moves sub-phase as reinforcements.
       BLOCKED: no reinforcement mechanism exists.
-- [ ] Surrounded, the rest of it (p. 155) — the units stay locked, but "fight
-      another round exactly as if the combat had been a draw" is not modelled.
+- [x] Surrounded, the rest of it (p. 155) — "the unit's movement stops
+      immediately and the units instead remain locked in place until the next
+      player's turn when they will fight another round of combat, exactly as if
+      the combat had been a draw."
+      Two halves were missing, and the interesting one was the *detection*. The
+      rule fires when a loser "is unable to break contact with one or more of
+      the enemy units engaging it"; the code asked whether the Give Ground
+      moved it at all. For two units nose to nose those are the same question —
+      any move over a hair breaks contact — so the gap only shows with three.
+      A unit engaged in front and both flanks has its two flank directions
+      cancel, so it gives ground straight backwards, breaks cleanly from the
+      unit in front and *scrapes along the faces of the two beside it*, still
+      touching both. It had been moving off as though it had got away.
+      `surrounded()` projects the loser's box by the step it is about to take
+      and measures it against every winner with `obb_distance`, the same
+      oriented-box maths the 1" rule and the Leadership bubbles use. Measured
+      against where the winners stand *now*, deliberately: a Follow Up closing
+      the gap again is a later choice by the winner, not a failure by the loser
+      to break away, and testing against the followers' destinations would have
+      called every followed-up Give Ground in the game Surrounded.
+      The second half is the reform. A winner that restrained was still being
+      offered its free reform in pass 4, but the loser never drew off, so the
+      two are nose to nose with no room to turn in — and a drawn combat grants
+      no reform at all. It is skipped, and says which unit's Surrounded result
+      took it away.
+      Nothing else was needed for "as if the combat had been a draw": neither
+      side moves, so both stay engaged and fight again next turn, which is what
+      the draw branch does by returning early.
+      The log carries how far it could actually have gone and who it is still
+      stuck against, because "locked in place" and "the rule never fired" look
+      identical on the board.
 - [ ] Give Ground moves 1.9", not 2" — `crashFraction` multiplies by 0.95 even
       on a clear path, as a margin against immediately re-contacting. Predates
       this work.

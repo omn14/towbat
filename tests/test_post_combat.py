@@ -14,6 +14,58 @@ from post_combat import (  # noqa: E402
     peril_wounds, pursuit_roll, restraint_test, segment_crosses_box,
     winner_response,
 )
+from combat_resolution import CombatResolver  # noqa: E402
+
+
+def _unit(name, box):
+    """A stand-in carrying only what `surrounded` reads off a unit."""
+    return SimpleNamespace(unit=SimpleNamespace(name=name), box=box)
+
+
+class TestSurrounded(unittest.TestCase):
+    """A loser 4" wide and 2" deep at the origin, its enemy nose to nose in
+    front of it (p. 155)."""
+
+    def setUp(self):
+        self.resolver = CombatResolver.__new__(CombatResolver)
+        psy = SimpleNamespace(_unit_box=lambda u: u.box)
+        self.resolver.game = SimpleNamespace(psychology=psy)
+        self.loser = _unit("Jade Warriors", (0.0, 0.0, 2.0, 1.0, 0.0))
+        self.front = _unit("Longbeards", (0.0, 2.0, 2.0, 1.0, 0.0))
+
+    def step(self, dx, dy):
+        return SimpleNamespace(x=dx, y=dy, length=lambda: math.hypot(dx, dy))
+
+    def test_a_clean_two_inch_give_ground_breaks_contact(self):
+        self.assertFalse(self.resolver.surrounded(
+            self.loser, [self.front], self.step(0.0, -2.0)))
+
+    def test_a_unit_that_cannot_move_is_surrounded(self):
+        self.assertTrue(self.resolver.surrounded(
+            self.loser, [self.front], self.step(0.0, 0.0)))
+
+    def test_a_unit_pinned_on_three_sides_slides_along_the_flankers(self):
+        # Engaged front and both flanks: the flank directions cancel, so it
+        # gives ground straight back, breaks from the unit in front and scrapes
+        # along the two beside it, still touching both. This is the case the
+        # old "did it move at all?" test could not see.
+        left = _unit("Hammerers", (-3.0, 0.0, 1.0, 2.0, 0.0))
+        right = _unit("Ironbreakers", (3.0, 0.0, 1.0, 2.0, 0.0))
+        self.assertTrue(self.resolver.surrounded(
+            self.loser, [self.front, left, right], self.step(0.0, -2.0)))
+
+    def test_breaking_from_one_enemy_but_not_the_other_is_surrounded(self):
+        rear = _unit("Hammerers", (0.0, -2.0, 2.0, 1.0, 0.0))
+        self.assertTrue(self.resolver.surrounded(
+            self.loser, [self.front, rear], self.step(0.0, -2.0)))
+
+    def test_it_records_the_result_on_the_unit(self):
+        self.resolver.surrounded(self.loser, [self.front], self.step(0.0, 0.0))
+        self.assertTrue(self.loser.surroundedThisPhase)
+
+    def test_a_winner_that_is_already_gone_leaves_nothing_to_break_from(self):
+        self.assertFalse(
+            self.resolver.surrounded(self.loser, [], self.step(0.0, 0.0)))
 
 
 class TestPeril(unittest.TestCase):
