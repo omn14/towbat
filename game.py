@@ -753,6 +753,14 @@ class MyApp(ShowBase):
         """Interactive free reform (rotate/reposition, left-click to confirm).
         Used by auto-rally after a Fall Back in Good Order.  Calls *on_done*
         once the reform is confirmed."""
+        # The pending callback lives in a single slot, so starting a second
+        # reform would strand whoever is waiting on the first for ever.
+        pending = getattr(self, '_reformDone', None)
+        if pending is not None:
+            print("WARNING: a free reform was already pending; releasing its "
+                  "waiter before starting another")
+            self._reformDone = None
+            pending()
         self._reformDone = on_done
         self.ignore('mouse1')
         self.accept('mouse1', self.giveSignal)

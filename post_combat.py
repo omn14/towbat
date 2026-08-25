@@ -19,7 +19,26 @@ __all__ = [
     'GIVE_GROUND', 'flee_roll', 'fall_back_roll', 'pursuit_roll',
     'flees_from', 'flee_direction', 'give_ground_direction', 'facing_vector',
     'restraint_test', 'winner_response', 'catch_outcome', 'may_pursue',
+    'nearest_corner',
 ]
+
+
+def nearest_corner(corners, half_x: float, half_y: float) -> int:
+    """Index of the corner closest to a base of half extents *half_x* by
+    *half_y*, everything in that base's own frame.
+
+    A unit that runs in at an angle meets the enemy corner-first, and that
+    corner is the point it pivots about. Pivoting about anything else -- the
+    middle of the edge, the point under their centre -- swings the corner off
+    the enemy and opens a gap.
+    """
+    def distance(p):
+        dx, dy = abs(p[0]) - half_x, abs(p[1]) - half_y
+        if dx > 0 or dy > 0:
+            return math.hypot(max(dx, 0.0), max(dy, 0.0))
+        return max(dx, dy)
+
+    return min(range(len(corners)), key=lambda i: distance(corners[i]))
 
 
 # ─── Distances ────────────────────────────────────────────────────────────

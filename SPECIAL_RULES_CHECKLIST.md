@@ -520,20 +520,26 @@ charge path was quietly handling it — check there before believing an absence.
       turned out to be handled by the charge path already and only the logging
       was missing.
       Done for an overrun too, in `overrunContact`.
-      Both paths wheel to align, but not by the same means. A charge arrives
-      already wheeled onto the enemy's face, so `chargeInterval` can turn about
-      the point of contact held on `playerNP` — that block is now `alignToEnemy`
-      rather than being buried mid-method. Reusing it for the overrun looked
-      right and was not: an overrun arrives head-on at whatever angle it was
-      facing, so turning about a touching corner swings the unit *away* from
-      the enemy and leaves it out of base contact. Caught in play — it appeared
-      to rotate about its own bottom-left corner, which is exactly what it was
-      doing. `alignAndClose` works the final pose out first instead: back off by
-      the base's diagonal, take the new facing, sweep straight back up to
-      contact, then animate to that pose in one move. `sweepTestDir` is used
-      rather than `sweepTest` because `sweepTest` re-orients the shape to face
-      the direction of travel, which is not the aligned heading.
-      LEFTOVER: no wheel to *maximise contact* before the align, on either
+      Both paths pivot to align about the point of contact — for an overrun,
+      the **corner that struck**, which `contactPointOn` finds as the corner of
+      its own base nearest the enemy's. Pivoting about the point the two bases
+      share leaves them sharing it: measured across three angles the gap after
+      the pivot equals the gap before it, to three decimal places, and the
+      pivot itself drifts 0.000.
+      Four wrong turns before that, all of them mine and all from reasoning
+      about geometry in prose instead of measuring it: a stale `playerNP`; then
+      "back off, turn, drive straight in", which squares the unit up but slides
+      it somewhere it never touched; then a pivot on the *middle* of the struck
+      edge, which swings the touching corner away and opens a gap; then a
+      closing slide to take up that gap, which was patching a symptom of the
+      pivot being wrong. `getHalfExtentsWithoutMargin` was wrong too — Bullet
+      keeps the box shrunk by the margin, so `WithMargin` is the true size.
+      `tests/harness_align.py` is what settled it: two real Bullet unit boxes
+      offscreen, the real `contactPointOn`, and printed numbers for pivot
+      position, pivot drift and the gap either side of the turn. It found the
+      margin inversion on its first run. Reach for it before arguing about
+      what the board looks like.
+      LEFTOVER: no pivot to *maximise contact* before aligning, on either
       path — the unit engages wherever it happened to touch.
 - [x] Pursuit into a Fleeing Enemy (p. 157) — run down exactly as if caught by
       a charging unit, then the pursuer may reform. `chargeInterval`'s Catching

@@ -14,7 +14,7 @@ All methods operate on the game instance passed during construction.
 import math
 from types import SimpleNamespace
 
-from panda3d.core import Vec2, Vec3, NodePath, TransformState, BitMask32
+from panda3d.core import Vec2, Vec3, Point3, NodePath
 
 
 def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
@@ -46,8 +46,8 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        unit_strength_total)
 from post_combat import (GIVE_GROUND, facing_vector, fall_back_roll,
                          flee_direction, flee_roll, flees_from,
-                         give_ground_direction, pursuit_roll, restraint_test,
-                         winner_response)
+                         give_ground_direction, nearest_corner, pursuit_roll,
+                         restraint_test, winner_response)
 from rules_log import rule_log, rule_skipped
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
@@ -742,11 +742,17 @@ class CombatResolver:
 
     # ─── Flank Detection ──────────────────────────────────────────────────
 
-    async def alignToEnemy(self, unit, angleToRotate, duration=0.5):
-        """Wheel to align, pivoting about the point of contact (p. 157)."""
+    async def alignToEnemy(self, unit, angleToRotate, pivot=None, duration=0.5):
+        """Pivot to align, about the point of contact (p. 157).
+
+        A charge leaves that point on `playerNP`; an overrun has to supply the
+        corner that struck, never having gone through the move code that sets
+        it. Nothing else moves: pivoting about the point the two bases share
+        leaves them sharing it.
+        """
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
-        newnode.setPos(self.game.playerNP.getPos())
+        newnode.setPos(self.game.playerNP.getPos() if pivot is None else pivot)
         newnode.setHpr(unit.bodyNP.getHpr())
         unit.bodyNP.wrtReparentTo(newnode)
         await LerpPosHprInterval(
@@ -759,38 +765,20 @@ class CombatResolver:
         unit.bodyNP.wrtReparentTo(parent)
         newnode.removeNode()
 
-    async def alignAndClose(self, unit, defenderNP, angleToRotate, duration=0.5):
-        """Wheel to align and close back up to base contact (p. 157).
+    def contactPointOn(self, unit, otherNP):
+        """The corner of *unit*'s base that struck *otherNP*.
 
-        A charge arrives already wheeled onto the enemy's face, so it can turn
-        about the point of contact. An overrun arrives head-on at whatever
-        angle it happened to be facing, and turning about a touching corner
-        swings the rest of the unit away from the enemy instead of onto it.
-        So the final pose is worked out first — back off far enough to turn
-        freely, take the new facing, then sweep straight back up to contact —
-        and the unit is animated to it in one move.
+        Bullet's manifold carries a contact point of its own, but for a contact
+        test on a body that was just placed there -- rather than a collision the
+        solver worked out -- it is not reliably on the struck face.
         """
-        startPos, startHpr = unit.bodyNP.getPos(), unit.bodyNP.getHpr()
-        toward = defenderNP.getPos() - startPos
-        toward.z = 0
-        if toward.length() < 1e-4:
-            return
-        toward.normalize()
-
-        half = unit.bodyNP.node().getShape(0).getHalfExtentsWithMargin()
-        scale = unit.bodyNP.getScale()
-        clearance = math.hypot(half.x * scale.x, half.y * scale.y)
-
-        endHpr = Vec3(startHpr.x + angleToRotate, startHpr.y, startHpr.z)
-        backPos = startPos - toward * clearance
-        frac, _hit = self.game.movement.sweepTestDir(
-            unit, TransformState.makePosHpr(backPos, endHpr), toward,
-            clearance * 2, mask=BitMask32.bit(9), pass_over=False)
-        endPos = (backPos + toward * (clearance * 2 * frac)
-                  if frac < 1.0 else startPos)
-
-        await LerpPosHprInterval(unit.bodyNP, duration=duration, pos=endPos,
-                                 hpr=endHpr, blendType='easeInOut')
+        mine = unit.bodyNP.node().getShape(0).getHalfExtentsWithMargin()
+        theirs = otherNP.node().getShape(0).getHalfExtentsWithMargin()
+        local = [Point3(sx * mine.x, sy * mine.y, 0)
+                 for sx in (-1, 1) for sy in (-1, 1)]
+        seen = [otherNP.getRelativePoint(unit.bodyNP, p) for p in local]
+        i = nearest_corner([(p.x, p.y) for p in seen], theirs.x, theirs.y)
+        return render.getRelativePoint(unit.bodyNP, local[i])
 
     def joinsCombatThisPhase(self, enemy):
         """Pursuit into a New Combat (p. 157): the pursuer fights again only if
@@ -1480,8 +1468,11 @@ class CombatResolver:
             return
 
         flank, angleToRotate = self.getFlankFromContact(winner, c)
-        # The flank is read before the wheel, from the contact as it was made.
-        await self.alignAndClose(winner, blockerNP, angleToRotate)
+        # Read the flank from the contact as it was made, then wheel about the
+        # point on the overrunning unit that struck.
+        await self.alignToEnemy(
+            winner, angleToRotate,
+            pivot=self.contactPointOn(winner, blockerNP))
 
         # "That combat has not yet been fought" decides whether this becomes a
         # fight this phase or a lock until the next turn.
@@ -1758,6 +1749,9 @@ class CombatResolver:
         # from the charge task, which the post-combat pass does not await, so it
         # has already moved on to the next unit's reform. The player can only
         # place one at a time, so they queue.
+        if self.reformInProgress:
+            print(f"{unit.unit.name} waits to reform until the one in progress "
+                  f"is finished.")
         while self.reformInProgress:
             await Task.pause(0.1)
         self.reformInProgress = True

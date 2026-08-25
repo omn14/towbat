@@ -10,9 +10,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from post_combat import (  # noqa: E402
     GIVE_GROUND, catch_outcome, facing_vector, fall_back_roll, flee_direction,
-    flee_roll, flees_from, give_ground_direction, may_pursue, pursuit_roll,
-    restraint_test, winner_response,
+    flee_roll, flees_from, give_ground_direction, may_pursue, nearest_corner,
+    pursuit_roll, restraint_test, winner_response,
 )
+
+
+class TestPivotCorner(unittest.TestCase):
+    """Corners come in the order the resolver builds them; the enemy base here
+    is 6 wide by 2 deep, centred on its own origin."""
+
+    def test_the_corner_that_reaches_furthest_in_is_the_one_that_struck(self):
+        corners = [(-4, -3), (-4, 0.5), (1, -3), (1, 0.5)]
+        self.assertEqual(nearest_corner(corners, 3.0, 1.0), 3)
+
+    def test_a_trailing_corner_is_never_chosen(self):
+        corners = [(0, -5), (0, -4), (2, -5), (2, -4)]
+        self.assertIn(nearest_corner(corners, 3.0, 1.0), (1, 3))
+
+    def test_the_nearest_corner_beats_one_that_is_merely_close_in_x(self):
+        corners = [(-2.9, -6), (-2.9, -5), (2.9, -1.2), (2.9, -0.2)]
+        self.assertEqual(nearest_corner(corners, 3.0, 1.0), 3)
 
 
 class TestDistances(unittest.TestCase):
