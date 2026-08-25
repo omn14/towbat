@@ -539,6 +539,15 @@ charge path was quietly handling it — check there before believing an absence.
       position, pivot drift and the gap either side of the turn. It found the
       margin inversion on its first run. Reach for it before arguing about
       what the board looks like.
+      A fifth wrong turn, and not a geometric one: `pivot` went in as the
+      *third* positional parameter of `alignToEnemy`, ahead of `duration`. The
+      new overrun call passed it by keyword and was fine, but the charge call
+      has always passed its duration positionally, so every charge align since
+      has handed `0.5` to `setPos` and raised. Adding a parameter in the middle
+      of a signature is silent in Python — no error at the call site, nothing
+      from pyflakes — and no test touches `alignToEnemy`, which is async and
+      needs `render`. `pivot` is keyword-only now so a positional argument
+      cannot land on it again.
       LEFTOVER: no pivot to *maximise contact* before aligning, on either
       path — the unit engages wherever it happened to touch.
 - [x] Pursuit into a Fleeing Enemy (p. 157) — run down exactly as if caught by

@@ -744,13 +744,15 @@ class CombatResolver:
 
     # ─── Flank Detection ──────────────────────────────────────────────────
 
-    async def alignToEnemy(self, unit, angleToRotate, pivot=None, duration=0.5):
+    async def alignToEnemy(self, unit, angleToRotate, duration=0.5, *, pivot=None):
         """Pivot to align, about the point of contact (p. 157).
 
         A charge leaves that point on `playerNP`; an overrun has to supply the
         corner that struck, never having gone through the move code that sets
         it. Nothing else moves: pivoting about the point the two bases share
         leaves them sharing it.
+
+        `pivot` is keyword-only so it cannot swallow a positional duration.
         """
         parent = unit.bodyNP.getParent()
         newnode = render.attachNewNode(f"Temp-{unit.unitName}")
