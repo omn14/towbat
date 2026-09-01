@@ -331,6 +331,7 @@ class MyApp(ShowBase):
                                             endPos=Point3(15,0, 0))
         
         self.mousePosOnGround=Point3(0,0,0)
+        self._hoveredUnit = None
 
         self.bakeTextures(self.ground)
 
@@ -1323,46 +1324,41 @@ class MyApp(ShowBase):
 
         self.taskMgr.add(shake_task, "cameraShakeTask")
     
-    def mouseHoverUnit(self,task):
+    def mouseHoverUnit(self, task):
+        """Track the hovered unit and pin the tooltip where it first appears.
+
+        Placed on hover-enter rather than followed every frame: a tooltip that
+        chases the cursor jitters, and re-running the fit each frame would make
+        it jump as it crossed a screen edge.
+        """
+        hovered = None
         if base.mouseWatcherNode.hasMouse():
-            # Get mouse position in normalized device coordinates
             pMouse = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
             pTo = Point3()
             base.camLens.extrude(pMouse, pFrom, pTo)
-
-            # Transform to global coordinates
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
 
-            
-            
-
-            # Perform ray test
             result = self.world.rayTestClosest(pFrom, pTo, CM.HOVER_PICK)
-            #self.debug_ray(pFrom, pTo)
             if result.hasHit():
-                hit_node = result.getNode()
-                # Check if hit node is a unit
-                #if isinstance(hit_node, BulletRigidBodyNode):
                 self.mousePosOnGround = result.getHitPos()
-                #self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), result.getHitPos())
-                #self.drawProjectileTrajectory(Point3(-15,-5,0), Point3(-15,5,0), n=50)
-                if True:
-                    node_name = hit_node.getName()
-                    #print(node_name)
-                    if node_name.startswith('UnitCollision-'):
-                        unit_name = node_name.replace('UnitCollision-', '')
-                        # Set the active unit based on which was clicked
-                        for unit in self.units:
-                            if unit_name == unit.unitName:
-                                hovered_unit = unit
-                                #print(f"Hovered unit: {unit.unitName}")
-                                unit.text_node.show()
-                    else:
-                        for unit in self.units:
-                            unit.text_node.hide()
-        
+                node_name = result.getNode().getName()
+                if node_name.startswith('UnitCollision-'):
+                    unit_name = node_name.replace('UnitCollision-', '')
+                    hovered = next((u for u in self.units
+                                    if u.unitName == unit_name), None)
+
+        if hovered is not self._hoveredUnit:
+            self._hoveredUnit = hovered
+            if hovered is None:
+                self.hud.hide_tooltip()
+            else:
+                hovered.updateTextNode()
+                mouse = base.mouseWatcherNode.getMouse()
+                self.hud.show_tooltip(hovered.text.getText(),
+                                      mouse.getX() * self.getAspectRatio(),
+                                      mouse.getY())
         return task.cont
                         
 

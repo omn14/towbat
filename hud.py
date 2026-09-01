@@ -101,6 +101,12 @@ class HUD(DirectObject):
     DETAIL_TOP = 0.455
     DETAIL_STEP = 0.046
 
+    # Hover tooltip. Screen space, so it can be measured and kept on screen;
+    # as world-space text on the unit it simply ran off the bottom edge.
+    TIP_SCALE = 0.030
+    TIP_PAD = 0.020
+    TIP_GAP = 0.015
+
     def __init__(self):
         DirectObject.__init__(self)
         _register_properties()
@@ -151,6 +157,7 @@ class HUD(DirectObject):
         self._widgets = [self._turn, self._round, self._phase, self._log_frame]
 
         self._build_unit_card(font)
+        self._build_tooltip(font)
 
         self.set_phase(self._active_phase)
         self._redraw_log()
@@ -160,6 +167,64 @@ class HUD(DirectObject):
         self.accept('hud-log', self.log)
         self.accept('hud-unit', self.show_unit)
         rules_log.add_listener(self._on_rule)
+
+    # ─── Hover tooltip ────────────────────────────────────────────────
+
+    def _build_tooltip(self, font):
+        self._tip_frame = DirectFrame(
+            parent=base.aspect2d,
+            frameColor=(0.10, 0.08, 0.06, 0.94),
+            frameSize=(0, 0, 0, 0),
+            relief=DGG.FLAT,
+        )
+        self._tip_frame.setTransparency(TransparencyAttrib.MAlpha)
+        self._tip_frame.setBin('gui-popup', 0)
+        self._tip_text = T.styled_text(
+            text='', pos=(0, 0), scale=self.TIP_SCALE, fg=T.CREAM,
+            align=TextNode.ALeft, parent=self._tip_frame, font=font)
+        self._tip_frame.hide()
+        self._widgets.append(self._tip_frame)
+
+    def show_tooltip(self, text: str, x: float, y: float):
+        """Show *text* with its top-left corner at the cursor (*x*, *y* in
+        aspect2d coordinates), nudged just far enough to stay on screen."""
+        if not text:
+            self.hide_tooltip()
+            return
+
+        self._tip_text.setText(text)
+        node = self._tip_text.textNode
+        s = self.TIP_SCALE
+        left, right = node.getLeft() * s, node.getRight() * s
+        bottom, top = node.getBottom() * s, node.getTop() * s
+        pad = self.TIP_PAD
+        self._tip_frame['frameSize'] = (left - pad, right + pad,
+                                        bottom - pad, top + pad)
+
+        # Put the top-left of the text block at the cursor, offset by a gap so
+        # the pointer does not sit on the first line.
+        px = x + self.TIP_GAP - left
+        pz = y - self.TIP_GAP - top
+
+        # Then shift by the least amount that brings it back on screen, so the
+        # anchor stays as near the cursor as it can.
+        limit_x, limit_y = base.getAspectRatio(), 1.0
+        x0, x1 = px + left - pad, px + right + pad
+        y0, y1 = pz + bottom - pad, pz + top + pad
+        if x1 > limit_x:
+            px -= x1 - limit_x
+        if x0 < -limit_x:
+            px += -limit_x - x0
+        if y0 < -limit_y:
+            pz += -limit_y - y0
+        if y1 > limit_y:
+            pz -= y1 - limit_y
+
+        self._tip_frame.setPos(px, 0, pz)
+        self._tip_frame.show()
+
+    def hide_tooltip(self):
+        self._tip_frame.hide()
 
     # ─── Unit card ────────────────────────────────────────────────────
 

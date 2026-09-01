@@ -31,6 +31,7 @@ nothing covers the centre of the board.
 | Bottom left | `a2dBottomLeft` | Unit card |
 | Bottom centre | `a2dBottomCenter` | Transient readouts: dice, targeting, status |
 | Bottom right | `a2dBottomRight` | Battle log |
+| Follows the cursor | `aspect2d` | Hover tooltip (drawn above everything) |
 
 Anchor to the corner nodes, never to raw aspect2d coordinates. `(-1.3, 0.9)`
 is 16:9 only; on any other window shape it drifts off the edge or into the
@@ -89,6 +90,22 @@ middle of the table.
   about to happen to it. Facts earn a place on it by deciding something this
   phase. Duplicating the dossier would cost the card the thing that makes it
   readable at a glance.
+
+- Hover tooltip moved from world space to screen space. It was a billboarded
+  `TextNode` parented to the unit, so its position was whatever the camera
+  projection gave you — there was nothing to clamp against, and a unit low on
+  the board put its dossier off the bottom of the screen.
+
+  Now one shared `aspect2d` widget with a panel behind it. Its top-left corner
+  is placed at the cursor, then shifted by the *least* amount that brings it
+  back on screen, so the anchor stays as near the pointer as it can. Placed on
+  hover-enter, not followed every frame: a tooltip that chases the cursor
+  jitters, and re-running the fit each frame makes it jump as it crosses an
+  edge. `units.py` keeps the `TextNode` purely as the string builder.
+
+  Free consequences: no scaling with camera zoom, no depth-sort fighting, a
+  unit's own models can no longer occlude its label, and the text is set in
+  MedievalSharp rather than `cmtt12`, so `4+` renders as `4+` instead of `4−`.
 
 ## Next, in order
 
@@ -160,6 +177,14 @@ The two genuinely hard ones:
   others loses the tail of the "Fighting" line.
 - Not on the card, and deliberately: points value, the full special-rules list,
   the full weapon list, and armour pieces. They belong to the hover dossier.
+- The tooltip's stat table is only roughly aligned. `units.py` pads its columns
+  for a fixed-width face, and it is now set in the proportional display face.
+  The real fix is the body font; the alternative, `cmtt12`, breaks `+`.
+- The tooltip can cover the unit card when hovering a unit low on the left.
+  Acceptable while it is transient and drawn on top, but it argues for the
+  two-stage split: a short card on hover, the dossier in the free top-right
+  zone. That split is still not done — hover shows the whole dossier, so on a
+  tall unit entry the panel is still most of the screen height.
 - Nothing posts to the log from `psychology.py`, `spell_system.py`,
   `cannon_fire.py` or `bombardment.py` yet. They only need a
   `messenger.send('hud-log', ...)` at the point of resolution.
