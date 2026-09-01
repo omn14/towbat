@@ -31,9 +31,6 @@ class GamePhaseFSM(FSM):
 
         self.current_phase_index = 0
 
-        self.game.debugText.setText(
-            f"Current phase: {self.PHASES[self.current_phase_index]}"
-        )
         self.request(self.PHASES[self.current_phase_index])
 
         self.menu_cubes = base.camera.findAllMatches("**/*MenuCube")
@@ -45,6 +42,17 @@ class GamePhaseFSM(FSM):
         self.accept('mouse1', self._on_menu_click)
 
     # ─── Convenience properties for backward compatibility ──────────
+
+    def request(self, request, *args):
+        """Announce every transition, however the phase was entered.
+
+        Phases are requested directly from half a dozen places as well as
+        through nextPhase(), so hooking the transition is the only way the
+        HUD sees all of them.
+        """
+        result = FSM.request(self, request, *args)
+        messenger.send('hud-phase', [self.state or request])
+        return result
 
     @property
     def phases(self):
@@ -189,7 +197,6 @@ class GamePhaseFSM(FSM):
         self.game.boundary_np.setPos(0, -dep_height - dep_height / 2, 0)
         base.world.attachRigidBody(self.game.boundary_ghost)
 
-        self.game.debugText.setText("Current phase: Deploy Phase")
         self.game.setActiveUnitTask = self.game.taskLoopDeploy
         self.game.setActiveUnitTaskName = "taskLoopDeploy"
         self.game.accept(
@@ -205,9 +212,6 @@ class GamePhaseFSM(FSM):
 
     def enterStrategyPhase(self):
         self.current_phase_index = 0
-        self.game.debugText.setText(
-            f"Current phase: {self.PHASES[self.current_phase_index]}"
-        )
         self.game.setActiveUnitTask = self.game.taskLoopStrategy
         self.game.setActiveUnitTaskName = "taskLoopStrategy"
         self.game.accept(
@@ -238,9 +242,6 @@ class GamePhaseFSM(FSM):
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
-        self.game.debugText.setText(
-            f"Current phase: {self.PHASES[self.current_phase_index]}"
-        )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
             unit.fledThisPhase = False
@@ -277,9 +278,6 @@ class GamePhaseFSM(FSM):
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
-        self.game.debugText.setText(
-            f"Current phase: {self.PHASES[self.current_phase_index]}"
-        )
         for unit in self.game.units:
             unit.panicTestedThisPhase = False
             unit.fledThisPhase = False
@@ -306,9 +304,6 @@ class GamePhaseFSM(FSM):
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
-        self.game.debugText.setText(
-            f"Current phase: {self.PHASES[self.current_phase_index]}"
-        )
         self.game.setActiveUnitTask = self.game.taskStartCombat
         self.game.setActiveUnitTaskName = "taskStartCombat"
         self.game.accept(
@@ -357,7 +352,6 @@ class GamePhaseFSM(FSM):
 
     def enterMakeChoice(self):
         print("Entering Make Choice Phase")
-        self.game.debugText.setText("Current phase: MakeChoice")
         self.game.accept('mouse1', self.game.makeChoiceSelection)
 
     def exitMakeChoice(self):
@@ -365,7 +359,6 @@ class GamePhaseFSM(FSM):
 
     def enterSpellPhase(self):
         print("Entering Spell Phase")
-        self.game.debugText.setText("Casting a spell")
         self.activeSpell = None
         self.spellFunctionToCast = None
         # Casting is a detour from whichever phase asked for it; a spell's type
@@ -397,7 +390,6 @@ class GamePhaseFSM(FSM):
     def enterCampaignPhase(self):
         """Show campaign map, hide battle scene."""
         print("Entering Campaign Phase")
-        self.game.debugText.setText("Current phase: Campaign Map")
         self.game.debugNP.hide()
 
         self._saved_cam_pos = self.game.camera.getPos()

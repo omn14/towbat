@@ -69,6 +69,7 @@ from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
 from debug_tools import DebugTools, debug_enabled
+from hud import HUD
 import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -177,14 +178,26 @@ class MyApp(ShowBase):
 
         self.awaitingChoice = False
         self.resolvingCombat = False
-        self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=gui_theme.HINT_FG)
-        self.debugTextUnit.setText("Debug Info test")
+        # Anchored to screen corners so they cannot drift into the HUD's zones
+        # (top-left banner, top-centre phase track, bottom-right battle log).
+        self.debugTextUnit = self.setup_text_node(
+            pos=(0.03, 0.13), scale=0.038, color=gui_theme.HINT_FG,
+            parent=self.a2dBottomLeft, align=TextNode.ALeft)
 
-        self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=gui_theme.HINT_FG)
+        self.debugTextInfo = self.setup_text_node(
+            pos=(0, 0.20), scale=0.042, color=gui_theme.HINT_FG,
+            parent=self.a2dBottomCenter)
         self.moveArceDistance = 0
-        self.debugTextInfo.setText("Debug Arch test")
 
-        self.diceInfoText = self.setup_text_node(text="Dice Info", pos=(-0.7, 0.55), scale=0.05, color=gui_theme.GOLD)
+        self.diceInfoText = self.setup_text_node(
+            pos=(0, 0.30), scale=0.045, color=gui_theme.GOLD,
+            parent=self.a2dBottomCenter)
+
+        # One-off status messages (war-machine summaries and the like); the
+        # phase name it used to echo is now the HUD's phase track.
+        self.debugText = self.setup_text_node(
+            pos=(0, 0.11), scale=0.040, color=gui_theme.CREAM,
+            parent=self.a2dBottomCenter)
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
@@ -234,10 +247,11 @@ class MyApp(ShowBase):
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.onRightClick,[self.unitToMove])
         #self.messenger.toggleVerbose()
+        # Built before anything that publishes to it (round counter, FSM).
+        self.hud = HUD()
+        self.accept('f3', self.hud.toggle)
         self.roundCounter = RoundCounter(self,16)
 
-        self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=gui_theme.CREAM)
-        self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         """ self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
         self.AIplayer2.active = True """
@@ -1396,7 +1410,7 @@ class MyApp(ShowBase):
                         self.accept('mouse3', self.onRightClick,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
-                        self.debugTextUnit.setText(f"Selected unit: {self.unitToMove.unitName}\nStats: {self.unitToMove.unit.model.characteristics}")
+                        self.showSelectedUnit(self.unitToMove)
 
             result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))    
             if result2.hasHit():
@@ -1430,6 +1444,19 @@ class MyApp(ShowBase):
     def spellDescriptions(self, wizard, names) -> dict:
         """name -> readout, for the spell-selection menu."""
         return {n: spell_readout(n, wizard.spells.get(n)) for n in names}
+
+    SELECTION_STATS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
+
+    def showSelectedUnit(self, unit):
+        """Bottom-left readout for the selected unit."""
+        ch = unit.unit.model.characteristics
+        stats = "  ".join(f"{k} {ch.get(k, '-')}"
+                          for k in self.SELECTION_STATS)
+        save = getattr(unit.unit.model, 'armor_save', 7)
+        save = f"{save}+" if save <= 6 else "none"
+        self.debugTextUnit.setText(
+            f"{unit.unit.name}   ({unit.unit.nmodels} models, "
+            f"{unit.unit.files}x{unit.unit.ranks}, save {save})\n{stats}")
 
     async def resolveSpell(self, target):
         """Cast the chosen spell at *target* — a unit, or a ground point for a
@@ -1600,23 +1627,26 @@ class MyApp(ShowBase):
         return selected
 
     
-    def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
+    def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1),
+                        parent=None, align=TextNode.ACenter):
         """
         Creates and returns a text node for displaying text on screen.
         Uses the shared medieval theme font and shadow.
-        
+
         Args:
             text: The text to display
-            pos: (x, y) position in aspect2d coordinates (-1 to 1)
+            pos: (x, y) position, in *parent*'s space
             scale: Text scale
             color: Text color as (r, g, b, a) tuple
-        
+            parent: Anchor node (e.g. base.a2dBottomLeft); aspect2d if None
+            align: TextNode alignment
+
         Returns:
             TextNode object that can be updated with .setText()
         """
         return gui_theme.styled_text(
             text=text, pos=pos, scale=scale, fg=color,
-            align=TextNode.ACenter,
+            align=align, parent=parent,
         )
 
     # ─── Campaign Map ─────────────────────────────────────────────────────
