@@ -4,6 +4,8 @@ from direct.showbase.ShowBase import ShowBase
 import random
 from panda3d.core import LRotationf, LColor, Material
 
+from rules_log import dice_roll
+
 
 def checkDice(allDice,task):
     """Task to check the status of all dice in the scene."""
@@ -43,6 +45,8 @@ def checkDice(allDice,task):
             #print(q.getUp().normalized(), q.getForward().normalized(), q.getRight().normalized())
         #for dice in allDice:
         #    dice.remove(base.world)
+        # The one point where a roll's faces are known, whoever threw it.
+        dice_roll([d.currentValue for d in allDice])
         return task.done
     return task.cont
 

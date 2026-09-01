@@ -127,9 +127,6 @@ class unitGraphics(FSM):
             mayChange=True
         ) """
         self.text = TextNode('node name')
-        mono_font = loader.loadFont('cmtt12')
-        if mono_font:
-            self.text.setFont(mono_font)
         # Register inline colour properties (done once per process via global manager)
         _tpm = TextPropertiesManager.getGlobalPtr()
         if not _tpm.hasProperties('stat_low'):
@@ -148,15 +145,19 @@ class unitGraphics(FSM):
     # Average human-level baseline for above-average detection
     _STAT_AVERAGE = {'M': 4, 'WS': 3, 'BS': 3, 'S': 3, 'T': 3, 'W': 1, 'I': 3, 'A': 1, 'Ld': 7}
     _STAT_KEYS    = ['M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld']
-    _COL_W        = 4   # fixed column width for monospace alignment
+    _COL_W        = 4   # nominal column width, for separator and wrap widths only
 
     def _stat_table(self, label: str, ch: dict) -> str:
         """Return a two-line stat table (header + values) for the given characteristics dict.
         Stats above average are marked '+' in green; below average are marked '-' in red.
+
+        Columns are separated by tabs, not padded with spaces: the HUD renders
+        this text in the proportional theme font, where a space is narrower
+        than a digit and no amount of padding lines the rows up. The tab stop
+        is set by HUD.TIP_TAB_WIDTH.
         """
-        cw = self._COL_W
         header = f"{label}\n"
-        hdr_row = "".join(f"{k:^{cw}}" for k in self._STAT_KEYS)
+        hdr_row = "\t".join(self._STAT_KEYS)
         val_parts = []
         for k in self._STAT_KEYS:
             raw = ch.get(k, '-')
@@ -164,23 +165,15 @@ class unitGraphics(FSM):
                 val = int(raw)
                 avg = self._STAT_AVERAGE.get(k, 99)
                 if val > avg:
-                    visible = str(raw) + '+'
-                    cell = f"\x01stat_high\x01{visible}\x02"
+                    cell = f"\x01stat_high\x01{raw}+\x02"
                 elif val < avg:
-                    visible = str(raw) + '-'
-                    cell = f"\x01stat_low\x01{visible}\x02"
+                    cell = f"\x01stat_low\x01{raw}-\x02"
                 else:
-                    visible = str(raw)
-                    cell = visible
+                    cell = str(raw)
             except (ValueError, TypeError):
-                visible = str(raw)
-                cell = visible
-            # Centre-pad using the visible text length (markup bytes have no display width)
-            padding = max(0, cw - len(visible))
-            lpad = padding // 2
-            rpad = padding - lpad
-            val_parts.append(' ' * lpad + cell + ' ' * rpad)
-        val_row = "".join(val_parts)
+                cell = str(raw)
+            val_parts.append(cell)
+        val_row = "\t".join(val_parts)
         return header + hdr_row + "\n" + val_row + "\n"
 
     def _weapon_desc(self, w: dict) -> str:

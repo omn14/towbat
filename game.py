@@ -89,6 +89,7 @@ class MyApp(ShowBase):
     def __init__(self):
         super().__init__()
         render.setAntialias(AntialiasAttrib.MAuto)
+        self.setBackgroundColor(0, 0, 0, 1)
 
         # Enable PStats profiling
         #PStatClient.connect()
@@ -178,24 +179,23 @@ class MyApp(ShowBase):
 
         self.awaitingChoice = False
         self.resolvingCombat = False
-        # Anchored to screen corners so they cannot drift into the HUD's zones
-        # (top-left banner, top-centre phase track, bottom-right battle log,
-        # bottom-left unit card).
+        # Anchored to screen corners so they cannot drift into the HUD's
+        # zones. They sit just above the bottom command bar (HUD.BAR_H).
         # These three are written from a dozen call sites with arbitrary text,
         # so they keep the display face, which has the full glyph set.
         self.debugTextInfo = self.setup_text_node(
-            pos=(0, 0.20), scale=0.040, color=gui_theme.HINT_FG,
+            pos=(0, 0.56), scale=0.040, color=gui_theme.HINT_FG,
             parent=self.a2dBottomCenter)
         self.moveArceDistance = 0
 
         self.diceInfoText = self.setup_text_node(
-            pos=(0, 0.30), scale=0.044, color=gui_theme.GOLD,
+            pos=(0, 0.62), scale=0.044, color=gui_theme.GOLD,
             parent=self.a2dBottomCenter)
 
         # One-off status messages (war-machine summaries and the like); the
         # phase name it used to echo is now the HUD's phase track.
         self.debugText = self.setup_text_node(
-            pos=(0, 0.11), scale=0.038, color=gui_theme.CREAM,
+            pos=(0, 0.51), scale=0.038, color=gui_theme.CREAM,
             parent=self.a2dBottomCenter)
 
         self.numsPoints=0
@@ -249,6 +249,9 @@ class MyApp(ShowBase):
         # Built before anything that publishes to it (round counter, FSM).
         self.hud = HUD()
         self.accept('f3', self.hud.toggle)
+        # The bar posts an intent; the FSM owns the turn sequence. Bound
+        # through a lambda because the FSM is built after the HUD.
+        self.accept('hud-end-phase', lambda: self.fsm.nextPhase())
         self.roundCounter = RoundCounter(self,16)
 
         self.boundries = OutOfBounds(self)

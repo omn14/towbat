@@ -49,6 +49,18 @@ def battle_log(text: str, category: str = 'info') -> None:
         messenger.send('hud-log', [text, category])
 
 
+def dice_roll(values) -> None:
+    """Publish the face values of a settled roll to the on-screen dice strip.
+
+    Same messenger guard as ``battle_log``: ``dice`` is imported by the tests
+    without a ShowBase.
+    """
+    import builtins
+    messenger = getattr(builtins, 'messenger', None)
+    if messenger is not None:
+        messenger.send('hud-dice', [list(values)])
+
+
 def subject_name(subject) -> str:
     """A readable name for a unit wrapper, a Unit, a model or a plain string."""
     if subject is None:

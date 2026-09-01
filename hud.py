@@ -1,16 +1,25 @@
-"""On-screen HUD: turn banner, phase track and the battle log.
+"""On-screen HUD: one full-width command bar along the bottom of the screen.
 
 The rule trace produced by ``rules_log`` is the engine's only evidence that a
 rule fired, and until now it went to the console alone. The log panel here is
 that same stream made visible while the game is being played.
 
-Everything is anchored to Panda3D's aspect2d corner nodes rather than fixed
-aspect2d coordinates, so the layout survives any window shape.
+The bar is *drawn over* the board rather than shrinking the camera's display
+region. The picking code extrudes raw mouse coordinates straight through
+``base.camLens``, which assumes the region covers the whole window; shrinking
+it would silently offset every pick. Nothing is lost by overlaying, because
+DirectGui regions suppress mouse-button events, so a click on the bar cannot
+reach a unit behind it.
+
+Sections are laid out as fractions of the bar's width and re-flowed on
+``window-event``, so the bar survives any window shape rather than being 16:9
+only.
 """
 
 from collections import deque
 
-from direct.gui.DirectGui import DirectFrame, DGG
+from direct.gui.DirectGui import DirectButton, DirectFrame, DGG
+from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import (TextNode, TextProperties, TextPropertiesManager,
                           TransparencyAttrib)
@@ -20,36 +29,45 @@ import rules_log
 
 
 # Log category -> (inline text-properties name, colour).
+# The pages are parchment, so these are ink tints rather than the bright
+# on-black colours the corner panels used; the same hues, darkened to read.
 _CATEGORY_COLOURS = {
-    'rule':   ('log_rule',   T.GOLD),
-    'skip':   ('log_skip',   (0.58, 0.55, 0.48, 1.0)),
-    'dice':   ('log_dice',   (0.81, 0.92, 1.00, 1.0)),
-    'combat': ('log_combat', T.CREAM),
-    'morale': ('log_morale', (1.00, 0.54, 0.54, 1.0)),
-    'good':   ('log_good',   (0.43, 0.88, 0.43, 1.0)),
-    'info':   ('log_info',   T.CREAM),
+    'rule':   ('log_rule',   (0.46, 0.32, 0.04, 1.0)),
+    'skip':   ('log_skip',   (0.48, 0.43, 0.34, 1.0)),
+    'dice':   ('log_dice',   (0.16, 0.28, 0.46, 1.0)),
+    'combat': ('log_combat', T.INK),
+    'morale': ('log_morale', (0.62, 0.10, 0.08, 1.0)),
+    'good':   ('log_good',   (0.13, 0.40, 0.13, 1.0)),
+    'info':   ('log_info',   T.INK),
 }
 
 _PHASE_ON = 'hud_phase_on'
 _PHASE_OFF = 'hud_phase_off'
+_PHASE_ON_COLOUR = (0.52, 0.13, 0.10, 1.0)
+_PHASE_OFF_COLOUR = (0.42, 0.36, 0.26, 0.65)
 
-# State chips on the unit card.
+# State chips on the regiment page.
 _CHIP_COLOURS = {
-    'bad':  ('chip_bad',  (1.00, 0.45, 0.45, 1.0)),
-    'good': ('chip_good', (0.45, 0.90, 0.45, 1.0)),
-    'note': ('chip_note', T.GOLD),
+    'bad':  ('chip_bad',  (0.62, 0.10, 0.08, 1.0)),
+    'good': ('chip_good', (0.13, 0.40, 0.13, 1.0)),
+    'note': ('chip_note', (0.46, 0.32, 0.04, 1.0)),
 }
 
-_STAT_HI = (0.45, 0.90, 0.45, 1.0)
-_STAT_LO = (1.00, 0.45, 0.45, 1.0)
+_STAT_HI = (0.13, 0.40, 0.13, 1.0)
+_STAT_LO = (0.62, 0.10, 0.08, 1.0)
+
+# Models bar: green while the unit is safe, amber past the 50% fall-back
+# threshold, red past the 25% heavy-casualties one.
+_BAR_FULL = (0.25, 0.45, 0.18, 1.0)
+_BAR_MID = (0.72, 0.52, 0.10, 1.0)
 
 
 def _register_properties():
     """Register the inline colours once per process."""
     tpm = TextPropertiesManager.getGlobalPtr()
     entries = list(_CATEGORY_COLOURS.values()) + list(_CHIP_COLOURS.values())
-    entries.append((_PHASE_ON, T.GOLD))
-    entries.append((_PHASE_OFF, (0.92, 0.85, 0.68, 0.40)))
+    entries.append((_PHASE_ON, _PHASE_ON_COLOUR))
+    entries.append((_PHASE_OFF, _PHASE_OFF_COLOUR))
     for name, colour in entries:
         if not tpm.hasProperties(name):
             tp = TextProperties()
@@ -74,38 +92,58 @@ class HUD(DirectObject):
     ASIDES = {'SpellPhase': 'CASTING', 'MakeChoice': 'CHOOSING',
               'CampaignPhase': 'CAMPAIGN'}
 
-    LOG_ENTRIES = 8
-    LOG_SCALE = 0.032
-    LOG_LEFT = -1.00
-    LOG_TOP = 0.500
-    LOG_BOTTOM = 0.075
-    LOG_TEXT_WIDTH = 0.94
+    LOG_ENTRIES = 6
+    LOG_SCALE = 0.026
+    LOG_TOP = 0.350
+    LOG_BOTTOM = 0.048
 
-    # Unit card. Columns are placed by hand and centred, which keeps the stat
-    # table aligned without a fixed-width face.
+    # ── Bar geometry ────────────────────────────────────────────────
+    BAR_H = 0.46            # aspect2d is 2 units tall, so this is 23% of it
+    GUTTER = 0.014
+    HEAD_Z = 0.408          # section headings
+    RULE_Z = 0.390          # the gold rule under them
+
+    # Section spans as fractions of the bar's width, left to right.
+    SECTIONS = {
+        'rail':       (0.000, 0.050),
+        'regiment':   (0.050, 0.315),
+        'log':        (0.315, 0.560),
+        'centre':     (0.560, 0.790),
+        'rules':      (0.790, 0.838),
+        'objectives': (0.838, 0.930),
+        'end':        (0.930, 1.000),
+    }
+
+    # Regiment page. Column positions are fractions across the section, so the
+    # stat table stays aligned without needing a fixed-width face.
     STAT_KEYS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
     STAT_AVERAGE = {'M': 4, 'WS': 3, 'BS': 3, 'S': 3, 'T': 3,
                     'W': 1, 'I': 3, 'A': 1, 'Ld': 7}
-    CARD_LEFT = 0.06
-    CARD_TOP = 0.78
-    CARD_BOTTOM = 0.06
-    COL_FIRST = 0.11
-    COL_LAST = 0.97
-    BAR_LEFT = 0.08
-    BAR_WIDTH = 0.92
-    BAR_Z = 0.163
-    BAR_HEIGHT = 0.026
-    MODELS_Z = 0.215
-    CHIPS_Z = 0.093
-    DETAIL_LINES = 5
-    DETAIL_TOP = 0.455
-    DETAIL_STEP = 0.046
+    PORTRAIT = 0.24         # side of the square portrait slot
+    TEXT_X = 0.28           # where the text column starts, past the portrait
+    COL_FIRST = 0.32
+    COL_LAST = 0.94
+    DETAIL_LINES = 2
+    DETAIL_TOP = 0.114
+    DETAIL_STEP = 0.030
+    BAR_Z = 0.138           # models bar
+    BAR_HEIGHT = 0.024
+    MODELS_Z = 0.178
+    CHIPS_Z = 0.052
+
+    DICE_SLOTS = 5
+    DICE_SIZE = 0.085
+    PHASE_SCALE = 0.022
 
     # Hover tooltip. Screen space, so it can be measured and kept on screen;
     # as world-space text on the unit it simply ran off the bottom edge.
     TIP_SCALE = 0.030
     TIP_PAD = 0.020
     TIP_GAP = 0.015
+    # Stat-table column stop. The theme font is proportional, so Unit._stat_table
+    # separates its columns with tabs; this is the width they snap to. Wide
+    # enough for the broadest cell a stat can produce ("10+" at 1.54 units).
+    TIP_TAB_WIDTH = 1.9
 
     def __init__(self):
         DirectObject.__init__(self)
@@ -116,57 +154,294 @@ class HUD(DirectObject):
         self._visible = True
 
         font = T.get_font()
+        self._font = font
 
-        # ── Turn banner (top left) ────────────────────────────────────
-        self._turn = T.styled_text(
-            text='', pos=(0.03, -0.10), scale=0.055, fg=T.GOLD,
-            align=TextNode.ALeft, parent=base.a2dTopLeft, font=font)
-        self._round = T.styled_text(
-            text='', pos=(0.03, -0.155), scale=0.036, fg=T.CREAM,
-            align=TextNode.ALeft, parent=base.a2dTopLeft, font=font)
+        # Every positioned child is registered in _flex as a fraction across
+        # its section, and re-placed by _layout when the window changes shape.
+        self._pages = {}
+        self._flex = []
+        self._stretch = []
+        self._log_x = 0.0
 
-        # ── Phase track (top centre) ──────────────────────────────────
-        self._phase = T.styled_text(
-            text='', pos=(0, -0.095), scale=0.034, fg=T.CREAM,
-            align=TextNode.ACenter, parent=base.a2dTopCenter, font=font)
-
-        # ── Battle log (bottom right) ─────────────────────────────────
-        self._log_frame = DirectFrame(
-            parent=base.a2dBottomRight,
-            frameColor=T.PANEL_BG,
-            frameSize=(-1.05, -0.03, 0.04, 0.62),
+        self._bar = DirectFrame(
+            parent=base.a2dBottomCenter,
+            frameTexture=T.TEX_COMMAND_BAR,
+            frameColor=(1, 1, 1, 1),
+            frameSize=(-1, 1, 0, self.BAR_H),
             relief=DGG.FLAT,
         )
-        self._log_frame.setTransparency(TransparencyAttrib.MAlpha)
+        self._bar.setTransparency(TransparencyAttrib.MAlpha)
+        self._widgets = [self._bar]
 
-        T.styled_text(
-            text='BATTLE LOG', pos=(self.LOG_LEFT, 0.555), scale=0.032,
-            fg=T.GOLD, align=TextNode.ALeft, parent=self._log_frame,
-            font=font, mayChange=False)
-        self._log_rule = DirectFrame(
-            parent=self._log_frame, frameColor=T.SEPARATOR,
-            frameSize=(self.LOG_LEFT, -0.08, -0.002, 0.002),
-            pos=(0, 0, 0.538),
-        )
-
-        self._log_text = T.styled_text(
-            text='', pos=(self.LOG_LEFT, self.LOG_TOP), scale=self.LOG_SCALE,
-            fg=T.CREAM, align=TextNode.ALeft, parent=self._log_frame,
-            font=font, wordwrap=(self.LOG_TEXT_WIDTH / self.LOG_SCALE))
-
-        self._widgets = [self._turn, self._round, self._phase, self._log_frame]
-
-        self._build_unit_card(font)
+        self._build_rail(font)
+        self._build_regiment(font)
+        self._build_log(font)
+        self._build_centre(font)
+        self._build_rules(font)
+        self._build_objectives(font)
+        self._build_end(font)
         self._build_tooltip(font)
+
+        self._layout()
+        self.accept('window-event', self._on_window)
 
         self.set_phase(self._active_phase)
         self._redraw_log()
+        self.set_dice([])
 
         self.accept('hud-turn', self.set_turn)
         self.accept('hud-phase', self.set_phase)
         self.accept('hud-log', self.log)
         self.accept('hud-unit', self.show_unit)
+        self.accept('hud-dice', self.set_dice)
         rules_log.add_listener(self._on_rule)
+
+    # ─── Layout ───────────────────────────────────────────────────────
+
+    def _section(self, name, page=True, z0=0.034, z1=None):
+        """Anchor node for one section, with an optional parchment page."""
+        z1 = self.RULE_Z if z1 is None else z1
+        anchor = self._bar.attachNewNode(f'sec-{name}')
+        frame = None
+        if page:
+            frame = DirectFrame(
+                parent=anchor, frameTexture=T.TEX_PARCHMENT,
+                frameColor=(1, 1, 1, 1), relief=DGG.FLAT,
+                frameSize=(0, 1, z0, z1))
+            frame.setTransparency(TransparencyAttrib.MAlpha)
+        self._pages[name] = (anchor, frame, z0, z1)
+        return anchor
+
+    def _place(self, node, section, frac_x, z):
+        """Put *node* at a fraction across its section. Re-applied on resize."""
+        self._flex.append((node, section, frac_x, z))
+        return node
+
+    def _span(self, frame, section, f0, f1, z):
+        """A frame whose width spans *f0*..*f1* of its section."""
+        self._stretch.append((frame, section, f0, f1, z))
+        return frame
+
+    def _label(self, parent, section, frac_x, z, scale, colour,
+               align=TextNode.ALeft, text=''):
+        node = T.styled_text(text=text, pos=(0, z), scale=scale, fg=colour,
+                             align=align, parent=parent, font=self._font)
+        return self._place(node, section, frac_x, z)
+
+    def _heading(self, parent, section, text):
+        """Small-caps gold section title with a rule beneath it."""
+        self._label(parent, section, 0.5, self.HEAD_Z, 0.026, T.GOLD,
+                    TextNode.ACenter, text)
+        rule = DirectFrame(parent=parent, frameColor=T.SEPARATOR,
+                           frameSize=(0, 1, -0.0015, 0.0015))
+        return self._span(rule, section, 0.0, 1.0, self.RULE_Z + 0.012)
+
+    def _section_width(self, name, total):
+        f0, f1 = self.SECTIONS[name]
+        return total * (f1 - f0) - 2 * self.GUTTER
+
+    def _on_window(self, win=None):
+        self._layout()
+
+    def _layout(self):
+        """Re-flow the bar for the current window shape."""
+        a = base.getAspectRatio()
+        total = 2.0 * a
+        self._bar['frameSize'] = (-a, a, 0, self.BAR_H)
+
+        for name, (anchor, frame, z0, z1) in self._pages.items():
+            f0, _ = self.SECTIONS[name]
+            anchor.setX(-a + total * f0 + self.GUTTER)
+            if frame is not None:
+                frame['frameSize'] = (0, self._section_width(name, total),
+                                      z0, z1)
+
+        for frame, name, f0, f1, z in self._stretch:
+            width = self._section_width(name, total)
+            size = frame['frameSize']
+            frame['frameSize'] = (0, (f1 - f0) * width, size[2], size[3])
+            frame.setPos(f0 * width, 0, z)
+
+        for node, name, frac, z in self._flex:
+            x = frac * self._section_width(name, total)
+            # OnscreenText overrides setPos with a flat (x, z) signature.
+            if isinstance(node, OnscreenText):
+                node.setPos(x, z)
+            else:
+                node.setPos(x, 0, z)
+
+        self._log_x = 0.02 * self._section_width('log', total)
+        self._log_text['wordwrap'] = (
+            (self._section_width('log', total) - 0.04) / self.LOG_SCALE)
+        self._fit_phase()
+        self._redraw_log()
+
+    def _fit_phase(self):
+        """Shrink the phase track if the five labels are wider than the section.
+
+        The track is one text node rather than five chips, so it cannot wrap;
+        on a narrow window it would otherwise run out over the neighbouring
+        panels.
+        """
+        width = self._section_width('centre', 2.0 * base.getAspectRatio()) * 0.94
+        natural = self._phase.textNode.getWidth() * self.PHASE_SCALE
+        scale = self.PHASE_SCALE
+        if natural > width:
+            scale *= width / natural
+        self._phase.setScale(scale)
+
+    # ─── Sections ─────────────────────────────────────────────────────
+
+    def _slot(self, parent, w, h, centred=False):
+        """An empty framed slot, reserved for art that is not drawn yet."""
+        size = ((-w / 2, w / 2, -h / 2, h / 2) if centred else (0, w, 0, h))
+        frame = DirectFrame(parent=parent, frameTexture=T.TEX_SLOT,
+                            frameColor=(1, 1, 1, 1), relief=DGG.FLAT,
+                            frameSize=size)
+        frame.setTransparency(TransparencyAttrib.MAlpha)
+        return frame
+
+    def _build_rail(self, font):
+        """Two navigation slots down the left edge — army list and spellbook."""
+        anchor = self._section('rail', page=False)
+        for text, z in (('ARMY', 0.310), ('BOOK', 0.130)):
+            self._place(self._slot(anchor, 0.13, 0.13, centred=True),
+                        'rail', 0.5, z)
+            self._label(anchor, 'rail', 0.5, z - 0.095, 0.019, T.CREAM,
+                        TextNode.ACenter, text)
+
+
+    def _build_regiment(self, font):
+        anchor = self._section('regiment')
+        self._heading(anchor, 'regiment', 'SELECTED REGIMENT')
+
+        self._portrait = self._slot(anchor, self.PORTRAIT, self.PORTRAIT)
+        self._place(self._portrait, 'regiment', 0.02, 0.140)
+
+        self._card_name = self._label(anchor, 'regiment', self.TEXT_X, 0.330,
+                                      0.036, T.GOLD)
+        self._card_sub = self._label(anchor, 'regiment', self.TEXT_X, 0.294,
+                                     0.022, T.INK_FADED)
+
+        step = (self.COL_LAST - self.COL_FIRST) / (len(self.STAT_KEYS) - 1)
+        self._stat_values = {}
+        self._regiment_static = []
+        for i, key in enumerate(self.STAT_KEYS):
+            frac = self.COL_FIRST + i * step
+            self._regiment_static.append(
+                self._label(anchor, 'regiment', frac, 0.252, 0.020,
+                            T.PARCHMENT_DARK, TextNode.ACenter, key))
+            self._stat_values[key] = self._label(
+                anchor, 'regiment', frac, 0.212, 0.030, T.INK,
+                TextNode.ACenter)
+
+        self._regiment_static.append(
+            self._label(anchor, 'regiment', self.TEXT_X, self.MODELS_Z, 0.020,
+                        T.PARCHMENT_DARK, text='MODELS'))
+        self._card_models = self._label(anchor, 'regiment', self.COL_LAST,
+                                        self.MODELS_Z, 0.022, T.INK,
+                                        TextNode.ARight)
+
+        # The bar starts past the portrait, so it does not run underneath it.
+        self._bar_back = self._span(
+            DirectFrame(parent=anchor, frameColor=(0.30, 0.24, 0.16, 0.85),
+                        frameSize=(0, 1, 0, self.BAR_HEIGHT)),
+            'regiment', self.TEXT_X, self.COL_LAST, self.BAR_Z)
+        self._card_bar = self._span(
+            DirectFrame(parent=anchor, frameColor=_BAR_FULL,
+                        frameSize=(0, 1, 0, self.BAR_HEIGHT)),
+            'regiment', self.TEXT_X, self.COL_LAST, self.BAR_Z)
+
+        # 50% splits flee from fall back and 25% is the heavy-casualties Panic
+        # threshold; both decide what happens next, so they are marked.
+        span = self.COL_LAST - self.TEXT_X
+        self._bar_ticks = []
+        for fraction, colour in ((0.50, T.INK), (0.25, (0.4, 0.05, 0.05, 1))):
+            tick = DirectFrame(
+                parent=anchor, frameColor=colour,
+                frameSize=(0, 0.004, -0.004, self.BAR_HEIGHT + 0.004))
+            self._bar_ticks.append((tick, fraction))
+            self._place(tick, 'regiment', self.TEXT_X + fraction * span,
+                        self.BAR_Z)
+
+        self._detail_labels = [
+            self._label(anchor, 'regiment', 0.02,
+                        self.DETAIL_TOP - i * self.DETAIL_STEP, 0.021, T.INK)
+            for i in range(self.DETAIL_LINES)]
+        self._card_chips = self._label(anchor, 'regiment', 0.02,
+                                       self.CHIPS_Z, 0.021, T.INK)
+        self._set_regiment_visible(False)
+
+    def _build_log(self, font):
+        anchor = self._section('log')
+        self._heading(anchor, 'log', 'BATTLE LOG')
+        self._log_text = self._label(anchor, 'log', 0.02, self.LOG_TOP,
+                                     self.LOG_SCALE, T.INK)
+        self._log_text['wordwrap'] = 30
+
+    def _build_centre(self, font):
+        anchor = self._section('centre')
+        self._heading(anchor, 'centre', 'RECENT DICE')
+
+        self._dice_slots, self._dice_values = [], []
+        span = 1.0 / self.DICE_SLOTS
+        for i in range(self.DICE_SLOTS):
+            frac = span * (i + 0.5)
+            slot = self._slot(anchor, self.DICE_SIZE, self.DICE_SIZE,
+                              centred=True)
+            self._place(slot, 'centre', frac, 0.300)
+            self._dice_slots.append(slot)
+            self._dice_values.append(
+                self._label(anchor, 'centre', frac, 0.286, 0.034, T.CREAM,
+                            TextNode.ACenter))
+
+        self._label(anchor, 'centre', 0.5, 0.206, 0.022, T.PARCHMENT_DARK,
+                    TextNode.ACenter, 'TURN PHASE')
+        self._phase = self._label(anchor, 'centre', 0.5, 0.152,
+                                  self.PHASE_SCALE, T.CREAM, TextNode.ACenter)
+        self._turn = self._label(anchor, 'centre', 0.5, 0.096, 0.030, T.GOLD,
+                                 TextNode.ACenter)
+        self._round = self._label(anchor, 'centre', 0.5, 0.054, 0.022,
+                                  T.INK_FADED, TextNode.ACenter)
+
+    def _build_rules(self, font):
+        anchor = self._section('rules', page=False)
+        self._place(self._slot(anchor, 0.13, 0.19, centred=True),
+                    'rules', 0.5, 0.265)
+        self._label(anchor, 'rules', 0.5, 0.135, 0.019, T.CREAM,
+                    TextNode.ACenter, 'GAME')
+        self._label(anchor, 'rules', 0.5, 0.105, 0.019, T.CREAM,
+                    TextNode.ACenter, 'RULES')
+
+    def _build_objectives(self, font):
+        anchor = self._section('objectives')
+        self._heading(anchor, 'objectives', 'OBJECTIVES')
+        # No objectives system in the engine yet, so the panel reserves the
+        # space rather than inventing a readout.
+        self._place(self._slot(anchor, 0.20, 0.30, centred=True),
+                    'objectives', 0.5, 0.210)
+
+    def _build_end(self, font):
+        anchor = self._section('end', page=False)
+        # Advances the phase; the FSM owns the turn sequence, so the bar posts
+        # an intent rather than reaching into it.
+        self._end_btn = DirectButton(
+            parent=anchor, text='END\nPHASE', text_font=font,
+            text_fg=T.BTN_TEXT, text_scale=0.42, text_pos=(0, 0.16),
+            frameTexture=T.TEX_BTN_ROUND, frameColor=(1, 1, 1, 1),
+            frameSize=(-1, 1, -1, 1), relief=DGG.FLAT, scale=0.105,
+            command=lambda: messenger.send('hud-end-phase'))
+        self._end_btn.setTransparency(TransparencyAttrib.MAlpha)
+        self._end_btn.bind(
+            DGG.WITHIN,
+            lambda *_: self._end_btn.__setitem__('frameTexture',
+                                                 T.TEX_BTN_ROUND_HOVER))
+        self._end_btn.bind(
+            DGG.WITHOUT,
+            lambda *_: self._end_btn.__setitem__('frameTexture',
+                                                 T.TEX_BTN_ROUND))
+        self._place(self._end_btn, 'end', 0.5, 0.210)
+
 
     # ─── Hover tooltip ────────────────────────────────────────────────
 
@@ -182,6 +457,7 @@ class HUD(DirectObject):
         self._tip_text = T.styled_text(
             text='', pos=(0, 0), scale=self.TIP_SCALE, fg=T.CREAM,
             align=TextNode.ALeft, parent=self._tip_frame, font=font)
+        self._tip_text.textNode.setTabWidth(self.TIP_TAB_WIDTH)
         self._tip_frame.hide()
         self._widgets.append(self._tip_frame)
 
@@ -226,73 +502,27 @@ class HUD(DirectObject):
     def hide_tooltip(self):
         self._tip_frame.hide()
 
-    # ─── Unit card ────────────────────────────────────────────────────
+    # ─── Regiment page ────────────────────────────────────────────────
 
-    def _build_unit_card(self, font):
-        self._card = DirectFrame(
-            parent=base.a2dBottomLeft,
-            frameColor=T.PANEL_BG,
-            frameSize=(0.03, 1.05, self.CARD_BOTTOM, self.CARD_TOP),
-            relief=DGG.FLAT,
-        )
-        self._card.setTransparency(TransparencyAttrib.MAlpha)
-        self._widgets.append(self._card)
+    def _set_regiment_visible(self, visible: bool):
+        """Blank the readouts when nothing is selected.
 
-        def label(pos, scale, colour, align=TextNode.ALeft, text='',
-                  parent=None):
-            return T.styled_text(text=text, pos=pos, scale=scale, fg=colour,
-                                 align=align, parent=parent or self._card,
-                                 font=font)
-
-        self._card_name = label((self.CARD_LEFT, 0.715), 0.052, T.GOLD)
-        self._card_sub = label((self.CARD_LEFT, 0.667), 0.030, T.CREAM)
-
-        step = (self.COL_LAST - self.COL_FIRST) / (len(self.STAT_KEYS) - 1)
-        self._stat_values = {}
-        for i, key in enumerate(self.STAT_KEYS):
-            x = self.COL_FIRST + i * step
-            label((x, 0.600), 0.028, T.GOLD, TextNode.ACenter, key)
-            self._stat_values[key] = label((x, 0.538), 0.042, T.CREAM,
-                                           TextNode.ACenter)
-
-        self._detail_labels = [
-            label((self.CARD_LEFT, self.DETAIL_TOP - i * self.DETAIL_STEP),
-                  0.028, T.CREAM)
-            for i in range(self.DETAIL_LINES)]
-
-        # The bar and chips ride up when a unit has fewer detail lines, so an
-        # unmounted footslogger's card has no hole in the middle of it.
-        self._card_lower = self._card.attachNewNode('card-lower')
-        label((self.BAR_LEFT, self.MODELS_Z), 0.026, T.GOLD, text='MODELS',
-              parent=self._card_lower)
-        self._card_models = label((self.BAR_LEFT + self.BAR_WIDTH,
-                                   self.MODELS_Z), 0.028, T.CREAM,
-                                  TextNode.ARight, parent=self._card_lower)
-
-        DirectFrame(parent=self._card_lower,
-                    frameColor=(0.05, 0.04, 0.03, 0.9),
-                    frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
-                    pos=(self.BAR_LEFT, 0, self.BAR_Z))
-        self._card_bar = DirectFrame(
-            parent=self._card_lower, frameColor=T.GOLD,
-            frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
-            pos=(self.BAR_LEFT, 0, self.BAR_Z))
-        # 50% splits flee from fall back, 25% is the heavy-casualties Panic
-        # threshold; both decide what happens next, so they are marked.
-        for fraction, colour in ((0.50, T.CREAM), (0.25, (0.8, 0.2, 0.2, 1))):
-            DirectFrame(parent=self._card_lower, frameColor=colour,
-                        frameSize=(0, 0.004, -0.004, self.BAR_HEIGHT + 0.004),
-                        pos=(self.BAR_LEFT + self.BAR_WIDTH * fraction, 0,
-                             self.BAR_Z))
-
-        self._card_chips = label((self.CARD_LEFT, self.CHIPS_Z), 0.030, T.CREAM,
-                                 parent=self._card_lower)
-        self._card.hide()
+        The parchment and the heading stay: hiding the whole page would leave
+        a hole in the middle of the bar.
+        """
+        nodes = [self._card_name, self._card_sub, self._card_models,
+                 self._card_chips, self._card_bar, self._bar_back]
+        nodes += self._detail_labels
+        nodes += self._regiment_static
+        nodes += list(self._stat_values.values())
+        nodes += [tick for tick, _ in self._bar_ticks]
+        for node in nodes:
+            node.show() if visible else node.hide()
 
     def show_unit(self, info: dict):
-        """Fill the unit card. *info* is built by the caller, which owns the
-        rules; the card only lays it out."""
-        self._card.show()
+        """Fill the regiment page. *info* is built by the caller, which owns
+        the rules; the page only lays it out."""
+        self._set_regiment_visible(True)
         self._card_name.setText(info.get('name', ''))
 
         bits = []
@@ -317,20 +547,14 @@ class HUD(DirectObject):
             try:
                 numeric = int(value)
             except (TypeError, ValueError):
-                node['fg'] = T.CREAM
+                node['fg'] = T.INK
                 continue
             node['fg'] = (_STAT_HI if numeric > average
-                          else _STAT_LO if numeric < average else T.CREAM)
+                          else _STAT_LO if numeric < average else T.INK)
 
         details = (info.get('details') or [])[:self.DETAIL_LINES]
         for i, node in enumerate(self._detail_labels):
             node.setText(details[i] if i < len(details) else '')
-        # The card shrinks to its content rather than leaving a hole where a
-        # footslogger has no mount or weapon line.
-        shift = (self.DETAIL_LINES - len(details)) * self.DETAIL_STEP
-        self._card_lower.setZ(shift)
-        self._card['frameSize'] = (0.03, 1.05,
-                                   self.CARD_BOTTOM + shift, self.CARD_TOP)
 
         models = info.get('models', 0)
         start = max(1, info.get('start_models', models) or 1)
@@ -338,8 +562,8 @@ class HUD(DirectObject):
         fraction = max(0.0, min(1.0, models / start))
         self._card_bar.setScale(max(fraction, 0.001), 1, 1)
         self._card_bar['frameColor'] = (
-            (0.8, 0.2, 0.2, 1) if fraction <= 0.25 else
-            (0.85, 0.65, 0.2, 1) if fraction <= 0.5 else T.GOLD)
+            T.RED_WAX if fraction <= 0.25 else
+            _BAR_MID if fraction <= 0.5 else _BAR_FULL)
 
         chips = info.get('chips') or []
         self._card_chips.setText("  ".join(
@@ -348,7 +572,22 @@ class HUD(DirectObject):
             for text, tone in chips))
 
     def clear_unit(self):
-        self._card.hide()
+        self._set_regiment_visible(False)
+
+    # ─── Recent dice ──────────────────────────────────────────────────
+
+    def set_dice(self, values):
+        """Show the faces of the last roll to settle, newest roll only.
+
+        Unused slots stay on screen dimmed rather than disappearing, so the
+        strip does not change width between a 2D6 and a 5D6 roll.
+        """
+        values = list(values)[-self.DICE_SLOTS:]
+        for i, node in enumerate(self._dice_values):
+            node.setText(str(values[i]) if i < len(values) else '')
+        for i, slot in enumerate(self._dice_slots):
+            slot.setColorScale(1, 1, 1, 1.0 if i < len(values) else 0.35)
+
 
     # ─── Turn / phase ─────────────────────────────────────────────────
 
@@ -370,6 +609,7 @@ class HUD(DirectObject):
         if aside:
             line += _markup(_PHASE_ON, f"   [{aside}]")
         self._phase.setText(line)
+        self._fit_phase()
 
     # ─── Battle log ───────────────────────────────────────────────────
 
@@ -397,11 +637,11 @@ class HUD(DirectObject):
             lines.append(_markup(prop, f"\u2022 {text}"))
         self._log_text.setText('\n'.join(lines))
 
-        # Grow the block upward from the bottom of the panel, so the newest
+        # Grow the block upward from the bottom of the page, so the newest
         # line always sits in the same place however much the lines wrap.
         height = self._log_text.textNode.getHeight() * self.LOG_SCALE
-        top = min(self.LOG_BOTTOM + height, self.LOG_TOP)
-        self._log_text.setPos(self.LOG_LEFT, top)
+        self._log_text.setPos(self._log_x,
+                              min(self.LOG_BOTTOM + height, self.LOG_TOP))
 
     # ─── Chrome visibility ────────────────────────────────────────────
 

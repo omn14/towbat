@@ -335,6 +335,116 @@ def make_victory_panel(w=512, h=400):
     return path
 
 
+# ── 6. Command bar (the bottom HUD frame) ───────────────────────────
+
+def make_command_bar(w=1024, h=256):
+    """Dark oak backing for the bottom command bar.
+
+    Stretched across the full width rather than tiled, so the grain is drawn
+    the whole way and there is no seam to line up.
+    """
+    img = _noise(w, h, (46, 33, 21, 255), variance=9, seed=707)
+    rng = random.Random(717)
+    draw = ImageDraw.Draw(img)
+    for _ in range(h):
+        y = rng.randint(0, h - 1)
+        shade = rng.randint(-20, 15)
+        draw.line([(0, y), (w, y)],
+                  fill=(max(0, 46 + shade), max(0, 33 + shade),
+                        max(0, 21 + shade), 45),
+                  width=rng.choice([1, 1, 2]))
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.7))
+    img = _stain(img, n=7, seed=727, min_alpha=10, max_alpha=30)
+    img = _corner_burn(img, radius=120, strength=55, seed=737)
+    draw = ImageDraw.Draw(img)
+    gold = (168, 138, 58, 255)
+    dark = (24, 16, 9, 255)
+    # Gold beading along the top edge only: the bottom of the bar is the
+    # bottom of the screen, so a rule there reads as a gap.
+    draw.line([(0, 1), (w, 1)], fill=dark, width=3)
+    draw.line([(0, 4), (w, 4)], fill=gold, width=3)
+    draw.line([(0, 8), (w, 8)], fill=dark, width=2)
+    path = os.path.join(OUT_DIR, 'command_bar.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
+# ── 7. Empty framed slot (portrait, crest, phase icon) ──────────────
+
+def make_slot(w=192, h=192):
+    """A recessed empty frame, for art that has not been drawn yet.
+
+    Corner ticks and a faint diagonal cross mark it as a reserved slot rather
+    than a panel someone forgot to fill.
+    """
+    img = _noise(w, h, (34, 26, 17, 240), variance=8, seed=808)
+    img = _stain(img, n=3, seed=818, min_alpha=8, max_alpha=22)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+    img = _bevel(img, light=12, dark=44, width=3)
+    draw = ImageDraw.Draw(img)
+    faint = (120, 98, 48, 55)
+    draw.line([(10, 10), (w - 11, h - 11)], fill=faint, width=1)
+    draw.line([(w - 11, 10), (10, h - 11)], fill=faint, width=1)
+    _embossed_border(draw, w, h, inset=3,
+                     color_light=(152, 124, 56, 205),
+                     color_dark=(70, 52, 24, 225))
+    tick, off = 14, 6
+    gold = (190, 158, 70, 230)
+    for cx, sx in ((off, 1), (w - off - 1, -1)):
+        for cy, sy in ((off, 1), (h - off - 1, -1)):
+            draw.line([(cx, cy), (cx + sx * tick, cy)], fill=gold, width=2)
+            draw.line([(cx, cy), (cx, cy + sy * tick)], fill=gold, width=2)
+    path = os.path.join(OUT_DIR, 'slot.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
+# ── 8. Round button (End Turn) ──────────────────────────────────────
+
+def _make_round_btn(d, body_color, rim_color, highlight, seed, name):
+    img = _noise(d, d, body_color, variance=12, seed=seed)
+    img = _stain(img, n=4, seed=seed + 10, min_alpha=8, max_alpha=24)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.7))
+
+    # Domed highlight over the top of the disc. Composited rather than drawn
+    # straight on: ImageDraw writes RGBA verbatim instead of blending, so a
+    # translucent fill would punch a hole in the disc instead of lightening it.
+    r = d / 2
+    glow = Image.new('RGBA', (d, d), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for yy in range(4, int(r)):
+        a = int(highlight[3] * (1.0 - yy / r))
+        half = math.sqrt(max(0.0, r * r - (r - yy) ** 2))
+        gd.line([(r - half + 3, yy), (r + half - 4, yy)],
+                fill=(highlight[0], highlight[1], highlight[2], a), width=1)
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=4))
+    img = Image.alpha_composite(img, glow)
+
+    mask = Image.new('L', (d, d), 0)
+    ImageDraw.Draw(mask).ellipse([2, 2, d - 3, d - 3], fill=255)
+    img.putalpha(mask)
+
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([2, 2, d - 3, d - 3], outline=rim_color, width=5)
+    draw.ellipse([9, 9, d - 10, d - 10], outline=(40, 26, 12, 255), width=2)
+    path = os.path.join(OUT_DIR, f'{name}.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
+def make_round_button(d=256):
+    return _make_round_btn(d, (122, 26, 22, 255), (170, 140, 52, 255),
+                           (235, 140, 110, 90), 909, 'button_round')
+
+
+def make_round_button_hover(d=256):
+    return _make_round_btn(d, (158, 36, 28, 255), (215, 182, 72, 255),
+                           (255, 175, 140, 110), 919, 'button_round_hover')
+
+
 # ── Generate all ─────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -346,4 +456,8 @@ if __name__ == '__main__':
     make_button_hover()
     make_button_red()
     make_victory_panel()
+    make_command_bar()
+    make_slot()
+    make_round_button()
+    make_round_button_hover()
     print('Done!')

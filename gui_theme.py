@@ -50,6 +50,10 @@ TEX_BUTTON      = TEX_DIR + 'button.png'
 TEX_BUTTON_HOVER = TEX_DIR + 'button_hover.png'
 TEX_BUTTON_RED  = TEX_DIR + 'button_red.png'
 TEX_VICTORY     = TEX_DIR + 'victory_panel.png'
+TEX_COMMAND_BAR = TEX_DIR + 'command_bar.png'
+TEX_SLOT        = TEX_DIR + 'slot.png'
+TEX_BTN_ROUND   = TEX_DIR + 'button_round.png'
+TEX_BTN_ROUND_HOVER = TEX_DIR + 'button_round_hover.png'
 
 # ── Cached font reference (loaded lazily, after ShowBase exists) ─────────
 _med_font = None
