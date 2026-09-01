@@ -43,8 +43,12 @@ float sdPolygon( in vec2 p, in vec2[maxpoints] v )
 
 
 // ── Procedural "classic Warhammer Fantasy" grass battle mat ────────────────
+// Hoskins hash12: sin() based hashes lose precision on some drivers and leave
+// the value-noise lattice visible as a grid of squares.
 float hashG(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 float noiseG(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -52,21 +56,25 @@ float noiseG(vec2 p) {
     float b = hashG(i + vec2(1.0, 0.0));
     float c = hashG(i + vec2(0.0, 1.0));
     float d = hashG(i + vec2(1.0, 1.0));
-    vec2 u = f * f * (3.0 - 2.0 * f);
+    // Quintic fade: smoothstep's second derivative jumps at the cell borders,
+    // which the contrast boost below turns into visible seams.
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 float fbmG(vec2 p) {
+    // Rotating each octave keeps the lattices from stacking up axis-aligned.
+    const mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
     float v = 0.0, a = 0.5;
-    for (int i = 0; i < 5; i++) { v += a * noiseG(p); p *= 2.0; a *= 0.5; }
+    for (int i = 0; i < 5; i++) { v += a * noiseG(p); p = rot * p * 2.03; a *= 0.5; }
     return v;
 }
 vec3 battleMat(vec2 uv) {
     vec2 p = uv * 16.0;                          // detail scale across the board
     // Two-tone grass patches — lighter, less-saturated tones.
-    float patch = fbmG(p * 0.5);
+    float patchMix = fbmG(p * 0.5);
     vec3 grassDark = vec3(0.22, 0.38, 0.16);
     vec3 grassLite = vec3(0.48, 0.64, 0.34);
-    vec3 col = mix(grassDark, grassLite, patch);
+    vec3 col = mix(grassDark, grassLite, patchMix);
     // Worn earth / mud showing through in trampled areas.
     float earth = smoothstep(0.55, 0.85, fbmG(p * 0.3 + 3.1));
     vec3 dirt = vec3(0.46, 0.42, 0.26);
