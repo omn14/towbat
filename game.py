@@ -148,6 +148,7 @@ class MyApp(ShowBase):
         self.disableMouse()
         self.camera.setPos(0, -75, 150)
         self.camera.lookAt(self.ground)
+        self.centreViewAboveHud()
         #self.enableMouse()
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
@@ -2179,6 +2180,27 @@ class MyApp(ShowBase):
         load_game_state(self, filename)
 
     # ─── Camera Zoom & Controls ───────────────────────────────────────────
+
+    def centreViewAboveHud(self):
+        """Lift the projection so the board centres in the uncovered strip.
+
+        The command bar covers the bottom ``HUD.BAR_H`` of aspect2d's two-unit
+        height, which puts the middle of what you can actually see at
+        ``BAR_H / 2`` above the middle of the window.
+
+        Done with a film offset rather than by moving the camera: the offset
+        lives in the lens, and ``base.camLens.extrude`` reads it back, so every
+        pick site stays aligned with what is on screen for free. Moving the
+        camera would need the same correction applied by hand everywhere.
+        """
+        film_height = self.camLens.getFilmSize()[1]
+        self.camLens.setFilmOffset(0, -HUD.BAR_H / 4.0 * film_height)
+
+    def windowEvent(self, win):
+        # The film size follows the window shape, so the offset derived from it
+        # has to be recomputed rather than set once at startup.
+        ShowBase.windowEvent(self, win)
+        self.centreViewAboveHud()
 
     def zoomIn(self):
         # Move camera closer (towards Y=0 from Y=-75)

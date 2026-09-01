@@ -49,6 +49,20 @@ region covers the whole window; shrinking it silently offsets every pick.
 Nothing is lost by overlaying: DirectGui regions suppress mouse-button
 events, so a click on the bar cannot also reach a unit behind it.
 
+Overlaying does move the apparent centre, though: with the bottom `BAR_H`
+covered, the middle of what you can see sits `BAR_H / 2` above the middle of
+the window, and the board looked low. `MyApp.centreViewAboveHud` corrects it
+with a lens film offset rather than by moving the camera — the offset lives
+in the lens and `camLens.extrude` reads it back, so every pick site stays
+aligned with what is on screen for free. Moving the camera would have needed
+the same correction applied by hand at each of them.
+
+**Textures must be opaque where they cover the board.** `ImageDraw` writes
+RGBA verbatim instead of blending, so a translucent fill punches a hole
+rather than tinting. Both the bar's wood grain and the round button's dome
+hit this; they composite through `alpha_composite`, and `command_bar.png`
+and `slot.png` finish with `putalpha(255)` so the board cannot show through.
+
 **Keep what you act on in one place.** Bycer's criticism of Planetary
 Annihilation is exactly this: build commands at the bottom, resources at the
 top and unit orders on the right forces the player to split their attention.

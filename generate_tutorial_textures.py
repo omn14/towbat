@@ -345,14 +345,19 @@ def make_command_bar(w=1024, h=256):
     """
     img = _noise(w, h, (46, 33, 21, 255), variance=9, seed=707)
     rng = random.Random(717)
-    draw = ImageDraw.Draw(img)
+    # Grain goes through a composited overlay: ImageDraw writes RGBA verbatim
+    # rather than blending, so drawing these lines straight on would punch
+    # translucent stripes through the bar and show the board behind it.
+    grain = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(grain)
     for _ in range(h):
         y = rng.randint(0, h - 1)
         shade = rng.randint(-20, 15)
-        draw.line([(0, y), (w, y)],
-                  fill=(max(0, 46 + shade), max(0, 33 + shade),
-                        max(0, 21 + shade), 45),
-                  width=rng.choice([1, 1, 2]))
+        gd.line([(0, y), (w, y)],
+                fill=(max(0, 46 + shade), max(0, 33 + shade),
+                      max(0, 21 + shade), 45),
+                width=rng.choice([1, 1, 2]))
+    img = Image.alpha_composite(img, grain)
     img = img.filter(ImageFilter.GaussianBlur(radius=0.7))
     img = _stain(img, n=7, seed=727, min_alpha=10, max_alpha=30)
     img = _corner_burn(img, radius=120, strength=55, seed=737)
@@ -364,6 +369,8 @@ def make_command_bar(w=1024, h=256):
     draw.line([(0, 1), (w, 1)], fill=dark, width=3)
     draw.line([(0, 4), (w, 4)], fill=gold, width=3)
     draw.line([(0, 8), (w, 8)], fill=dark, width=2)
+    # The bar is the floor of the screen: it has to hide the board behind it.
+    img.putalpha(255)
     path = os.path.join(OUT_DIR, 'command_bar.png')
     img.save(path)
     print(f'  Saved {path}')
@@ -382,10 +389,13 @@ def make_slot(w=192, h=192):
     img = _stain(img, n=3, seed=818, min_alpha=8, max_alpha=22)
     img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
     img = _bevel(img, light=12, dark=44, width=3)
+    # Composited, not drawn straight on, for the same reason as the bar grain.
+    cross = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(cross)
+    cd.line([(10, 10), (w - 11, h - 11)], fill=(120, 98, 48, 55), width=1)
+    cd.line([(w - 11, 10), (10, h - 11)], fill=(120, 98, 48, 55), width=1)
+    img = Image.alpha_composite(img, cross)
     draw = ImageDraw.Draw(img)
-    faint = (120, 98, 48, 55)
-    draw.line([(10, 10), (w - 11, h - 11)], fill=faint, width=1)
-    draw.line([(w - 11, 10), (10, h - 11)], fill=faint, width=1)
     _embossed_border(draw, w, h, inset=3,
                      color_light=(152, 124, 56, 205),
                      color_dark=(70, 52, 24, 225))
@@ -395,6 +405,7 @@ def make_slot(w=192, h=192):
         for cy, sy in ((off, 1), (h - off - 1, -1)):
             draw.line([(cx, cy), (cx + sx * tick, cy)], fill=gold, width=2)
             draw.line([(cx, cy), (cx, cy + sy * tick)], fill=gold, width=2)
+    img.putalpha(255)
     path = os.path.join(OUT_DIR, 'slot.png')
     img.save(path)
     print(f'  Saved {path}')
