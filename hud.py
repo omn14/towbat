@@ -87,12 +87,19 @@ class HUD(DirectObject):
     STAT_AVERAGE = {'M': 4, 'WS': 3, 'BS': 3, 'S': 3, 'T': 3,
                     'W': 1, 'I': 3, 'A': 1, 'Ld': 7}
     CARD_LEFT = 0.06
+    CARD_TOP = 0.78
+    CARD_BOTTOM = 0.06
     COL_FIRST = 0.11
     COL_LAST = 0.97
     BAR_LEFT = 0.08
     BAR_WIDTH = 0.92
-    BAR_Z = 0.240
+    BAR_Z = 0.163
     BAR_HEIGHT = 0.026
+    MODELS_Z = 0.215
+    CHIPS_Z = 0.093
+    DETAIL_LINES = 5
+    DETAIL_TOP = 0.455
+    DETAIL_STEP = 0.046
 
     def __init__(self):
         DirectObject.__init__(self)
@@ -160,47 +167,61 @@ class HUD(DirectObject):
         self._card = DirectFrame(
             parent=base.a2dBottomLeft,
             frameColor=T.PANEL_BG,
-            frameSize=(0.03, 1.05, 0.10, 0.60),
+            frameSize=(0.03, 1.05, self.CARD_BOTTOM, self.CARD_TOP),
             relief=DGG.FLAT,
         )
         self._card.setTransparency(TransparencyAttrib.MAlpha)
         self._widgets.append(self._card)
 
-        def label(pos, scale, colour, align=TextNode.ALeft, text=''):
+        def label(pos, scale, colour, align=TextNode.ALeft, text='',
+                  parent=None):
             return T.styled_text(text=text, pos=pos, scale=scale, fg=colour,
-                                 align=align, parent=self._card, font=font)
+                                 align=align, parent=parent or self._card,
+                                 font=font)
 
-        self._card_name = label((self.CARD_LEFT, 0.535), 0.052, T.GOLD)
-        self._card_sub = label((self.CARD_LEFT, 0.487), 0.030, T.CREAM)
+        self._card_name = label((self.CARD_LEFT, 0.715), 0.052, T.GOLD)
+        self._card_sub = label((self.CARD_LEFT, 0.667), 0.030, T.CREAM)
 
         step = (self.COL_LAST - self.COL_FIRST) / (len(self.STAT_KEYS) - 1)
         self._stat_values = {}
         for i, key in enumerate(self.STAT_KEYS):
             x = self.COL_FIRST + i * step
-            label((x, 0.420), 0.028, T.GOLD, TextNode.ACenter, key)
-            self._stat_values[key] = label((x, 0.358), 0.042, T.CREAM,
+            label((x, 0.600), 0.028, T.GOLD, TextNode.ACenter, key)
+            self._stat_values[key] = label((x, 0.538), 0.042, T.CREAM,
                                            TextNode.ACenter)
 
-        label((self.BAR_LEFT, 0.300), 0.026, T.GOLD, text='MODELS')
-        self._card_models = label((self.BAR_LEFT + self.BAR_WIDTH, 0.300),
-                                  0.028, T.CREAM, TextNode.ARight)
+        self._detail_labels = [
+            label((self.CARD_LEFT, self.DETAIL_TOP - i * self.DETAIL_STEP),
+                  0.028, T.CREAM)
+            for i in range(self.DETAIL_LINES)]
 
-        DirectFrame(parent=self._card, frameColor=(0.05, 0.04, 0.03, 0.9),
+        # The bar and chips ride up when a unit has fewer detail lines, so an
+        # unmounted footslogger's card has no hole in the middle of it.
+        self._card_lower = self._card.attachNewNode('card-lower')
+        label((self.BAR_LEFT, self.MODELS_Z), 0.026, T.GOLD, text='MODELS',
+              parent=self._card_lower)
+        self._card_models = label((self.BAR_LEFT + self.BAR_WIDTH,
+                                   self.MODELS_Z), 0.028, T.CREAM,
+                                  TextNode.ARight, parent=self._card_lower)
+
+        DirectFrame(parent=self._card_lower,
+                    frameColor=(0.05, 0.04, 0.03, 0.9),
                     frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
                     pos=(self.BAR_LEFT, 0, self.BAR_Z))
         self._card_bar = DirectFrame(
-            parent=self._card, frameColor=T.GOLD,
+            parent=self._card_lower, frameColor=T.GOLD,
             frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
             pos=(self.BAR_LEFT, 0, self.BAR_Z))
         # 50% splits flee from fall back, 25% is the heavy-casualties Panic
         # threshold; both decide what happens next, so they are marked.
         for fraction, colour in ((0.50, T.CREAM), (0.25, (0.8, 0.2, 0.2, 1))):
-            DirectFrame(parent=self._card, frameColor=colour,
+            DirectFrame(parent=self._card_lower, frameColor=colour,
                         frameSize=(0, 0.004, -0.004, self.BAR_HEIGHT + 0.004),
                         pos=(self.BAR_LEFT + self.BAR_WIDTH * fraction, 0,
                              self.BAR_Z))
 
-        self._card_chips = label((self.CARD_LEFT, 0.150), 0.030, T.CREAM)
+        self._card_chips = label((self.CARD_LEFT, self.CHIPS_Z), 0.030, T.CREAM,
+                                 parent=self._card_lower)
         self._card.hide()
 
     def show_unit(self, info: dict):
@@ -209,14 +230,18 @@ class HUD(DirectObject):
         self._card.show()
         self._card_name.setText(info.get('name', ''))
 
-        bits = [f"{info['files']}x{info['ranks']}"] if info.get('files') else []
+        bits = []
+        if info.get('troop_type'):
+            bits.append(info['troop_type'])
+        if info.get('us'):
+            bits.append(f"US {info['us']}")
+        if info.get('files'):
+            bits.append(f"{info['files']}x{info['ranks']}")
         bits.append(f"Save {info.get('save') or 'none'}")
         if info.get('ward'):
             bits.append(f"Ward {info['ward']}")
         if info.get('rank_bonus'):
             bits.append(f"Rank +{info['rank_bonus']}")
-        if info.get('troop_type'):
-            bits.insert(0, info['troop_type'])
         self._card_sub.setText("   ".join(bits))
 
         stats = info.get('stats') or {}
@@ -231,6 +256,16 @@ class HUD(DirectObject):
                 continue
             node['fg'] = (_STAT_HI if numeric > average
                           else _STAT_LO if numeric < average else T.CREAM)
+
+        details = (info.get('details') or [])[:self.DETAIL_LINES]
+        for i, node in enumerate(self._detail_labels):
+            node.setText(details[i] if i < len(details) else '')
+        # The card shrinks to its content rather than leaving a hole where a
+        # footslogger has no mount or weapon line.
+        shift = (self.DETAIL_LINES - len(details)) * self.DETAIL_STEP
+        self._card_lower.setZ(shift)
+        self._card['frameSize'] = (0.03, 1.05,
+                                   self.CARD_BOTTOM + shift, self.CARD_TOP)
 
         models = info.get('models', 0)
         start = max(1, info.get('start_models', models) or 1)

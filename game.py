@@ -64,7 +64,7 @@ from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager, sees_over
 from psychology import (PsychologySystem, select_general, select_battle_standard,
-                       command_range, rank_bonus)
+                       command_range, rank_bonus, unit_strength_total)
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
@@ -1456,6 +1456,7 @@ class MyApp(ShowBase):
         messenger.send('hud-unit', [{
             'name': unit.unit.name,
             'troop_type': model.troop_type(),
+            'us': unit_strength_total(unit),
             'files': unit.unit.files,
             'ranks': unit.unit.ranks,
             'save': f"{save}+" if save <= 6 else None,
@@ -1464,8 +1465,62 @@ class MyApp(ShowBase):
             'stats': dict(model.characteristics),
             'models': unit.unit.nmodels,
             'start_models': unit.startOfBattleModels,
+            'details': self.unitDetailLines(unit),
             'chips': self.unitStateChips(unit),
         }])
+
+    CARD_LINE_CHARS = 54
+
+    def unitDetailLines(self, unit):
+        """The facts that decide something this phase, one short line each."""
+        model = unit.unit.model
+        lines = []
+
+        ld, general = self.psychology.leadership_of(unit)
+        line = f"Ld {ld}"
+        if general is not None:
+            line += f" from {general.unit.name}"
+        if self.psychology.battle_standard_of(unit) is not None:
+            line += "   +BSB re-rolls"
+        lines.append(line)
+
+        # A mounted model fights with two profiles; the stat row shows only the
+        # rider's, so the beast's has to be spelled out.
+        mount = model.get_mount()
+        if mount is not None:
+            mc = mount.characteristics
+            lines.append(f"Mount {mount.name}: M{mc.get('M', '-')} "
+                         f"WS{mc.get('WS', '-')} S{mc.get('S', '-')} "
+                         f"A{mc.get('A', '-')}")
+
+        weapon = model.equipedWeapon or {}
+        if weapon:
+            if weapon.get('tag') == 'ranged':
+                lines.append(f"{weapon.get('name', 'weapon')}: "
+                             f"R{weapon.get('ranged_range', '-')}\" "
+                             f"S{weapon.get('ranged_strength', '-')} "
+                             f"AP{weapon.get('ranged_AP', 0)}")
+            else:
+                parts = [f"{weapon.get('name', 'weapon')}:"]
+                if weapon.get('strength'):
+                    parts.append(f"S{weapon['strength']}")
+                if weapon.get('ap'):
+                    parts.append(f"AP{weapon['ap']}")
+                lines.append(" ".join(parts))
+
+        if model.is_wizard():
+            level = model.wizard_level(1)
+            left = max(0, level - len(getattr(unit, 'spellsCastThisTurn', [])))
+            lines.append(f"Wizard Level {level}: {left} casting(s) left")
+
+        if unit.isInCombatWith:
+            names = ", ".join(u.unit.name for u in unit.isInCombatWith)
+            flanks = "/".join(unit.isInCombatFlank)
+            lines.append(f"Fighting {names}" + (f" ({flanks})" if flanks else ""))
+
+        return [line if len(line) <= self.CARD_LINE_CHARS
+                else line[:self.CARD_LINE_CHARS - 1] + "\u2026"
+                for line in lines]
 
     def refreshSelectedUnit(self, *_args):
         unit = getattr(self, 'unitToMove', None)

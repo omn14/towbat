@@ -68,14 +68,27 @@ middle of the table.
 - `CombatResolver.printBattleResults` also posts a one-line summary.
 - The four loose text nodes anchored to corners; the selected-unit readout no
   longer dumps the raw characteristics dict.
-- Unit card (bottom left): name, troop type, formation, save, Ward, rank bonus;
-  a stat row with above-average values green and below-average red; a models
-  bar marked at 50% (flee vs fall back) and 25% (heavy-casualties Panic), whose
-  fill turns amber then red as it crosses them; and state chips — fleeing,
-  engaged, disrupted, charged, general, battle standard, moved, attacked.
+- Unit card (bottom left): name, troop type, Unit Strength, formation, save,
+  Ward, rank bonus; a stat row with above-average values green and
+  below-average red; up to five detail lines — effective Leadership and where
+  it comes from, the mount's profile, the equipped weapon, casting attempts
+  left, and who it is fighting and from which arc; a models bar marked at 50%
+  (flee vs fall back) and 25% (heavy-casualties Panic), whose fill turns amber
+  then red as it crosses them; and state chips — fleeing, engaged, disrupted,
+  charged, general, battle standard, moved, attacked.
+
   Stat columns are placed by hand and centred, which keeps the table aligned
-  without needing a fixed-width face. `game.showSelectedUnit` gathers the facts
-  and publishes `hud-unit`; the card only lays them out.
+  without needing a fixed-width face. The card shrinks to its content, so a
+  footslogger with no mount or weapon line has no hole in it.
+  `game.showSelectedUnit` gathers the facts and publishes `hud-unit`; the card
+  only lays them out.
+
+  **The card is not the hover tooltip.** The tooltip in `units.py` is the full
+  dossier — every weapon, every special rule, both stat blocks. The card
+  answers a narrower question: what can this unit do right now, and what is
+  about to happen to it. Facts earn a place on it by deciding something this
+  phase. Duplicating the dossier would cost the card the thing that makes it
+  readable at a glance.
 
 ## Next, in order
 
@@ -142,6 +155,11 @@ The two genuinely hard ones:
   a unit is disrupted by terrain, joined by a character, or has its Ward
   granted mid-turn by a spell — those change the card without touching any of
   the three triggers.
+- Detail lines are truncated at 54 characters rather than wrapped, because the
+  card lays them out on a fixed step. A unit with a long name fighting two
+  others loses the tail of the "Fighting" line.
+- Not on the card, and deliberately: points value, the full special-rules list,
+  the full weapon list, and armour pieces. They belong to the hover dossier.
 - Nothing posts to the log from `psychology.py`, `spell_system.py`,
   `cannon_fire.py` or `bombardment.py` yet. They only need a
   `messenger.send('hud-log', ...)` at the point of resolution.
