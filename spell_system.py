@@ -12,6 +12,7 @@ from panda3d.core import Point3, Vec3, LRotationf
 from panda3d.bullet import BulletBoxShape
 from dice import Dice, checkDice
 from rulesFunctions import plusSTAT
+from rules_log import battle_log
 
 
 def casting_result(dice_total: int, wizard_level: int) -> int:
@@ -181,6 +182,11 @@ class Spell:
         print(f"{self.name}: casting roll {values} = {total} "
               f"+ {result - total} (Level {self.wizard_level}) = {result} "
               f"vs {self.casting_value}+ -> {outcome}")
+        battle_log(
+            f"{self.name}: {values} = {result} v {self.casting_value}+ "
+            f"-> {outcome}",
+            'morale' if outcome == CAST_MISCAST else
+            'good' if outcome in (CAST_SUCCESS, CAST_PERFECT) else 'dice')
 
         if outcome != CAST_MISCAST:
             return outcome in (CAST_SUCCESS, CAST_PERFECT)
@@ -188,6 +194,7 @@ class Spell:
         miscast_roll, _ = await self._roll_casting_dice()
         entry = miscast_result(miscast_roll)
         print(f"   Miscast! {miscast_roll}: {entry['name']} — {entry['effect']}")
+        battle_log(f"Miscast! {miscast_roll}: {entry['name']}", 'morale')
         self.perfect = entry['perfect']
         self.no_more_spells = entry['no_more_spells']
         if entry['at_casting_value']:

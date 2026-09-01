@@ -1,0 +1,236 @@
+# GUI plan
+
+The simulation is well ahead of its interface. This is the plan for closing
+that gap, what has been built so far, and what deliberately has not.
+
+Design sketch: [hud_mockup.svg](hud_mockup.svg) — open the VS Code preview.
+Current state rendered offscreen: [hud_render.png](hud_render.png).
+
+## The problem this solves
+
+The engine's most valuable output is invisible. `rules_log.rule_log` and
+`rule_skipped` are the only evidence that a rule fired or declined — a Ward
+save that works and a Ward save that was never coded look identical on screen —
+and until now that trace went to the console alone. Combat results, morale
+tests and modifier stacks were in the same position.
+
+Everything else followed from four text nodes at hardcoded aspect2d
+coordinates, each owning whichever corner it was written for, with no layout
+system to stop them colliding.
+
+## Screen zones
+
+One owner per zone. Nothing may draw outside the zone it was given, and
+nothing covers the centre of the board.
+
+| Zone | Anchor | Owner |
+|---|---|---|
+| Top left | `a2dTopLeft` | Turn banner — player, round |
+| Top centre | `a2dTopCenter` | Phase track |
+| Top right | `a2dTopRight` | *free* — army strength |
+| Bottom left | `a2dBottomLeft` | Unit card, and the action bar attached to it |
+| Bottom centre | `a2dBottomCenter` | Transient readouts: dice, targeting, status |
+| Bottom right | `a2dBottomRight` | Battle log |
+| Follows the cursor | `aspect2d` | Hover tooltip (drawn above everything) |
+
+Anchor to the corner nodes, never to raw aspect2d coordinates. `(-1.3, 0.9)`
+is 16:9 only; on any other window shape it drifts off the edge or into the
+middle of the table.
+
+**Keep what you act on in one place.** Readouts may be spread — they are
+glanced at, and the board has to stay clear — but the selected unit and the
+things you can do with it belong in one block. Bycer's criticism of Planetary
+Annihilation is exactly this: build commands at the bottom, resources at the
+top and unit orders on the right forces the player to split their attention.
+So the action bar attaches to the unit card rather than being centred.
+
+## Architecture rules
+
+- **Build once, `setText` after.** No destroy-and-recreate on every update.
+- **Publish, don't reach in.** Game systems post `messenger.send('hud-log',
+  [text, category])`; they never import or touch a widget. The HUD is a
+  subscriber. Events: `hud-turn`, `hud-phase`, `hud-log`, `hud-unit`.
+
+  Rules modules post through `rules_log.battle_log` instead. They are imported
+  by the tests without a ShowBase, so the Panda3D `messenger` builtin may not
+  exist; `battle_log` is the one place that knows about it, and it no-ops when
+  there is no game running.
+- **Nothing decisive resolves off screen.** If an event changes the battle and
+  the player would not otherwise see it, it goes in the log. This is the whole
+  argument for the log, and the reason morale, casting, cannon and bombardment
+  were wired into it rather than left printing to a terminal.
+- **One source of truth per fact.** When the phase track went in, the nine
+  `debugText.setText(f"Current phase: ...")` echoes came out. A duplicated
+  readout is a readout that will eventually disagree with itself.
+- **A display that throws must not stop a rule resolving.** `rules_log`
+  catches and reports listener failures rather than letting them propagate.
+
+## Built
+
+- `hud.py` — `HUD` class: turn banner, phase track, battle log, `F3` to hide
+  all chrome for screenshots.
+- Phase track lit from `GamePhaseFSM.request`, which is overridden to
+  broadcast. Phases are requested directly from about six places as well as
+  through `nextPhase()`, so hooking the transition is the only way the track
+  sees all of them. Off-track states (`SpellPhase`, `MakeChoice`,
+  `CampaignPhase`) show as a suffix chip rather than blanking the track.
+- Battle log: 9 entries, colour-coded by category — rules fired gold, rules
+  *declined* dim grey, dice pale blue, morale red, kills green. Bottom-anchored
+  so the newest line stays put however much earlier lines wrap. Categories are
+  inline `TextProperties` runs in a single text node, not one widget per line.
+- `rules_log.add_listener` / `remove_listener`. Printing is unchanged; the
+  trace is now also emitted as `(kind, rule, subject, detail)`.
+- `RoundCounter.update_round_display` publishes `hud-turn` instead of
+  destroying and recreating an `OnscreenText`.
+- `CombatResolver.printBattleResults` also posts a one-line summary.
+- Morale, casting, cannon and bombardment post their outcomes too: the Panic
+  test with its roll against Leadership, the casting roll against the casting
+  value, Miscasts, and the war-machine damage summaries. Between those and the
+  rule trace, the things that decide a battle now happen on screen.
+- The four loose text nodes anchored to corners; the selected-unit readout no
+  longer dumps the raw characteristics dict.
+- Unit card (bottom left): name, troop type, Unit Strength, formation, save,
+  Ward, rank bonus; a stat row with above-average values green and
+  below-average red; up to five detail lines — effective Leadership and where
+  it comes from, the mount's profile, the equipped weapon, casting attempts
+  left, and who it is fighting and from which arc; a models bar marked at 50%
+  (flee vs fall back) and 25% (heavy-casualties Panic), whose fill turns amber
+  then red as it crosses them; and state chips — fleeing, engaged, disrupted,
+  charged, general, battle standard, moved, attacked.
+
+  Stat columns are placed by hand and centred, which keeps the table aligned
+  without needing a fixed-width face. The card shrinks to its content, so a
+  footslogger with no mount or weapon line has no hole in it.
+  `game.showSelectedUnit` gathers the facts and publishes `hud-unit`; the card
+  only lays them out.
+
+  **The card is not the hover tooltip.** The tooltip in `units.py` is the full
+  dossier — every weapon, every special rule, both stat blocks. The card
+  answers a narrower question: what can this unit do right now, and what is
+  about to happen to it. Facts earn a place on it by deciding something this
+  phase. Duplicating the dossier would cost the card the thing that makes it
+  readable at a glance.
+
+- Hover tooltip moved from world space to screen space. It was a billboarded
+  `TextNode` parented to the unit, so its position was whatever the camera
+  projection gave you — there was nothing to clamp against, and a unit low on
+  the board put its dossier off the bottom of the screen.
+
+  Now one shared `aspect2d` widget with a panel behind it. Its top-left corner
+  is placed at the cursor, then shifted by the *least* amount that brings it
+  back on screen, so the anchor stays as near the pointer as it can. Placed on
+  hover-enter, not followed every frame: a tooltip that chases the cursor
+  jitters, and re-running the fit each frame makes it jump as it crosses an
+  edge. `units.py` keeps the `TextNode` purely as the string builder.
+
+  Free consequences: no scaling with camera zoom, no depth-sort fighting, a
+  unit's own models can no longer occlude its label, and the text is set in
+  MedievalSharp rather than `cmtt12`, so `4+` renders as `4+` instead of `4−`.
+
+## Next, in order
+
+| Item | Effort | Payoff |
+|---|---|---|
+| In-world: selection decal, facing chevron, status badges, strength bar | Low–Med | High |
+| `legal_actions(unit)` + action bar **attached to the unit card** | Med | High |
+| Every action shows its key, plus a key-list overlay | Low | High |
+| End Phase button + army strength readout (the macro glance) | Low | High |
+| Target preview: to-hit, to-wound, save, modifier stack, expected casualties | Med | Very high |
+| Combat result card | Low | Medium |
+| Log scrollback and category filtering | Low | Medium |
+| Second font — **blocked**, see below | Low | High |
+
+The two genuinely hard ones:
+
+- **Target preview** needs an expected-value path that provably cannot drift
+  from the dice path. Compute it from the same `toHitAndToWound` helpers;
+  never re-derive the numbers in the UI.
+- **Action bar** needs legality extracted out of the task loops.
+  `taskLoopPathTowardsMouse` currently prints "Unit is not idle" and returns —
+  the reason a unit cannot act is computed but not queryable. Extract
+  `legal_actions(unit)` and have both the task loops and the bar call it.
+
+## Look and feel
+
+- **Every action shows its key, and every key has a visible action.** Hotkeys
+  are for speed; the visible control is how the player finds out the hotkey
+  exists. Today `t`, `c`, `l`, `a`, `F3`–`F10`, right-click-to-commit and a
+  floating collision cube are the entire command set, and none of it is
+  discoverable. Put the key on the button (`SHOOT (S)`) and add an
+  always-available key list — `debug_tools` has one on `h`, but only in debug
+  mode.
+
+  Bycer's hotkey list — control groups, attack-move, select-all-of-type, idle
+  workers — does not apply. That is base-management RTS under APM pressure;
+  this is turn-based with six units a side, so discoverability matters far
+  more than speed.
+
+- **Two fonts.** MedievalSharp for headings and unit names only; a clean
+  humanist sans for stat lines, numbers and the log. Display faces at 0.03
+  scale are illegible, and a stat block is tabular data.
+
+  **This is blocked on an asset, not on effort.** `fonts/` holds only
+  MedievalSharp, and Panda3D's bundled `cmss12` / `cmtt12` are not a
+  substitute: they are OT1-encoded Computer Modern, so `+` renders as a minus
+  sign and `>` as an inverted question mark. In a wargame UI where `4+` is the
+  most common string on screen, that is disqualifying. They are also
+  StaticTextFont, pre-rendered and unfilterable, so they blur when scaled.
+
+  To unblock: drop an OFL sans TTF (Inter, Lato, Open Sans) into `fonts/`, add
+  `BODY_FONT_PATH` beside `FONT_PATH` in `gui_theme`, and a `get_body_font()`
+  next to `get_font()`. Everything else is already parameterised —
+  `styled_text` and `setup_text_node` both take a `font`.
+
+- **Mind the glyph set.** MedievalSharp has no `→` (U+2192); an arrow in a log
+  line renders as nothing at all, silently. Stick to `->`, `v` and `-`.
+- **A type scale, not arbitrary values.** 0.075 title, 0.05 heading, 0.038
+  body, 0.03 caption.
+- **Semantic colour.** Gold means important, red means bad for you, green means
+  good for you, and nothing else may use them. Parchment and ink for
+  everything neutral.
+- **Panels float, the board does not.** Translucent, edge-anchored, never over
+  the centre of the table.
+- **Keep the physical dice.** Tumbling d6s are the most characterful thing in
+  the build. Add a 2D strip beside them showing values against the target
+  number so the *result* reads while the *rolling* stays tactile.
+- **Graduated detail, not everything at once.** Bycer contrasts Rise of Nations
+  (show it all) with Age of Empires 3 (degrees of detail, to avoid overload).
+  That is the argument for the two-stage tooltip: a short card on hover, the
+  full dossier on demand.
+
+Source for several of the above: Josh Bycer, *UI Strategy Game Design Dos and
+Don'ts*, Game Developer, 2015.
+
+## LEFTOVER
+
+- No second font — attempted with Panda3D's bundled faces and reverted; see
+  the reason under Look and feel. Needs a sans TTF added to `fonts/`.
+  MedievalSharp is still setting the stat lines, and it remains the weakest
+  part of the screen.
+- Battle log has no scrollback; it is a fixed 8-entry window with no filter.
+- The unit card refreshes on selection, on `applyWounds` and on every phase
+  change, which covers casualties and flag resets. It does *not* refresh when
+  a unit is disrupted by terrain, joined by a character, or has its Ward
+  granted mid-turn by a spell — those change the card without touching any of
+  the three triggers.
+- Detail lines are truncated at 54 characters rather than wrapped, because the
+  card lays them out on a fixed step. A unit with a long name fighting two
+  others loses the tail of the "Fighting" line.
+- Not on the card, and deliberately: points value, the full special-rules list,
+  the full weapon list, and armour pieces. They belong to the hover dossier.
+- The tooltip's stat table is only roughly aligned. `units.py` pads its columns
+  for a fixed-width face, and it is now set in the proportional display face.
+  The real fix is the body font; the alternative, `cmtt12`, breaks `+`.
+- The tooltip can cover the unit card when hovering a unit low on the left.
+  Acceptable while it is transient and drawn on top, but it argues for the
+  two-stage split: a short card on hover, the dossier in the free top-right
+  zone. That split is still not done — hover shows the whole dossier, so on a
+  tall unit entry the panel is still most of the screen height.
+- Nothing posts to the log from the pursuit, break-test or Fear/Terror paths in
+  `psychology.py` — only the Panic test does. A broken unit routing off the
+  board is still console-only.
+- Dice results still go to `diceInfoText` as plain text, not the roll strip.
+- `debugText`, `debugTextInfo`, `debugTextUnit` keep their debug-era names
+  despite carrying real gameplay information.
+- The `endPhase` collision cube is still the only way to advance a phase, and
+  it competes with unit picking for the same mouse ray.

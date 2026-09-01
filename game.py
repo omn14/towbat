@@ -64,11 +64,12 @@ from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager, sees_over
 from psychology import (PsychologySystem, select_general, select_battle_standard,
-                       command_range)
+                       command_range, rank_bonus, unit_strength_total)
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
 from debug_tools import DebugTools, debug_enabled
+from hud import HUD
 import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -177,14 +178,25 @@ class MyApp(ShowBase):
 
         self.awaitingChoice = False
         self.resolvingCombat = False
-        self.debugTextUnit = self.setup_text_node(text="Debug Info", pos=(-1.3, -0.9), scale=0.05, color=gui_theme.HINT_FG)
-        self.debugTextUnit.setText("Debug Info test")
-
-        self.debugTextInfo = self.setup_text_node(text="Debug Info", pos=(0.7, -0.8), scale=0.05, color=gui_theme.HINT_FG)
+        # Anchored to screen corners so they cannot drift into the HUD's zones
+        # (top-left banner, top-centre phase track, bottom-right battle log,
+        # bottom-left unit card).
+        # These three are written from a dozen call sites with arbitrary text,
+        # so they keep the display face, which has the full glyph set.
+        self.debugTextInfo = self.setup_text_node(
+            pos=(0, 0.20), scale=0.040, color=gui_theme.HINT_FG,
+            parent=self.a2dBottomCenter)
         self.moveArceDistance = 0
-        self.debugTextInfo.setText("Debug Arch test")
 
-        self.diceInfoText = self.setup_text_node(text="Dice Info", pos=(-0.7, 0.55), scale=0.05, color=gui_theme.GOLD)
+        self.diceInfoText = self.setup_text_node(
+            pos=(0, 0.30), scale=0.044, color=gui_theme.GOLD,
+            parent=self.a2dBottomCenter)
+
+        # One-off status messages (war-machine summaries and the like); the
+        # phase name it used to echo is now the HUD's phase track.
+        self.debugText = self.setup_text_node(
+            pos=(0, 0.11), scale=0.038, color=gui_theme.CREAM,
+            parent=self.a2dBottomCenter)
 
         self.numsPoints=0
         self.unitHitPos=Point3(0,0,0)
@@ -234,10 +246,11 @@ class MyApp(ShowBase):
         self.unitToMove=self.player1Units[0]
         self.accept('mouse3', self.onRightClick,[self.unitToMove])
         #self.messenger.toggleVerbose()
+        # Built before anything that publishes to it (round counter, FSM).
+        self.hud = HUD()
+        self.accept('f3', self.hud.toggle)
         self.roundCounter = RoundCounter(self,16)
 
-        self.debugText = self.setup_text_node(text="Debug Info", pos=(-1.3, 0.9), scale=0.05, color=gui_theme.CREAM)
-        self.debugText.setText("Debug Info test")
         self.boundries = OutOfBounds(self)
         """ self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
         self.AIplayer2.active = True """
@@ -260,6 +273,8 @@ class MyApp(ShowBase):
         #self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         #self.accept('a-up', lambda: taskMgr.add(auppp()))
+        # Not shift-a: Panda3D still emits 'a-up' on release, which would step a turn too.
+        self.accept('f4', self.toggle_ai_player2)
 
         # In your game class __init__:
         self.list_builder = None
@@ -283,6 +298,10 @@ class MyApp(ShowBase):
         # Developer tools; inert unless WH_DEBUG is set or --debug is passed.
         self.debug_tools = DebugTools(self) if debug_enabled() else None
         self.accept('t', self.start_tutorial)
+        # A phase change resets the flags the card's chips are drawn from.
+        # Bound here: the FSM broadcasts a phase while it is being built, when
+        # psychology and the rest do not exist yet.
+        self.accept('hud-phase', self.refreshSelectedUnit)
 
         self.fsm.request("DeployPhase")
 
@@ -312,6 +331,7 @@ class MyApp(ShowBase):
                                             endPos=Point3(15,0, 0))
         
         self.mousePosOnGround=Point3(0,0,0)
+        self._hoveredUnit = None
 
         self.bakeTextures(self.ground)
 
@@ -1304,46 +1324,41 @@ class MyApp(ShowBase):
 
         self.taskMgr.add(shake_task, "cameraShakeTask")
     
-    def mouseHoverUnit(self,task):
+    def mouseHoverUnit(self, task):
+        """Track the hovered unit and pin the tooltip where it first appears.
+
+        Placed on hover-enter rather than followed every frame: a tooltip that
+        chases the cursor jitters, and re-running the fit each frame would make
+        it jump as it crossed a screen edge.
+        """
+        hovered = None
         if base.mouseWatcherNode.hasMouse():
-            # Get mouse position in normalized device coordinates
             pMouse = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
             pTo = Point3()
             base.camLens.extrude(pMouse, pFrom, pTo)
-
-            # Transform to global coordinates
             pFrom = render.getRelativePoint(base.cam, pFrom)
             pTo = render.getRelativePoint(base.cam, pTo)
 
-            
-            
-
-            # Perform ray test
             result = self.world.rayTestClosest(pFrom, pTo, CM.HOVER_PICK)
-            #self.debug_ray(pFrom, pTo)
             if result.hasHit():
-                hit_node = result.getNode()
-                # Check if hit node is a unit
-                #if isinstance(hit_node, BulletRigidBodyNode):
                 self.mousePosOnGround = result.getHitPos()
-                #self.trajectoryLine = self.drawProjectileTrajectory(self.unitToMove.bodyNP.getPos(), result.getHitPos())
-                #self.drawProjectileTrajectory(Point3(-15,-5,0), Point3(-15,5,0), n=50)
-                if True:
-                    node_name = hit_node.getName()
-                    #print(node_name)
-                    if node_name.startswith('UnitCollision-'):
-                        unit_name = node_name.replace('UnitCollision-', '')
-                        # Set the active unit based on which was clicked
-                        for unit in self.units:
-                            if unit_name == unit.unitName:
-                                hovered_unit = unit
-                                #print(f"Hovered unit: {unit.unitName}")
-                                unit.text_node.show()
-                    else:
-                        for unit in self.units:
-                            unit.text_node.hide()
-        
+                node_name = result.getNode().getName()
+                if node_name.startswith('UnitCollision-'):
+                    unit_name = node_name.replace('UnitCollision-', '')
+                    hovered = next((u for u in self.units
+                                    if u.unitName == unit_name), None)
+
+        if hovered is not self._hoveredUnit:
+            self._hoveredUnit = hovered
+            if hovered is None:
+                self.hud.hide_tooltip()
+            else:
+                hovered.updateTextNode()
+                mouse = base.mouseWatcherNode.getMouse()
+                self.hud.show_tooltip(hovered.text.getText(),
+                                      mouse.getX() * self.getAspectRatio(),
+                                      mouse.getY())
         return task.cont
                         
 
@@ -1394,7 +1409,7 @@ class MyApp(ShowBase):
                         self.accept('mouse3', self.onRightClick,[self.unitToMove])
                         #self.startTaskFunction(self.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
                         self.startTaskFunction(taskfunction, taskname)
-                        self.debugTextUnit.setText(f"Selected unit: {self.unitToMove.unitName}\nStats: {self.unitToMove.unit.model.characteristics}")
+                        self.showSelectedUnit(self.unitToMove)
 
             result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))    
             if result2.hasHit():
@@ -1428,6 +1443,110 @@ class MyApp(ShowBase):
     def spellDescriptions(self, wizard, names) -> dict:
         """name -> readout, for the spell-selection menu."""
         return {n: spell_readout(n, wizard.spells.get(n)) for n in names}
+
+    SELECTION_STATS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
+
+    def showSelectedUnit(self, unit):
+        """Publish the selected unit's state to the HUD's unit card."""
+        model = unit.unit.model
+        save = getattr(model, 'armor_save', 7)
+        ward = ward_save_value(model)
+        messenger.send('hud-unit', [{
+            'name': unit.unit.name,
+            'troop_type': model.troop_type(),
+            'us': unit_strength_total(unit),
+            'files': unit.unit.files,
+            'ranks': unit.unit.ranks,
+            'save': f"{save}+" if save <= 6 else None,
+            'ward': f"{ward}+" if ward else None,
+            'rank_bonus': rank_bonus(unit.unit, unit.isDisrupted),
+            'stats': dict(model.characteristics),
+            'models': unit.unit.nmodels,
+            'start_models': unit.startOfBattleModels,
+            'details': self.unitDetailLines(unit),
+            'chips': self.unitStateChips(unit),
+        }])
+
+    CARD_LINE_CHARS = 54
+
+    def unitDetailLines(self, unit):
+        """The facts that decide something this phase, one short line each."""
+        model = unit.unit.model
+        lines = []
+
+        ld, general = self.psychology.leadership_of(unit)
+        line = f"Ld {ld}"
+        if general is not None:
+            line += f" from {general.unit.name}"
+        if self.psychology.battle_standard_of(unit) is not None:
+            line += "   +BSB re-rolls"
+        lines.append(line)
+
+        # A mounted model fights with two profiles; the stat row shows only the
+        # rider's, so the beast's has to be spelled out.
+        mount = model.get_mount()
+        if mount is not None:
+            mc = mount.characteristics
+            lines.append(f"Mount {mount.name}: M{mc.get('M', '-')} "
+                         f"WS{mc.get('WS', '-')} S{mc.get('S', '-')} "
+                         f"A{mc.get('A', '-')}")
+
+        weapon = model.equipedWeapon or {}
+        if weapon:
+            name = weapon.get('name', 'weapon')
+            if weapon.get('tag') == 'ranged':
+                lines.append(f"{name}: R{weapon.get('ranged_range', '-')}\" "
+                             f"S{weapon.get('ranged_strength', '-')} "
+                             f"AP{weapon.get('ranged_AP', 0)}")
+            else:
+                # A plain hand weapon carries no override, so it gets no colon.
+                parts = []
+                if weapon.get('strength'):
+                    parts.append(f"S{weapon['strength']}")
+                if weapon.get('ap'):
+                    parts.append(f"AP{weapon['ap']}")
+                lines.append(f"{name}: {' '.join(parts)}" if parts else name)
+
+        if model.is_wizard():
+            level = model.wizard_level(1)
+            left = max(0, level - len(getattr(unit, 'spellsCastThisTurn', [])))
+            lines.append(f"Wizard Level {level}: {left} casting(s) left")
+
+        if unit.isInCombatWith:
+            names = ", ".join(u.unit.name for u in unit.isInCombatWith)
+            flanks = "/".join(unit.isInCombatFlank)
+            lines.append(f"Fighting {names}" + (f" ({flanks})" if flanks else ""))
+
+        return [line if len(line) <= self.CARD_LINE_CHARS
+                else line[:self.CARD_LINE_CHARS - 1] + "\u2026"
+                for line in lines]
+
+    def refreshSelectedUnit(self, *_args):
+        unit = getattr(self, 'unitToMove', None)
+        if unit is not None and not unit.bodyNP.isEmpty():
+            self.showSelectedUnit(unit)
+
+    @staticmethod
+    def unitStateChips(unit):
+        """The flags worth seeing at a glance, worst news first."""
+        chips = []
+        if unit.state == "IsFleeing":
+            chips.append(('FLEEING', 'bad'))
+        if unit.isInCombat:
+            chips.append(('ENGAGED', 'bad'))
+        if unit.isDisrupted:
+            chips.append(('DISRUPTED', 'bad'))
+        if unit.chargedThisTurn:
+            chips.append(('CHARGED', 'good'))
+        if unit.isGeneral:
+            chips.append(('GENERAL', 'note'))
+        if unit.isBSB:
+            chips.append(('BATTLE STANDARD', 'note'))
+        if unit.hasMovedThisTurn:
+            chips.append(('MOVED', 'note'))
+        if unit.hasAttackedThisTurn:
+            chips.append(('ATTACKED', 'note'))
+        return chips
 
     async def resolveSpell(self, target):
         """Cast the chosen spell at *target* — a unit, or a ground point for a
@@ -1598,23 +1717,27 @@ class MyApp(ShowBase):
         return selected
 
     
-    def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1)):
+    def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1),
+                        parent=None, align=TextNode.ACenter, font=None):
         """
         Creates and returns a text node for displaying text on screen.
         Uses the shared medieval theme font and shadow.
-        
+
         Args:
             text: The text to display
-            pos: (x, y) position in aspect2d coordinates (-1 to 1)
+            pos: (x, y) position, in *parent*'s space
             scale: Text scale
             color: Text color as (r, g, b, a) tuple
-        
+            parent: Anchor node (e.g. base.a2dBottomLeft); aspect2d if None
+            align: TextNode alignment
+            font: Typeface; the display face if None
+
         Returns:
             TextNode object that can be updated with .setText()
         """
         return gui_theme.styled_text(
             text=text, pos=pos, scale=scale, fg=color,
-            align=TextNode.ACenter,
+            align=align, parent=parent, font=font,
         )
 
     # ─── Campaign Map ─────────────────────────────────────────────────────
@@ -2016,6 +2139,10 @@ class MyApp(ShowBase):
 
     def applyWounds(self, unit, wounds):
         self.movement.applyWounds(unit, wounds)
+        # The card carries the model count and the flee/panic thresholds, so it
+        # is wrong the moment casualties land.
+        if unit is getattr(self, 'unitToMove', None):
+            self.showSelectedUnit(unit)
 
     def sweepTest(self, unit, direction, length):
         return self.movement.sweepTest(unit, direction, length)
@@ -2167,6 +2294,12 @@ class MyApp(ShowBase):
     def start_tutorial(self, filepath='tutorials/tutorial_basics.json'):
         """Launch the tutorial scenario system."""
         self.tutorial.start(filepath)
+
+    def toggle_ai_player2(self):
+        """Switch the player 2 AI between autonomous and manual play."""
+        self.AIplayer2.active = not self.AIplayer2.active
+        state = 'ON' if self.AIplayer2.active else 'OFF'
+        print(f"[AI] Player 2 AI {state} — F4 toggles, 'a' steps a single AI turn.")
 
 app = MyApp()
 app.run()

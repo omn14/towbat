@@ -8,6 +8,46 @@ the only way to tell, and it is what a bug report is written from.
 
 PREFIX = "[Rule]"
 
+# Anything that wants to display the trace as well as print it — the on-screen
+# battle log, a test harness — registers here.
+_listeners = []
+
+
+def add_listener(listener) -> None:
+    """Register ``listener(kind, rule, subject_name, detail)``.
+
+    *kind* is 'fired' or 'skipped'.
+    """
+    if listener not in _listeners:
+        _listeners.append(listener)
+
+
+def remove_listener(listener) -> None:
+    if listener in _listeners:
+        _listeners.remove(listener)
+
+
+def _emit(kind: str, rule: str, subject: str, detail: str) -> None:
+    for listener in list(_listeners):
+        try:
+            listener(kind, rule, subject, detail)
+        except Exception as exc:
+            # A broken display must not stop a rule from resolving.
+            print(f"{PREFIX} listener {listener!r} failed: {exc}")
+
+
+def battle_log(text: str, category: str = 'info') -> None:
+    """Post one line to the on-screen battle log, if there is one.
+
+    Rules modules are imported by the tests without a ShowBase, so the Panda3D
+    ``messenger`` builtin may not exist; engine code posts through here rather
+    than reaching for it directly.
+    """
+    import builtins
+    messenger = getattr(builtins, 'messenger', None)
+    if messenger is not None:
+        messenger.send('hud-log', [text, category])
+
 
 def subject_name(subject) -> str:
     """A readable name for a unit wrapper, a Unit, a model or a plain string."""
@@ -32,7 +72,9 @@ def rule_log(rule: str, subject, detail: str) -> None:
     *detail* should carry the numbers that decided it and what they changed,
     so the line answers "why did that happen?" without a re-run.
     """
-    print(f"{PREFIX} {rule} — {subject_name(subject)}: {detail}")
+    name = subject_name(subject)
+    print(f"{PREFIX} {rule} — {name}: {detail}")
+    _emit('fired', rule, name, detail)
 
 
 def rule_skipped(rule: str, subject, reason: str) -> None:
@@ -41,4 +83,6 @@ def rule_skipped(rule: str, subject, reason: str) -> None:
     Worth as much as the positive case: a rule that quietly declines looks
     exactly like a rule that is broken.
     """
-    print(f"{PREFIX} {rule} — {subject_name(subject)}: not claimed ({reason})")
+    name = subject_name(subject)
+    print(f"{PREFIX} {rule} — {name}: not claimed ({reason})")
+    _emit('skipped', rule, name, reason)

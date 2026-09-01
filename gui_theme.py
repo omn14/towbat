@@ -34,7 +34,11 @@ BTN_NEUTRAL_HOVER = (0.52, 0.42, 0.28, 1.0)
 ENTRY_BG        = (0.18, 0.15, 0.10, 0.9)
 ENTRY_FG        = CREAM
 
-# ── Font path ─────────────────────────────────────────────────────────────
+# ── Fonts ─────────────────────────────────────────────────────────────────
+# One face for everything, for want of a second one. Panda3D's bundled
+# cmss12/cmtt12 are OT1-encoded Computer Modern: '+' renders as a minus and
+# '>' as an inverted question mark, which is fatal in a UI full of "4+" saves.
+# A body sans has to be added as a TTF asset before the split is worth making.
 FONT_PATH = 'fonts/MedievalSharp.ttf'
 
 # ── Texture paths ─────────────────────────────────────────────────────────
@@ -47,22 +51,26 @@ TEX_BUTTON_HOVER = TEX_DIR + 'button_hover.png'
 TEX_BUTTON_RED  = TEX_DIR + 'button_red.png'
 TEX_VICTORY     = TEX_DIR + 'victory_panel.png'
 
-# ── Cached font reference (call load_medieval_font once after ShowBase) ──
+# ── Cached font reference (loaded lazily, after ShowBase exists) ─────────
 _med_font = None
+
+
+def _smooth(font, pixels_per_unit=128):
+    """Mipmapped, anisotropic filtering so text stays crisp when scaled."""
+    from panda3d.core import SamplerState
+    font.setPixelsPerUnit(pixels_per_unit)
+    font.setMinfilter(SamplerState.FT_linear_mipmap_linear)
+    font.setMagfilter(SamplerState.FT_linear)
+    font.setAnisotropicDegree(4)
+    return font
 
 
 def load_medieval_font():
     """Load and cache the MedievalSharp font.  Call once *after* ShowBase init."""
     global _med_font
-    from panda3d.core import Filename, SamplerState
-    from direct.showbase.Loader import Loader
     _med_font = loader.loadFont(FONT_PATH)   # noqa: F821 (panda3d global)
-    _med_font.setPixelsPerUnit(256)
     _med_font.setPageSize(1024, 1024)
-    _med_font.setMinfilter(SamplerState.FT_linear_mipmap_linear)
-    _med_font.setMagfilter(SamplerState.FT_linear)
-    _med_font.setAnisotropicDegree(4)
-    return _med_font
+    return _smooth(_med_font, 256)
 
 
 def get_font():

@@ -141,15 +141,8 @@ class unitGraphics(FSM):
             _tp_high.setTextColor(0.4, 1.0, 0.4, 1.0)    # green for above-average
             _tpm.setProperties('stat_high', _tp_high)
         self.text.setText(text)
-        #self.text_node = self.model.attachNewNode(self.text)
-        self.text_node = self.bodyNP.attachNewNode(self.text)
-        self.text_node.setPos(self.unitWidth/3, self.unitHeight*2, 5)
-        self.text_node.setScale(0.06)
-        self.text_node.setBillboardPointEye(-5, fixed_depth=True)
-        self.text_node.setBin("fixed", 0)
-        self.text_node.setDepthWrite(False)
-        self.text_node.setDepthTest(False)
-        self.text_node.hide()
+        # Text only: the HUD draws it in screen space on hover. As a billboard
+        # on the unit it ran off the bottom edge when the unit was low down.
 
         
     # Average human-level baseline for above-average detection

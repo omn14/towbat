@@ -16,6 +16,7 @@ from panda3d.core import Vec3, Point3, LineSegs
 
 from battleFunctions import check_armor_save
 from dice import ArtilleryDice, checkDice
+from rules_log import battle_log
 
 
 def wound_target(strength: int, toughness: int) -> int:
@@ -157,6 +158,7 @@ class CannonFire:
                    f"saved {total_saved}, slain {total_cas} (S{strength} AP-{ap})")
         print(summary)
         self.game.debugText.setText(summary)
+        battle_log(summary, 'good' if total_cas else 'combat')
         cannonUnit.hasAttackedThisTurn = True
 
     # ─── Hit determination ──────────────────────────────────────────

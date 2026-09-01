@@ -1,7 +1,5 @@
 from direct.fsm.FSM import FSM
-from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import TextNode, BitMask32
-import gui_theme
+from panda3d.core import BitMask32
 
 
 class RoundCounter(FSM):
@@ -61,18 +59,9 @@ class RoundCounter(FSM):
                 print("Game Over! Player Two has completed all rounds.")
 
     def update_round_display(self):
-        
-        # Remove existing text if it exists
-        if hasattr(self, 'round_text'):
-            self.round_text.destroy()
-        
-        # Create round info text
-        round_info = f"Player {self.current_player} | Round {self.currentRoundPlayer[self.current_player-1] + 1}/{self.max_rounds}"
-        
-        self.round_text = gui_theme.styled_text(
-            text=round_info,
-            pos=(1.3, 0.9),
-            scale=0.07,
-            fg=gui_theme.GOLD,
-            align=TextNode.ARight,
-        )
+        """Publish the turn state; the HUD owns the widget that shows it."""
+        messenger.send('hud-turn', [
+            self.current_player,
+            self.currentRoundPlayer[self.current_player - 1] + 1,
+            self.max_rounds,
+        ])
