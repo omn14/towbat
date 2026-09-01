@@ -5,6 +5,42 @@ from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
 from characters import is_character, has_joined_character, same_player, join_unit
 
 
+# ── Deployment zone ───────────────────────────────────────────────────
+
+# One world unit is one inch. The zone runs the full width of the 72x48 board
+# and 12 deep off the owning player's edge; game_fsm builds the frame that
+# encloses it from these, and moves it between the two players.
+DEPLOY_ZONE_WIDTH = 72
+DEPLOY_ZONE_DEPTH = 12
+
+# Undeployed units wait beside the board, never on it: a unit sitting inside
+# the zone at the start of the phase reads as one that has already been placed.
+# Player one queues west of the zone, player two east.
+STAGING_MARGIN = 2.0    # clear space between the board edge and a waiting unit
+STAGING_GAP = 1.0       # between units down the column
+
+
+def stage_undeployed(game):
+    """Queue each player's undeployed units up beside their deployment zone.
+
+    Units are lined up by their inner face rather than their centre, so a wide
+    regiment and a narrow one leave the same clearance from the board edge.
+    """
+    x_face = DEPLOY_ZONE_WIDTH / 2 + STAGING_MARGIN
+    for units, side in ((game.player1Units, -1), (game.player2Units, 1)):
+        # Start level with the outer edge of that player's zone and march in.
+        y = side * 2 * DEPLOY_ZONE_DEPTH
+        for unit in units:
+            if unit.isDeployed:
+                continue
+            width = getattr(unit, 'unitWidth', 4.0) or 4.0
+            depth = getattr(unit, 'unitHeight', 4.0) or 4.0
+            unit.bodyNP.setPos(side * (x_face + width / 2),
+                               y - side * depth / 2, 0)
+            unit.bodyNP.node().setTransformDirty()
+            y -= side * (depth + STAGING_GAP)
+
+
 # ── Strategy-aware deployment for AI ──────────────────────────────────
 
 # Cache to persist the chosen strategy across deploy calls within a game
@@ -398,7 +434,7 @@ def endMoveUnit(game,taskToEnd):
 def _advance_after_deploy(game):
     """Rebind selection and advance the deploy turn/phase after a placement."""
     game.accept('mouse1', game.setActiveUnit,[game.setActiveUnitTask, game.setActiveUnitTaskName])
-    depH=12
+    depH = DEPLOY_ZONE_DEPTH
     if game.roundCounter.current_player == 2:
         if not allUnitsDeployed(game.player1Units):
             game.roundCounter.request('PlayerOne')

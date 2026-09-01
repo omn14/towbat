@@ -9,6 +9,9 @@ from direct.fsm.FSM import FSM
 from panda3d.core import Point3, Vec3, BitMask32, TransformState
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 
+from deployPhase import (DEPLOY_ZONE_DEPTH, DEPLOY_ZONE_WIDTH,
+                         stage_undeployed)
+
 
 class GamePhaseFSM(FSM):
     """Controls the game's turn phase flow via a finite state machine."""
@@ -80,8 +83,8 @@ class GamePhaseFSM(FSM):
         messenger.send('tutorial-phase-change', ['DeployPhase'])
         self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
 
-        dep_width = 72
-        dep_height = 12
+        dep_width = DEPLOY_ZONE_WIDTH
+        dep_height = DEPLOY_ZONE_DEPTH
         box_w = 20
         box_h = 50
 
@@ -113,6 +116,7 @@ class GamePhaseFSM(FSM):
             'mouse1', self.game.setActiveUnit,
             [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName]
         )
+        stage_undeployed(self.game)
 
     def exitDeployPhase(self):
         base.world.removeRigidBody(self.game.boundary_ghost)
