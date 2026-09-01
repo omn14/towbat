@@ -81,6 +81,14 @@ loadPrcFileData('', 'framebuffer-multisample 1\nmultisamples 4')
 # Weapon ranges are written in inches; the board is three world units per inch.
 WORLD_UNITS_PER_INCH = 3.0
 
+# Tasks that glue a unit to the cursor. The hover tooltip stands down while one
+# of them runs: it is pinned where the hover began, so it covers the very
+# ground the unit is being put on, and it never clears by itself because the
+# held unit stays under the pointer and the hovered unit therefore never
+# changes.
+MOUSE_DRIVEN_TASKS = ('taskMoveUnit', 'taskLoopPathTowardsMouse',
+                      'freeReformUnitTask')
+
 
 class MyApp(ShowBase):
 
@@ -1352,6 +1360,13 @@ class MyApp(ShowBase):
                     unit_name = node_name.replace('UnitCollision-', '')
                     hovered = next((u for u in self.units
                                     if u.unitName == unit_name), None)
+
+        if any(taskMgr.hasTaskNamed(name) for name in MOUSE_DRIVEN_TASKS):
+            # Tracked but not shown, so dropping the unit does not immediately
+            # pop the tooltip back up under the pointer that just placed it.
+            self._hoveredUnit = hovered
+            self.hud.hide_tooltip()
+            return task.cont
 
         if hovered is not self._hoveredUnit:
             self._hoveredUnit = hovered
