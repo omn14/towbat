@@ -73,7 +73,6 @@ middle of the table.
 
 | Item | Effort | Payoff |
 |---|---|---|
-| Second font — sans for numbers and body | Low | High |
 | Unit card: proper panel, models bar with the 50%/25% thresholds, state chips | Low–Med | High |
 | In-world: selection decal, facing chevron, status badges, strength bar | Low–Med | High |
 | `legal_actions(unit)` + contextual action bar with disabled reasons | Med | High |
@@ -81,6 +80,7 @@ middle of the table.
 | Target preview: to-hit, to-wound, save, modifier stack, expected casualties | Med | Very high |
 | Combat result card | Low | Medium |
 | Log scrollback and category filtering | Low | Medium |
+| Second font — **blocked**, see below | Low | High |
 
 The two genuinely hard ones:
 
@@ -97,6 +97,21 @@ The two genuinely hard ones:
 - **Two fonts.** MedievalSharp for headings and unit names only; a clean
   humanist sans for stat lines, numbers and the log. Display faces at 0.03
   scale are illegible, and a stat block is tabular data.
+
+  **This is blocked on an asset, not on effort.** `fonts/` holds only
+  MedievalSharp, and Panda3D's bundled `cmss12` / `cmtt12` are not a
+  substitute: they are OT1-encoded Computer Modern, so `+` renders as a minus
+  sign and `>` as an inverted question mark. In a wargame UI where `4+` is the
+  most common string on screen, that is disqualifying. They are also
+  StaticTextFont, pre-rendered and unfilterable, so they blur when scaled.
+
+  To unblock: drop an OFL sans TTF (Inter, Lato, Open Sans) into `fonts/`, add
+  `BODY_FONT_PATH` beside `FONT_PATH` in `gui_theme`, and a `get_body_font()`
+  next to `get_font()`. Everything else is already parameterised —
+  `styled_text` and `setup_text_node` both take a `font`.
+
+- **Mind the glyph set.** MedievalSharp has no `→` (U+2192); an arrow in a log
+  line renders as nothing at all, silently. Stick to `->`, `v` and `-`.
 - **A type scale, not arbitrary values.** 0.075 title, 0.05 heading, 0.038
   body, 0.03 caption.
 - **Semantic colour.** Gold means important, red means bad for you, green means
@@ -110,8 +125,10 @@ The two genuinely hard ones:
 
 ## LEFTOVER
 
-- No second font yet — MedievalSharp is still setting the stat lines, and it
-  is the weakest part of the current screen.
+- No second font — attempted with Panda3D's bundled faces and reverted; see
+  the reason under Look and feel. Needs a sans TTF added to `fonts/`.
+  MedievalSharp is still setting the stat lines, and it remains the weakest
+  part of the screen.
 - Battle log has no scrollback; it is a fixed 9-entry window with no filter.
 - Nothing posts to the log from `psychology.py`, `spell_system.py`,
   `cannon_fire.py` or `bombardment.py` yet. They only need a

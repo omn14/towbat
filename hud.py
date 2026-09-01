@@ -65,7 +65,7 @@ class HUD(DirectObject):
               'CampaignPhase': 'CAMPAIGN'}
 
     LOG_ENTRIES = 9
-    LOG_SCALE = 0.032
+    LOG_SCALE = 0.030
     LOG_LEFT = -0.74
     LOG_TOP = 0.495
     LOG_BOTTOM = 0.075
@@ -86,12 +86,12 @@ class HUD(DirectObject):
             text='', pos=(0.03, -0.10), scale=0.055, fg=T.GOLD,
             align=TextNode.ALeft, parent=base.a2dTopLeft, font=font)
         self._round = T.styled_text(
-            text='', pos=(0.03, -0.165), scale=0.038, fg=T.CREAM,
+            text='', pos=(0.03, -0.155), scale=0.036, fg=T.CREAM,
             align=TextNode.ALeft, parent=base.a2dTopLeft, font=font)
 
         # ── Phase track (top centre) ──────────────────────────────────
         self._phase = T.styled_text(
-            text='', pos=(0, -0.10), scale=0.036, fg=T.CREAM,
+            text='', pos=(0, -0.095), scale=0.034, fg=T.CREAM,
             align=TextNode.ACenter, parent=base.a2dTopCenter, font=font)
 
         # ── Battle log (bottom right) ─────────────────────────────────

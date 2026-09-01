@@ -865,7 +865,7 @@ class CombatResolver:
               f"-> {saves_made} saved -> {total_wounds} slain "
               f"({defenderUnit.unit.name})")
         messenger.send('hud-log', [
-            f"{attackerUnit.unit.name} \u2192 {defenderUnit.unit.name}: "
+            f"{attackerUnit.unit.name} v {defenderUnit.unit.name}: "
             f"{attacks} {verb}, {total_hits} hit, {total_wounds} slain",
             'good' if total_wounds else 'combat'])
 

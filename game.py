@@ -181,22 +181,27 @@ class MyApp(ShowBase):
         # Anchored to screen corners so they cannot drift into the HUD's zones
         # (top-left banner, top-centre phase track, bottom-right battle log).
         self.debugTextUnit = self.setup_text_node(
-            pos=(0.03, 0.13), scale=0.038, color=gui_theme.HINT_FG,
+            pos=(0.03, 0.155), scale=0.044, color=gui_theme.GOLD,
+            parent=self.a2dBottomLeft, align=TextNode.ALeft)
+        self.unitStatsText = self.setup_text_node(
+            pos=(0.03, 0.095), scale=0.036, color=gui_theme.HINT_FG,
             parent=self.a2dBottomLeft, align=TextNode.ALeft)
 
+        # These three are written from a dozen call sites with arbitrary text,
+        # so they keep the display face, which has the full glyph set.
         self.debugTextInfo = self.setup_text_node(
-            pos=(0, 0.20), scale=0.042, color=gui_theme.HINT_FG,
+            pos=(0, 0.20), scale=0.040, color=gui_theme.HINT_FG,
             parent=self.a2dBottomCenter)
         self.moveArceDistance = 0
 
         self.diceInfoText = self.setup_text_node(
-            pos=(0, 0.30), scale=0.045, color=gui_theme.GOLD,
+            pos=(0, 0.30), scale=0.044, color=gui_theme.GOLD,
             parent=self.a2dBottomCenter)
 
         # One-off status messages (war-machine summaries and the like); the
         # phase name it used to echo is now the HUD's phase track.
         self.debugText = self.setup_text_node(
-            pos=(0, 0.11), scale=0.040, color=gui_theme.CREAM,
+            pos=(0, 0.11), scale=0.038, color=gui_theme.CREAM,
             parent=self.a2dBottomCenter)
 
         self.numsPoints=0
@@ -1450,13 +1455,13 @@ class MyApp(ShowBase):
     def showSelectedUnit(self, unit):
         """Bottom-left readout for the selected unit."""
         ch = unit.unit.model.characteristics
-        stats = "  ".join(f"{k} {ch.get(k, '-')}"
-                          for k in self.SELECTION_STATS)
         save = getattr(unit.unit.model, 'armor_save', 7)
         save = f"{save}+" if save <= 6 else "none"
         self.debugTextUnit.setText(
-            f"{unit.unit.name}   ({unit.unit.nmodels} models, "
-            f"{unit.unit.files}x{unit.unit.ranks}, save {save})\n{stats}")
+            f"{unit.unit.name}   —   {unit.unit.nmodels} models, "
+            f"{unit.unit.files}x{unit.unit.ranks}, save {save}")
+        stats = "   ".join(f"{k} {ch.get(k, '-')}" for k in self.SELECTION_STATS)
+        self.unitStatsText.setText(stats)
 
     async def resolveSpell(self, target):
         """Cast the chosen spell at *target* — a unit, or a ground point for a
@@ -1628,7 +1633,7 @@ class MyApp(ShowBase):
 
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1),
-                        parent=None, align=TextNode.ACenter):
+                        parent=None, align=TextNode.ACenter, font=None):
         """
         Creates and returns a text node for displaying text on screen.
         Uses the shared medieval theme font and shadow.
@@ -1640,13 +1645,14 @@ class MyApp(ShowBase):
             color: Text color as (r, g, b, a) tuple
             parent: Anchor node (e.g. base.a2dBottomLeft); aspect2d if None
             align: TextNode alignment
+            font: Typeface; the display face if None
 
         Returns:
             TextNode object that can be updated with .setText()
         """
         return gui_theme.styled_text(
             text=text, pos=pos, scale=scale, fg=color,
-            align=align, parent=parent,
+            align=align, parent=parent, font=font,
         )
 
     # ─── Campaign Map ─────────────────────────────────────────────────────
