@@ -28,7 +28,7 @@ nothing covers the centre of the board.
 | Top left | `a2dTopLeft` | Turn banner — player, round |
 | Top centre | `a2dTopCenter` | Phase track |
 | Top right | `a2dTopRight` | *free* — army strength |
-| Bottom left | `a2dBottomLeft` | Unit card |
+| Bottom left | `a2dBottomLeft` | Unit card, and the action bar attached to it |
 | Bottom centre | `a2dBottomCenter` | Transient readouts: dice, targeting, status |
 | Bottom right | `a2dBottomRight` | Battle log |
 | Follows the cursor | `aspect2d` | Hover tooltip (drawn above everything) |
@@ -37,12 +37,28 @@ Anchor to the corner nodes, never to raw aspect2d coordinates. `(-1.3, 0.9)`
 is 16:9 only; on any other window shape it drifts off the edge or into the
 middle of the table.
 
+**Keep what you act on in one place.** Readouts may be spread — they are
+glanced at, and the board has to stay clear — but the selected unit and the
+things you can do with it belong in one block. Bycer's criticism of Planetary
+Annihilation is exactly this: build commands at the bottom, resources at the
+top and unit orders on the right forces the player to split their attention.
+So the action bar attaches to the unit card rather than being centred.
+
 ## Architecture rules
 
 - **Build once, `setText` after.** No destroy-and-recreate on every update.
 - **Publish, don't reach in.** Game systems post `messenger.send('hud-log',
   [text, category])`; they never import or touch a widget. The HUD is a
-  subscriber. Events: `hud-turn`, `hud-phase`, `hud-log`.
+  subscriber. Events: `hud-turn`, `hud-phase`, `hud-log`, `hud-unit`.
+
+  Rules modules post through `rules_log.battle_log` instead. They are imported
+  by the tests without a ShowBase, so the Panda3D `messenger` builtin may not
+  exist; `battle_log` is the one place that knows about it, and it no-ops when
+  there is no game running.
+- **Nothing decisive resolves off screen.** If an event changes the battle and
+  the player would not otherwise see it, it goes in the log. This is the whole
+  argument for the log, and the reason morale, casting, cannon and bombardment
+  were wired into it rather than left printing to a terminal.
 - **One source of truth per fact.** When the phase track went in, the nine
   `debugText.setText(f"Current phase: ...")` echoes came out. A duplicated
   readout is a readout that will eventually disagree with itself.
@@ -67,6 +83,10 @@ middle of the table.
 - `RoundCounter.update_round_display` publishes `hud-turn` instead of
   destroying and recreating an `OnscreenText`.
 - `CombatResolver.printBattleResults` also posts a one-line summary.
+- Morale, casting, cannon and bombardment post their outcomes too: the Panic
+  test with its roll against Leadership, the casting roll against the casting
+  value, Miscasts, and the war-machine damage summaries. Between those and the
+  rule trace, the things that decide a battle now happen on screen.
 - The four loose text nodes anchored to corners; the selected-unit readout no
   longer dumps the raw characteristics dict.
 - Unit card (bottom left): name, troop type, Unit Strength, formation, save,
@@ -112,8 +132,9 @@ middle of the table.
 | Item | Effort | Payoff |
 |---|---|---|
 | In-world: selection decal, facing chevron, status badges, strength bar | Low–Med | High |
-| `legal_actions(unit)` + contextual action bar with disabled reasons | Med | High |
-| End Phase button + army strength readout | Low | High |
+| `legal_actions(unit)` + action bar **attached to the unit card** | Med | High |
+| Every action shows its key, plus a key-list overlay | Low | High |
+| End Phase button + army strength readout (the macro glance) | Low | High |
 | Target preview: to-hit, to-wound, save, modifier stack, expected casualties | Med | Very high |
 | Combat result card | Low | Medium |
 | Log scrollback and category filtering | Low | Medium |
@@ -130,6 +151,19 @@ The two genuinely hard ones:
   `legal_actions(unit)` and have both the task loops and the bar call it.
 
 ## Look and feel
+
+- **Every action shows its key, and every key has a visible action.** Hotkeys
+  are for speed; the visible control is how the player finds out the hotkey
+  exists. Today `t`, `c`, `l`, `a`, `F3`–`F10`, right-click-to-commit and a
+  floating collision cube are the entire command set, and none of it is
+  discoverable. Put the key on the button (`SHOOT (S)`) and add an
+  always-available key list — `debug_tools` has one on `h`, but only in debug
+  mode.
+
+  Bycer's hotkey list — control groups, attack-move, select-all-of-type, idle
+  workers — does not apply. That is base-management RTS under APM pressure;
+  this is turn-based with six units a side, so discoverability matters far
+  more than speed.
 
 - **Two fonts.** MedievalSharp for headings and unit names only; a clean
   humanist sans for stat lines, numbers and the log. Display faces at 0.03
@@ -159,6 +193,13 @@ The two genuinely hard ones:
 - **Keep the physical dice.** Tumbling d6s are the most characterful thing in
   the build. Add a 2D strip beside them showing values against the target
   number so the *result* reads while the *rolling* stays tactile.
+- **Graduated detail, not everything at once.** Bycer contrasts Rise of Nations
+  (show it all) with Age of Empires 3 (degrees of detail, to avoid overload).
+  That is the argument for the two-stage tooltip: a short card on hover, the
+  full dossier on demand.
+
+Source for several of the above: Josh Bycer, *UI Strategy Game Design Dos and
+Don'ts*, Game Developer, 2015.
 
 ## LEFTOVER
 
@@ -185,9 +226,9 @@ The two genuinely hard ones:
   two-stage split: a short card on hover, the dossier in the free top-right
   zone. That split is still not done — hover shows the whole dossier, so on a
   tall unit entry the panel is still most of the screen height.
-- Nothing posts to the log from `psychology.py`, `spell_system.py`,
-  `cannon_fire.py` or `bombardment.py` yet. They only need a
-  `messenger.send('hud-log', ...)` at the point of resolution.
+- Nothing posts to the log from the pursuit, break-test or Fear/Terror paths in
+  `psychology.py` — only the Panic test does. A broken unit routing off the
+  board is still console-only.
 - Dice results still go to `diceInfoText` as plain text, not the roll strip.
 - `debugText`, `debugTextInfo`, `debugTextUnit` keep their debug-era names
   despite carrying real gameplay information.

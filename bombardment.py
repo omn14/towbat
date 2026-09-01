@@ -19,6 +19,7 @@ from battleFunctions import check_armor_save
 from cannon_fire import wound_target
 from models import roll_dice_expr, stat_int
 from dice import ArtilleryDice, ScatterDice, checkDice
+from rules_log import battle_log
 
 
 class Bombardment:
@@ -200,6 +201,7 @@ class Bombardment:
                    f"(centre S{s_central} AP-{ap_central}, rest S{strength} AP-{ap})")
         print(summary)
         self.game.debugText.setText(summary)
+        battle_log(summary, 'good' if total_cas else 'combat')
 
     def _wound_unsaved(self, model, strength, ap):
         """Roll To Wound then armour save; True if a model is slain."""

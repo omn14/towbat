@@ -36,6 +36,19 @@ def _emit(kind: str, rule: str, subject: str, detail: str) -> None:
             print(f"{PREFIX} listener {listener!r} failed: {exc}")
 
 
+def battle_log(text: str, category: str = 'info') -> None:
+    """Post one line to the on-screen battle log, if there is one.
+
+    Rules modules are imported by the tests without a ShowBase, so the Panda3D
+    ``messenger`` builtin may not exist; engine code posts through here rather
+    than reaching for it directly.
+    """
+    import builtins
+    messenger = getattr(builtins, 'messenger', None)
+    if messenger is not None:
+        messenger.send('hud-log', [text, category])
+
+
 def subject_name(subject) -> str:
     """A readable name for a unit wrapper, a Unit, a model or a plain string."""
     if subject is None:

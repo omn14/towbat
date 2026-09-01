@@ -50,7 +50,7 @@ from post_combat import (GIVE_GROUND, facing_vector, fall_back_roll,
                          give_ground_direction, nearest_corner, peril_wounds,
                          pursuit_roll, restraint_test, segment_crosses_box,
                          winner_response)
-from rules_log import rule_log, rule_skipped
+from rules_log import rule_log, rule_skipped, battle_log
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -864,10 +864,10 @@ class CombatResolver:
         print(f"   {attacks} {verb} -> {total_hits} hit -> {suffered_wounds} wound "
               f"-> {saves_made} saved -> {total_wounds} slain "
               f"({defenderUnit.unit.name})")
-        messenger.send('hud-log', [
+        battle_log(
             f"{attackerUnit.unit.name} v {defenderUnit.unit.name}: "
             f"{attacks} {verb}, {total_hits} hit, {total_wounds} slain",
-            'good' if total_wounds else 'combat'])
+            'good' if total_wounds else 'combat')
 
     @staticmethod
     def printCombatResult(rows, totals, unit_strengths):

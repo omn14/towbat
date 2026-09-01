@@ -23,6 +23,7 @@ from direct.interval.FunctionInterval import Func
 
 from special_rules import (board_edge_distance, should_use_swiftstride,
                            unit_has_swiftstride)
+from rules_log import battle_log
 
 
 # ── Oriented-box (footprint) geometry ──────────────────────────────────────
@@ -548,6 +549,10 @@ class PsychologySystem:
         print(f"[Panic] {unit.unit.name}: Ld {ld} vs 2D6={roll} -> "
               f"{'PASS' if passed else 'FAIL'}  ({cause}; {remaining}/{start} "
               f"models, {pct:.0f}% remain)")
+        battle_log(
+            f"Panic test - {unit.unit.name}: 2D6 = {roll} v Ld {ld} "
+            f"{'passed' if passed else 'FAILED'} ({cause})",
+            'good' if passed else 'morale')
         if passed:
             on_done()
             return
