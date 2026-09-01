@@ -735,6 +735,25 @@ clamour of battle, friendly units are seldom able to tell the difference"
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
+- [x] One world unit is one inch, everywhere — `game.WORLD_UNITS_PER_INCH` was
+      3.0, so weapon ranges alone were tripled. Nothing else on the table
+      agreed with it: `models.MM_PER_UNIT` sizes bases at `base_mm / 25.4`, the
+      board rectangle is 72x48 (a 6'x4' table) and the deployment zones are 12
+      deep, all of which are plain inches, and Cannon Fire, Bombardment, spell
+      ranges and Command range all compare a range in inches straight against a
+      world-space `length()`.
+      The effect was that a 24" bow drew a 72-unit arc — the full width of the
+      table — and Long Range (-1 To Hit) began at 36" instead of 12", so almost
+      every shot counted as short range. Cannons, measuring honestly, were
+      out-ranged by bows.
+      Scale is now 1.0 and the three baked-in `* 1.5` half-range factors and
+      the `* 3 / 100` arc radius go through the constant. The `/ 100` in the
+      arc radius stays: it is the world-to-normalised-space conversion for
+      `movement_system.shootingArc`, not part of the table scale.
+      LEFTOVER: only ranged weapons were ever scaled, so nothing else needed
+      correcting — but the scale is still a bare module constant in `game.py`
+      rather than living beside `MM_PER_UNIT` in `models.py`, which is where a
+      reader would look for it.
 - [x] The equipped weapon is the one you fight with — `melee_strength_bonus`,
       `melee_ap` and `armour_bane_for_attack` all said "the active melee
       weapon" in their docstrings and then looped over *every* melee weapon the

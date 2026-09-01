@@ -78,8 +78,17 @@ loadPrcFileData('', 'show-frame-rate-meter true')
 # to use and every edge stays stair-stepped.
 loadPrcFileData('', 'framebuffer-multisample 1\nmultisamples 4')
 
-# Weapon ranges are written in inches; the board is three world units per inch.
-WORLD_UNITS_PER_INCH = 3.0
+# Weapon ranges are written in inches, and one world unit is one inch: the same
+# scale as models.MM_PER_UNIT, which sizes bases at base_mm / 25.4, and as the
+# 72x48 board, a 6'x4' table. Ranges used to be tripled here, which put a 24"
+# bow three-quarters of the way across the table while cannons, spells and
+# Command range measured in plain inches.
+WORLD_UNITS_PER_INCH = 1.0
+
+# The shooting arc is built in a normalised space where the 100-unit ground
+# plane spans 1.0 (movement_system.shootingArc), so a world-unit radius has to
+# be scaled into it.
+ARC_UNITS_PER_WORLD_UNIT = 0.01
 
 # Tasks that glue a unit to the cursor. The hover tooltip stands down while one
 # of them runs: it is pinned where the hover began, so it covers the very
@@ -932,12 +941,13 @@ class MyApp(ShowBase):
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
                                                        num_points=80, 
                                                        rotationangle=self.unitToMove.bodyNP.getH()+45,
-                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*3/100,
+                                                       radius=self.unitToMove.unit.model.equipedWeapon.get('ranged_range',18)*WORLD_UNITS_PER_INCH*ARC_UNITS_PER_WORLD_UNIT,
                                                        full_circle=_all_round)
         self.checkArrowsTerrain()
         self.setGroundOverlay(True, self.shootingArcPoints)
         # Half-range boundary: inside = short range, outside = long range (-1).
-        half = self.unitToMove.unit.model.equipedWeapon.get('ranged_range', 18) * 1.5
+        half = (self.unitToMove.unit.model.equipedWeapon.get('ranged_range', 18)
+                * WORLD_UNITS_PER_INCH / 2)
         self.drawRangeRing(self.unitToMove.bodyNP.getPos(), half)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
@@ -1123,7 +1133,7 @@ class MyApp(ShowBase):
         else:
             return task.cont
         weapon = self.unitToMove.unit.model.equipedWeapon or {}
-        half = weapon.get('ranged_range', 0) * 1.5
+        half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
         dist = (self.unitToMove.bodyNP.getPos() - aim).length()
         long_range = bool(half and dist > half)
         color = (1, 0.35, 0.35, 1) if long_range else (0.35, 1, 0.35, 1)
@@ -1631,7 +1641,7 @@ class MyApp(ShowBase):
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
         # Long range (beyond half the weapon's range) imposes -1 To Hit.
-        _half = weapon.get('ranged_range', 0) * 1.5
+        _half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
         _dist = (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length()
         attacker.model.at_long_range = bool(_half and _dist > _half)
         # US1 Skirmisher target imposes -1 To Hit on the shooter.
