@@ -8,6 +8,12 @@ uniform vec2 polygonpoints[maxpoints];
 uniform bool isActive;
 uniform sampler2D bakedMap;
 
+// The board rectangle in this card's UV space. The card is deliberately larger
+// than the playing surface because it is also the coordinate space the overlay
+// polygon is expressed in, so the grass has to be clipped rather than resized.
+uniform vec2 boardMin;
+uniform vec2 boardMax;
+
 // Input from vertex shader
 in vec4 color;
 in vec2 texcoord;
@@ -94,6 +100,12 @@ vec3 battleMat(vec2 uv) {
 
 void main() {
     vec2 uv = texcoord;
+
+    // Off the board is tabletop, not battlefield: let it show through.
+    if (uv.x < boardMin.x || uv.x > boardMax.x ||
+        uv.y < boardMin.y || uv.y > boardMax.y) {
+        discard;
+    }
 
     // Base surface is the procedural grass mat.
     vec3 ground = battleMat(uv);

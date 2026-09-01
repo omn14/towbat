@@ -99,6 +99,27 @@ MOUSE_DRIVEN_TASKS = ('taskMoveUnit', 'taskLoopPathTowardsMouse',
                       'freeReformUnitTask')
 
 
+# The shooting/movement overlay is expressed in a normalised space where this
+# half-extent maps to 0..1, and the ground card carries it, so the card is this
+# size rather than the board's. movement_system.shootingArc and coordsToWorld
+# use the same figure.
+GROUND_HALF = 50
+
+# Table dressing. The board is finite and its limit is the rule boundary, so it
+# gets a drawn edge; extending the grass outwards would leave the out-of-bounds
+# line looking arbitrary.
+BOARD_EDGE = 2.4          # 3.3% of the board width, restrained on purpose
+BOARD_STAND = 1.1         # how far the board stands proud of the tabletop
+BOARD_LIP = 0.12          # how far the edge rises above the grass
+TABLE_SIZE = 600          # wide enough to fill the view at any zoom
+
+# How much of the way to centre the board in the strip the command bar leaves.
+# 1 centres it in that strip, so the board sits in the middle of what you can
+# actually see; 0 would centre it on the window instead, tucking the near edge
+# further behind the bar.
+BOARD_TUCK = 1.0
+
+
 class MyApp(ShowBase):
 
     # ─── Initialization ──────────────────────────────────────────────────────
@@ -124,7 +145,7 @@ class MyApp(ShowBase):
 
         # Create a flat plane using CardMaker
         cm = CardMaker("ground")
-        cm.setFrame(-50, 50, -50, 50)  # 200x200 plane
+        cm.setFrame(-GROUND_HALF, GROUND_HALF, -GROUND_HALF, GROUND_HALF)
         self.ground = self.render.attachNewNode(cm.generate())
         self.ground.setPos(0, 0, 0)
         self.ground.setHpr(0, -90, 0)
@@ -163,12 +184,16 @@ class MyApp(ShowBase):
 
         # Position the camera above the plane, looking straight down
         self.disableMouse()
-        self.camera.setPos(0, -75, 150)
+        # A longer lens than the default 40: less perspective, so the near edge
+        # and the table at the sides stay flat instead of splaying outwards.
+        self.camLens.setFov(30)
+        self.camera.setPos(0, -102, 204)
         self.camera.lookAt(self.ground)
         self.centreViewAboveHud()
         #self.enableMouse()
         #self.camera.setP(-90)  # Pitch downwards
         self.setup_shader()
+        self.setup_table()
         self.setup_bullet()
         self.setup_campaign_map()
 
@@ -326,7 +351,6 @@ class MyApp(ShowBase):
 
         self.fsm.request("DeployPhase")
 
-        self.rectangleLine = self.drawRectangle(center=Point3(0, 0, 1), width=72, height=48, color=Vec4(1, 1, 0, 1))
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
 
         #self.z2= loader.loadModel("models/zup-axis")
@@ -1892,6 +1916,15 @@ class MyApp(ShowBase):
         shader = Shader.load(Shader.SL_GLSL, "shaders/c2.vert", "shaders/c1.frag")
         surface.setShader(shader)
         surface.setShaderInput("pos", Vec3(0,0,0))
+        # Where the board sits on the card, so the shader can clip the grass to
+        # it. Derived, not written out, so the grass edge and the painted edge
+        # cannot end up in different places.
+        half_u = BOARD_WIDTH / 2 / GROUND_HALF
+        half_v = BOARD_DEPTH / 2 / GROUND_HALF
+        surface.setShaderInput("boardMin", Vec2((1 - half_u) * 0.5,
+                                                (1 - half_v) * 0.5))
+        surface.setShaderInput("boardMax", Vec2((1 + half_u) * 0.5,
+                                                (1 + half_v) * 0.5))
         # Define polygon points for the shader
         self.polygonpoints = []
         num_points = 6  # Example: hexagon
@@ -1913,6 +1946,143 @@ class MyApp(ShowBase):
         self.ground.setShaderInput("isActive", active)
         if hasattr(self, 'terrain_manager'):
             self.terrain_manager.set_move_overlay(active, points)
+
+    def _wood_box(self, parent, x0, x1, y0, y1, z0, z1, texture, tint,
+                  tile=1.0):
+        """An axis-aligned box. models/box spans 0..1 from its origin corner,
+        so it is scaled to the span and moved to the low corner."""
+        box = self.loader.loadModel('models/box')
+        box.reparentTo(parent)
+        box.setScale(x1 - x0, y1 - y0, z1 - z0)
+        box.setPos(x0, y0, z0)
+        if texture is not None:
+            tex = self.loader.loadTexture(texture)
+            tex.setWrapU(Texture.WMRepeat)
+            tex.setWrapV(Texture.WMRepeat)
+            box.setTexture(tex, 1)
+            box.setTexScale(TextureStage.getDefault(), tile, tile)
+        box.setColor(*tint)
+        return box
+
+    def setup_table(self):
+        """Stand the battlefield on a dark tabletop inside a wooden edge.
+
+        Visual order is miniatures, then board, then HUD, then table: the table
+        is deliberately darker and flatter than either the board or the bar, so
+        it reads as the surface the game is played on and nothing more.
+        """
+        self.tableRoot = self.render.attachNewNode('table')
+
+        table_z = -BOARD_STAND
+        cm = CardMaker('tabletop')
+        cm.setFrame(-TABLE_SIZE / 2, TABLE_SIZE / 2,
+                    -TABLE_SIZE / 2, TABLE_SIZE / 2)
+        top = self.tableRoot.attachNewNode(cm.generate())
+        top.setHpr(0, -90, 0)
+        top.setPos(0, 0, table_z)
+        tex = self.loader.loadTexture(gui_theme.TEX_TABLE)
+        tex.setWrapU(Texture.WMRepeat)
+        tex.setWrapV(Texture.WMRepeat)
+        top.setTexture(tex, 1)
+        top.setTexScale(TextureStage.getDefault(), TABLE_SIZE / 60,
+                        TABLE_SIZE / 60)
+        # The texture is already near-black walnut; tinting it down as well
+        # leaves a void that the contact shadow cannot register against.
+        top.setColor(0.95, 0.95, 1.0, 1)
+
+        half_w = BOARD_WIDTH / 2 + BOARD_EDGE
+        half_d = BOARD_DEPTH / 2 + BOARD_EDGE
+
+        # Contact shadow, sitting just above the tabletop and reaching a little
+        # past the board. Without it the board looks pasted onto the table.
+        spread = BOARD_EDGE * 2.5
+        cm = CardMaker('board-shadow')
+        cm.setFrame(-half_w - spread, half_w + spread,
+                    -half_d - spread, half_d + spread)
+        shadow = self.tableRoot.attachNewNode(cm.generate())
+        shadow.setHpr(0, -90, 0)
+        shadow.setPos(0, 0, table_z + 0.02)
+        shadow.setTexture(self.loader.loadTexture(gui_theme.TEX_BOARD_SHADOW), 1)
+        shadow.setTransparency(TransparencyAttrib.MAlpha)
+        shadow.setLightOff()
+
+        # The edge: four planks, the long ones running the full width so the
+        # corners read as a mitre rather than a butt joint.
+        edge, tint = gui_theme.TEX_BOARD_EDGE, (0.85, 0.85, 0.88, 1)
+        z0, z1 = table_z, BOARD_LIP
+        inner_w, inner_d = BOARD_WIDTH / 2, BOARD_DEPTH / 2
+        self._wood_box(self.tableRoot, -half_w, half_w, inner_d, half_d,
+                       z0, z1, edge, tint, tile=6)
+        self._wood_box(self.tableRoot, -half_w, half_w, -half_d, -inner_d,
+                       z0, z1, edge, tint, tile=6)
+        self._wood_box(self.tableRoot, -half_w, -inner_w, -inner_d, inner_d,
+                       z0, z1, edge, tint, tile=4)
+        self._wood_box(self.tableRoot, inner_w, half_w, -inner_d, inner_d,
+                       z0, z1, edge, tint, tile=4)
+
+        # The board's own bed, so the grass does not float over the table.
+        self._wood_box(self.tableRoot, -inner_w, inner_w, -inner_d, inner_d,
+                       z0, -0.02, edge, (0.45, 0.45, 0.48, 1), tile=8)
+
+        # A brass fillet along the inside of the edge, and studs at the corners.
+        brass = (0.72, 0.58, 0.28, 1)
+        f = 0.18
+        for x0, x1, y0, y1 in (
+                (-inner_w - f, inner_w + f, inner_d, inner_d + f),
+                (-inner_w - f, inner_w + f, -inner_d - f, -inner_d),
+                (-inner_w - f, -inner_w, -inner_d, inner_d),
+                (inner_w, inner_w + f, -inner_d, inner_d)):
+            self._wood_box(self.tableRoot, x0, x1, y0, y1,
+                           BOARD_LIP - 0.02, BOARD_LIP + 0.03, None, brass)
+        stud = BOARD_EDGE * 0.30
+        mid = (inner_w + half_w) / 2, (inner_d + half_d) / 2
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                for cx, cy in ((sx * mid[0], sy * half_d - sy * BOARD_EDGE / 2),
+                               (sx * half_w - sx * BOARD_EDGE / 2, sy * mid[1])):
+                    self._wood_box(self.tableRoot, cx - stud / 2, cx + stud / 2,
+                                   cy - stud / 2, cy + stud / 2,
+                                   BOARD_LIP, BOARD_LIP + 0.06, None, brass)
+
+        self._table_dressing(table_z)
+
+    def _table_dressing(self, table_z):
+        """Props at the extreme edges of the table.
+
+        Sited so the frame crops them: they are atmosphere, and anything fully
+        in view out here would compete with the board for attention.
+        """
+        edge = gui_theme.TEX_BOARD_EDGE
+
+        # A closed rulebook, spine towards the board.
+        bx, by = -BOARD_WIDTH / 2 - 27, 4
+        self._wood_box(self.tableRoot, bx - 7, bx + 7, by - 10, by + 10,
+                       table_z, table_z + 0.15, edge, (0.42, 0.15, 0.12, 1),
+                       tile=2)
+        self._wood_box(self.tableRoot, bx - 6.4, bx + 6.4, by - 9.4, by + 9.4,
+                       table_z + 0.15, table_z + 1.15, None,
+                       (0.80, 0.75, 0.62, 1))
+        self._wood_box(self.tableRoot, bx - 7, bx + 7, by - 10, by + 10,
+                       table_z + 1.15, table_z + 1.35, edge,
+                       (0.42, 0.15, 0.12, 1), tile=2)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                self._wood_box(self.tableRoot,
+                               bx + sx * 6.0 - 0.7, bx + sx * 6.0 + 0.7,
+                               by + sy * 9.0 - 0.7, by + sy * 9.0 + 0.7,
+                               table_z + 1.35, table_z + 1.42, None,
+                               (0.72, 0.58, 0.28, 1))
+
+        # A measuring ruler, laid down the far side.
+        rx = BOARD_WIDTH / 2 + 26
+        self._wood_box(self.tableRoot, rx - 1.6, rx + 1.6, -22, 22,
+                       table_z, table_z + 0.3, edge, (0.78, 0.66, 0.42, 1),
+                       tile=3)
+        for i in range(-20, 21, 4):
+            self._wood_box(self.tableRoot, rx + 0.2, rx + 1.5,
+                           i - 0.09, i + 0.09,
+                           table_z + 0.3, table_z + 0.33, None,
+                           (0.20, 0.14, 0.08, 1))
 
     def setup_bullet(self):
         self.world = BulletWorld()
@@ -2219,7 +2389,8 @@ class MyApp(ShowBase):
         camera would need the same correction applied by hand everywhere.
         """
         film_height = self.camLens.getFilmSize()[1]
-        self.camLens.setFilmOffset(0, -HUD.BAR_H / 4.0 * film_height)
+        self.camLens.setFilmOffset(
+            0, -HUD.BAR_H / 4.0 * BOARD_TUCK * film_height)
 
     def windowEvent(self, win):
         # The film size follows the window shape, so the offset derived from it
@@ -2351,5 +2522,8 @@ class MyApp(ShowBase):
         state = 'ON' if self.AIplayer2.active else 'OFF'
         print(f"[AI] Player 2 AI {state} — F4 toggles, 'a' steps a single AI turn.")
 
-app = MyApp()
-app.run()
+# Guarded so the module can be imported to build the scene offscreen and
+# screenshot it, which is the only way to check anything visual here.
+if __name__ == '__main__':
+    app = MyApp()
+    app.run()

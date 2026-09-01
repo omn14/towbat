@@ -6,6 +6,7 @@ from panda3d.bullet import BulletBoxShape, BulletGhostNode
 from panda3d.core import Vec3, BitMask32
 
 from collision_masks import CollisionMask as CM
+from models import BOARD_DEPTH, BOARD_WIDTH
 
 
 
@@ -16,10 +17,13 @@ class OutOfBounds:
         print("OutOfBounds initialized")
         self.game = Game
         self.mask = CM.OUT_OF_BOUNDS
-        self.northBoundry=self.boundry((0,48/2+5,0),Vec3(72/2, 5, 5))
-        self.southBoundry=self.boundry((0,-48/2-5,0),Vec3(72/2, 5, 5))
-        self.westBoundry=self.boundry((-72/2-5,0,0),Vec3(5, 68/2, 5))
-        self.eastBoundry=self.boundry((72/2+5,0,0),Vec3(5, 68/2, 5))
+        # Walls sit just outside the board, so their inner faces are the edge.
+        t = 5
+        self.northBoundry=self.boundry((0,BOARD_DEPTH/2+t,0),Vec3(BOARD_WIDTH/2, t, t))
+        self.southBoundry=self.boundry((0,-BOARD_DEPTH/2-t,0),Vec3(BOARD_WIDTH/2, t, t))
+        # The side walls overrun north and south so the corners are covered.
+        self.westBoundry=self.boundry((-BOARD_WIDTH/2-t,0,0),Vec3(t, BOARD_DEPTH/2+10, t))
+        self.eastBoundry=self.boundry((BOARD_WIDTH/2+t,0,0),Vec3(t, BOARD_DEPTH/2+10, t))
         
         #self.northBoundry=self.boundry((0,48/2-12,11))
 

@@ -456,6 +456,84 @@ def make_round_button_hover(d=256):
                            (255, 175, 140, 110), 919, 'button_round_hover')
 
 
+# ── 9. Table dressing (the board sits on this) ──────────────────────
+
+def _wood(w, h, base, grain_strength, seed, knots=0):
+    """Straight-grained wood. Grain runs along x so a strip of it can be
+    rotated onto any side of the board frame and still read as one plank."""
+    img = _noise(w, h, base, variance=6, seed=seed)
+    rng = random.Random(seed + 1)
+    grain = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(grain)
+    for _ in range(h * 2):
+        y = rng.randint(0, h - 1)
+        shade = rng.randint(-grain_strength, grain_strength // 2)
+        # Grain lines wander, or the plank looks like corduroy.
+        step, prev = max(8, w // 24), y
+        for x in range(0, w, step):
+            nxt = y + rng.randint(-1, 1)
+            gd.line([(x, prev), (min(x + step, w), nxt)],
+                    fill=(max(0, base[0] + shade), max(0, base[1] + shade),
+                          max(0, base[2] + shade), 60),
+                    width=rng.choice([1, 1, 2]))
+            prev = nxt
+    img = Image.alpha_composite(img, grain)
+    for _ in range(knots):
+        cx, cy = rng.randint(0, w), rng.randint(0, h)
+        ring = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        rd = ImageDraw.Draw(ring)
+        for r in range(2, rng.randint(8, 18), 2):
+            rd.ellipse([cx - r * 2, cy - r, cx + r * 2, cy + r],
+                       outline=(max(0, base[0] - 22), max(0, base[1] - 18),
+                                max(0, base[2] - 14), 90), width=1)
+        img = Image.alpha_composite(img, ring)
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+    img.putalpha(255)
+    return img
+
+
+def make_board_edge(w=512, h=64):
+    """Dark walnut for the board's beveled edge."""
+    img = _wood(w, h, (58, 36, 22, 255), 26, seed=1201, knots=2)
+    img = _stain(img, n=4, seed=1211, min_alpha=8, max_alpha=22)
+    img.putalpha(255)
+    path = os.path.join(OUT_DIR, 'board_edge.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
+def make_table(w=512, h=512):
+    """The tabletop the board rests on: darker and flatter than the board edge,
+    so it stays behind both the miniatures and the HUD."""
+    img = _wood(w, h, (30, 21, 15, 255), 14, seed=1301, knots=3)
+    img = _stain(img, n=6, seed=1311, min_alpha=6, max_alpha=18)
+    img.putalpha(255)
+    path = os.path.join(OUT_DIR, 'table.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
+def make_board_shadow(size=256, falloff=0.42):
+    """Soft contact shadow, black with a feathered alpha edge. Stretched under
+    the board, so the falloff has to live in the outer band only."""
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    px = img.load()
+    edge = size * falloff / 2
+    for y in range(size):
+        for x in range(size):
+            d = min(x, size - 1 - x, y, size - 1 - y)
+            t = min(1.0, d / edge)
+            # Quadratic ease so the shadow is densest right under the board.
+            px[x, y] = (0, 0, 0, int(190 * t * t))
+    img = img.filter(ImageFilter.GaussianBlur(radius=size * 0.03))
+    path = os.path.join(OUT_DIR, 'board_shadow.png')
+    img.save(path)
+    print(f'  Saved {path}')
+    return path
+
+
 # ── Generate all ─────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -471,4 +549,7 @@ if __name__ == '__main__':
     make_slot()
     make_round_button()
     make_round_button_hover()
+    make_board_edge()
+    make_table()
+    make_board_shadow()
     print('Done!')

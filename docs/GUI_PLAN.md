@@ -254,6 +254,22 @@ The two genuinely hard ones:
   everything neutral.
 - **Panels float, the board does not.** Translucent, edge-anchored, never over
   the centre of the table.
+- **The board is a board.** It is finite, and its limit is where the rules stop
+  applying, so it has a drawn wooden edge and sits on a dark tabletop rather
+  than fading into open ground. Extending the grass outwards would read as a
+  continuous world and leave the out-of-bounds line looking arbitrary.
+
+  The edge is restrained — 2.4 units, 3.3% of the board width — with a brass
+  fillet and corner studs to tie it to the book-themed bar. The table is
+  darker and flatter than either the board or the HUD, and the dressing at its
+  extreme edges is sited to be cropped by the frame. Reading order is
+  miniatures, board, HUD, table dressing, and nothing in the last two may
+  compete with the first.
+
+  `MyApp.setup_table` builds it. The grass is clipped to the board in
+  `c1.frag` rather than by resizing the ground card: the card is also the
+  coordinate space the movement and shooting overlay polygons live in, where
+  world ±50 maps to 0..1, so resizing it would silently move every arc.
 - **Keep the physical dice.** Tumbling d6s are the most characterful thing in
   the build. Add a 2D strip beside them showing values against the target
   number so the *result* reads while the *rolling* stays tactile.

@@ -18,6 +18,11 @@ ARMY_UNITS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'army_
 # Table scale: 1 game unit == 1 inch == 25.4 mm (a 6'x4' table is 72x48 units).
 MM_PER_UNIT = 25.4
 
+# The playing surface, in those units. The out-of-bounds walls, the painted
+# board edge and the grass all measure from here, so they cannot drift apart.
+BOARD_WIDTH = 72
+BOARD_DEPTH = 48
+
 # Parry improves an armour value by 1, but never past this (Rulebook p. 190).
 PARRY_BEST_SAVE = 3
 

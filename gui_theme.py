@@ -54,6 +54,9 @@ TEX_COMMAND_BAR = TEX_DIR + 'command_bar.png'
 TEX_SLOT        = TEX_DIR + 'slot.png'
 TEX_BTN_ROUND   = TEX_DIR + 'button_round.png'
 TEX_BTN_ROUND_HOVER = TEX_DIR + 'button_round_hover.png'
+TEX_BOARD_EDGE  = TEX_DIR + 'board_edge.png'
+TEX_TABLE       = TEX_DIR + 'table.png'
+TEX_BOARD_SHADOW = TEX_DIR + 'board_shadow.png'
 
 # ── Cached font reference (loaded lazily, after ShowBase exists) ─────────
 _med_font = None
