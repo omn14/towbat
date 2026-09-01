@@ -946,6 +946,19 @@ class EnhancedAI:
         """
         if not self.active or getattr(self, '_turn_running', False):
             return
+
+        # DeployPhase is not in fsm.PHASES, so GameState.current_phase misreports
+        # it as StrategyPhase. Deployment is its own self-chaining task loop:
+        # taskMoveUnit auto-places, then _advance_after_deploy calls deployUnits()
+        # again once the turn comes back round to this player.
+        if self.game.fsm.state == 'DeployPhase':
+            if self.game.roundCounter.current_player != self.player_num:
+                print(f"[AI] Player {self.player_num} deploy: waiting for the "
+                      f"opponent to place a unit first.")
+                return
+            self.deployUnits()
+            return
+
         self.game.save_game_state('previous_phase.json')
         self._turn_running = True
 

@@ -260,6 +260,8 @@ class MyApp(ShowBase):
         #self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
         #self.accept('a-up', lambda: taskMgr.add(auppp()))
+        # Not shift-a: Panda3D still emits 'a-up' on release, which would step a turn too.
+        self.accept('f4', self.toggle_ai_player2)
 
         # In your game class __init__:
         self.list_builder = None
@@ -2167,6 +2169,12 @@ class MyApp(ShowBase):
     def start_tutorial(self, filepath='tutorials/tutorial_basics.json'):
         """Launch the tutorial scenario system."""
         self.tutorial.start(filepath)
+
+    def toggle_ai_player2(self):
+        """Switch the player 2 AI between autonomous and manual play."""
+        self.AIplayer2.active = not self.AIplayer2.active
+        state = 'ON' if self.AIplayer2.active else 'OFF'
+        print(f"[AI] Player 2 AI {state} — F4 toggles, 'a' steps a single AI turn.")
 
 app = MyApp()
 app.run()
