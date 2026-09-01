@@ -249,8 +249,6 @@ class MyApp(ShowBase):
         # Built before anything that publishes to it (round counter, FSM).
         self.hud = HUD()
         self.accept('f3', self.hud.toggle)
-        # A phase change resets the flags the card's chips are drawn from.
-        self.accept('hud-phase', self.refreshSelectedUnit)
         self.roundCounter = RoundCounter(self,16)
 
         self.boundries = OutOfBounds(self)
@@ -300,6 +298,10 @@ class MyApp(ShowBase):
         # Developer tools; inert unless WH_DEBUG is set or --debug is passed.
         self.debug_tools = DebugTools(self) if debug_enabled() else None
         self.accept('t', self.start_tutorial)
+        # A phase change resets the flags the card's chips are drawn from.
+        # Bound here: the FSM broadcasts a phase while it is being built, when
+        # psychology and the rest do not exist yet.
+        self.accept('hud-phase', self.refreshSelectedUnit)
 
         self.fsm.request("DeployPhase")
 
@@ -1495,18 +1497,19 @@ class MyApp(ShowBase):
 
         weapon = model.equipedWeapon or {}
         if weapon:
+            name = weapon.get('name', 'weapon')
             if weapon.get('tag') == 'ranged':
-                lines.append(f"{weapon.get('name', 'weapon')}: "
-                             f"R{weapon.get('ranged_range', '-')}\" "
+                lines.append(f"{name}: R{weapon.get('ranged_range', '-')}\" "
                              f"S{weapon.get('ranged_strength', '-')} "
                              f"AP{weapon.get('ranged_AP', 0)}")
             else:
-                parts = [f"{weapon.get('name', 'weapon')}:"]
+                # A plain hand weapon carries no override, so it gets no colon.
+                parts = []
                 if weapon.get('strength'):
                     parts.append(f"S{weapon['strength']}")
                 if weapon.get('ap'):
                     parts.append(f"AP{weapon['ap']}")
-                lines.append(" ".join(parts))
+                lines.append(f"{name}: {' '.join(parts)}" if parts else name)
 
         if model.is_wizard():
             level = model.wizard_level(1)
