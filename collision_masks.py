@@ -41,7 +41,7 @@ class CollisionMask:
 
     # ── unit / selection ────────────────────────────────────────
     UNIT_DEFAULT     = BitMask32.bit(1)   # units at rest – picked by mouse rays
-    DEPLOY_ZONE      = BitMask32.bit(2)   # deployment-phase cubes
+    DEPLOY_ZONE      = BitMask32.bit(2)   # free: was the floating phase cube
     ARROW_DEFAULT    = BitMask32.bit(3)   # projectile / arrow collision
     COMBAT_ENGAGED   = BitMask32.bit(4)   # units locked in melee
     ARROW_ALT        = BitMask32.bit(5)   # alternate arrow check pass

@@ -8,9 +8,6 @@ Shooting, Combat, Spell, Campaign, and MakeChoice.
 from direct.fsm.FSM import FSM
 from panda3d.core import Point3, Vec3, BitMask32, TransformState
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
-from direct.interval.LerpInterval import LerpHprInterval
-from direct.interval.IntervalGlobal import Sequence
-from direct.interval.FunctionInterval import Func
 
 
 class GamePhaseFSM(FSM):
@@ -23,23 +20,9 @@ class GamePhaseFSM(FSM):
         self.game = game
 
         self.end_of_turn_spells = []
-        self._cube_cooldown = False
-
-        self.end_phase_cube = self._create_menu_collision_cube(
-            "endPhase", Point3(5, 20, 3)
-        )
-
         self.current_phase_index = 0
 
         self.request(self.PHASES[self.current_phase_index])
-
-        self.menu_cubes = base.camera.findAllMatches("**/*MenuCube")
-
-        # The cube rides the camera, but Bullet only re-reads a body's transform
-        # when that body is flagged dirty, and moving an ancestor doesn't flag it.
-        taskMgr.add(self._sync_menu_cube, "syncMenuCube")
-
-        self.accept('mouse1', self._on_menu_click)
 
     # ─── Convenience properties for backward compatibility ──────────
 
@@ -74,80 +57,7 @@ class GamePhaseFSM(FSM):
     def endOfTurnSpells(self, value):
         self.end_of_turn_spells = value
 
-    # ─── Menu Collision ─────────────────────────────────────────────
-
-    def _create_menu_collision_cube(self, name='StrategyPhase', pos=Point3(5, 20, 0)):
-        """Create a Bullet collision cube attached to the camera for UI interaction."""
-        half_extents = Vec3(1, 1, 1)
-        shape = BulletBoxShape(half_extents)
-        cube_node = BulletRigidBodyNode(name)
-        cube_node.setMass(0)
-        cube_node.addShape(shape)
-
-        cube_np = base.camera.attachNewNode(cube_node)
-        cube_np.setPos(pos)
-        cube_np.setCollideMask(BitMask32.bit(2))
-        cube_np.setName(name)
-
-        base.world.attachRigidBody(cube_node)
-
-        try:
-            model = loader.loadModel('models/box')
-            model.reparentTo(cube_np)
-            model.setScale(2)
-            model.setPos(-1, -1, -1)
-        except Exception:
-            pass
-        return cube_np
-
-    def _sync_menu_cube(self, task):
-        self.end_phase_cube.node().setTransformDirty()
-        return task.cont
-
-    def _on_menu_click(self):
-        """Handle click on the phase-advance menu cube."""
-        if not base.mouseWatcherNode.hasMouse():
-            return
-        # A click belongs to an open choice menu, not to the phase cube.
-        if getattr(self.game, 'awaitingChoice', False):
-            return
-
-        pMouse = base.mouseWatcherNode.getMouse()
-        pFrom = Point3()
-        pTo = Point3()
-        base.camLens.extrude(pMouse, pFrom, pTo)
-
-        pFrom = render.getRelativePoint(base.cam, pFrom)
-        pTo = render.getRelativePoint(base.cam, pTo)
-
-        result = base.world.rayTestClosest(pFrom, pTo, BitMask32.bit(2))
-
-        if result.hasHit():
-            if self._cube_cooldown:
-                return
-            self._cube_cooldown = True
-
-            # Spin the cube for visual feedback
-            cube = self.end_phase_cube
-            start_hpr = cube.getHpr()
-            spin = LerpHprInterval(
-                cube,
-                duration=0.4,
-                hpr=start_hpr + Vec3(0, 0, 360),
-                startHpr=start_hpr,
-                blendType='easeInOut',
-            )
-            seq = Sequence(
-                spin,
-                Func(self._clear_cube_cooldown),
-            )
-            seq.start()
-
-            self.nextPhase()
-
-    def _clear_cube_cooldown(self):
-        """Re-enable phase cube interaction after the spin animation."""
-        self._cube_cooldown = False
+    # ─── Phase advance ──────────────────────────────────────────────
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
@@ -443,7 +353,6 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         self.game.ignore('mouse3')
         self.game.ignore('m')
-        self.accept('mouse1', self._on_menu_click)
         self.game.accept(
             'mouse1', self.game.setActiveUnit,
             [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName]

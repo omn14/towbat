@@ -167,6 +167,12 @@ the button that ends the phase are all within one glance.
   to the FSM; `game.py` binds that to `fsm.nextPhase`. It is labelled for what
   it does — the engine cycles phases and has no separate end-of-turn step.
 
+  It replaced the floating `endPhase` collision cube: a camera-parented Bullet
+  body with a `models/box` on it, which advanced the phase when a mouse ray
+  hit it. That cost a per-frame task to flag its transform dirty, because
+  Bullet does not re-read a body when an ancestor moves, and it answered the
+  same mouse ray that picks units.
+
 
 - Hover tooltip moved from world space to screen space. It was a billboarded
   `TextNode` parented to the unit, so its position was whatever the camera
@@ -212,8 +218,8 @@ The two genuinely hard ones:
 
 - **Every action shows its key, and every key has a visible action.** Hotkeys
   are for speed; the visible control is how the player finds out the hotkey
-  exists. Today `t`, `c`, `l`, `a`, `F3`–`F10`, right-click-to-commit and a
-  floating collision cube are the entire command set, and none of it is
+  exists. Today `t`, `c`, `l`, `a`, `F3`–`F10`, right-click-to-commit and the
+  End Phase button are the entire command set, and only the last of them is
   discoverable. Put the key on the button (`SHOOT (S)`) and add an
   always-available key list — `debug_tools` has one on `h`, but only in debug
   mode.
@@ -307,5 +313,3 @@ Don'ts*, Game Developer, 2015.
 - Dice results still go to `diceInfoText` as plain text, not the roll strip.
 - `debugText`, `debugTextInfo`, `debugTextUnit` keep their debug-era names
   despite carrying real gameplay information.
-- The `endPhase` collision cube is still the only way to advance a phase, and
-  it competes with unit picking for the same mouse ray.
