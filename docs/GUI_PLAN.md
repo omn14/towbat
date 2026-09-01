@@ -28,7 +28,7 @@ nothing covers the centre of the board.
 | Top left | `a2dTopLeft` | Turn banner — player, round |
 | Top centre | `a2dTopCenter` | Phase track |
 | Top right | `a2dTopRight` | *free* — army strength |
-| Bottom left | `a2dBottomLeft` | Selected unit readout |
+| Bottom left | `a2dBottomLeft` | Unit card |
 | Bottom centre | `a2dBottomCenter` | Transient readouts: dice, targeting, status |
 | Bottom right | `a2dBottomRight` | Battle log |
 
@@ -68,12 +68,19 @@ middle of the table.
 - `CombatResolver.printBattleResults` also posts a one-line summary.
 - The four loose text nodes anchored to corners; the selected-unit readout no
   longer dumps the raw characteristics dict.
+- Unit card (bottom left): name, troop type, formation, save, Ward, rank bonus;
+  a stat row with above-average values green and below-average red; a models
+  bar marked at 50% (flee vs fall back) and 25% (heavy-casualties Panic), whose
+  fill turns amber then red as it crosses them; and state chips — fleeing,
+  engaged, disrupted, charged, general, battle standard, moved, attacked.
+  Stat columns are placed by hand and centred, which keeps the table aligned
+  without needing a fixed-width face. `game.showSelectedUnit` gathers the facts
+  and publishes `hud-unit`; the card only lays them out.
 
 ## Next, in order
 
 | Item | Effort | Payoff |
 |---|---|---|
-| Unit card: proper panel, models bar with the 50%/25% thresholds, state chips | Low–Med | High |
 | In-world: selection decal, facing chevron, status badges, strength bar | Low–Med | High |
 | `legal_actions(unit)` + contextual action bar with disabled reasons | Med | High |
 | End Phase button + army strength readout | Low | High |
@@ -129,7 +136,12 @@ The two genuinely hard ones:
   the reason under Look and feel. Needs a sans TTF added to `fonts/`.
   MedievalSharp is still setting the stat lines, and it remains the weakest
   part of the screen.
-- Battle log has no scrollback; it is a fixed 9-entry window with no filter.
+- Battle log has no scrollback; it is a fixed 8-entry window with no filter.
+- The unit card refreshes on selection, on `applyWounds` and on every phase
+  change, which covers casualties and flag resets. It does *not* refresh when
+  a unit is disrupted by terrain, joined by a character, or has its Ward
+  granted mid-turn by a spell — those change the card without touching any of
+  the three triggers.
 - Nothing posts to the log from `psychology.py`, `spell_system.py`,
   `cannon_fire.py` or `bombardment.py` yet. They only need a
   `messenger.send('hud-log', ...)` at the point of resolution.

@@ -175,8 +175,7 @@ def load_game_state(game, filename):
     if game_state is None:
         message = f"Load failed: '{filename}' is corrupted or missing."
         print(f"[persistence] {message}")
-        if getattr(game, 'debugTextUnit', None):
-            game.debugTextUnit.setText(message)
+        messenger.send('hud-log', [message, 'morale'])
         return
 
     # Restore FSM state
@@ -348,7 +347,7 @@ def load_game_state(game, filename):
             game.movement.alignModelsToHillNormal(unit)
 
     print(f"Game loaded from {filename}")
-    game.debugTextUnit.setText(f"Loaded: {filename}")
+    messenger.send('hud-log', [f"Loaded: {filename}", 'info'])
 
     # Print analysis for both players
     for player_num in (1, 2):

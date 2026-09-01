@@ -64,7 +64,7 @@ from combat_resolution import CombatResolver
 from movement_system import MovementSystem
 from terrain_system import TerrainManager, sees_over
 from psychology import (PsychologySystem, select_general, select_battle_standard,
-                       command_range)
+                       command_range, rank_bonus)
 from tutorial_system import TutorialManager
 from cannon_fire import CannonFire
 from bombardment import Bombardment
@@ -179,14 +179,8 @@ class MyApp(ShowBase):
         self.awaitingChoice = False
         self.resolvingCombat = False
         # Anchored to screen corners so they cannot drift into the HUD's zones
-        # (top-left banner, top-centre phase track, bottom-right battle log).
-        self.debugTextUnit = self.setup_text_node(
-            pos=(0.03, 0.155), scale=0.044, color=gui_theme.GOLD,
-            parent=self.a2dBottomLeft, align=TextNode.ALeft)
-        self.unitStatsText = self.setup_text_node(
-            pos=(0.03, 0.095), scale=0.036, color=gui_theme.HINT_FG,
-            parent=self.a2dBottomLeft, align=TextNode.ALeft)
-
+        # (top-left banner, top-centre phase track, bottom-right battle log,
+        # bottom-left unit card).
         # These three are written from a dozen call sites with arbitrary text,
         # so they keep the display face, which has the full glyph set.
         self.debugTextInfo = self.setup_text_node(
@@ -255,6 +249,8 @@ class MyApp(ShowBase):
         # Built before anything that publishes to it (round counter, FSM).
         self.hud = HUD()
         self.accept('f3', self.hud.toggle)
+        # A phase change resets the flags the card's chips are drawn from.
+        self.accept('hud-phase', self.refreshSelectedUnit)
         self.roundCounter = RoundCounter(self,16)
 
         self.boundries = OutOfBounds(self)
@@ -1453,15 +1449,50 @@ class MyApp(ShowBase):
     SELECTION_STATS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
 
     def showSelectedUnit(self, unit):
-        """Bottom-left readout for the selected unit."""
-        ch = unit.unit.model.characteristics
-        save = getattr(unit.unit.model, 'armor_save', 7)
-        save = f"{save}+" if save <= 6 else "none"
-        self.debugTextUnit.setText(
-            f"{unit.unit.name}   —   {unit.unit.nmodels} models, "
-            f"{unit.unit.files}x{unit.unit.ranks}, save {save}")
-        stats = "   ".join(f"{k} {ch.get(k, '-')}" for k in self.SELECTION_STATS)
-        self.unitStatsText.setText(stats)
+        """Publish the selected unit's state to the HUD's unit card."""
+        model = unit.unit.model
+        save = getattr(model, 'armor_save', 7)
+        ward = ward_save_value(model)
+        messenger.send('hud-unit', [{
+            'name': unit.unit.name,
+            'troop_type': model.troop_type(),
+            'files': unit.unit.files,
+            'ranks': unit.unit.ranks,
+            'save': f"{save}+" if save <= 6 else None,
+            'ward': f"{ward}+" if ward else None,
+            'rank_bonus': rank_bonus(unit.unit, unit.isDisrupted),
+            'stats': dict(model.characteristics),
+            'models': unit.unit.nmodels,
+            'start_models': unit.startOfBattleModels,
+            'chips': self.unitStateChips(unit),
+        }])
+
+    def refreshSelectedUnit(self, *_args):
+        unit = getattr(self, 'unitToMove', None)
+        if unit is not None and not unit.bodyNP.isEmpty():
+            self.showSelectedUnit(unit)
+
+    @staticmethod
+    def unitStateChips(unit):
+        """The flags worth seeing at a glance, worst news first."""
+        chips = []
+        if unit.state == "IsFleeing":
+            chips.append(('FLEEING', 'bad'))
+        if unit.isInCombat:
+            chips.append(('ENGAGED', 'bad'))
+        if unit.isDisrupted:
+            chips.append(('DISRUPTED', 'bad'))
+        if unit.chargedThisTurn:
+            chips.append(('CHARGED', 'good'))
+        if unit.isGeneral:
+            chips.append(('GENERAL', 'note'))
+        if unit.isBSB:
+            chips.append(('BATTLE STANDARD', 'note'))
+        if unit.hasMovedThisTurn:
+            chips.append(('MOVED', 'note'))
+        if unit.hasAttackedThisTurn:
+            chips.append(('ATTACKED', 'note'))
+        return chips
 
     async def resolveSpell(self, target):
         """Cast the chosen spell at *target* — a unit, or a ground point for a
@@ -2054,6 +2085,10 @@ class MyApp(ShowBase):
 
     def applyWounds(self, unit, wounds):
         self.movement.applyWounds(unit, wounds)
+        # The card carries the model count and the flee/panic thresholds, so it
+        # is wrong the moment casualties land.
+        if unit is getattr(self, 'unitToMove', None):
+            self.showSelectedUnit(unit)
 
     def sweepTest(self, unit, direction, length):
         return self.movement.sweepTest(unit, direction, length)

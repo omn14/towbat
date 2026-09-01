@@ -33,11 +33,21 @@ _CATEGORY_COLOURS = {
 _PHASE_ON = 'hud_phase_on'
 _PHASE_OFF = 'hud_phase_off'
 
+# State chips on the unit card.
+_CHIP_COLOURS = {
+    'bad':  ('chip_bad',  (1.00, 0.45, 0.45, 1.0)),
+    'good': ('chip_good', (0.45, 0.90, 0.45, 1.0)),
+    'note': ('chip_note', T.GOLD),
+}
+
+_STAT_HI = (0.45, 0.90, 0.45, 1.0)
+_STAT_LO = (1.00, 0.45, 0.45, 1.0)
+
 
 def _register_properties():
     """Register the inline colours once per process."""
     tpm = TextPropertiesManager.getGlobalPtr()
-    entries = list(_CATEGORY_COLOURS.values())
+    entries = list(_CATEGORY_COLOURS.values()) + list(_CHIP_COLOURS.values())
     entries.append((_PHASE_ON, T.GOLD))
     entries.append((_PHASE_OFF, (0.92, 0.85, 0.68, 0.40)))
     for name, colour in entries:
@@ -64,12 +74,25 @@ class HUD(DirectObject):
     ASIDES = {'SpellPhase': 'CASTING', 'MakeChoice': 'CHOOSING',
               'CampaignPhase': 'CAMPAIGN'}
 
-    LOG_ENTRIES = 9
-    LOG_SCALE = 0.030
-    LOG_LEFT = -0.74
-    LOG_TOP = 0.495
+    LOG_ENTRIES = 8
+    LOG_SCALE = 0.032
+    LOG_LEFT = -1.00
+    LOG_TOP = 0.500
     LOG_BOTTOM = 0.075
-    LOG_TEXT_WIDTH = 0.68
+    LOG_TEXT_WIDTH = 0.94
+
+    # Unit card. Columns are placed by hand and centred, which keeps the stat
+    # table aligned without a fixed-width face.
+    STAT_KEYS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
+    STAT_AVERAGE = {'M': 4, 'WS': 3, 'BS': 3, 'S': 3, 'T': 3,
+                    'W': 1, 'I': 3, 'A': 1, 'Ld': 7}
+    CARD_LEFT = 0.06
+    COL_FIRST = 0.11
+    COL_LAST = 0.97
+    BAR_LEFT = 0.08
+    BAR_WIDTH = 0.92
+    BAR_Z = 0.240
+    BAR_HEIGHT = 0.026
 
     def __init__(self):
         DirectObject.__init__(self)
@@ -98,19 +121,19 @@ class HUD(DirectObject):
         self._log_frame = DirectFrame(
             parent=base.a2dBottomRight,
             frameColor=T.PANEL_BG,
-            frameSize=(-0.78, -0.02, 0.04, 0.62),
+            frameSize=(-1.05, -0.03, 0.04, 0.62),
             relief=DGG.FLAT,
         )
         self._log_frame.setTransparency(TransparencyAttrib.MAlpha)
 
         T.styled_text(
-            text='BATTLE LOG', pos=(self.LOG_LEFT, 0.555), scale=0.030,
+            text='BATTLE LOG', pos=(self.LOG_LEFT, 0.555), scale=0.032,
             fg=T.GOLD, align=TextNode.ALeft, parent=self._log_frame,
             font=font, mayChange=False)
         self._log_rule = DirectFrame(
             parent=self._log_frame, frameColor=T.SEPARATOR,
-            frameSize=(self.LOG_LEFT, -0.06, -0.002, 0.002),
-            pos=(0, 0, 0.535),
+            frameSize=(self.LOG_LEFT, -0.08, -0.002, 0.002),
+            pos=(0, 0, 0.538),
         )
 
         self._log_text = T.styled_text(
@@ -120,13 +143,112 @@ class HUD(DirectObject):
 
         self._widgets = [self._turn, self._round, self._phase, self._log_frame]
 
+        self._build_unit_card(font)
+
         self.set_phase(self._active_phase)
         self._redraw_log()
 
         self.accept('hud-turn', self.set_turn)
         self.accept('hud-phase', self.set_phase)
         self.accept('hud-log', self.log)
+        self.accept('hud-unit', self.show_unit)
         rules_log.add_listener(self._on_rule)
+
+    # ─── Unit card ────────────────────────────────────────────────────
+
+    def _build_unit_card(self, font):
+        self._card = DirectFrame(
+            parent=base.a2dBottomLeft,
+            frameColor=T.PANEL_BG,
+            frameSize=(0.03, 1.05, 0.10, 0.60),
+            relief=DGG.FLAT,
+        )
+        self._card.setTransparency(TransparencyAttrib.MAlpha)
+        self._widgets.append(self._card)
+
+        def label(pos, scale, colour, align=TextNode.ALeft, text=''):
+            return T.styled_text(text=text, pos=pos, scale=scale, fg=colour,
+                                 align=align, parent=self._card, font=font)
+
+        self._card_name = label((self.CARD_LEFT, 0.535), 0.052, T.GOLD)
+        self._card_sub = label((self.CARD_LEFT, 0.487), 0.030, T.CREAM)
+
+        step = (self.COL_LAST - self.COL_FIRST) / (len(self.STAT_KEYS) - 1)
+        self._stat_values = {}
+        for i, key in enumerate(self.STAT_KEYS):
+            x = self.COL_FIRST + i * step
+            label((x, 0.420), 0.028, T.GOLD, TextNode.ACenter, key)
+            self._stat_values[key] = label((x, 0.358), 0.042, T.CREAM,
+                                           TextNode.ACenter)
+
+        label((self.BAR_LEFT, 0.300), 0.026, T.GOLD, text='MODELS')
+        self._card_models = label((self.BAR_LEFT + self.BAR_WIDTH, 0.300),
+                                  0.028, T.CREAM, TextNode.ARight)
+
+        DirectFrame(parent=self._card, frameColor=(0.05, 0.04, 0.03, 0.9),
+                    frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
+                    pos=(self.BAR_LEFT, 0, self.BAR_Z))
+        self._card_bar = DirectFrame(
+            parent=self._card, frameColor=T.GOLD,
+            frameSize=(0, self.BAR_WIDTH, 0, self.BAR_HEIGHT),
+            pos=(self.BAR_LEFT, 0, self.BAR_Z))
+        # 50% splits flee from fall back, 25% is the heavy-casualties Panic
+        # threshold; both decide what happens next, so they are marked.
+        for fraction, colour in ((0.50, T.CREAM), (0.25, (0.8, 0.2, 0.2, 1))):
+            DirectFrame(parent=self._card, frameColor=colour,
+                        frameSize=(0, 0.004, -0.004, self.BAR_HEIGHT + 0.004),
+                        pos=(self.BAR_LEFT + self.BAR_WIDTH * fraction, 0,
+                             self.BAR_Z))
+
+        self._card_chips = label((self.CARD_LEFT, 0.150), 0.030, T.CREAM)
+        self._card.hide()
+
+    def show_unit(self, info: dict):
+        """Fill the unit card. *info* is built by the caller, which owns the
+        rules; the card only lays it out."""
+        self._card.show()
+        self._card_name.setText(info.get('name', ''))
+
+        bits = [f"{info['files']}x{info['ranks']}"] if info.get('files') else []
+        bits.append(f"Save {info.get('save') or 'none'}")
+        if info.get('ward'):
+            bits.append(f"Ward {info['ward']}")
+        if info.get('rank_bonus'):
+            bits.append(f"Rank +{info['rank_bonus']}")
+        if info.get('troop_type'):
+            bits.insert(0, info['troop_type'])
+        self._card_sub.setText("   ".join(bits))
+
+        stats = info.get('stats') or {}
+        for key, node in self._stat_values.items():
+            value = stats.get(key, '-')
+            node.setText(str(value))
+            average = self.STAT_AVERAGE.get(key)
+            try:
+                numeric = int(value)
+            except (TypeError, ValueError):
+                node['fg'] = T.CREAM
+                continue
+            node['fg'] = (_STAT_HI if numeric > average
+                          else _STAT_LO if numeric < average else T.CREAM)
+
+        models = info.get('models', 0)
+        start = max(1, info.get('start_models', models) or 1)
+        self._card_models.setText(f"{models} / {start}")
+        fraction = max(0.0, min(1.0, models / start))
+        self._card_bar.setScale(max(fraction, 0.001), 1, 1)
+        self._card_bar['frameColor'] = (
+            (0.8, 0.2, 0.2, 1) if fraction <= 0.25 else
+            (0.85, 0.65, 0.2, 1) if fraction <= 0.5 else T.GOLD)
+
+        chips = info.get('chips') or []
+        self._card_chips.setText("  ".join(
+            _markup(_CHIP_COLOURS.get(tone, _CHIP_COLOURS['note'])[0],
+                    f"[{text}]")
+            for text, tone in chips))
+
+    def clear_unit(self):
+        self._card.hide()
 
     # ─── Turn / phase ─────────────────────────────────────────────────
 
