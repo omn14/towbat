@@ -970,7 +970,10 @@ class MyApp(ShowBase):
     def taskShootingArcUpdate(self, task):
         for unit in self.units:
             unit.model.setColor(unit.color)
-            unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+        # Clears the target marks the last selection left behind, without
+        # flattening everyone onto the active player's mask: that made the
+        # opponent's units selectable, and their army drivable.
+        self.roundCounter.apply_selection_masks()
         if self.unitToMove.isInCombat:
             print("Unit is in combat, cant shoot.")
             return task.done
@@ -1058,7 +1061,7 @@ class MyApp(ShowBase):
     async def taskMagicArcUpdate(self, task):
         for unit in self.units:
             unit.model.setColor(unit.color)
-            unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
+        self.roundCounter.apply_selection_masks()
         if self.unitToMove.isInCombat:
             print("Unit is in combat, cant shoot.")
             return task.done
@@ -1131,7 +1134,8 @@ class MyApp(ShowBase):
         self.setGroundOverlay(True, self.shootingArcPoints)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
             taskMgr.add(self.taskShootingTrajectoryDrawLine, "taskShootingTrajectoryDrawLine")
-        self.checkArrows(BitMask32.bit(5))
+        # A spell may be aimed at either side: Devil's Visit hastens a friend.
+        self.checkArrows(BitMask32.bit(5), CM.UNIT_DEFAULT | CM.OPPONENT_UNIT)
         return task.done
     
     def taskStartCombat(self, task):
@@ -1329,7 +1333,13 @@ class MyApp(ShowBase):
             if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
                 taskMgr.remove("taskShootingTrajectoryDrawLine") """
     
-    def checkArrows(self,mask=BitMask32.bit(3)):
+    def checkArrows(self, mask=BitMask32.bit(3), pick=None):
+        """Mark every unit in the arc as a target.
+
+        *pick* is which units may be marked. Shooting may only pick the other
+        side; a spell may be aimed at a friend, so it passes both.
+        """
+        pick = CM.OPPONENT_UNIT if pick is None else pick
         hit = False
         for point in self.shootingArcPoints:
             point = point * 2
@@ -1338,7 +1348,7 @@ class MyApp(ShowBase):
             pFrom = self.unitToMove.bodyNP.getPos(render)
             pTo = Point3(point.x, point.y, pFrom.z)
 
-            result = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
+            result = self.world.rayTestClosest(pFrom, pTo, pick)
 
             if result.hasHit():
                 for c in result.getNode().getChildren():
@@ -1348,19 +1358,20 @@ class MyApp(ShowBase):
                         NodePath.anyPath(result.getNode()).setCollideMask(mask)
                         #self.toCleanup.append(np)
                         hit = True
-        hit = self.markHillTargets(mask) or hit
+        hit = self.markHillTargets(mask, pick) or hit
         if not hit:
             print(f"[Shooting] no targets in {self.unitToMove.unit.name}'s arc.")
             #self.ground.setShaderInput("isActive", False)
             if taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
                 taskMgr.remove("taskShootingTrajectoryDrawLine")
 
-    def markHillTargets(self, mask=BitMask32.bit(3)):
+    def markHillTargets(self, mask=BitMask32.bit(3), pick=None):
         """Vantage Point: a unit entirely on a hill is seen across or through
         other units, so it stays targetable even where the arc was clipped
         short of it (Rulebook p. 271). Only units are seen over; a wood or
         another hill in the way still blocks.
         """
+        pick = CM.OPPONENT_UNIT if pick is None else pick
         shooter = self.unitToMove
         weapon = shooter.unit.model.equipedWeapon or {}
         reach = (weapon.get('ranged_range') or 0) * WORLD_UNITS_PER_INCH
@@ -1371,6 +1382,8 @@ class MyApp(ShowBase):
         marked = False
         for unit in self.units:
             if unit is shooter or unit.bodyNP.isEmpty():
+                continue
+            if (unit.bodyNP.getCollideMask() & pick).isZero():
                 continue
             up = unit.bodyNP.getPos()
             if (up - origin).length() > reach:
@@ -1502,34 +1515,21 @@ class MyApp(ShowBase):
                         self.startTaskFunction(taskfunction, taskname)
                         self.showSelectedUnit(self.unitToMove)
 
-            result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))    
-            if result2.hasHit():
-                total_hits = 0
-                selected_unit = self.getSelectedUnit(result2.getNode())
-                self.shootAt(self.unitToMove, selected_unit)
-                """ attacker = self.unitToMove.unit
-                defender = selected_unit.unit
-                print(attacker.name, "shooting an arrow at",defender.name)
-                #attacker.model.equip_weapon('short bow')
-                attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(attacker, defender,charge=False)
-                self.printBattleResults(self.unitToMove, selected_unit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-                #unit.model.setColor(unit.color)
-                #unit.bodyNP.setCollideMask(BitMask32.bit(unit.bitmask))
-                self.unitToMove.bodyNP.setCollideMask(BitMask32.bit(4))
-                selected_unit.bodyNP.setCollideMask(BitMask32.bit(4))
-                self.shootingAnimation(self.unitToMove,selected_unit,total_wounds) """
-                """ for c in result2.getNode().getChildren():
-                    #print(c.getName())
-                    if "Model" in c.getName():
-                        np = NodePath.anyPath(c)
-                        np.setColor(0,1,0,1)
-                        NodePath.anyPath(result2.getNode()).setCollideMask(BitMask32.bit(1)) """
-            
-            result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))    
-            if result3.hasHit():
-                selected_unit = self.getSelectedUnit(result3.getNode())
-                print("Selected magic target:",selected_unit.unit.name)
-                await self.resolveSpell(selected_unit)
+            # Targeting clicks. Only the phase that marked the targets may act
+            # on them: these masks outlive the phase, and a stale one turned a
+            # click meant to start a combat into another volley of shooting.
+            if self.fsm.state == 'ShootingPhase':
+                result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))
+                if result2.hasHit():
+                    selected_unit = self.getSelectedUnit(result2.getNode())
+                    self.shootAt(self.unitToMove, selected_unit)
+
+            if self.fsm.state == 'SpellPhase':
+                result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))
+                if result3.hasHit():
+                    selected_unit = self.getSelectedUnit(result3.getNode())
+                    print("Selected magic target:", selected_unit.unit.name)
+                    await self.resolveSpell(selected_unit)
 
     def spellDescriptions(self, wizard, names) -> dict:
         """name -> readout, for the spell-selection menu."""

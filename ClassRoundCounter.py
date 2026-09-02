@@ -17,32 +17,30 @@ class RoundCounter(FSM):
     def enterPlayerOne(self):
         print(f"Entering Player One's turn in Round {self.currentRoundPlayer[0] + 1}")
         self.current_player = 1
-        # Additional logic for Player One's turn can be added here
-        for unit in self.game.player1Units:
-            if not unit.bodyNP.isEmpty():
-                unit.bodyNP.setCollideMask(BitMask32.bit(1))
-            else:
-                self.game.player1Units.remove(unit)
-        for unit in self.game.player2Units:
-            if not unit.bodyNP.isEmpty():
-                unit.bodyNP.setCollideMask(BitMask32.bit(7))
-            else:
-                self.game.player2Units.remove(unit)
+        self.apply_selection_masks()
 
     def enterPlayerTwo(self):
         print(f"Entering Player Two's turn in Round {self.currentRoundPlayer[1] + 1}")
         self.current_player = 2
-        # Additional logic for Player Two's turn can be added here
-        for unit in self.game.player1Units:
-            if not unit.bodyNP.isEmpty():
-                unit.bodyNP.setCollideMask(BitMask32.bit(7))
-            else:
-                self.game.player1Units.remove(unit)
-        for unit in self.game.player2Units:
-            if not unit.bodyNP.isEmpty():
-                unit.bodyNP.setCollideMask(BitMask32.bit(1))
-            else:
-                self.game.player2Units.remove(unit)
+        self.apply_selection_masks()
+
+    def apply_selection_masks(self):
+        """Put every unit back on the mask a selection click looks for.
+
+        Shooting and magic move their targets onto targeting masks, and a shot
+        moves both parties onto the melee one. Those have to be undone when a
+        phase ends as well as when the turn does, or the click that should
+        select a unit in the next phase finds a target instead.
+        """
+        for units, player in ((self.game.player1Units, 1),
+                              (self.game.player2Units, 2)):
+            mask = BitMask32.bit(1) if player == self.current_player \
+                else BitMask32.bit(7)
+            for unit in list(units):
+                if unit.bodyNP.isEmpty():
+                    units.remove(unit)
+                else:
+                    unit.bodyNP.setCollideMask(mask)
 
     def next_turn(self):
         if self.current_player == 1:

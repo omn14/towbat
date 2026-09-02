@@ -370,3 +370,4 @@ class GamePhaseFSM(FSM):
             unit.model.setColor(unit.color)
             unit.endedInUnit = False
             unit.updateTextNode()
+        self.game.roundCounter.apply_selection_masks()
