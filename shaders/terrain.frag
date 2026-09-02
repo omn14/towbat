@@ -68,35 +68,53 @@ void main() {
     float alpha = 1.0;
 
     if (terrainType == 0) {
-        // Forest floor and canopy. Built on the mat grass so the wood sits on
-        // the board rather than beside it, then buried under discrete leaf
-        // clumps — smooth noise alone gave a flat dappled blob.
+        // Forest floor. The base is the mat's own grass, so the sabot reads as
+        // a piece of the table with a wood on it, rather than a green plate
+        // set down beside it.
         vec2 mp = p * MAT_WORLD_SCALE;
-        col = matGrass(mp) * 0.62;
+        col = matGrass(mp);
 
-        vec2 cp = p * 0.9;
-        float canopy = fbmG(cp);
-        vec3 dark = vec3(0.10, 0.20, 0.08);
-        vec3 lite = vec3(0.24, 0.38, 0.15);
-        col = mix(col, mix(dark, lite, canopy), 0.80);
+        // 0 at the rim, 1 well inside. Everything that makes this a wood
+        // rather than a lawn is keyed off it, so the edge stays open.
+        float inside = smoothstep(edgeLevel, edgeLevel + 0.22, texcoord.x);
 
-        // Leaf clumps at two scales, each faded out before it aliases.
-        vec2 lp = p * 3.2;
-        float lf = grainFade(lp);
-        if (lf > 0.01) {
-            col = mix(col, vec3(0.30, 0.45, 0.17),
-                      specks(lp, 5.0, 0.62) * 0.55 * lf);
-            col = mix(col, vec3(0.08, 0.16, 0.06),
-                      specks(lp * 1.7, 12.3, 0.50) * 0.45 * lf);
+        // Shade cast by the canopy, tinted rather than repainted: the grass
+        // underneath still shows through. A little of it reaches the rim, or
+        // the base stops being visible as a base at all.
+        float canopy = fbmG(p * 0.9);
+        vec3 shade = mix(vec3(0.44, 0.52, 0.42), vec3(0.66, 0.74, 0.58), canopy);
+        col *= mix(vec3(1.0), shade, 0.28 + 0.57 * inside);
+
+        // Bare soil and needle litter where the canopy is thickest and no
+        // grass gets the light.
+        float soil = smoothstep(0.46, 0.86, fbmG(p * 1.25 + 17.3));
+        col = mix(col, vec3(0.23, 0.18, 0.12), soil * 0.60 * inside);
+
+        vec2 np = p * 6.5;
+        float nf = grainFade(np);
+        if (nf > 0.01) {
+            col = mix(col, vec3(0.33, 0.24, 0.14),
+                      specks(np, 55.3, 0.42) * 0.34 * nf * inside);
         }
-        vec2 fp2 = p * 9.0;
-        float ff = grainFade(fp2);
+
+        // Small stones, all the way to the rim: they are part of the ground,
+        // not of the wood.
+        vec2 sp = p * 3.4;
+        float sf = grainFade(sp);
+        if (sf > 0.01) {
+            col = mix(col, vec3(0.45, 0.43, 0.38),
+                      specks(sp, 71.9, 0.30) * 0.26 * sf);
+        }
+
+        // Scattered flock over the rim, so the outline breaks up into tufts
+        // instead of ending on a clean line.
+        vec2 fp = p * 2.4;
+        float ff = grainFade(fp);
         if (ff > 0.01) {
-            col = mix(col, vec3(0.34, 0.48, 0.20),
-                      specks(fp2, 27.1, 0.44) * 0.22 * ff);
+            float rim = 1.0 - inside;
+            col = mix(col, vec3(0.26, 0.34, 0.18),
+                      specks(fp, 101.7, 0.46) * 0.42 * ff * rim);
         }
-        // Interior shade: a wood is darker away from its edge.
-        col *= mix(0.72, 1.0, smoothstep(edgeLevel, edgeLevel + 0.35, texcoord.x));
     } else if (terrainType == 1) {
         // Hill — literally the mat's grass, so the slope reads as the same
         // ground lifted rather than as a different material.

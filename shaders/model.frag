@@ -47,6 +47,14 @@ void main() {
             col = mix(col, col * 0.62, specks(lp * 1.6, 21.0, 0.48) * 0.40 * lf);
         }
         col *= 1.0 + 0.10 * grainG(p * 9.0);
+
+        // Sky above, shade below: upward faces catch warm light, undersides
+        // sit in the cool dark of the tree's own interior. Without this a
+        // crown is one flat colour and reads as a cut stone.
+        float up = clamp(N.z, 0.0, 1.0);
+        col = mix(col, col * vec3(1.30, 1.22, 0.98), up * 0.55);
+        float under = clamp(-N.z, 0.0, 1.0);
+        col = mix(col, col * vec3(0.70, 0.77, 0.88), under * 0.30);
     } else {
         // Building: plaster and timber both weather, so break the flat fill
         // with broad staining and a fine grain rather than a pattern.

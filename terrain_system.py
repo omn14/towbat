@@ -233,35 +233,61 @@ def _apply_model_shader(np, kind):
 
 
 # Cached, shared low-poly fir-tree model used to populate forests.
-_TREE_MODEL = None
+_TREE_MODELS = None
+_PROP_MODELS = None
 
 
-def _cone_geom(radius, height, base_z, segments, color):
-    """Return a Geom for a single cone (apex up) with per-vertex colour."""
+def _revolve_geom(height, base_z, radius, profile, segments, rings,
+                  colour_at, rng, wobble, dx=0.0, dy=0.0):
+    """Return a surface of revolution: the shape of a tree, a trunk or a shrub.
+
+    ``profile(t)`` gives the radius as a fraction of ``radius`` at height
+    fraction ``t``. ``wobble`` knocks each vertex off that radius, because a
+    mathematically exact solid of revolution is what makes a fir read as a cut
+    gemstone rather than a tree.
+    """
     fmt = GeomVertexFormat.getV3n3c4()
-    vdata = GeomVertexData('cone', fmt, Geom.UHStatic)
+    vdata = GeomVertexData('revolve', fmt, Geom.UHStatic)
     vw = GeomVertexWriter(vdata, 'vertex')
     nw = GeomVertexWriter(vdata, 'normal')
     cw = GeomVertexWriter(vdata, 'color')
 
-    # Apex vertex (index 0).
-    vw.addData3(0.0, 0.0, base_z + height)
-    nw.addData3(0.0, 0.0, 1.0)
-    cw.addData4(*color)
+    # One wobble value per ring/segment, held so the seam closes on itself.
+    noise = [[1.0 + wobble * (rng.random() - 0.5) for _ in range(segments)]
+             for _ in range(rings + 1)]
 
-    # Base ring — the extra vertex closes the loop.
-    for i in range(segments + 1):
-        ang = 2.0 * math.pi * i / segments
-        cx, cy = math.cos(ang), math.sin(ang)
-        vw.addData3(cx * radius, cy * radius, base_z)
-        n = Vec3(cx * height, cy * height, radius)
-        n.normalize()
-        nw.addData3(n.x, n.y, n.z)
-        cw.addData4(*color)
+    for r in range(rings + 1):
+        t = r / rings
+        z = base_z + t * height
+        pr = max(profile(t), 0.0)
+        # Slope of the profile, for a normal that follows the silhouette.
+        e = 0.5 / rings
+        dr = (profile(min(t + e, 1.0)) - profile(max(t - e, 0.0))) * radius
+        dz = height * (min(t + e, 1.0) - max(t - e, 0.0))
+        col = colour_at(t)
+        for s in range(segments + 1):
+            ang = 2.0 * math.pi * s / segments
+            cx, cy = math.cos(ang), math.sin(ang)
+            w = noise[r][s % segments]
+            vw.addData3(dx + cx * radius * pr * w,
+                        dy + cy * radius * pr * w, z)
+            n = Vec3(cx * dz, cy * dz, -dr)
+            if n.length() < 1e-6:
+                n = Vec3(cx, cy, 0.5)
+            n.normalize()
+            nw.addData3(n.x, n.y, n.z)
+            cw.addData4(*col)
 
     tris = GeomTriangles(Geom.UHStatic)
-    for i in range(1, segments + 1):
-        tris.addVertices(0, i, i + 1)
+    row = segments + 1
+    for r in range(rings):
+        for s in range(segments):
+            v00 = r * row + s
+            v10 = v00 + 1
+            v01 = v00 + row
+            v11 = v01 + 1
+            tris.addVertices(v00, v10, v11)
+            tris.addVertices(v00, v11, v01)
     tris.closePrimitive()
 
     geom = Geom(vdata)
@@ -269,23 +295,136 @@ def _cone_geom(radius, height, base_z, segments, color):
     return geom
 
 
-def _get_tree_model():
-    """Build a small fir tree (brown trunk + stacked green cones) once."""
-    global _TREE_MODEL
-    if _TREE_MODEL is None:
+# Foliage is olive and grey-green, not the poster green a fir model defaults
+# to. Several related tones so a wood has depth without looking like a mixed
+# planting of unrelated species.
+_FOLIAGE_TONES = [
+    ((0.30, 0.36, 0.21), (0.46, 0.52, 0.30)),   # standard conifer
+    ((0.27, 0.33, 0.20), (0.42, 0.47, 0.28)),   # deeper, older
+    ((0.34, 0.39, 0.23), (0.52, 0.56, 0.33)),   # lighter, sunnier
+    ((0.33, 0.35, 0.21), (0.51, 0.50, 0.29)),   # dry, faintly yellowed
+]
+_BARK = (0.30, 0.23, 0.16, 1.0)
+
+
+def _tree_designs():
+    """Trunk plus the foliage masses stacked on it, per silhouette.
+
+    A crown built as one solid of revolution reads as a rock or a dark spike
+    however it is coloured. Conifers get tiered skirts and broadleaves get two
+    or three masses offset off the trunk, which is what gives either of them
+    an outline with structure in it.
+    """
+    def cone(t):                        # a tier: full skirt at its base
+        return (1.0 - t) ** 1.15
+    def soft_cone(t):                   # blunter, for the lower tiers
+        return (1.0 - t) ** 0.85
+    def lobe(t):                        # one rounded mass of broadleaf
+        # Curves over at the top. A profile that runs to zero in a straight
+        # line gives a point, and a crown of points looks like an artichoke.
+        return (1.0 - t * t) ** 0.55
+    def torn(t):                        # storm-torn: uneven, gappy
+        return (1.0 - t) ** 0.95 * (1.0 + 0.30 * math.sin(t * 14.0 + 1.3))
+
+    return [
+        # (trunk height, trunk radius, wobble,
+        #  [(profile, base z, height, radius, dx, dy), ...])
+        # Young fir: narrow, three tight tiers.
+        (0.46, 0.070, 0.13, [
+            (soft_cone, 0.40, 0.95, 0.42, 0.00, 0.00),
+            (cone,      0.92, 0.85, 0.33, 0.02, -0.01),
+            (cone,      1.42, 0.78, 0.22, -0.01, 0.02),
+        ]),
+        # Older fir: broad, heavy lower skirt.
+        (0.58, 0.125, 0.18, [
+            (soft_cone, 0.48, 0.90, 0.78, 0.00, 0.00),
+            (soft_cone, 1.00, 0.78, 0.58, -0.03, 0.02),
+            (cone,      1.50, 0.70, 0.36, 0.02, -0.03),
+        ]),
+        # Broadleaf: three masses off the trunk, none of them centred.
+        (0.92, 0.145, 0.24, [
+            (lobe, 0.78, 0.80, 0.52, -0.24, 0.10),
+            (lobe, 0.90, 0.76, 0.48, 0.26, -0.12),
+            (lobe, 1.06, 0.68, 0.44, 0.02, 0.22),
+        ]),
+        # Storm-torn: two masses, deliberately lopsided.
+        (0.80, 0.105, 0.30, [
+            (torn, 0.70, 1.05, 0.50, -0.16, 0.06),
+            (torn, 1.06, 0.78, 0.34, 0.22, -0.10),
+        ]),
+    ]
+
+
+def _get_tree_models():
+    """Build the tree variants once and return them as NodePaths."""
+    global _TREE_MODELS
+    if _TREE_MODELS is None:
         try:
-            node = GeomNode('tree')
-            trunk = (0.35, 0.22, 0.08, 1.0)
-            lower = (0.10, 0.35, 0.10, 1.0)
-            upper = (0.16, 0.45, 0.14, 1.0)
-            node.addGeom(_cone_geom(0.15, 0.6, 0.0, 6, trunk))
-            node.addGeom(_cone_geom(0.9, 1.4, 0.4, 7, lower))
-            node.addGeom(_cone_geom(0.6, 1.2, 1.1, 7, upper))
-            _TREE_MODEL = NodePath(node)
+            # Fixed seed: the variants are assets, not layout. Only where they
+            # are planted should change between forests.
+            rng = random.Random(90210)
+            models = []
+            for i, (th, tr, wob, masses) in enumerate(_tree_designs()):
+                for lo, hi in _FOLIAGE_TONES:
+                    node = GeomNode(f'tree_{i}')
+                    # Trunk runs the full height of the crown so nothing floats,
+                    # but the foliage starts above it, leaving bark showing.
+                    node.addGeom(_revolve_geom(
+                        th + masses[0][2] * 0.5, 0.0, tr,
+                        lambda t: 1.0 - 0.35 * t,
+                        7, 1, lambda t: _BARK, rng, 0.10))
+
+                    def crown_colour(t, lo=lo, hi=hi):
+                        # Light at the top of each mass, dark underneath it.
+                        k = t * t
+                        return (lo[0] + (hi[0] - lo[0]) * k,
+                                lo[1] + (hi[1] - lo[1]) * k,
+                                lo[2] + (hi[2] - lo[2]) * k, 1.0)
+
+                    for profile, bz, h, r, dx, dy in masses:
+                        node.addGeom(_revolve_geom(
+                            h, bz, r, profile, 11, 6, crown_colour, rng, wob,
+                            dx=dx, dy=dy))
+                    models.append(NodePath(node))
+            _TREE_MODELS = models
         except Exception as exc:  # pragma: no cover — trees are optional eye-candy
-            print(f"[Terrain] Could not build tree model: {exc}")
-            _TREE_MODEL = False  # sentinel: don't retry
-    return _TREE_MODEL or None
+            print(f"[Terrain] Could not build tree models: {exc}")
+            _TREE_MODELS = False  # sentinel: don't retry
+    return _TREE_MODELS or None
+
+
+def _get_prop_models():
+    """Stumps and low shrubs, to break up the floor between the trunks."""
+    global _PROP_MODELS
+    if _PROP_MODELS is None:
+        try:
+            rng = random.Random(1337)
+            stump = GeomNode('stump')
+            stump.addGeom(_revolve_geom(
+                0.26, 0.0, 0.22, lambda t: 1.0 - 0.18 * t,
+                8, 1, lambda t: (0.30, 0.23, 0.16, 1.0), rng, 0.16))
+            # Pale sawn top, so it reads as cut rather than as a rock.
+            stump.addGeom(_revolve_geom(
+                0.03, 0.26, 0.18, lambda t: 1.0 - t * 0.9,
+                8, 1, lambda t: (0.46, 0.38, 0.27, 1.0), rng, 0.10))
+
+            shrub = GeomNode('shrub')
+            # Three small masses, not one dome: a single dome on the ground is
+            # indistinguishable from a boulder.
+            for bz, r, dx, dy in ((0.0, 0.30, -0.16, 0.06),
+                                  (0.05, 0.26, 0.17, -0.09),
+                                  (0.12, 0.22, 0.01, 0.16)):
+                shrub.addGeom(_revolve_geom(
+                    r * 1.5, bz, r, lambda t: (1.0 - t * t) ** 0.55,
+                    8, 3, lambda t: (0.28 + 0.13 * t, 0.36 + 0.12 * t,
+                                     0.19 + 0.07 * t, 1.0), rng, 0.34,
+                    dx=dx, dy=dy))
+            _PROP_MODELS = (NodePath(stump), NodePath(shrub))
+        except Exception as exc:  # pragma: no cover
+            print(f"[Terrain] Could not build forest props: {exc}")
+            _PROP_MODELS = False
+    return _PROP_MODELS or None
+
 
 
 # ── Simple coloured-mesh builder (houses) ──────────────────────────────────
@@ -584,8 +723,12 @@ class TerrainPiece:
             self._create_heightfield_visual(
                 peak=min(self.width, self.height) * 0.11, seed=11.0)
         elif self.terrain_type == 'forest':
+            # A modelled base, not a hill: it rises to its full height almost
+            # at once, so the edge reads as a bevelled sabot rather than a
+            # slope. The ripple is what stops it being a green oval.
             self._create_heightfield_visual(
-                peak=min(self.width, self.height) * 0.03, seed=23.0)
+                peak=min(self.width, self.height) * 0.035, seed=23.0,
+                f_edge=0.35, f_top=0.50, wobble=0.16, ripple=0.20)
         else:
             self._create_mesh_visual()
         if self.terrain_type not in _BUILT_TYPES:
@@ -641,7 +784,8 @@ class TerrainPiece:
         self.visual.setPos(self.center.x, self.center.y, 0.0)
         self.visual.flattenStrong()
 
-    def _create_heightfield_visual(self, peak, seed):
+    def _create_heightfield_visual(self, peak, seed, f_edge=0.35, f_top=0.95,
+                                   wobble=0.10, ripple=0.0):
         """Organic kidney-shaped mound with a flat top for units to stand on.
 
         A smooth metaball field defines the footprint (clean rim, no edge
@@ -652,8 +796,6 @@ class TerrainPiece:
         hw = self.width / 2.0
         hh = self.height / 2.0
         N = 40
-        f_edge = 0.35      # rim iso-level (lower = wider, gentler slope toe)
-        f_top = 0.95       # plateau (flat top) begins here
 
         def field(nx, ny):
             g1 = math.exp(-((nx + 0.30) ** 2 + (ny - 0.05) ** 2) / (2 * 0.34 ** 2))
@@ -661,7 +803,12 @@ class TerrainPiece:
             g3 = math.exp(-((nx + 0.02) ** 2 + (ny - 0.28) ** 2) / (2 * 0.22 ** 2))
             f = g1 + g2 + 0.6 * g3
             # Low-frequency wobble only — keeps the rim organic but smooth.
-            f += 0.10 * (_fbm2(nx * 1.2 + seed, ny * 1.2 + seed, seed) - 0.5)
+            f += wobble * (_fbm2(nx * 1.2 + seed, ny * 1.2 + seed, seed) - 0.5)
+            # A second, finer pass where the caller wants a bay-and-headland
+            # outline instead of a smooth oval.
+            if ripple > 0.0:
+                f += ripple * (_fbm2(nx * 3.3 + seed * 2.0,
+                                     ny * 3.3 + seed * 2.0, seed + 7.0) - 0.5)
             return f
 
         def sstep(a, b, x):
@@ -934,13 +1081,14 @@ class TerrainPiece:
     # ── Scattered trees for forests ───────────────────────────────────
 
     def _create_trees(self):
-        """Instance low-poly fir trees across the forest footprint."""
-        tree_model = _get_tree_model()
-        if tree_model is None:
+        """Plant the wood: trees, stumps and shrubs across the footprint."""
+        models = _get_tree_models()
+        props = _get_prop_models()
+        if models is None:
             return
         self.trees_np = render.attachNewNode("forest_trees")
         _apply_model_shader(self.trees_np, 1)
-        # The cones are open at the bottom, and the shadow pass draws back
+        # The crowns are open at the bottom, and the shadow pass draws back
         # faces: culled to one side a tree records its own hollow interior,
         # which lies at ground level, and casts nothing at all.
         self.trees_np.setTwoSided(True)
@@ -950,28 +1098,84 @@ class TerrainPiece:
                    self.width * 7 + self.height * 3)
         rng = random.Random(seed)
 
-        margin = 1.0
+        margin = 1.4
         hw = max(self.width / 2.0 - margin, 0.5)
         hh = max(self.height / 2.0 - margin, 0.5)
         spacing = 2.2
         count = int((self.width * self.height) / (spacing * spacing))
         count = max(4, min(count, 60))  # keep the tree budget sane
 
+        placed = []
+
+        def room_for(x, y, clearance):
+            return all((x - px) ** 2 + (y - py) ** 2 > clearance ** 2
+                       for px, py, _ in placed)
+
+        # Several tries per tree: rejected placements are what leave the gaps
+        # you can actually see between the trunks.
         for _ in range(count):
-            x = self.center.x + rng.uniform(-hw, hw)
-            y = self.center.y + rng.uniform(-hh, hh)
-            # Keep trees within the organic forest rim, not the rectangle.
-            if self._field is not None:
-                nx = (x - self.center.x) / (self.width / 2.0)
-                ny = (y - self.center.y) / (self.height / 2.0)
-                if self._field(nx, ny) < self._field_edge:
+            for _attempt in range(8):
+                x = self.center.x + rng.uniform(-hw, hw)
+                y = self.center.y + rng.uniform(-hh, hh)
+                if self._field is not None:
+                    nx = (x - self.center.x) / (self.width / 2.0)
+                    ny = (y - self.center.y) / (self.height / 2.0)
+                    f = self._field(nx, ny)
+                    if f < self._field_edge:
+                        continue
+                    # Thin towards the rim, so the wood has a soft edge rather
+                    # than a wall of trunks stopping at the base.
+                    depth = min((f - self._field_edge) / 0.45, 1.0)
+                    if rng.random() > 0.25 + 0.75 * depth:
+                        continue
+                if not room_for(x, y, 1.15):
                     continue
-            z = self._hf(x - self.center.x, y - self.center.y) if self._hf else 0.0
-            placeholder = self.trees_np.attachNewNode("tree")
-            tree_model.instanceTo(placeholder)
-            placeholder.setPos(x, y, z)
-            placeholder.setH(rng.uniform(0.0, 360.0))
-            placeholder.setScale(rng.uniform(0.8, 1.5))
+
+                z = self._hf(x - self.center.x, y - self.center.y) if self._hf else 0.0
+                placeholder = self.trees_np.attachNewNode("tree")
+                rng.choice(models).instanceTo(placeholder)
+                placeholder.setPos(x, y, z)
+
+                # Height and width vary separately: scaling a tree uniformly
+                # keeps its silhouette, which is the thing being varied.
+                h = rng.uniform(0.72, 1.08)
+                w = h * rng.uniform(0.82, 1.24)
+                placeholder.setScale(w, w, h)
+                placeholder.setHpr(rng.uniform(0.0, 360.0),
+                                   rng.uniform(-6.0, 6.0),
+                                   rng.uniform(-6.0, 6.0))
+                # Related tones rather than one green, on top of the four
+                # baked into the models.
+                placeholder.setColorScale(rng.uniform(0.88, 1.10),
+                                          rng.uniform(0.92, 1.08),
+                                          rng.uniform(0.86, 1.06), 1.0)
+                placed.append((x, y, 1.15))
+                break
+
+        if props is None:
+            return
+        stump, shrub = props
+        for _ in range(max(5, count // 3)):
+            for _attempt in range(6):
+                x = self.center.x + rng.uniform(-hw, hw)
+                y = self.center.y + rng.uniform(-hh, hh)
+                if self._field is not None:
+                    nx = (x - self.center.x) / (self.width / 2.0)
+                    ny = (y - self.center.y) / (self.height / 2.0)
+                    if self._field(nx, ny) < self._field_edge + 0.03:
+                        continue
+                if not room_for(x, y, 0.75):
+                    continue
+                z = self._hf(x - self.center.x, y - self.center.y) if self._hf else 0.0
+                np_ = self.trees_np.attachNewNode("prop")
+                (stump if rng.random() < 0.4 else shrub).instanceTo(np_)
+                np_.setPos(x, y, z)
+                s = rng.uniform(0.75, 1.35)
+                np_.setScale(s, s, s * rng.uniform(0.8, 1.2))
+                np_.setH(rng.uniform(0.0, 360.0))
+                placed.append((x, y, 0.75))
+                break
+
 
     # ── Outline rectangle drawn with LineSegs ─────────────────────────
 
