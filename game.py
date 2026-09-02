@@ -151,6 +151,8 @@ class MyApp(ShowBase):
         #self.disableMouse()
         base.enableParticles()
         self.signal = False
+        # A spell's target is fixed once its dice are rolling; see setActiveUnit.
+        self.castingSpell = False
         # Free reforms are placed one at a time; see startFreeReform.
         self._reformQueue = []
         self._reformActive = False
@@ -1574,14 +1576,33 @@ class MyApp(ShowBase):
                 result2 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(3))
                 if result2.hasHit():
                     selected_unit = self.getSelectedUnit(result2.getNode())
-                    self.shootAt(self.unitToMove, selected_unit)
+                    if (selected_unit is not None
+                            and not self.unitToMove.hasAttackedThisTurn):
+                        # The target is fixed once the volley is loosed, so the
+                        # arc comes down with the click that chose it rather
+                        # than following the mouse until the arrows land.
+                        # mouse1 stays bound: the player still has to be able
+                        # to pick the next unit to shoot with.
+                        self.cancelAiming('locked on target')
+                        self.shootAt(self.unitToMove, selected_unit)
 
             if self.fsm.state == 'SpellPhase':
                 result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))
-                if result3.hasHit():
+                if result3.hasHit() and not self.castingSpell:
                     selected_unit = self.getSelectedUnit(result3.getNode())
-                    print("Selected magic target:", selected_unit.unit.name)
-                    await self.resolveSpell(selected_unit)
+                    if selected_unit is not None:
+                        print("Selected magic target:", selected_unit.unit.name)
+                        # The target is fixed once the casting dice are thrown,
+                        # so the aim comes down with the click that chose it.
+                        # The ground-targeted spells already do this; without
+                        # it a second click during the roll re-aimed the spell.
+                        self.castingSpell = True
+                        self.ignore('mouse1')
+                        self.cancelAiming('locked on target')
+                        try:
+                            await self.resolveSpell(selected_unit)
+                        finally:
+                            self.castingSpell = False
 
     def spellDescriptions(self, wizard, names) -> dict:
         """name -> readout, for the spell-selection menu."""
@@ -1720,11 +1741,19 @@ class MyApp(ShowBase):
         self.accept('mouse1', self._onGroundSpellClick)
 
     def _onGroundSpellClick(self):
-        if self.awaitingChoice:
+        if self.awaitingChoice or self.castingSpell:
             return
         point = Point3(self.mousePosOnGround)
+        self.castingSpell = True
         self.ignore('mouse1')
-        taskMgr.add(self.resolveSpell(point))
+        self.cancelAiming('locked on target')
+
+        async def _cast():
+            try:
+                await self.resolveSpell(point)
+            finally:
+                self.castingSpell = False
+        taskMgr.add(_cast())
 
     async def dispelAttempt(self, spell, caster):
         """Offer the opposing side its Dispel attempt (Rulebook p. 110).
@@ -1841,23 +1870,20 @@ class MyApp(ShowBase):
 
     # ─── Unit Selection & Interaction ─────────────────────────────────────
 
-    def getSelectedUnit(self,cnode):
-        #if isinstance(cnode, BulletRigidBodyNode):
-        if True:
-            node_name = cnode.getName()
-            if node_name.startswith('UnitCollision-'):
-                unit_name = node_name.replace('UnitCollision-', '')
-                # Set the active unit based on which was clicked
-                for unit in self.units:
-                    if unit_name == unit.unitName:
-                        selected = unit
-                """ if unit_name == self.bretBowmen.unitName:
-                    selected = self.bretBowmen
-                    print(f"Selected unit: {self.bretBowmen.unitName}")
-                elif unit_name == self.goblins.unitName:
-                    selected = self.goblins
-                    print(f"Selected unit: {self.goblins.unitName}") """
-        return selected
+    def getSelectedUnit(self, cnode):
+        """The unit owning collision node *cnode*, or None.
+
+        A ray can land on the ground, terrain, a die or a unit that has since
+        been removed from play, so the miss is a normal answer rather than an
+        error; it used to leave the return value unbound and raise.
+        """
+        node_name = cnode.getName()
+        if node_name.startswith('UnitCollision-'):
+            unit_name = node_name.replace('UnitCollision-', '')
+            for unit in self.units:
+                if unit_name == unit.unitName:
+                    return unit
+        return None
 
     
     def setup_text_node(self, text="", pos=(0, 0.9), scale=0.07, color=(1, 1, 1, 1),
@@ -2366,7 +2392,7 @@ class MyApp(ShowBase):
         """True while a shooting or spell target is being picked."""
         return taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine")
 
-    def cancelAiming(self):
+    def cancelAiming(self, reason='cancelled'):
         """Drop the arc, the aim line and every target mark."""
         taskMgr.remove("taskShootingTrajectoryDrawLine")
         if getattr(self, 'trajectoryLine', None) is not None:
@@ -2380,7 +2406,7 @@ class MyApp(ShowBase):
         for u in self.units:
             u.model.setColor(u.color)
             u.bodyNP.setCollideMask(BitMask32.bit(u.bitmask))
-        print("[Aim] cancelled.")
+        print(f"[Aim] {reason}.")
         # Casting is a detour from another phase; shooting is not.
         if self.fsm.state == "SpellPhase":
             self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
