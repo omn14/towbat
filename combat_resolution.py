@@ -78,7 +78,6 @@ class CombatResolver:
         # Dice state used during charge/flee intervals
         self.terningerCharge = []
         self.terningerFlee = []
-        self.reformInProgress = False
 
     # ─── Contact Detection ────────────────────────────────────────────────
 
@@ -1911,27 +1910,17 @@ class CombatResolver:
         player is still placing the unit (p. 156, p. 157).
 
         The AI has no way to answer the interactive prompt, so it declines.
+        Ordering is not decided here: several reforms fall due at once and the
+        Panic pass raises its own, so they queue in ``startFreeReform``, which
+        is the one point both paths pass through.
         """
         if self.game.aiControls(unit):
             return
-        # Two can fall due at once: a pursuer that catches its quarry reforms
-        # from the charge task, which the post-combat pass does not await, so it
-        # has already moved on to the next unit's reform. The player can only
-        # place one at a time, so they queue.
-        if self.reformInProgress:
-            print(f"{unit.unit.name} waits to reform until the one in progress "
-                  f"is finished.")
-        while self.reformInProgress:
+        rule_log('Free Reform', unit, "may reform after the pursuit")
+        finished = []
+        self.game.startFreeReform(unit, on_done=lambda: finished.append(True))
+        while not finished:
             await Task.pause(0.1)
-        self.reformInProgress = True
-        try:
-            rule_log('Free Reform', unit, "may reform after the pursuit")
-            finished = []
-            self.game.startFreeReform(unit, on_done=lambda: finished.append(True))
-            while not finished:
-                await Task.pause(0.1)
-        finally:
-            self.reformInProgress = False
 
     def fleesFrom(self, loserUnit):
         """The winner a Break or Fall Back runs directly away from: the highest

@@ -151,6 +151,10 @@ class MyApp(ShowBase):
         #self.disableMouse()
         base.enableParticles()
         self.signal = False
+        # Free reforms are placed one at a time; see startFreeReform.
+        self._reformQueue = []
+        self._reformActive = False
+        self._reformDone = None
         self.autoCharge=False
         self.autoRoll=False
         self.autoHold=False
@@ -875,21 +879,42 @@ class MyApp(ShowBase):
 
     def startFreeReform(self, unit, on_done=None):
         """Interactive free reform (rotate/reposition, left-click to confirm).
-        Used by auto-rally after a Fall Back in Good Order.  Calls *on_done*
-        once the reform is confirmed."""
-        # The pending callback lives in a single slot, so starting a second
-        # reform would strand whoever is waiting on the first for ever.
-        pending = getattr(self, '_reformDone', None)
-        if pending is not None:
-            print("WARNING: a free reform was already pending; releasing its "
-                  "waiter before starting another")
-            self._reformDone = None
-            pending()
-        self._reformDone = on_done
-        self.ignore('mouse1')
-        self.accept('mouse1', self.giveSignal)
-        taskMgr.add(self._freeReformTask, "freeReformUnitTask",
-                    extraArgs=[unit], appendTask=True)
+
+        Queued, because several fall due at once: a pursuer that runs its
+        quarry down reforms, and the same break sends nearby friends into
+        Panic tests that each end in a Fall Back in Good Order and a reform of
+        their own. The player can only place one unit at a time.
+
+        The queue lives here because this is where the two paths meet -- the
+        combat resolver and the Panic pass. A queue on either side alone does
+        not see the other's reforms.
+        """
+        self._reformQueue.append((unit, on_done))
+        if self._reformActive:
+            print(f"{unit.unit.name} waits to reform: "
+                  f"{len(self._reformQueue)} queued.")
+            return
+        self._startNextReform()
+
+    def _startNextReform(self):
+        while self._reformQueue:
+            unit, on_done = self._reformQueue.pop(0)
+            # Run down while it waited its turn: nothing left to place.
+            if unit.bodyNP.isEmpty():
+                if on_done:
+                    on_done()
+                continue
+            self._reformActive = True
+            self._reformDone = on_done
+            print(f"[Reform] {unit.unit.name} reforms "
+                  f"({len(self._reformQueue)} still waiting).")
+            self.ignore('mouse1')
+            self.accept('mouse1', self.giveSignal)
+            taskMgr.add(self._freeReformTask, "freeReformUnitTask",
+                        extraArgs=[unit], appendTask=True)
+            return
+        self._reformActive = False
+        self._reformDone = None
 
     def _freeReformTask(self, unit, task):
         result = self.freeReformUnit(unit, task)
@@ -899,8 +924,11 @@ class MyApp(ShowBase):
                         [self.setActiveUnitTask, self.setActiveUnitTaskName])
             cb = getattr(self, '_reformDone', None)
             self._reformDone = None
+            # _reformActive stays set across the callback, so a reform it sets
+            # off queues behind this one rather than starting on top of it.
             if cb:
                 cb()
+            self._startNextReform()
         return result
 
     async def rollLeadershipDice(self):

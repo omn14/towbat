@@ -472,6 +472,16 @@ charge path was quietly handling it — check there before believing an absence.
       started the next unit's reform. Both prompts were live together and the
       player could only place one. Awaiting one caller is not enough when the
       other reform is reached down a task the caller never waits for.
+      Corrected since: that queue was the combat resolver's own, and the Panic
+      pass never touched it — `psychology.py` calls `game.startFreeReform`
+      directly. One break can raise four reforms at once, the pursuer's plus a
+      Fall Back in Good Order for every friend that then failed its Panic test,
+      and each new one force-released the previous waiter and started on top.
+      The queue now lives in `MyApp.startFreeReform`, the single point both
+      paths reach, as a FIFO with the callbacks fired in turn. A unit run down
+      while it waited is skipped but its waiter is still released, and a reform
+      raised from another's callback queues behind rather than on top, because
+      the active flag stays set across the callback.
 - [x] "During the next turn, the pursuing unit counts as having charged"
       (p. 157). Catching a unit that Fell Back set `chargedThisTurn`, but
       `exitCombatPhase` clears that at the end of the very phase it was set, so
