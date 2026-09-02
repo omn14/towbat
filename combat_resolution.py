@@ -106,20 +106,23 @@ class CombatResolver:
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
         chargeYesNo = ["Yes", "No"]
-        if self.game.autoCharge or (self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active):
+        # Declaring the charge is the charger's call; reacting to it is the
+        # defender's, and they need not belong to the same player.
+        defenderNP = render.find(f"**/{c.getNode1().getName()}")
+        defender = self.game.getSelectedUnit(defenderNP.node())
+        if self.game.autoCharge or self.game.aiControls(unit):
             cynchoice = "Yes"
         else:
-            cynchoice = await taskMgr.add(self.game.makeChoiceNew(chargeYesNo, Vec3(-20, 0, 10)))
+            cynchoice = await taskMgr.add(self.game.makeChoiceNew(chargeYesNo, Vec3(-20, 0, 10), owner=unit))
 
         if cynchoice == "Yes":
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
-            if self.game.autoHold or (self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active):
+            if self.game.autoHold or self.game.aiControls(defender):
                 crchoice = "hold"
             else:
-                crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10)))
-            defenderNP = render.find(f"**/{c.getNode1().getName()}")
+                crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10), owner=defender))
             if crchoice == "hold":
                 print("Defender holds position.")
 
@@ -355,13 +358,13 @@ class CombatResolver:
         """
         if not unit_has_swiftstride(unit):
             return False
-        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+        if self.game.aiControls(unit):
             use = should_use_swiftstride(kind, distance_to_edge)
         else:
             choice = [unit.unitName + '\nSwiftstride +D6',
                       unit.unitName + '\nNo bonus']
             selected = await taskMgr.add(
-                self.game.makeChoiceNew(choice, Vec3(0, 0, 10)))
+                self.game.makeChoiceNew(choice, Vec3(0, 0, 10), owner=unit))
             use = selected == choice[0]
         print(f"{unit.unit.name} {'takes' if use else 'declines'} its Swiftstride "
               f"{kind} bonus.")
@@ -948,7 +951,7 @@ class CombatResolver:
         self.game.resolvingCombat = True
         weps = self.game.unitToMove.unit.model.weapons
 
-        wepchoice = await taskMgr.add(self.game.makeChoiceNew(weps, Vec3(0, 0, 10)))
+        wepchoice = await taskMgr.add(self.game.makeChoiceNew(weps, Vec3(0, 0, 10), owner=self.game.unitToMove))
 
         self.game.unitToMove.unit.model.equip_weapon(wepchoice)
 
@@ -980,7 +983,7 @@ class CombatResolver:
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
         engagedWith = [x.unitName for x in self.game.unitToMove.isInCombatWith]
 
-        selected_choice = await taskMgr.add(self.game.makeChoiceNew(engagedWith, Vec3(0, 0, 10)))
+        selected_choice = await taskMgr.add(self.game.makeChoiceNew(engagedWith, Vec3(0, 0, 10), owner=self.game.unitToMove))
 
         for unit in self.game.unitToMove.isInCombatWith:
             if unit.unitName == selected_choice:
@@ -1265,13 +1268,14 @@ class CombatResolver:
             overwhelm = self.isOverwhelmed(loserUnit, loserUnits)
 
             if stubborn_available(loserUnit):
-                if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+                if self.game.aiControls(loserUnit):
                     useStubborn = should_use_stubborn(ld, diff, overwhelm)
                 else:
                     stubbornChoice = [loserUnit.unitName + '\nStand Firm',
                                       loserUnit.unitName + '\nBreak test']
                     selected = await taskMgr.add(
-                        self.game.makeChoiceNew(stubbornChoice, Vec3(0, 0, 10)))
+                        self.game.makeChoiceNew(stubbornChoice, Vec3(0, 0, 10),
+                                                owner=loserUnit))
                     useStubborn = selected == stubbornChoice[0]
                 if useStubborn:
                     loserUnit.usedStubborn = True
@@ -1289,13 +1293,14 @@ class CombatResolver:
 
             bsb = psy.battle_standard_of(loserUnit) if psy is not None else None
             if bsb is not None:
-                if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+                if self.game.aiControls(loserUnit):
                     reroll = should_reroll_break(outcome, ld, diff, overwhelm)
                 else:
                     rerollChoice = [loserUnit.unitName + f'\nRe-roll ({outcome})',
                                     loserUnit.unitName + '\nKeep']
                     selected = await taskMgr.add(
-                        self.game.makeChoiceNew(rerollChoice, Vec3(0, 0, 10)))
+                        self.game.makeChoiceNew(rerollChoice, Vec3(0, 0, 10),
+                                                owner=loserUnit))
                     reroll = selected == rerollChoice[0]
                 if reroll:
                     ldDice = await self.rollBreakDice()
@@ -1348,7 +1353,8 @@ class CombatResolver:
                 if len(targets) > 1:
                     names = [u.unitName + '\nChase' for u, _ in targets]
                     picked = await taskMgr.add(
-                        self.game.makeChoiceNew(names, Vec3(0, 0, 10)))
+                        self.game.makeChoiceNew(names, Vec3(0, 0, 10),
+                                                owner=winner))
                     target, targetOutcome = next(
                         (u, o) for (u, o), n in zip(targets, names) if n == picked)
                 else:
@@ -1374,13 +1380,13 @@ class CombatResolver:
                      f"Restraint test")
             winner.request("Idle")
             return 'restrain'
-        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+        if self.game.aiControls(winner):
             chosen = move
         else:
             options = [winner.unitName + '\n' + verb,
                        winner.unitName + '\nRestrain']
             selected = await taskMgr.add(
-                self.game.makeChoiceNew(options, Vec3(0, 0, 10)))
+                self.game.makeChoiceNew(options, Vec3(0, 0, 10), owner=winner))
             chosen = move if selected == options[0] else 'restrain'
 
         if chosen != 'restrain':
@@ -1906,7 +1912,7 @@ class CombatResolver:
 
         The AI has no way to answer the interactive prompt, so it declines.
         """
-        if self.game.roundCounter.current_player in [1, 2] and self.game.AIplayer2.active:
+        if self.game.aiControls(unit):
             return
         # Two can fall due at once: a pursuer that catches its quarry reforms
         # from the charge task, which the post-combat pass does not await, so it

@@ -1102,7 +1102,8 @@ class MyApp(ShowBase):
         spellchoice = await taskMgr.add(
             self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True,
                                descriptions=self.spellDescriptions(_wizard,
-                                                                   spellChoices)))
+                                                                   spellChoices),
+                               owner=self.unitToMove))
 
         print("Chosen spell: ", spellchoice)
         if spellchoice not in spellChoices:
@@ -2348,13 +2349,32 @@ class MyApp(ShowBase):
             return
         self.movement.moveUnit(unit)
 
+    def aiControls(self, unit):
+        """True when *unit* is the AI's to answer for.
+
+        Ownership, not whose turn it is. Charge reactions, Break tests and
+        pursuit choices all fall to a unit that may belong to the player who
+        is not currently moving, so keying off the active player hands the
+        AI decisions that belong to the human.
+        """
+        return bool(unit is not None
+                    and getattr(self, 'AIplayer2', None) is not None
+                    and self.AIplayer2.active
+                    and unit in self.player2Units)
+
     async def makeChoiceNew(self, choices, position, cancellable=False,
-                            descriptions=None):
+                            descriptions=None, owner=None):
         cyn = Choice(choices, position, cancellable, descriptions)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')
-        if self.roundCounter.current_player in [1, 2] and self.AIplayer2.active:
+        # Answered for the owner when the AI owns it. Callers that cannot name
+        # an owner fall back to the active player, so an unnamed prompt still
+        # does not stall the AI's own turn.
+        auto = (self.aiControls(owner) if owner is not None else
+                (self.roundCounter.current_player == 2
+                 and self.AIplayer2.active))
+        if auto:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
             # AI auto-selects first choice — use first key for dicts, first element for lists
