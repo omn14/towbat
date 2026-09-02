@@ -14,6 +14,33 @@ from characters import join_unit
 from spell_system import load_spells, save_spells
 
 
+# ── Interface preferences ─────────────────────────────────────────────
+# Kept apart from save games: these follow the player, not the battle.
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             'settings.json')
+
+
+def load_settings() -> dict:
+    """Interface preferences, or an empty dict if there are none yet."""
+    try:
+        with open(SETTINGS_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_setting(key, value) -> None:
+    """Update one preference, leaving the rest of the file alone."""
+    data = load_settings()
+    data[key] = value
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+    except OSError as exc:
+        # A preference that will not save must not stop the game.
+        print(f"[Settings] could not write {SETTINGS_FILE}: {exc}")
+
+
 def _clean_weapon(weapon):
     """Return a JSON-safe copy of a weapon dict, dropping coded (callable) rules."""
     safe = {}

@@ -21,3 +21,6 @@ Warhammer-The-Old-World/
 # Runtime armies written by the list builder's Set P1/P2 buttons
 strategy_armies/player1_army.json
 strategy_armies/player2_army.json
+
+# Interface preferences: follows the player, not the repository
+settings.json

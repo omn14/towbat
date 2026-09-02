@@ -57,7 +57,8 @@ from game_fsm import GamePhaseFSM
 from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
                           Spell, dispel_result, is_dispelled, may_attempt,
                           spell_class, spell_readout)
-from persistence import save_game_state, load_game_state
+from persistence import (load_game_state, load_settings, save_game_state,
+                         save_setting)
 from rules_log import rule_log, rule_skipped
 from characters import JOIN_TAG, enemy_units
 from combat_resolution import CombatResolver
@@ -326,8 +327,12 @@ class MyApp(ShowBase):
         self.accept('mouse3', self.onRightClick,[self.unitToMove])
         #self.messenger.toggleVerbose()
         # Built before anything that publishes to it (round counter, FSM).
-        self.hud = HUD()
+        self.hud = HUD(load_settings().get('hud_orientation', HUD.HORIZONTAL))
+        self.centreViewAboveHud()
         self.accept('f3', self.hud.toggle)
+        self.accept('f2', self.toggleHudLayout)
+        # Collapsing the ledger frees the screen it was covering.
+        self.accept('hud-layout-changed', self.centreViewAboveHud)
         # The bar posts an intent; the FSM owns the turn sequence. Bound
         # through a lambda because the FSM is built after the HUD.
         self.accept('hud-end-phase', lambda: self.fsm.nextPhase())
@@ -2468,20 +2473,45 @@ class MyApp(ShowBase):
     # ─── Camera Zoom & Controls ───────────────────────────────────────────
 
     def centreViewAboveHud(self):
-        """Lift the projection so the board centres in the uncovered strip.
+        """Shift the projection so the board centres in what the HUD leaves.
 
-        The command bar covers the bottom ``HUD.BAR_H`` of aspect2d's two-unit
-        height, which puts the middle of what you can actually see at
-        ``BAR_H / 2`` above the middle of the window.
+        Which axis moves depends on the layout: the bottom bar displaces the
+        board upwards, the right-hand ledger displaces it left. The HUD owns
+        that arithmetic and reports the fractions.
 
         Done with a film offset rather than by moving the camera: the offset
         lives in the lens, and ``base.camLens.extrude`` reads it back, so every
-        pick site stays aligned with what is on screen for free. Moving the
-        camera would need the same correction applied by hand everywhere.
+        pick site stays aligned for free. Moving the camera would need the same
+        correction applied by hand everywhere.
         """
-        film_height = self.camLens.getFilmSize()[1]
-        self.camLens.setFilmOffset(
-            0, -HUD.BAR_H / 4.0 * BOARD_TUCK * film_height)
+        # Called once before the HUD exists, while the camera is being placed.
+        hud = getattr(self, 'hud', None)
+        right, up = hud.view_shift() if hud else (0.0, HUD.BAR_H / 4.0)
+        film_w, film_h = self.camLens.getFilmSize()
+        self.camLens.setFilmOffset(-right * film_w * BOARD_TUCK,
+                                   -up * film_h * BOARD_TUCK)
+
+    def toggleHudLayout(self):
+        """Swap the bottom command bar for the right-hand ledger, or back.
+
+        The HUD is rebuilt rather than re-flowed: the two layouts arrange their
+        panels differently enough that there is nothing to re-flow. Whatever
+        the player would lose by that -- the log, the phase, the turn -- is
+        carried across.
+        """
+        nxt = (HUD.VERTICAL if self.hud.orientation == HUD.HORIZONTAL
+               else HUD.HORIZONTAL)
+        state = self.hud.snapshot()
+        self.hud.destroy()
+        self.hud = HUD(nxt)
+        self.hud.restore(state)
+        self.accept('f3', self.hud.toggle)
+        self.accept('hud-layout-changed', self.centreViewAboveHud)
+        self.centreViewAboveHud()
+        if getattr(self, 'unitToMove', None) is not None:
+            self.showSelectedUnit(self.unitToMove)
+        save_setting('hud_orientation', nxt)
+        print(f"[HUD] {nxt} layout — F2 switches.")
 
     def windowEvent(self, win):
         # The film size follows the window shape, so the offset derived from it

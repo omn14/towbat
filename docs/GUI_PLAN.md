@@ -42,6 +42,46 @@ other window shape it drifts off the edge or into the middle of the table.
 The bar itself is anchored to `a2dBottomCenter` and sized from
 `base.getAspectRatio()`.
 
+### The vertical ledger
+
+`F2` swaps the bottom bar for a right-hand ledger, and the choice is written
+to `settings.json` so it survives a restart. The board then keeps nearly the
+full height instead of the full width, which suits a tall window where the
+bar eats a quarter of the play area.
+
+| Section | Span | Owner |
+|---|---|---|
+| Turn | 0.000–0.058 | Player and round |
+| Regiment | 0.058–0.348 | Portrait, name, models bar, stats, chips |
+| Phase | 0.348–0.508 | The turn sequence as a lit list |
+| Dice | 0.508–0.622 | Recent dice and their total |
+| Tabs | 0.622–0.838 | Battle log, game rules, objectives |
+| Controls | 0.838–0.905 | Army and spellbook |
+| End | 0.905–1.000 | End Phase button |
+
+Spans run top to bottom and are fractions of aspect2d's fixed two-unit
+height, so unlike the bar the ledger does not move with the aspect ratio.
+`_layout` places section anchors and `_section_width` reports the space
+across the short axis — the section's own slice when sections tile left to
+right, the whole ledger width when they stack. Everything else is shared:
+`_place`, `_span`, `_slot`, `_label`, the tooltip, and every setter.
+
+Only the panels whose arrangement genuinely differs are built twice. The
+regiment stats go two columns by four rather than nine across, and the phase
+track becomes five lit rows rather than one text node, because neither fits
+the other shape. `set_phase` and `set_dice` drive whichever exists.
+
+**Switching rebuilds rather than re-flows.** The two layouts arrange their
+panels differently enough that there is nothing to re-flow, so the HUD is
+destroyed and remade. `snapshot`/`restore` carry what the player would
+otherwise lose — the log, the phase, the turn, the dice — and `game.py`
+re-publishes the selected unit.
+
+`HUD.view_shift` reports which way the board has to move for the layout in
+force, so the camera correction is the same code for both: the bar displaces
+it upwards, the ledger leftwards, and collapsing the ledger gives the screen
+back.
+
 **The bar is drawn over the board, not carved out of it.** Shrinking the
 camera's display region would be the tidier answer, but every pick site
 extrudes raw mouse coordinates through `base.camLens`, which assumes the
