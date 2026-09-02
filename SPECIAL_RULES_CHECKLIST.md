@@ -129,6 +129,22 @@ army-agnostic and would benefit every faction.
       `special_rules.py`. Pursuit moves run through the charge machinery
       (`IsPursuing` -> `maxmove = 0`, `chdist = sum(chdice)`), so the bonus die
       is summed there rather than discarded.
+      Corrected since: a mounted character was losing the rule. The roster
+      importer skipped mount subtrees when gathering special rules, so a
+      Captain of the Empire on a Demigryph arrived with the beast's name and
+      none of its rules; `model('Demigryph', '')` then found nothing, because
+      the catalogue has no standalone Demigryph profile, only Demigryph
+      Knight. `is_swiftstride` looks through to the mount, found an empty
+      model, and said no — and because a joined character without the rule
+      breaks the unit's claim, the Demigryph Knights it joined lost it too.
+      The data was never wrong: the roster carries Swiftstride directly under
+      the Captain's mount selection. `_collect_mount_rules` now exports it as
+      `mount_special_rules` and `MyApp.applyDataRules` puts it on the mount
+      model, where the look-through expects it. Fear, Counter Charge and First
+      Charge were being dropped the same way and come back with it.
+      LEFTOVER: converted army files under `strategy_armies/` predate this and
+      carry no `mount_special_rules`; `Bm_army.json` was regenerated, the rest
+      need re-importing before their mounts' rules reach the table.
 - [ ] Move Through Cover — no difficult-terrain movement penalty
 - [ ] Shieldwall — defensive bonus vs charges
 - [ ] Resolute — strikes with full ranks when charged
@@ -735,6 +751,19 @@ clamour of battle, friendly units are seldom able to tell the difference"
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
+- [x] One hand weapon per model, and it is the catalogue's — every model was
+      given an invented `'hand weapon'` carrying a made-up description, while
+      the roster supplied the real `'Hand Weapon'`. `weapons` is keyed on the
+      raw name, so the two capitalisations were two separate weapons and
+      models carried both.
+      The invented one is gone: models take the catalogue entry, which brings
+      its actual rules and the rulebook note with it. A stub remains only for
+      running with no catalogue at all. `model.weapon_slot` matches names
+      case-insensitively, so `equip_weapon('hand weapon')` still resolves, a
+      roster's copy merges into the existing entry instead of sitting beside
+      it, and saves written before the fix collapse to one entry on load.
+      Two tests asserted the invented lower-case name; the fallback is the
+      point, not its capitalisation, so they assert `uses_hand_weapon()`.
 - [x] A cocked die no longer reports the previous roll — `checkDice` tested
       each of the six body axes against a fixed `dot > 0.9` and set
       `currentValue` when one cleared. A die that landed cocked, resting on

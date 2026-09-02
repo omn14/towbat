@@ -44,7 +44,13 @@
                 "Light Armour"
             ],
             "spells": [],
-            "wizard_level": null
+            "wizard_level": null,
+            "mount_special_rules": [
+                "Counter Charge",
+                "First Charge",
+                "Fear",
+                "Swiftstride"
+            ]
         },
         {
             "name": "Master Mage",
@@ -134,7 +140,8 @@
                     "number": null
                 }
             ],
-            "wizard_level": 2
+            "wizard_level": 2,
+            "mount_special_rules": []
         },
         {
             "name": "State Missile Trooper",
@@ -177,7 +184,8 @@
             ],
             "armour": [],
             "spells": [],
-            "wizard_level": null
+            "wizard_level": null,
+            "mount_special_rules": []
         },
         {
             "name": "State Trooper",
@@ -221,7 +229,8 @@
                 "Light Armour"
             ],
             "spells": [],
-            "wizard_level": null
+            "wizard_level": null,
+            "mount_special_rules": []
         },
         {
             "name": "Demigryph Knight",
@@ -268,7 +277,8 @@
                 "Full Plate Armour"
             ],
             "spells": [],
-            "wizard_level": null
+            "wizard_level": null,
+            "mount_special_rules": []
         },
         {
             "name": "War Wagon",
@@ -389,7 +399,8 @@
                 "Armour Value : 3+"
             ],
             "spells": [],
-            "wizard_level": null
+            "wizard_level": null,
+            "mount_special_rules": []
         }
     ]
 }

@@ -425,6 +425,28 @@ class MyApp(ShowBase):
     
     # ─── Army Loading ─────────────────────────────────────────────────────
 
+    def applyDataRules(self, model_instance, names):
+        """Add special rules named by the army list and wire their hooks.
+
+        Used for the unit's own rules and, separately, for its mount's: the
+        catalogue keeps a beast's rules on the beast, and rules that look
+        through to the mount read them from there.
+        """
+        if not names:
+            return
+        current = model_instance.characteristics.get('Special Rules')
+        current = list(current) if isinstance(current, list) else []
+        for rname in names:
+            if rname and rname not in current:
+                current.append(rname)
+        model_instance.characteristics['Special Rules'] = current
+        have = {r.get('name') for r in model_instance.special_rules
+                if isinstance(r, dict)}
+        for entry in build_special_rules(model_instance):
+            if isinstance(entry, dict) and entry.get('name') not in have:
+                model_instance.special_rules.append(entry)
+                have.add(entry.get('name'))
+
     def load_army_from_json(self, filename, player_num=1, start_pos=Point3(0, -20, 0), spacing=12):
         """
         Load army units from a JSON file created by the list builder
@@ -558,6 +580,11 @@ class MyApp(ShowBase):
             mount_unit = None
             if mount_name:
                 mount_model = model(mount_name, "")
+                # The beast's own rules. A Demigryph carries Swiftstride and
+                # the rider takes it from there, so losing them at import cost
+                # the whole unit its claim to the rule.
+                self.applyDataRules(mount_model,
+                                    army_unit_data.get('mount_special_rules'))
                 mount_unit = unit(f"{mount_name} Unit", mount_model, nmodels, files, ranks)
 
             model_instance = model(unit_name, "")
@@ -577,8 +604,11 @@ class MyApp(ShowBase):
                 name = wdict.get('name', 'weapon')
                 # A class/catalogue weapon (e.g. a war machine's piece) is the
                 # fresh source of truth; saved data only fills fields it lacks.
-                if name in model_instance.weapons:
-                    existing = model_instance.weapons[name]
+                # Matched case-insensitively so a roster's "Hand Weapon" lands
+                # on the catalogue entry rather than beside it.
+                slot = model_instance.weapon_slot(name)
+                if slot is not None:
+                    existing = model_instance.weapons[slot]
                     for key, value in wdict.items():
                         existing.setdefault(key, value)
                 else:
@@ -586,20 +616,8 @@ class MyApp(ShowBase):
 
             # Merge data-driven special rules from the army list (e.g. the
             # Skirmishers upgrade on an imported roster) and wire their hooks.
-            extra_rules = army_unit_data.get('special_rules') or []
-            if extra_rules:
-                current = model_instance.characteristics.get('Special Rules')
-                current = list(current) if isinstance(current, list) else []
-                for rname in extra_rules:
-                    if rname and rname not in current:
-                        current.append(rname)
-                model_instance.characteristics['Special Rules'] = current
-                have = {r.get('name') for r in model_instance.special_rules
-                        if isinstance(r, dict)}
-                for entry in build_special_rules(model_instance):
-                    if isinstance(entry, dict) and entry.get('name') not in have:
-                        model_instance.special_rules.append(entry)
-                        have.add(entry.get('name'))
+            self.applyDataRules(model_instance,
+                                army_unit_data.get('special_rules'))
 
             # Derive the armour save from the roster's armour equipment.
             armour = army_unit_data.get('armour')

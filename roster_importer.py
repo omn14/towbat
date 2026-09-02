@@ -104,6 +104,9 @@ def _collect_special_rules(selection: dict, out: list) -> None:
 
     Rules can sit on the unit itself or on any nested upgrade selection (e.g.
     the Skirmishers formation upgrade), as a 'Special Rule' profile or a rule.
+
+    Mount subtrees are left to ``_collect_mount_rules``: they belong to the
+    mount's own profile, and the engine looks through to it.
     """
     for p in selection.get("profiles", []):
         if p.get("typeName") == "Special Rule" and p.get("name"):
@@ -115,6 +118,20 @@ def _collect_special_rules(selection: dict, out: list) -> None:
         if sub.get("type") == "mount":
             continue
         _collect_special_rules(sub, out)
+
+
+def _collect_mount_rules(selection: dict, out: list) -> None:
+    """Special rules carried by the mount, wherever it sits in the unit.
+
+    A Captain on a Demigryph takes Swiftstride from the beast, not from
+    himself, and it decides whether the unit he joins may add Swiftstride's
+    die to its charge.
+    """
+    for sub in selection.get("selections", []):
+        if sub.get("type") == "mount":
+            _collect_special_rules(sub, out)
+        else:
+            _collect_mount_rules(sub, out)
 
 
 def _collect_spells(selection: dict, out: list) -> None:
@@ -183,6 +200,9 @@ def import_roster(path: str) -> dict:
             _collect_special_rules(unit, special_rules)
             # De-duplicate, preserving order.
             special_rules = list(dict.fromkeys(special_rules))
+            mount_rules: list = []
+            _collect_mount_rules(unit, mount_rules)
+            mount_rules = list(dict.fromkeys(mount_rules))
             armour: list = []
             _collect_armour(unit, armour)
             armour = list(dict.fromkeys(armour))
@@ -203,6 +223,7 @@ def import_roster(path: str) -> dict:
                 "category": _primary_category(unit),
                 "mounted": bool(mount),
                 "mount": mount,
+                "mount_special_rules": mount_rules,
                 "weapons": weapons,
                 "special_rules": special_rules,
                 "armour": armour,

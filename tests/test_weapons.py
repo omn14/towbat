@@ -238,14 +238,16 @@ class EquipBestMeleeTests(unittest.TestCase):
     def test_lance_only_equipped_while_charging(self):
         m = model("Demigryph Knight", ""); m.give_weapon("Lance")
         m.charging = False
-        self.assertEqual(m.equip_best_melee(), "hand weapon")
+        # Capitalisation is the catalogue's business, so match on the fact.
+        self.assertTrue(m.uses_hand_weapon())
         m.charging = True
         self.assertEqual(m.equip_best_melee(), "Lance")
 
     def test_falls_back_to_hand_weapon(self):
         m = model("State Trooper", "")
         m.charging = False
-        self.assertEqual(m.equip_best_melee(), "hand weapon")
+        m.equip_best_melee()
+        self.assertTrue(m.uses_hand_weapon())
 
 
 class ArmourBaneCombatTests(unittest.TestCase):

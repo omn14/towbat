@@ -154,9 +154,14 @@ class model:
         self.special_rules = []
         self.special_rules = build_special_rules(self)
         self.weapons = {}
-        self.weapons.update({'hand weapon': {'name': 'hand weapon',
-                                             'description': 'basic melee weapon',
-                                             'tag': 'combat'}})
+        # Every model carries a hand weapon unless told otherwise (Rulebook
+        # p. 190). Taken from the catalogue so the roster's own copy merges
+        # into it later instead of arriving as a second, differently-cased
+        # weapon. The stub is only for running without the catalogue.
+        if not self.give_weapon('Hand Weapon'):
+            self.weapons['hand weapon'] = {'name': 'hand weapon',
+                                           'description': 'basic melee weapon',
+                                           'tag': 'combat'}
         self.equipedWeapon = None
         self.equip_weapon('hand weapon')
         # War machines carry their piece as a ranged weapon (e.g. Great Cannon),
@@ -238,10 +243,24 @@ class model:
             #print(list(pairs.keys()))
             #print(pairs.get('Ld'))
         return pairs
+    def weapon_slot(self, name):
+        """The key in ``weapons`` matching *name*, ignoring case, or None.
+
+        The catalogue names weapons in title case ("Hand Weapon") while the
+        engine asks for them in lower case, and a dict keyed on the raw string
+        kept both as separate weapons.
+        """
+        target = str(name).strip().lower()
+        for key in self.weapons:
+            if str(key).strip().lower() == target:
+                return key
+        return None
+
     def equip_weapon(self, weapon_name: str):
         try:
+            slot = self.weapon_slot(weapon_name)
             self.special_rules = [rule for rule in self.special_rules if rule != self.equipedWeapon]
-            self.equipedWeapon = self.weapons.get(weapon_name)
+            self.equipedWeapon = self.weapons.get(slot) if slot else None
             # Remove existing weapon rule if it has the same name
             #self.special_rules = [rule for rule in self.special_rules if rule.get('name') != weapon_name]
             self.special_rules = [rule for rule in self.special_rules if rule != self.equipedWeapon]
@@ -519,6 +538,10 @@ class model:
         if w:
             if w.get('tag') == 'ranged' and not w.get('ranged_strength'):
                 w['ranged_strength'] = self.shooting_strength()
+            # Replace any entry of the same name rather than sitting beside it.
+            slot = self.weapon_slot(w['name'])
+            if slot is not None and slot != w['name']:
+                del self.weapons[slot]
             self.weapons[w['name']] = w
         return w
 
