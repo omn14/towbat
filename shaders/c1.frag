@@ -76,25 +76,37 @@ float fbmG(vec2 p) {
 }
 vec3 battleMat(vec2 uv) {
     vec2 p = uv * 16.0;                          // detail scale across the board
-    // Two-tone grass patches — lighter, less-saturated tones.
-    float patchMix = fbmG(p * 0.5);
-    vec3 grassDark = vec3(0.22, 0.38, 0.16);
-    vec3 grassLite = vec3(0.48, 0.64, 0.34);
-    vec3 col = mix(grassDark, grassLite, patchMix);
-    // Worn earth / mud showing through in trampled areas.
-    float earth = smoothstep(0.55, 0.85, fbmG(p * 0.3 + 3.1));
-    vec3 dirt = vec3(0.46, 0.42, 0.26);
-    col = mix(col, dirt, earth * 0.35);
-    // Fine blade speckle.
-    float speckle = fbmG(p * 2.0);
-    col *= 0.90 + 0.20 * speckle;
-    // Occasional darker clumps of tall grass.
-    col *= 1.0 - 0.12 * smoothstep(0.60, 0.92, fbmG(p * 1.1 + 7.0));
-    // Pull saturation down toward luminance for a natural gaming-mat look.
+
+    // A printed gaming mat is close to even. Anything more than a few percent
+    // of swing between light and shade reads as camouflage, not as grass.
+    float broad = fbmG(p * 0.8);
+    vec3 col = mix(vec3(0.31, 0.39, 0.18), vec3(0.41, 0.49, 0.25),
+                   smoothstep(0.35, 0.68, broad));
+
+    // Sparse bleached-straw patches, soft edged.
+    float straw = smoothstep(0.70, 0.96, fbmG(p * 1.1 + 11.7));
+    col = mix(col, vec3(0.50, 0.49, 0.31), straw * 0.14);
+
+    // Worn earth, rarer and weaker than the straw.
+    float earth = smoothstep(0.78, 0.99, fbmG(p * 1.6 + 3.1));
+    col = mix(col, vec3(0.42, 0.36, 0.24), earth * 0.12);
+
+    // Flock grain. Fine enough to read as fabric rather than as a painted
+    // surface, but not so fine that minification averages it flat.
+    float fine = noiseG(p * 30.0) - 0.5;
+    float mid = noiseG(p * 10.0) - 0.5;
+    col *= 1.0 + 0.16 * fine + 0.08 * mid;
+
+    // Matt rather than poster green, but it is still grass: take only the
+    // edge off the saturation.
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(lum), col, 0.82);
-    // Boost contrast and lift overall brightness.
-    col = (col - 0.5) * 1.28 + 0.5 + 0.06;
+    col = mix(vec3(lum), col, 0.95);
+
+    // The mat dips into shadow where it meets the table edge.
+    vec2 span = max(boardMax - boardMin, vec2(1e-4));
+    vec2 e = min(uv - boardMin, boardMax - uv) / span;
+    col *= mix(0.80, 1.0, smoothstep(0.0, 0.05, min(e.x, e.y)));
+
     return clamp(col, 0.0, 1.0);
 }
 
