@@ -20,31 +20,13 @@ in vec2 texcoord;
 
 out vec4 p3d_FragColor;
 
-// ── Cheap value-noise / fbm for procedural surface detail ──────────────────
-float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
+// ── Shared material vocabulary with the ground card ───────────────────────
+#pragma include "mat_noise.glsl"
 
-float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    float a = hash(i);
-    float b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0));
-    float d = hash(i + vec2(1.0, 1.0));
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
+// The river and marsh were tuned against a 4-octave sum that topped out at
+// 0.9375, so they keep that range rather than the normalised one.
 float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    for (int i = 0; i < 4; i++) {
-        v += a * noise(p);
-        p *= 2.0;
-        a *= 0.5;
-    }
-    return v;
+    return fbmG(p) * 0.9375;
 }
 
 // Signed distance to the movement/shooting polygon (matches the ground card).
@@ -84,20 +66,58 @@ void main() {
     float alpha = 1.0;
 
     if (terrainType == 0) {
-        // Forest — dappled green canopy that drifts slightly over time.
-        float canopy = fbm(p * 0.8);
-        vec3 dark = vec3(0.05, 0.22, 0.06);
-        vec3 lite = vec3(0.15, 0.45, 0.12);
-        col = mix(dark, lite, canopy);
-        float dapple = fbm(p * 1.6 + osg_FrameTime * 0.05);
-        col += vec3(0.06, 0.10, 0.02) * smoothstep(0.55, 0.9, dapple);
+        // Forest floor and canopy. Built on the mat grass so the wood sits on
+        // the board rather than beside it, then buried under discrete leaf
+        // clumps — smooth noise alone gave a flat dappled blob.
+        vec2 mp = p * MAT_WORLD_SCALE;
+        col = matGrass(mp) * 0.62;
+
+        vec2 cp = p * 0.9;
+        float canopy = fbmG(cp);
+        vec3 dark = vec3(0.10, 0.20, 0.08);
+        vec3 lite = vec3(0.24, 0.38, 0.15);
+        col = mix(col, mix(dark, lite, canopy), 0.80);
+
+        // Leaf clumps at two scales, each faded out before it aliases.
+        vec2 lp = p * 3.2;
+        float lf = grainFade(lp);
+        if (lf > 0.01) {
+            col = mix(col, vec3(0.30, 0.45, 0.17),
+                      specks(lp, 5.0, 0.62) * 0.55 * lf);
+            col = mix(col, vec3(0.08, 0.16, 0.06),
+                      specks(lp * 1.7, 12.3, 0.50) * 0.45 * lf);
+        }
+        vec2 fp2 = p * 9.0;
+        float ff = grainFade(fp2);
+        if (ff > 0.01) {
+            col = mix(col, vec3(0.34, 0.48, 0.20),
+                      specks(fp2, 27.1, 0.44) * 0.22 * ff);
+        }
+        // Interior shade: a wood is darker away from its edge.
+        col *= mix(0.72, 1.0, smoothstep(edgeLevel, edgeLevel + 0.35, texcoord.x));
     } else if (terrainType == 1) {
-        // Hill — grass on the lower slopes blending to rock near the top.
+        // Hill — literally the mat's grass, so the slope reads as the same
+        // ground lifted rather than as a different material.
+        vec2 mp = p * MAT_WORLD_SCALE;
+        col = matGrass(mp);
+
+        // Scattered stone and scree, thickening toward the crown.
         float h = clamp(worldPos.z * 0.18, 0.0, 1.0);
-        vec3 grass = vec3(0.20, 0.42, 0.14);
-        vec3 rock = vec3(0.45, 0.40, 0.32);
-        col = mix(grass, rock, smoothstep(0.3, 0.9, h));
-        col *= mix(0.9, 1.15, fbm(p * 1.2));
+        float crown = smoothstep(0.25, 0.95, h);
+        vec2 rp = p * 1.6;
+        float rf = grainFade(rp);
+        if (rf > 0.01) {
+            float rock = specks(rp, 41.0, 0.42) * rf;
+            col = mix(col, vec3(0.46, 0.43, 0.36), rock * (0.20 + 0.55 * crown));
+        }
+        vec2 pp = p * 5.0;
+        float pf = grainFade(pp);
+        if (pf > 0.01) {
+            col = mix(col, vec3(0.40, 0.37, 0.31),
+                      specks(pp, 63.7, 0.38) * 0.28 * pf * (0.3 + 0.7 * crown));
+        }
+        // Worn, drier grass on the exposed top.
+        col = mix(col, vec3(0.47, 0.44, 0.26), crown * 0.22);
     } else if (terrainType == 2) {
         // River — water body, foamy shoreline, wet/sandy banks, soft edge.
         float along  = texcoord.x;
