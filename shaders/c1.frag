@@ -90,28 +90,72 @@ float grainG(vec2 p) {
 float grainFade(vec2 p) {
     return 1.0 - smoothstep(0.30, 0.90, max(fwidth(p.x), fwidth(p.y)));
 }
+
+// Discrete specks — the flock fibres and little tufts of a printed mat. Value
+// noise is smooth at every scale, so on its own it can only ever look like
+// cloud; crisp detail has to come from something that is actually discrete.
+// One seeded point per cell, with a round falloff so the cells never show.
+float specks(vec2 p, float seed, float size) {
+    vec2 i = floor(p), f = fract(p);
+    float best = 0.0;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            vec2 g = vec2(float(x), float(y));
+            vec2 c = i + g + seed;
+            vec2 o = vec2(hashG(c), hashG(c + 19.7));
+            best = max(best, 1.0 - smoothstep(0.0, size, length(f - g - o)));
+        }
+    }
+    return best;
+}
 vec3 battleMat(vec2 uv) {
     vec2 p = uv * 16.0;                          // detail scale across the board
 
     // One base colour with small multiplicative shading. Mixing between two
     // different greens gave big soft blobs; a printed mat has almost no
     // large-scale variation, only fine texture.
-    vec3 col = vec3(0.365, 0.440, 0.225);
-    col *= 1.0 + 0.16 * (fbmG(p * 3.0) - 0.5)
-               + 0.10 * (fbmG(p * 9.0) - 0.5);
+    // The base is a warm olive: the reference mat is nearer khaki than grass
+    // green, with yellow and brown showing through it.
+    vec3 col = vec3(0.400, 0.440, 0.230);
+    col *= 1.0 + 0.11 * (fbmG(p * 3.0) - 0.5)
+               + 0.08 * (fbmG(p * 9.0) - 0.5);
+
+    // Warm drift: some stretches of the mat read yellow, others stay green.
+    float warm = smoothstep(0.35, 0.75, fbmG(p * 1.7 + 5.3));
+    col = mix(col, vec3(0.52, 0.50, 0.27), warm * 0.28);
 
     // Sparse bleached-straw patches, soft edged.
-    float straw = smoothstep(0.74, 0.98, fbmG(p * 1.1 + 11.7));
-    col = mix(col, vec3(0.50, 0.49, 0.31), straw * 0.10);
+    float straw = smoothstep(0.68, 0.96, fbmG(p * 1.1 + 11.7));
+    col = mix(col, vec3(0.56, 0.52, 0.32), straw * 0.22);
 
-    // Worn earth, rarer and weaker than the straw.
-    float earth = smoothstep(0.82, 0.99, fbmG(p * 1.6 + 3.1));
-    col = mix(col, vec3(0.42, 0.36, 0.24), earth * 0.08);
+    // Worn earth, browner and rarer than the straw.
+    float earth = smoothstep(0.76, 0.99, fbmG(p * 1.6 + 3.1));
+    col = mix(col, vec3(0.40, 0.31, 0.19), earth * 0.20);
 
     // Flock grain: what reads as fabric rather than as a painted surface.
     vec2 gp = p * 26.0;
-    col *= 1.0 + 0.11 * grainG(gp) * grainFade(gp)
-               + 0.06 * grainG(p * 7.0);
+    col *= 1.0 + 0.09 * grainG(gp) * grainFade(gp)
+               + 0.05 * grainG(p * 7.0);
+
+    // Fibres and tufts. Without these the mat is all smooth gradient and reads
+    // as airbrushed paint; the photograph is full of small discrete detail.
+    // Skipped once they have faded out: three speck layers is 54 hashes a
+    // pixel, and the branch is coherent because the fade follows the zoom.
+    vec2 sp = p * 42.0;
+    float fade = grainFade(sp);
+    if (fade > 0.01) {
+        col = mix(col, vec3(0.24, 0.28, 0.13),
+                  specks(sp, 0.0, 0.58) * 0.38 * fade);
+        col = mix(col, vec3(0.62, 0.60, 0.38),
+                  specks(sp * 1.37, 7.1, 0.46) * 0.32 * fade);
+    }
+    // Sparser, larger tufts, which survive further out than the fibres do.
+    vec2 tp = p * 15.0;
+    float tufts = grainFade(tp);
+    if (tufts > 0.01) {
+        col = mix(col, vec3(0.28, 0.33, 0.15),
+                  specks(tp, 3.4, 0.30) * 0.26 * tufts);
+    }
 
     // Matt rather than poster green, but it is still grass: take only the
     // edge off the saturation.
