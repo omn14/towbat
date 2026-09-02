@@ -72,7 +72,9 @@ float fbmG(vec2 p) {
     const mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
     float v = 0.0, a = 0.5;
     for (int i = 0; i < 5; i++) { v += a * noiseG(p); p = rot * p * 2.03; a *= 0.5; }
-    return v;
+    // Normalised, or a threshold does not mean what it looks like: the raw sum
+    // tops out at 0.96875 and sits mostly between 0.35 and 0.65.
+    return v / 0.96875;
 }
 
 // Grain, signed and centred on zero. Three octaves rather than one: a single
@@ -121,16 +123,16 @@ vec3 battleMat(vec2 uv) {
                + 0.08 * (fbmG(p * 9.0) - 0.5);
 
     // Warm drift: some stretches of the mat read yellow, others stay green.
-    float warm = smoothstep(0.35, 0.75, fbmG(p * 1.7 + 5.3));
-    col = mix(col, vec3(0.52, 0.50, 0.27), warm * 0.28);
+    float warm = smoothstep(0.42, 0.70, fbmG(p * 1.7 + 5.3));
+    col = mix(col, vec3(0.54, 0.49, 0.25), warm * 0.40);
 
     // Sparse bleached-straw patches, soft edged.
-    float straw = smoothstep(0.68, 0.96, fbmG(p * 1.1 + 11.7));
-    col = mix(col, vec3(0.56, 0.52, 0.32), straw * 0.22);
+    float straw = smoothstep(0.52, 0.76, fbmG(p * 1.1 + 11.7));
+    col = mix(col, vec3(0.62, 0.56, 0.33), straw * 0.38);
 
     // Worn earth, browner and rarer than the straw.
-    float earth = smoothstep(0.76, 0.99, fbmG(p * 1.6 + 3.1));
-    col = mix(col, vec3(0.40, 0.31, 0.19), earth * 0.20);
+    float earth = smoothstep(0.58, 0.84, fbmG(p * 1.6 + 3.1));
+    col = mix(col, vec3(0.42, 0.31, 0.18), earth * 0.42);
 
     // Flock grain: what reads as fabric rather than as a painted surface.
     vec2 gp = p * 26.0;
@@ -144,17 +146,25 @@ vec3 battleMat(vec2 uv) {
     vec2 sp = p * 42.0;
     float fade = grainFade(sp);
     if (fade > 0.01) {
-        col = mix(col, vec3(0.24, 0.28, 0.13),
-                  specks(sp, 0.0, 0.58) * 0.38 * fade);
-        col = mix(col, vec3(0.62, 0.60, 0.38),
-                  specks(sp * 1.37, 7.1, 0.46) * 0.32 * fade);
+        // Clumped rather than evenly peppered: an even scatter of specks reads
+        // as freckles, where real flock gathers and thins.
+        float clump = 0.30 + 0.70 * smoothstep(0.28, 0.72, fbmG(p * 5.0 + 31.0));
+        float a = fade * clump;
+        col = mix(col, vec3(0.31, 0.35, 0.19),
+                  specks(sp, 0.0, 0.66) * 0.20 * a);
+        col = mix(col, vec3(0.52, 0.51, 0.32),
+                  specks(sp * 1.37, 7.1, 0.54) * 0.17 * a);
+        // Brown flecks, so the warmth is in the detail and not only in the
+        // broad patches.
+        col = mix(col, vec3(0.44, 0.35, 0.22),
+                  specks(sp * 0.83, 23.9, 0.44) * 0.15 * a);
     }
     // Sparser, larger tufts, which survive further out than the fibres do.
     vec2 tp = p * 15.0;
     float tufts = grainFade(tp);
     if (tufts > 0.01) {
-        col = mix(col, vec3(0.28, 0.33, 0.15),
-                  specks(tp, 3.4, 0.30) * 0.26 * tufts);
+        col = mix(col, vec3(0.33, 0.37, 0.19),
+                  specks(tp, 3.4, 0.34) * 0.15 * tufts);
     }
 
     // Matt rather than poster green, but it is still grass: take only the
