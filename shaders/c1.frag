@@ -74,28 +74,44 @@ float fbmG(vec2 p) {
     for (int i = 0; i < 5; i++) { v += a * noiseG(p); p = rot * p * 2.03; a *= 0.5; }
     return v;
 }
+
+// Grain, signed and centred on zero. Three octaves rather than one: a single
+// octave of value noise shows its lattice as soft blocks the moment a cell is
+// only a few pixels across, which is what made the mat look pixellated.
+float grainG(vec2 p) {
+    const mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 3; i++) { v += a * noiseG(p); p = rot * p * 2.11; a *= 0.5; }
+    return v / 0.875 - 0.5;
+}
+
+// Fade a grain layer out before its cells reach pixel size, or it aliases into
+// blocks when the camera pulls back.
+float grainFade(vec2 p) {
+    return 1.0 - smoothstep(0.30, 0.90, max(fwidth(p.x), fwidth(p.y)));
+}
 vec3 battleMat(vec2 uv) {
     vec2 p = uv * 16.0;                          // detail scale across the board
 
-    // A printed gaming mat is close to even. Anything more than a few percent
-    // of swing between light and shade reads as camouflage, not as grass.
-    float broad = fbmG(p * 0.8);
-    vec3 col = mix(vec3(0.31, 0.39, 0.18), vec3(0.41, 0.49, 0.25),
-                   smoothstep(0.35, 0.68, broad));
+    // One base colour with small multiplicative shading. Mixing between two
+    // different greens gave big soft blobs; a printed mat has almost no
+    // large-scale variation, only fine texture.
+    vec3 col = vec3(0.365, 0.440, 0.225);
+    col *= 1.0 + 0.16 * (fbmG(p * 3.0) - 0.5)
+               + 0.10 * (fbmG(p * 9.0) - 0.5);
 
     // Sparse bleached-straw patches, soft edged.
-    float straw = smoothstep(0.70, 0.96, fbmG(p * 1.1 + 11.7));
-    col = mix(col, vec3(0.50, 0.49, 0.31), straw * 0.14);
+    float straw = smoothstep(0.74, 0.98, fbmG(p * 1.1 + 11.7));
+    col = mix(col, vec3(0.50, 0.49, 0.31), straw * 0.10);
 
     // Worn earth, rarer and weaker than the straw.
-    float earth = smoothstep(0.78, 0.99, fbmG(p * 1.6 + 3.1));
-    col = mix(col, vec3(0.42, 0.36, 0.24), earth * 0.12);
+    float earth = smoothstep(0.82, 0.99, fbmG(p * 1.6 + 3.1));
+    col = mix(col, vec3(0.42, 0.36, 0.24), earth * 0.08);
 
-    // Flock grain. Fine enough to read as fabric rather than as a painted
-    // surface, but not so fine that minification averages it flat.
-    float fine = noiseG(p * 30.0) - 0.5;
-    float mid = noiseG(p * 10.0) - 0.5;
-    col *= 1.0 + 0.16 * fine + 0.08 * mid;
+    // Flock grain: what reads as fabric rather than as a painted surface.
+    vec2 gp = p * 26.0;
+    col *= 1.0 + 0.11 * grainG(gp) * grainFade(gp)
+               + 0.06 * grainG(p * 7.0);
 
     // Matt rather than poster green, but it is still grass: take only the
     // edge off the saturation.
