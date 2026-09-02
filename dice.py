@@ -7,6 +7,34 @@ from panda3d.core import LRotationf, LColor, Material
 from rules_log import dice_roll
 
 
+# Which number shows when a given body axis points at the sky.
+_FACES = {('up', 1): 6, ('up', -1): 1,
+          ('forward', 1): 2, ('forward', -1): 5,
+          ('right', 1): 3, ('right', -1): 4}
+
+# Below this the die is not lying flat -- cocked on another die or on the rim.
+COCKED_DOT = 0.75
+
+
+def face_up(q):
+    """Return (number, how square-on it is) for a die with orientation *q*.
+
+    The face is whichever body axis points most nearly at the sky. Each axis
+    used to be tested against a fixed threshold instead, and a die that
+    cleared none of them kept the value the *previous* roll had left in it,
+    so a cocked die quietly reported an old number rather than a wrong one.
+    """
+    best, best_dot = None, 0.0
+    for name, vec in (('up', q.getUp()), ('forward', q.getForward()),
+                      ('right', q.getRight())):
+        dot = vec.normalized().dot(Vec3(0, 0, 1))
+        if abs(dot) > abs(best_dot):
+            best, best_dot = name, dot
+    if best is None:
+        return None, 0.0
+    return _FACES[(best, 1 if best_dot > 0 else -1)], abs(best_dot)
+
+
 def checkDice(allDice,task):
     """Task to check the status of all dice in the scene."""
     hpr = [None] * len(allDice)
@@ -18,35 +46,21 @@ def checkDice(allDice,task):
 
     #print("Dice orientations:", hpr)
     if all(h is not None for h in hpr):
-        print("All dice have settled.")
+        values = []
         for i, o in enumerate(hpr):
             q = LRotationf()
             q.setHpr(o)
-            #print(f"Orientation HPR: {o} -> Quat: {q}")
-            if q.getUp().normalized().dot(Vec3(0,0,1)) > 0.9:
-                print(6,"Z is up")
-                allDice[i].currentValue = 6
-            if q.getUp().normalized().dot(Vec3(0,0,-1)) > 0.9:
-                print(1,"Z is down")
-                allDice[i].currentValue   = 1
-            if q.getForward().normalized().dot(Vec3(0,0,1)) > 0.9:
-                print(2,"Y is up")
-                allDice[i].currentValue = 2
-            if q.getForward().normalized().dot(Vec3(0,0,-1)) > 0.9:
-                print(5,"Y is down")
-                allDice[i].currentValue = 5
-            if q.getRight().normalized().dot(Vec3(0,0,1)) > 0.9:
-                print(3,"X is up")
-                allDice[i].currentValue = 3
-            if q.getRight().normalized().dot(Vec3(0,0,-1)) > 0.9:
-                print(4,"X is down")
-                allDice[i].currentValue = 4
-            
-            #print(q.getUp().normalized(), q.getForward().normalized(), q.getRight().normalized())
-        #for dice in allDice:
-        #    dice.remove(base.world)
+            face, flatness = face_up(q)
+            if flatness < COCKED_DOT:
+                # Read it anyway -- the alternative is no number at all -- but
+                # say so, because it is the one result worth distrusting.
+                print(f"[Dice] die {i} is cocked ({flatness:.2f} square-on), "
+                      f"reading nearest face {face}")
+            allDice[i].currentValue = face
+            values.append(face)
+        print(f"All dice have settled: {values}")
         # The one point where a roll's faces are known, whoever threw it.
-        dice_roll([d.currentValue for d in allDice])
+        dice_roll(values)
         return task.done
     return task.cont
 

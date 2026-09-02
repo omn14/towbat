@@ -735,6 +735,24 @@ clamour of battle, friendly units are seldom able to tell the difference"
 ## Loose ends
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
+- [x] A cocked die no longer reports the previous roll — `checkDice` tested
+      each of the six body axes against a fixed `dot > 0.9` and set
+      `currentValue` when one cleared. A die that landed cocked, resting on
+      another die or on the rim, cleared none of them, and `currentValue` kept
+      whatever the *last* roll had put there. Across a sweep of 197k
+      orientations the old read produced no answer for 56% of them.
+      It reads the axis pointing most nearly at the sky instead, so there is
+      always a face, and prints a line when the die is under 0.75 square-on —
+      the one result worth distrusting, and previously invisible. Verified
+      against the old logic over the same sweep: wherever the old code read a
+      face the new one returns the identical face, 0 mismatches, so the
+      numbering is unchanged.
+      This reached further than the dice strip that exposed it. `game.py`
+      Leadership tests, charge and flee distances in `combat_resolution.py`
+      and the casting roll in `spell_system.py` all sum `currentValue`
+      straight, so each would have silently reused a stale number.
+      LEFTOVER: nothing re-rolls or nudges a cocked die, which is what a
+      player would do; it reads the nearest face and says so.
 - [x] One world unit is one inch, everywhere — `game.WORLD_UNITS_PER_INCH` was
       3.0, so weapon ranges alone were tripled. Nothing else on the table
       agreed with it: `models.MM_PER_UNIT` sizes bases at `base_mm / 25.4`, the

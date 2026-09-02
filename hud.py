@@ -827,7 +827,7 @@ class HUD(DirectObject):
         Unused slots stay on screen dimmed rather than disappearing, so the
         strip does not change width between a 2D6 and a 5D6 roll.
         """
-        values = list(values)[-self.DICE_SLOTS:]
+        values = [v for v in list(values)[-self.DICE_SLOTS:] if v is not None]
         self._dice_state = values
         for i, node in enumerate(self._dice_values):
             node.setText(str(values[i]) if i < len(values) else '')
