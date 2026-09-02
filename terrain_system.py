@@ -203,6 +203,35 @@ def _get_terrain_shader():
     return _TERRAIN_SHADER or None
 
 
+_MODEL_SHADER = None
+
+
+def _get_model_shader():
+    """Shader for flat-shaded coloured geometry: houses and trees."""
+    global _MODEL_SHADER
+    if _MODEL_SHADER is None:
+        try:
+            _MODEL_SHADER = Shader.load(
+                Shader.SL_GLSL,
+                vertex="shaders/model.vert",
+                fragment="shaders/model.frag",
+            )
+        except Exception as exc:  # pragma: no cover — optional eye-candy
+            print(f"[Terrain] Could not load model shader: {exc}")
+            _MODEL_SHADER = False
+    return _MODEL_SHADER or None
+
+
+def _apply_model_shader(np, kind):
+    """*kind*: 0 building, 1 foliage. Replaces fixed-function lighting, which
+    the shader reimplements with terrain.frag's key and fill."""
+    shader = _get_model_shader()
+    if shader is None:
+        return
+    np.setShader(shader)
+    np.setShaderInput("modelKind", kind)
+
+
 # Cached, shared low-poly fir-tree model used to populate forests.
 _TREE_MODEL = None
 
@@ -578,6 +607,7 @@ class TerrainPiece:
         # way round. Buildings sit square to the board.
         self.visual.setH(90.0 if self.height > self.width else 0.0)
         self.visual.flattenStrong()
+        _apply_model_shader(self.visual, 0)
 
     def _create_vortex_visual(self):
         """A blast template, drawn as the ring it is on the tabletop."""
@@ -909,6 +939,7 @@ class TerrainPiece:
         if tree_model is None:
             return
         self.trees_np = render.attachNewNode("forest_trees")
+        _apply_model_shader(self.trees_np, 1)
 
         # Deterministic layout so trees don't jump around on reload.
         seed = int(self.center.x * 131 + self.center.y * 17 +
