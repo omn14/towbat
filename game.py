@@ -79,6 +79,14 @@ loadPrcFileData('', 'show-frame-rate-meter true')
 # board is fill-bound, so it scaled straight into the window size.
 loadPrcFileData('', 'framebuffer-multisample 0\nmultisamples 0')
 
+# WH_PSTATS=1 profiles the frame. Vsync goes with it: capped at the refresh
+# rate every frame reads as waiting for the flip, and two costs either side of
+# the cap measure the same.
+PROFILING = bool(os.environ.get('WH_PSTATS'))
+if PROFILING:
+    loadPrcFileData('', 'sync-video 0')
+    loadPrcFileData('', 'pstats-host localhost')
+
 # Weapon ranges are written in inches, and one world unit is one inch: the same
 # scale as models.MM_PER_UNIT, which sizes bases at base_mm / 25.4, and as the
 # 72x48 board, a 6'x4' table. Ranges used to be tripled here, which put a 24"
@@ -130,7 +138,13 @@ class MyApp(ShowBase):
         self.setBackgroundColor(0, 0, 0, 1)
 
         # Enable PStats profiling
-        #PStatClient.connect()
+        if PROFILING:
+            if PStatClient.connect():
+                print("[PStats] connected - Draw vs Cull vs App are on the "
+                      "server's timeline.")
+            else:
+                print("[PStats] no server on localhost:5185. Start pstats.exe "
+                      "first, then relaunch.")
         
         # Disable default camera controls
         #self.disableMouse()
