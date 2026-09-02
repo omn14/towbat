@@ -170,6 +170,14 @@ class MyApp(ShowBase):
         dlnp.setHpr(-45, -60, 0)
         self.render.setLight(dlnp)
 
+        # The board's shaders light themselves, so they need the sun as a
+        # vector. Taken from the light's own orientation rather than written
+        # out a second time: the two copies had already drifted to opposite
+        # sides of the sky, which lit a hill from the side its shadow fell on.
+        sun_dir = self.render.getRelativeVector(dlnp, Vec3(0, 1, 0)) * -1
+        sun_dir.normalize()
+        self.render.setShaderInput("sunDir", sun_dir)
+
         # Ambient light
         alight = AmbientLight('alight')
         alight.setColor((0.2, 0.2, 0.3, 1))

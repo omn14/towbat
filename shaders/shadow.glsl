@@ -14,6 +14,11 @@ uniform struct p3d_LightSourceParameters {
     mat4 shadowViewMatrix;
 } p3d_LightSource[1];
 
+// Direction from a surface toward the sun, in world space, normalised. Set
+// from the shadow-casting light's own orientation, so a surface cannot be
+// shaded as though the sun were somewhere other than where it casts from.
+uniform vec3 sunDir;
+
 // 1.0 in full sun, 0.0 in full shadow. eyePos is the fragment in eye space,
 // which is where Panda's shadowViewMatrix starts from -- not world space.
 float sunShadow(vec4 eyePos) {

@@ -68,8 +68,7 @@ void main() {
     col *= mix(0.55, 1.0, clamp(localZ * 0.9, 0.0, 1.0));
 
     // Same key light and fill as terrain.frag, so models and ground agree.
-    float lambert = clamp(dot(N, normalize(vec3(0.4, 0.3, 0.9))), 0.0, 1.0)
-                    * 0.7 + 0.3;
+    float lambert = clamp(dot(N, sunDir), 0.0, 1.0) * 0.7 + 0.3;
     col *= lambert;
 
     col = shadeSun(col, sunShadow(eyePos));

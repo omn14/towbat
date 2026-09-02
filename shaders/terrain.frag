@@ -61,7 +61,7 @@ void main() {
     N = normalize(N);
 
     // Simple directional key light + ambient fill.
-    float lambert = clamp(dot(N, normalize(vec3(0.4, 0.3, 0.9))), 0.0, 1.0) * 0.7 + 0.3;
+    float lambert = clamp(dot(N, sunDir), 0.0, 1.0) * 0.7 + 0.3;
 
     vec2 p = worldPos.xy;
     vec3 col;
