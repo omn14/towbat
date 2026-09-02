@@ -17,6 +17,7 @@ uniform vec2 boardMax;
 // Input from vertex shader
 in vec4 color;
 in vec2 texcoord;
+in vec4 eyePos;
 
 
 // Output to the screen
@@ -51,6 +52,7 @@ float sdPolygon( in vec2 p, in vec2[maxpoints] v )
 // ── Procedural "classic Warhammer Fantasy" grass battle mat ────────────────
 // Shared with terrain.frag so a hill is made of the same stuff as the mat.
 #pragma include "mat_noise.glsl"
+#pragma include "shadow.glsl"
 
 vec3 battleMat(vec2 uv) {
     vec2 p = uv * 16.0;                          // detail scale across the board
@@ -80,6 +82,9 @@ void main() {
 
     // Base surface is the procedural grass mat.
     vec3 ground = battleMat(uv);
+
+    // Everything standing on the board drops its shadow here.
+    ground = shadeSun(ground, sunShadow(eyePos));
 
     if (isActive) {
         // Movement / shooting range overlay drawn on top of the grass.

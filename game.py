@@ -155,9 +155,17 @@ class MyApp(ShowBase):
         self.ground.setTexture(tex)
         self.groundSizeboundingbox=self.ground.getTightBounds()
 
-        # Directional light
+        # Directional light, and the sun that casts the board's shadows.
         dlight = DirectionalLight('dlight')
         dlight.setColor((0.8, 0.8, 0.7, 1))
+        # A directional light shadows through an orthographic lens, so the film
+        # has to cover the whole 72x48 board at the angle the light rakes
+        # across it, or corner pieces fall outside the map and lose their
+        # shadow with no other symptom.
+        lens = dlight.getLens()
+        lens.setFilmSize(130, 130)
+        lens.setNearFar(-100, 200)
+        dlight.setShadowCaster(True, 2048, 2048)
         dlnp = self.render.attachNewNode(dlight)
         dlnp.setHpr(-45, -60, 0)
         self.render.setLight(dlnp)
@@ -167,6 +175,12 @@ class MyApp(ShowBase):
         alight.setColor((0.2, 0.2, 0.3, 1))
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
+
+        # Needed for the unit models to receive shadows at all: fixed-function
+        # rendering has no shadow lookup. Nodes carrying an explicit shader
+        # (ground, terrain, buildings, trees) keep theirs and sample the map
+        # themselves.
+        self.render.setShaderAuto()
 
               
 

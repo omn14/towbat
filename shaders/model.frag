@@ -13,10 +13,12 @@ in vec3 worldPos;
 in vec3 worldNormal;
 in vec4 vertColor;
 in float localZ;
+in vec4 eyePos;
 
 out vec4 p3d_FragColor;
 
 #pragma include "mat_noise.glsl"
+#pragma include "shadow.glsl"
 
 void main() {
     vec3 N = worldNormal;
@@ -69,6 +71,8 @@ void main() {
     float lambert = clamp(dot(N, normalize(vec3(0.4, 0.3, 0.9))), 0.0, 1.0)
                     * 0.7 + 0.3;
     col *= lambert;
+
+    col = shadeSun(col, sunShadow(eyePos));
 
     p3d_FragColor = vec4(clamp(col, 0.0, 1.0), vertColor.a);
 }

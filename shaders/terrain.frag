@@ -17,11 +17,13 @@ uniform float osg_FrameTime;
 in vec3 worldPos;
 in vec3 worldNormal;
 in vec2 texcoord;
+in vec4 eyePos;
 
 out vec4 p3d_FragColor;
 
 // ── Shared material vocabulary with the ground card ───────────────────────
 #pragma include "mat_noise.glsl"
+#pragma include "shadow.glsl"
 
 // The river and marsh were tuned against a 4-octave sum that topped out at
 // 0.9375, so they keep that range rather than the normalised one.
@@ -179,6 +181,8 @@ void main() {
         col = mix(col, baseColor.rgb, 0.15);
     }
     col *= lambert;
+
+    col = shadeSun(col, sunShadow(eyePos));
 
     // Movement/shooting range overlay wrapped over the terrain surface. The
     // board card spans world -50..50, so map world XY into the same 0..1 space.

@@ -940,6 +940,10 @@ class TerrainPiece:
             return
         self.trees_np = render.attachNewNode("forest_trees")
         _apply_model_shader(self.trees_np, 1)
+        # The cones are open at the bottom, and the shadow pass draws back
+        # faces: culled to one side a tree records its own hollow interior,
+        # which lies at ground level, and casts nothing at all.
+        self.trees_np.setTwoSided(True)
 
         # Deterministic layout so trees don't jump around on reload.
         seed = int(self.center.x * 131 + self.center.y * 17 +

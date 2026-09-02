@@ -3,6 +3,7 @@
 // Uniform inputs
 uniform mat4 p3d_ModelViewProjectionMatrix;
 uniform mat4 p3d_ModelMatrix;
+uniform mat4 p3d_ModelViewMatrix;
 
 // Vertex inputs
 in vec4 p3d_Vertex;
@@ -14,10 +15,12 @@ in vec4 p3d_MultiTexCoord0;
 // Output to fragment shader
 out vec4 color;
 out vec2 texcoord;
+out vec4 eyePos;
 
 void main() {
   gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
   vec4 vertPosWorldCoord = p3d_ModelMatrix * p3d_Vertex;
+  eyePos = p3d_ModelViewMatrix * p3d_Vertex;
 
   
 
