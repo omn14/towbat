@@ -1948,12 +1948,65 @@ class MyApp(ShowBase):
 
     # ─── Shader & Physics Setup ───────────────────────────────────────────
 
+    def bakeBattleMat(self, size=4096):
+        """Render the grass mat once into a texture and return it.
+
+        Baked at startup rather than sampled per frame because the shader that
+        draws it is expensive and its output is constant. The target covers the
+        board rectangle only, so every texel lands on grass that is drawn.
+        """
+        half_u = BOARD_WIDTH / 2 / GROUND_HALF
+        half_v = BOARD_DEPTH / 2 / GROUND_HALF
+        board_min = Vec2((1 - half_u) * 0.5, (1 - half_v) * 0.5)
+        board_max = Vec2((1 + half_u) * 0.5, (1 + half_v) * 0.5)
+
+        tex = Texture('battle_mat')
+        # The mat is viewed at a raking angle across the whole table, which is
+        # exactly where bilinear alone turns grass into shimmer.
+        tex.setMinfilter(Texture.FTLinearMipmapLinear)
+        tex.setMagfilter(Texture.FTLinear)
+        tex.setAnisotropicDegree(16)
+        tex.setWrapU(Texture.WMClamp)
+        tex.setWrapV(Texture.WMClamp)
+
+        # to_ram so the texture outlives the buffer that drew it.
+        buf = self.win.makeTextureBuffer('mat_bake', size, size, tex, True)
+        buf.setSort(-100)
+
+        scene = NodePath('mat_bake')
+        cm = CardMaker('mat_quad')
+        cm.setFrameFullscreenQuad()
+        card = scene.attachNewNode(cm.generate())
+        card.setShader(Shader.load(Shader.SL_GLSL, "shaders/bake_mat.vert",
+                                   "shaders/bake_mat.frag"))
+        card.setShaderInput("boardMin", board_min)
+        card.setShaderInput("boardMax", board_max)
+
+        lens = OrthographicLens()
+        lens.setFilmSize(2, 2)
+        lens.setNearFar(-10, 10)
+        cam = Camera('mat_bake_cam')
+        cam.setLens(lens)
+        cam.setScene(scene)
+        cam_np = scene.attachNewNode(cam)
+        cam_np.setPos(0, -5, 0)
+        buf.makeDisplayRegion().setCamera(cam_np)
+
+        self.graphicsEngine.renderFrame()
+        self.graphicsEngine.removeWindow(buf)
+        scene.removeNode()
+        return tex
+
     def setup_shader(self):
         #surface = self.render.find("**/ground")
         surface = self.ground
+        # Baked before the ground takes its shader: baking renders a frame, and
+        # a shader already applied but not yet given its inputs asserts.
+        mat = self.bakeBattleMat()
         shader = Shader.load(Shader.SL_GLSL, "shaders/c2.vert", "shaders/c1.frag")
         surface.setShader(shader)
         surface.setShaderInput("pos", Vec3(0,0,0))
+        surface.setShaderInput("matTex", mat)
         # Where the board sits on the card, so the shader can clip the grass to
         # it. Derived, not written out, so the grass edge and the painted edge
         # cannot end up in different places.

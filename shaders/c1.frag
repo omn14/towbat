@@ -49,26 +49,25 @@ float sdPolygon( in vec2 p, in vec2[maxpoints] v )
 }
 
 
-// ── Procedural "classic Warhammer Fantasy" grass battle mat ────────────────
-// Shared with terrain.frag so a hill is made of the same stuff as the mat.
-#pragma include "mat_noise.glsl"
+// ── Grass battle mat ─────────────────────────────────────────────
+// Baked once at startup by bake_mat.frag, which runs the same matGrass the
+// terrain uses. Nothing here is recomputed per frame: the mat never changes,
+// and its grain is below a pixel at every camera distance the game uses, so
+// the mipmap chain fades it exactly as the live grainFade used to.
+uniform sampler2D matTex;
 #pragma include "shadow.glsl"
 
 vec3 battleMat(vec2 uv) {
-    vec2 p = uv * 16.0;                          // detail scale across the board
-    vec3 col = matGrass(p);
+    vec3 col = texture(matTex, (uv - boardMin) / (boardMax - boardMin)).rgb;
 
-    // Matt rather than poster green, but it is still grass: take only the
-    // edge off the saturation.
-    float lum = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(lum), col, 0.95);
-
-    // The mat dips into shadow where it meets the table edge.
+    // The mat dips into shadow where it meets the table edge. Left live rather
+    // than baked: it costs almost nothing, and baking it puts a dark rim in
+    // the outermost texels for the mipmaps to smear back inwards.
     vec2 span = max(boardMax - boardMin, vec2(1e-4));
     vec2 e = min(uv - boardMin, boardMax - uv) / span;
     col *= mix(0.80, 1.0, smoothstep(0.0, 0.05, min(e.x, e.y)));
 
-    return clamp(col, 0.0, 1.0);
+    return col;
 }
 
 void main() {
