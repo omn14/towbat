@@ -74,9 +74,10 @@ import gui_theme
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 loadPrcFileData('', 'show-frame-rate-meter true')
-# Must be set before the window opens, or the framebuffer has no MSAA samples
-# to use and every edge stays stair-stepped.
-loadPrcFileData('', 'framebuffer-multisample 1\nmultisamples 4')
+# MSAA off. The driver ignored the 4 samples this used to ask for and handed
+# back 16, costing 24.5 ms of a 53 ms frame at 1920x1080 -- 46% -- and the
+# board is fill-bound, so it scaled straight into the window size.
+loadPrcFileData('', 'framebuffer-multisample 0\nmultisamples 0')
 
 # Weapon ranges are written in inches, and one world unit is one inch: the same
 # scale as models.MM_PER_UNIT, which sizes bases at base_mm / 25.4, and as the
@@ -126,7 +127,6 @@ class MyApp(ShowBase):
 
     def __init__(self):
         super().__init__()
-        render.setAntialias(AntialiasAttrib.MAuto)
         self.setBackgroundColor(0, 0, 0, 1)
 
         # Enable PStats profiling
