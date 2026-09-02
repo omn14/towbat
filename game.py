@@ -479,8 +479,10 @@ class MyApp(ShowBase):
         'Cold One Rider':               {'path': 'models/jade_lancer.bam',      'color': (0, 1, 1, 1)},
     }
 
-    # Every unit in a player's army shares one colour.
-    PLAYER_COLORS = {1: (1, 0, 0, 1), 2: (0, 0, 1, 1)}
+    # Every unit in a player's army shares one colour. Painted miniatures are
+    # pigment, not primaries: fully saturated red and blue read as plastic and
+    # fight the muted board.
+    PLAYER_COLORS = {1: (0.62, 0.17, 0.15, 1), 2: (0.19, 0.26, 0.55, 1)}
 
     # Default mount per rider name, used when the army data names no mount.
     MOUNT_NAME_MAP = {

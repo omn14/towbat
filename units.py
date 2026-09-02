@@ -82,6 +82,7 @@ class unitGraphics(FSM):
 
         #self.model.setPos(35,0,0)
         self.setUpCollisions()
+        self._varyModelTones()
 
         # Floating ring above the model to flag character units.
         self.characterMarker = None
@@ -367,6 +368,24 @@ class unitGraphics(FSM):
             self.applyFootprint(box_size)
             #self.model.flattenLight()
     
+    def _varyModelTones(self):
+        """Give each miniature its own tone, so a regiment reads as many models
+        rather than one solid block of colour.
+
+        Colour *scale*, not colour: the game sets the models' colour outright to
+        grey out an illegal placement and to flag a shooting target, and a scale
+        multiplies that instead of fighting it.
+        """
+        # Seeded with the name itself, not hash(): str hashing is salted per
+        # process, so the pattern would be reshuffled on every launch.
+        rng = random.Random(self.unitName)
+        for child in self.model.getChildren():
+            v = rng.uniform(0.80, 1.14)
+            # A little warm/cool drift as well, or it reads as a brightness ramp.
+            child.setColorScale(v * rng.uniform(0.98, 1.05),
+                                v,
+                                v * rng.uniform(0.95, 1.02), 1.0)
+
     def _add_character_marker(self):
         """Attach a small billboarded ring above the model for character units."""
         ch = self.unit.model.characteristics if self.unit and self.unit.model else {}
