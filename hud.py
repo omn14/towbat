@@ -152,6 +152,15 @@ class HUD(DirectObject):
     DICE_SIZE = 0.085
     PHASE_SCALE = 0.022
 
+    # Ledger regiment page: the text column has to clear the portrait, which
+    # is placed at V_PORTRAIT_X and is V_PORTRAIT wide.
+    V_PORTRAIT = 0.130
+    V_PORTRAIT_X = 0.04
+    V_TEXT_X = 0.29
+    V_TEXT_RIGHT = 0.96
+    V_NAME_SCALE = 0.024
+    V_SUB_SCALE = 0.018
+
     # Hover tooltip. Screen space, so it can be measured and kept on screen;
     # as world-space text on the unit it simply ran off the bottom edge.
     TIP_SCALE = 0.030
@@ -534,36 +543,39 @@ class HUD(DirectObject):
         anchor = self._section('regiment')
         self._heading_v(anchor, 'regiment', 'SELECTED REGIMENT')
 
-        self._portrait = self._slot(anchor, 0.155, 0.155)
-        self._place(self._portrait, 'regiment', 0.04, -0.235)
+        self._portrait = self._slot(anchor, self.V_PORTRAIT, self.V_PORTRAIT)
+        self._place(self._portrait, 'regiment', self.V_PORTRAIT_X, -0.212)
 
-        self._card_name = self._label(anchor, 'regiment', 0.24, -0.118,
-                                      0.026, T.GOLD)
-        self._card_sub = self._label(anchor, 'regiment', 0.24, -0.152,
-                                     0.019, T.INK_FADED)
+        self._card_name = self._label(anchor, 'regiment', self.V_TEXT_X, -0.118,
+                                      self.V_NAME_SCALE, T.GOLD)
+        self._card_sub = self._label(anchor, 'regiment', self.V_TEXT_X, -0.150,
+                                     self.V_SUB_SCALE, T.INK_FADED)
 
         self._regiment_static = []
         self._regiment_static.append(
-            self._label(anchor, 'regiment', 0.24, -0.190, 0.019,
+            self._label(anchor, 'regiment', self.V_TEXT_X, -0.186, 0.019,
                         T.PARCHMENT_DARK, text='Models'))
-        self._card_models = self._label(anchor, 'regiment', 0.96, -0.190,
-                                        0.021, T.INK, TextNode.ARight)
+        self._card_models = self._label(anchor, 'regiment', self.V_TEXT_RIGHT,
+                                        -0.186, 0.021, T.INK,
+                                        TextNode.ARight)
 
         self._bar_back = self._span(
             DirectFrame(parent=anchor, frameColor=(0.30, 0.24, 0.16, 0.85),
                         frameSize=(0, 1, 0, self.BAR_HEIGHT)),
-            'regiment', 0.24, 0.96, -0.226)
+            'regiment', self.V_TEXT_X, self.V_TEXT_RIGHT, -0.222)
         self._card_bar = self._span(
             DirectFrame(parent=anchor, frameColor=_BAR_FULL,
                         frameSize=(0, 1, 0, self.BAR_HEIGHT)),
-            'regiment', 0.24, 0.96, -0.226)
+            'regiment', self.V_TEXT_X, self.V_TEXT_RIGHT, -0.222)
         self._bar_ticks = []
+        span = self.V_TEXT_RIGHT - self.V_TEXT_X
         for fraction, colour in ((0.50, T.INK), (0.25, (0.4, 0.05, 0.05, 1))):
             tick = DirectFrame(
                 parent=anchor, frameColor=colour,
                 frameSize=(0, 0.004, -0.004, self.BAR_HEIGHT + 0.004))
             self._bar_ticks.append((tick, fraction))
-            self._place(tick, 'regiment', 0.24 + fraction * 0.72, -0.226)
+            self._place(tick, 'regiment',
+                        self.V_TEXT_X + fraction * span, -0.222)
 
         # Two columns of four, which fits the ledger where a nine-across strip
         # would not.
@@ -688,6 +700,25 @@ class HUD(DirectObject):
             btn['frameColor'] = ((0.52, 0.42, 0.26, 0.95) if name == key
                                  else (0.30, 0.24, 0.16, 0.85))
 
+    def _fit(self, node, scale, width):
+        """Shrink *node* until it fits *width*.
+
+        Unit names run from "Zombie Unit" to "Captain of the Empire Unit" and
+        the ledger's text column is narrow, so the long ones have to give.
+        """
+        natural = node.textNode.getWidth() * scale
+        node.setScale(scale * min(1.0, width / natural) if natural else scale)
+
+    def _fit_regiment_text(self):
+        """Keep the name and sub-line inside the column beside the portrait."""
+        if not self._vertical:
+            return
+        total = 2.0
+        width = ((self.V_TEXT_RIGHT - self.V_TEXT_X)
+                 * self._section_width('regiment', total))
+        self._fit(self._card_name, self.V_NAME_SCALE, width)
+        self._fit(self._card_sub, self.V_SUB_SCALE, width)
+
     # ─── Hover tooltip ────────────────────────────────────────────────
 
     def _build_tooltip(self, font):
@@ -783,6 +814,7 @@ class HUD(DirectObject):
         if info.get('rank_bonus'):
             bits.append(f"Rank +{info['rank_bonus']}")
         self._card_sub.setText("   ".join(bits))
+        self._fit_regiment_text()
 
         stats = info.get('stats') or {}
         for key, node in self._stat_values.items():
