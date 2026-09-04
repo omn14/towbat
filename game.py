@@ -619,6 +619,12 @@ class MyApp(ShowBase):
                 # Matched case-insensitively so a roster's "Hand Weapon" lands
                 # on the catalogue entry rather than beside it.
                 slot = model_instance.weapon_slot(name)
+                if slot is None and model_instance.give_weapon(name):
+                    # Not on the model's own profile but the catalogue knows it,
+                    # so take it fresh: a stored dict is only as current as the
+                    # build that wrote it, and silently lacks any flag added
+                    # since.
+                    slot = model_instance.weapon_slot(name)
                 if slot is not None:
                     existing = model_instance.weapons[slot]
                     for key, value in wdict.items():
@@ -1810,9 +1816,13 @@ class MyApp(ShowBase):
 
     async def shootAt(self, attackerUnit, defenderUnit):
         if getattr(attackerUnit, 'marchedThisTurn', False):
-            rule_log('Marching', attackerUnit,
-                     "marched this turn -> cannot shoot (p. 123)")
-            return
+            if not attackerUnit.unit.model.fires_after_marching():
+                rule_log('Marching', attackerUnit,
+                         "marched this turn -> cannot shoot (p. 123)")
+                return
+            rule_log('Move & Shoot', attackerUnit,
+                     f"{attackerUnit.unit.model.equipedWeapon.get('name', 'weapon')} "
+                     f"fires despite the march (p. 174)")
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}

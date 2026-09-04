@@ -64,5 +64,68 @@ class BarredSpellTests(unittest.TestCase):
         self.assertNotIn(oaken.get('type'), MARCH_BARRED_SPELLS)
 
 
+class MoveAndShootTests(unittest.TestCase):
+    """Move & Shoot (p. 174) — fires even after a march."""
+
+    def _weapons(self):
+        from battlescribe import get_catalogue
+        return get_catalogue().weapons_by_slug.values()
+
+    def _rule_names(self, weapon):
+        return [str(r.get('name') if isinstance(r, dict) else r)
+                for r in (weapon.get('special_rules') or [])]
+
+    def test_move_or_shoot_is_not_mistaken_for_it(self):
+        # The two rules are opposites and differ by a single word, so a match
+        # on "move ... shoot" would flag 25 weapons that must not fire.
+        wrong = [w.get('name') for w in self._weapons()
+                 if w.get('move_and_shoot')
+                 and any('or shoot' in n.lower() for n in self._rule_names(w))]
+        self.assertEqual(wrong, [], "Move or Shoot weapons flagged as Move & Shoot")
+
+    def test_every_move_and_shoot_weapon_is_flagged(self):
+        missed = [w.get('name') for w in self._weapons()
+                  if not w.get('move_and_shoot')
+                  and any('& shoot' in n.lower() or 'and shoot' in n.lower()
+                          for n in self._rule_names(w))]
+        self.assertEqual(missed, [], "Move & Shoot weapons left unflagged")
+
+    def test_the_rule_reaches_an_equipped_model(self):
+        from models import model
+        m = model("Gyrocopter", "")
+        m.give_weapon("Clattergun"); m.equip_weapon("Clattergun")
+        self.assertTrue(m.fires_after_marching())
+
+    def test_an_ordinary_weapon_still_cannot_fire_after_a_march(self):
+        from models import model
+        m = model("State Missile Trooper", "")
+        m.give_weapon("Handgun"); m.equip_weapon("Handgun")
+        self.assertFalse(m.fires_after_marching())
+
+    def test_a_save_written_before_the_flag_existed_still_works(self):
+        # persistence stores the weapon dict, so a quicksave taken before
+        # move_and_shoot was parsed has no such key — but it does keep the
+        # rule names, which is enough to answer the question.
+        from models import model
+        m = model("Gyrocopter", "")
+        m.weapons['Clattergun'] = {
+            'name': 'Clattergun', 'tag': 'ranged', 'ranged_strength': 4,
+            'ranged_AP': -1, 'special_rules': ['Armour Bane (1)', 'Move & Shoot'],
+        }
+        m.equip_weapon('Clattergun')
+        self.assertNotIn('move_and_shoot', m.equipedWeapon)
+        self.assertTrue(m.fires_after_marching())
+
+    def test_the_fallback_does_not_free_a_move_or_shoot_weapon(self):
+        from models import model
+        m = model("Gyrocopter", "")
+        m.weapons['Bombard'] = {
+            'name': 'Bombard', 'tag': 'ranged', 'ranged_strength': 4,
+            'ranged_AP': 0, 'special_rules': ['Move or Shoot'],
+        }
+        m.equip_weapon('Bombard')
+        self.assertFalse(m.fires_after_marching())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

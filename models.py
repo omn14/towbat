@@ -8,7 +8,8 @@ import os
 import random
 import re
 
-from battlescribe import get_catalogue, NAME_ALIASES as _NAME_ALIASES
+from battlescribe import (get_catalogue, NAME_ALIASES as _NAME_ALIASES,
+                          has_move_and_shoot)
 from special_rules import build_special_rules
 import troop_types
 
@@ -591,6 +592,14 @@ class model:
             return 1.0
         dice = w.get('ranged_shots_dice')
         return dice_expr_mean(dice) if dice else float(w.get('ranged_shots') or 1)
+
+    def fires_after_marching(self) -> bool:
+        """Move & Shoot: the equipped weapon may fire even after a march (p. 174)."""
+        w = self.equipedWeapon or {}
+        if 'move_and_shoot' in w:
+            return bool(w['move_and_shoot'])
+        # A save written before the flag existed still carries the rule names.
+        return has_move_and_shoot(w.get('special_rules'))
 
     def active_melee_weapon(self) -> dict:
         """The melee weapon this model is actually fighting with.

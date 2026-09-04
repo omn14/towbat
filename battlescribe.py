@@ -27,6 +27,17 @@ DEFAULT_CAT_DIR = os.path.join(REPO_DIR, "Warhammer-The-Old-World")
 # The BattleScribe schema namespace; ElementTree prefixes every tag with it.
 NS = "{http://www.battlescribe.net/schema/catalogueSchema}"
 
+
+def has_move_and_shoot(rules) -> bool:
+    """True if *rules* names Move & Shoot (p. 174).
+
+    The catalogue also carries `Move or Shoot`, which is the opposite rule and
+    differs by one word, so the joiner is what has to match.
+    """
+    return any(re.search(r"move\s*(?:&|and)\s*shoot", str(r), re.I)
+               for r in (rules or []))
+
+
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
@@ -339,6 +350,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
             if mw:
                 weapon["multiple_wounds"] = mw.group(1).strip().upper().replace(" ", "")
         weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
+        weapon["move_and_shoot"] = has_move_and_shoot(rules)
         # Blast template diameter (e.g. '5" blast template') from the Notes.
         bm = re.search(r"(\d+)\s*[\"\u201d]?\s*blast", notes, re.I)
         if bm:

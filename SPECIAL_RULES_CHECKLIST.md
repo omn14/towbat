@@ -78,6 +78,42 @@ identical without the log. See `.github/copilot-instructions.md`.
       `break_test_outcome` / `overwhelmed` in `psychology.py`.
 
 ## Weapon rules — TODO (high frequency)
+- [x] Move & Shoot (p. 174) — a weapon with this rule fires in the Shooting
+      phase even if the model marched, so it is the exception to Marching.
+      Parsed onto the weapon as `move_and_shoot` in `battlescribe.py`, read by
+      `model.fires_after_marching()`, and `MyApp.shootAt` lets the volley
+      through and says which weapon earned it.
+      The catalogue carries **both** this and its opposite, `Move or Shoot`,
+      and the two names differ by a single word — 16 weapons have `Move &
+      Shoot`, 25 have `Move or Shoot` (one of them spelled `Move Or Shoot`).
+      Matching on "move ... shoot" would therefore have let 25 weapons fire
+      that must not, so the regex matches the joiner itself and two tests hold
+      that line from both directions: nothing with `or` is flagged, nothing
+      with `&` is missed.
+      LEFTOVER: read from the *unit's* equipped weapon, so a joined character
+      firing its own weapon is judged by the unit's. Magic Missiles stay
+      barred either way — this is a weapon rule, not a licence to cast.
+      Corrected from a game log: a Gyrocopter loaded from a quicksave was
+      refused its shot despite carrying a Clattergun. `persistence.py` stores
+      the weapon *dicts*, so a save written before `move_and_shoot` was parsed
+      has no such key, and reading it returned False — the exemption failed
+      silently on exactly the saves most likely to exist.
+      Fixed at the root rather than per-flag: `_create_unit` already treated a
+      catalogue weapon as the source of truth and let saved data fill only the
+      fields it lacked, but *only* for weapons already on the model's own
+      profile. A Clattergun is not part of the Gyrocopter's profile, so it fell
+      to the branch that took the stored dict wholesale. It now calls
+      `give_weapon()` first for anything the catalogue knows, so every weapon
+      is re-derived on load and a save can no longer pin a weapon to the flags
+      that existed when it was written. Only weapons the catalogue has never
+      heard of are taken from the save as-is.
+      Verified by loading the failing quicksave offscreen: all 13 ranged
+      weapons come back with the flag, both Clatterguns True, and the Warbow
+      and Grand cannon — which carry `Move or Shoot` — correctly False.
+      `fires_after_marching()` also falls back to the rule *names* the saved
+      dict keeps, which covers a weapon the catalogue no longer lists; both it
+      and the parser go through one `has_move_and_shoot()`, so the `&`-not-`or`
+      distinction is defined once.
 - [ ] Move or Shoot — cannot shoot after moving
 - [ ] Ponderous — move-or-shoot / initiative penalty
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
@@ -828,6 +864,8 @@ clamour of battle, friendly units are seldom able to tell the difference"
       The barred spell categories come from the catalogue's own `type` field
       ('Magic Missile', 28 spells; 'Magical Vortex', 18), not from a list
       invented here, and a test asserts those strings still match the data.
+      Move & Shoot (p. 174) is the exception and is done — see the weapon
+      rules above.
       LEFTOVER: Enemy Sighted (p. 123) is not implemented — beginning a march
       within 8" of a non-fleeing enemy needs a Leadership test, and a *failed*
       test still counts as having marched even if the unit then does not move
