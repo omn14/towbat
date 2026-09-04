@@ -17,6 +17,7 @@ only.
 """
 
 from collections import deque
+import math
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG
 from direct.gui.OnscreenText import OnscreenText
@@ -930,7 +931,10 @@ class HUD(DirectObject):
 
         # Grow the block upward from the bottom of the page, so the newest
         # line always sits in the same place however much the lines wrap.
-        height = self._log_text.textNode.getHeight() * self.LOG_SCALE
+        # An empty log measures as NaN, and a NaN position poisons the node for
+        # every later redraw, so the first real line would be the one to fail.
+        raw = self._log_text.textNode.getHeight() if self._entries else 0.0
+        height = raw * self.LOG_SCALE if math.isfinite(raw) else 0.0
         top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
         bottom = self.LOG_BOTTOM_V if self._vertical else self.LOG_BOTTOM
         self._log_text.setPos(self._log_x, min(bottom + height, top))
