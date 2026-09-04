@@ -2792,6 +2792,12 @@ class MyApp(ShowBase):
             self.p2army = path
             self.load_player2_army(path)
 
+        # load_army_from_json only lines the units up in a row off the near
+        # edge; staging beside the deploy zone happens on entering the deploy
+        # phase, which has already run by the time an army is set from the
+        # list builder.
+        stage_undeployed(self)
+
         # Keep the active unit and its binding valid.
         if self.player1Units:
             self.unitToMove = self.player1Units[0]
