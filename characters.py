@@ -89,10 +89,22 @@ def join_unit(game, character, host) -> bool:
     except Exception:
         pass
     character.bodyNP.setCollideMask(BitMask32.allOff())
+    # Parented to the body, not to host.model: casualties are taken by deleting
+    # the last child of host.model, which would otherwise delete the character.
     character.bodyNP.reparentTo(host.bodyNP)
-    character.bodyNP.setPos(Point3(0, host.unitHeight * 0.5, 0))  # front-centre
     character.bodyNP.setHpr(0, 0, 0)
     character.model.setColor(character.color)
+
+    # The character stands in the middle of the front rank, and the unit's own
+    # models close up around it, so the one it displaces ends up at the back.
+    files = max(1, host.unit.files)
+    host.characterSlot = files // 2
+    host.layOutRanks()
+    host.rebuildFootprint()
+    row, col = divmod(host.characterSlot, files)
+    character.bodyNP.setPos(host.model.getPos()
+                            + Point3(col * host.modelWidth,
+                                     -row * host.modelHeight, 0))
 
     # Remember the character's side before it leaves the player lists so a save
     # can still record which player it belongs to.

@@ -20,7 +20,7 @@ from panda3d.core import (
     LineSegs, MeshDrawer, NodePath,
 )
 from panda3d.bullet import (
-    BulletRigidBodyNode, BulletBoxShape,
+    BulletRigidBodyNode,
     BulletTriangleMesh, BulletTriangleMeshShape,
 )
 from direct.interval.IntervalGlobal import (
@@ -1150,17 +1150,11 @@ class MovementSystem:
             if getattr(self.game, 'psychology', None):
                 self.game.psychology.on_unit_destroyed(death_box, friendly_side, us_before)
             return
-        self.game.world.removeRigidBody(unit.bodyNP.node())
-        for shape in unit.bodyNP.node().shapes:
-            unit.bodyNP.node().removeShape(shape)
         if unit.model.isEmpty():
             return
-        box_size = unit.footprintSize()
-        shape = BulletBoxShape(box_size * 0.5)  # BulletBoxShape takes half-extents
-        unit.bodyNP.node().addShape(shape)
-        unit.bodyNP.node().setMass(0)  # Static object
-        self.game.world.attachRigidBody(unit.bodyNP.node())
-        unit.applyFootprint(box_size)
+        # Survivors close up, keeping any joined character's slot open.
+        unit.layOutRanks()
+        unit.rebuildFootprint()
 
     # ─── Sweep Tests ──────────────────────────────────────────────────────
 

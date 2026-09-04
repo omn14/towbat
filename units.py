@@ -54,6 +54,10 @@ class unitGraphics(FSM):
 
         self.request('Idle')
 
+        # Front-rank slot held by a joined character, if any. Read by
+        # layOutRanks and slotCount, so it must exist before either runs.
+        self.characterSlot = None
+
         # Skirmishers deploy as a loose blob (~1" apart), not rigid ranks/files.
         self.isSkirmisher = bool(self.unit and self.unit.model
                                  and self.unit.model.is_skirmisher())
@@ -66,13 +70,7 @@ class unitGraphics(FSM):
             self._skirmRows = math.ceil(self.unit.nmodels / side)
             self._arrange_skirmish_blob()
         else:
-            for i, child in enumerate(children):
-                row = i // files
-                col = i % files
-                p=Point3(col * (self.modelWidth ),-row * (self.modelHeight ), 0)
-                pp=p-Point3(self.unitWidth*2, -self.modelHeight/2,0)
-                child.setPos(p)
-            #child.setPos((col - (files - 1) / 2) * (self.modelWidth / files), (row - (ranks - 1) / 2) * (self.modelHeight / ranks), 0)
+            self.layOutRanks(files, children)
 
         #self.unitWidth=abs(self.model.getTightBounds()[1][0]-self.model.getTightBounds()[0][0])
         #self.unitHeight=abs(self.model.getTightBounds()[1][1]-self.model.getTightBounds()[0][1])
@@ -314,6 +312,45 @@ class unitGraphics(FSM):
 
         self.text.setText(row)
 
+    def layOutRanks(self, files=None, children=None):
+        """Place the unit's models in ranks and files, front rank first.
+
+        A joined character holds a slot of its own, which the unit's models step
+        around: it stands *in* the front rank, and the model it displaces falls
+        through to the back rather than the character forming a rank in front.
+        """
+        files = max(1, int(files if files is not None else self.unit.files))
+        children = self.model.getChildren() if children is None else children
+        reserved = self.characterSlot
+        slot = 0
+        for child in children:
+            if slot == reserved:
+                slot += 1
+            row, col = divmod(slot, files)
+            child.setPos(Point3(col * self.modelWidth, -row * self.modelHeight, 0))
+            slot += 1
+
+    def slotCount(self):
+        """Grid slots the unit fills: its own models, plus a joined character."""
+        return self.unit.nmodels + (1 if self.characterSlot is not None else 0)
+
+    def rebuildFootprint(self):
+        """Resize the collision box to the current formation.
+
+        A Bullet shape cannot be resized in place, so the body leaves the world,
+        swaps its box, and goes back in.
+        """
+        if not self.world or self.bodyNP.isEmpty() or self.model.isEmpty():
+            return
+        self.world.removeRigidBody(self.bodyNP.node())
+        for shape in self.bodyNP.node().shapes:
+            self.bodyNP.node().removeShape(shape)
+        box_size = self.footprintSize()
+        self.bodyNP.node().addShape(BulletBoxShape(box_size * 0.5))
+        self.bodyNP.node().setMass(0)
+        self.world.attachRigidBody(self.bodyNP.node())
+        self.applyFootprint(box_size)
+
     def footprintSize(self):
         """Collision-box size for the unit's current formation.
 
@@ -329,8 +366,9 @@ class unitGraphics(FSM):
             box_size.setY(self._skirmSY * self._skirmRows)
         elif getattr(self, 'baseSize', None):
             files = max(1, self.unit.files)
-            cols = min(files, self.unit.nmodels)
-            rows = (self.unit.nmodels + files - 1) // files
+            slots = self.slotCount()
+            cols = min(files, slots)
+            rows = (slots + files - 1) // files
             box_size.setX(self.modelWidth * cols)
             box_size.setY(self.modelHeight * rows)
         return box_size
@@ -461,11 +499,7 @@ class unitGraphics(FSM):
         if not getattr(self, 'isSkirmisher', False):
             return
         children = self.model.getChildren()
-        files = max(1, min(self.unit.files or 5, len(children)))
-        for i, child in enumerate(children):
-            row = i // files
-            col = i % files
-            child.setPos(Point3(col * self.modelWidth, -row * self.modelHeight, 0))
+        self.layOutRanks(min(self.unit.files or 5, len(children)), children)
 
     def spreadToSkirmish(self):
         """Return a skirmisher's models to the loose blob after combat."""
