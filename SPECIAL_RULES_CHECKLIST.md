@@ -114,6 +114,55 @@ identical without the log. See `.github/copilot-instructions.md`.
       dict keeps, which covers a weapon the catalogue no longer lists; both it
       and the parser go through one `has_move_and_shoot()`, so the `&`-not-`or`
       distinction is defined once.
+- [x] Moving and Shooting (p. 139) — "models that have moved for any reason
+      during this turn (including rallying and reforming) have less time to aim
+      and suffer a -1 To Hit modifier".
+      Found missing while implementing Quick Shot, which exists only to negate
+      it: `to_hit_ranged` had taken a `moved=` argument since it was written,
+      but nothing in the game ever passed it True, so the penalty had never
+      once been applied. Quick Shot would have been a rule that switched off
+      nothing.
+      "For any reason" is wider than the engine's `hasMovedThisTurn`, which is
+      set by an ordinary move, a Panic flee and a flee reaction, but
+      deliberately *not* by a manoeuvre on the spot. `MyApp.shootAt` therefore
+      asks four flags — `hasMovedThisTurn`, `manoeuvreThisTurn`,
+      `moveSpentThisTurn` and `attemptedRallyThisTurn` — and the log says which
+      one fired, so a -1 can always be traced to the thing that caused it.
+      This closes the LEFTOVER left by Redress the Ranks: redressing counts as
+      moving for shooting, and there is now a penalty for it to hook to.
+      Corrected on the way: `battleFunctions._ranged_tohit_report` kept a
+      *second* copy of the To Hit ladder and re-derived the modifiers itself,
+      so the log's stated target was computed separately from the dice that
+      rolled against it. It now asks `ranged_hit_requirement`, and works out
+      which modifiers a weapon waives by asking the same function rather than
+      restating the list — a test holds the two together across BS3/BS6 and
+      both weapon kinds, because a report that drifts from the dice is worse
+      than no report.
+      LEFTOVER: a rally is counted by `attemptedRallyThisTurn`, so a *failed*
+      rally also takes the -1. It is still fleeing and cannot shoot at all, so
+      nothing observable rides on it today.
+- [x] Quick Shot (p. 175) — first half done, second half blocked.
+      "Does not suffer the usual -1 To Hit modifier for Moving and Shooting":
+      parsed onto the weapon as `quick_shot` and folded into the existing
+      `ignore_to_hit_penalties` set that Blunderbusses already used, so the
+      waiver lives in the one function that owns the To Hit table rather than
+      in a new branch beside it.
+      The catalogue spells it two ways — 32 weapons `Quick Shot` and one
+      `Quick Shoot` — the same trap Move & Shoot set, so `has_quick_shot()`
+      makes the second 'o' optional and a test checks all 33 are flagged.
+      As with Move & Shoot the check falls back to the rule *names*, so a
+      quicksave written before the flag existed still gets the waiver.
+      Logged either way: `Quick Shot` when a moved unit still hits on its
+      unmodified number, `Moving and Shooting` when it does not, and
+      `rule_skipped('Quick Shot')` when the unit stood still and there was no
+      penalty to ignore — the three cases are indistinguishable on screen.
+      BLOCKED: "can use them to make a Stand & Shoot charge reaction regardless
+      of how close the charging unit is" cannot be written, because **the
+      Stand & Shoot reaction does not exist**: `combat_resolution.py` offers
+      only `["hold", "flee"]`, and `stand_and_shoot` survives solely as a To
+      Hit parameter nothing passes. This half is unimplementable until that
+      list gains a third option; the -1 waiver above is the whole of what
+      Quick Shot currently does.
 - [ ] Move or Shoot — cannot shoot after moving
 - [ ] Ponderous — move-or-shoot / initiative penalty
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
@@ -911,6 +960,10 @@ clamour of battle, friendly units are seldom able to tell the difference"
       nothing to hook it to. `hasMovedThisTurn` is deliberately NOT set —
       `moveUnit()` refuses to move a unit carrying it, which would forbid the
       rest of the move the rule explicitly allows.
+      CLOSED by Moving and Shooting (p. 139): the -1 now exists, and `shootAt`
+      reads `manoeuvreThisTurn` alongside `hasMovedThisTurn` precisely so a
+      redress is counted as moving without setting the flag that would bar the
+      rest of the move.
       LEFTOVER: the other four manoeuvres (wheel, turn, move backwards, move
       sideways, reform) do not set `manoeuvreThisTurn`, so only a redress
       currently blocks a second manoeuvre.

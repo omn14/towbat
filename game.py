@@ -1833,6 +1833,13 @@ class MyApp(ShowBase):
         # US1 Skirmisher target imposes -1 To Hit on the shooter.
         attacker.model.target_skirmisher = (defender.model.is_skirmisher()
                                              and defender.model.unit_strength() == 1)
+        # Moving and Shooting (p. 139): moved for *any* reason this turn, which
+        # includes a manoeuvre the move flag deliberately does not record.
+        attacker.model.moved_this_turn = bool(
+            attackerUnit.hasMovedThisTurn
+            or attackerUnit.manoeuvreThisTurn
+            or attackerUnit.moveSpentThisTurn
+            or attackerUnit.attemptedRallyThisTurn)
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
         # Vantage Point: a unit entirely on a hill fires with one extra rank.
         _on_hill, _models = self.movement.modelsInTerrain(
@@ -1854,10 +1861,33 @@ class MyApp(ShowBase):
         # Multiple Shots". That is why the flag ends up on the unit's shared
         # model rather than on each firing model -- do not move it per-model.
         # Asked before any dice are rolled, as the choice cannot follow them.
+        _hit_mods = dict(long_range=attacker.model.at_long_range,
+                         target_skirmisher=attacker.model.target_skirmisher)
+        # Moving and Shooting (p. 139), and the rule that waives it (p. 175).
+        # Compared against the same requirement the dice use, so a weapon that
+        # ignores the penalty is reported as ignoring it rather than silently.
+        _still = ranged_hit_requirement(attacker.model, **_hit_mods)
+        _after = ranged_hit_requirement(attacker.model, moved=True, **_hit_mods)
+        if attacker.model.moved_this_turn and _still and _after:
+            _why = ('rallied' if attackerUnit.attemptedRallyThisTurn
+                    else 'manoeuvred' if attackerUnit.manoeuvreThisTurn
+                    else f'moved {attackerUnit.moveSpentThisTurn:.1f}"'
+                    if attackerUnit.moveSpentThisTurn else 'moved')
+            if _after[0] == _still[0]:
+                rule_log('Quick Shot', attackerUnit,
+                         f"{weapon.get('name', 'weapon')}: {_why} this turn and "
+                         f"still hits on {_still[0]}+ (no -1 for Moving and Shooting)")
+            else:
+                rule_log('Moving and Shooting', attackerUnit,
+                         f"{_why} this turn -> -1 To Hit "
+                         f"({_still[0]}+ -> {_after[0]}+)")
+        elif _still and _after and _after[0] == _still[0]:
+            rule_skipped('Quick Shot', attackerUnit,
+                         "the unit stood still, so there was no Moving and "
+                         "Shooting penalty to ignore")
         fire_multiple = False
         if attacker.model.has_multiple_shots():
-            _mods = dict(long_range=attacker.model.at_long_range,
-                         target_skirmisher=attacker.model.target_skirmisher)
+            _mods = dict(moved=attacker.model.moved_this_turn, **_hit_mods)
             p_single = ranged_hit_chance(attacker.model, multiple_shots=False, **_mods)
             p_multi = ranged_hit_chance(attacker.model, multiple_shots=True, **_mods)
             exp_shots = attacker.model.expected_ranged_shots(True)
@@ -1888,9 +1918,8 @@ class MyApp(ShowBase):
         # Reported once for the volley, not per shot: to_hit_ranged runs inside
         # the dice loop, and only these two branches are invisible otherwise.
         _req = ranged_hit_requirement(
-            attacker.model, long_range=attacker.model.at_long_range,
-            target_skirmisher=attacker.model.target_skirmisher,
-            multiple_shots=fire_multiple)
+            attacker.model, moved=attacker.model.moved_this_turn,
+            multiple_shots=fire_multiple, **_hit_mods)
         if _req:
             _first, _reroll = _req
             if _reroll is not None:

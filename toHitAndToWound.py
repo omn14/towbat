@@ -1,6 +1,8 @@
 
 import random
 
+from battlescribe import has_quick_shot
+
 # A needed roll of 10 or more cannot be made even by the 7+ chain (p. 139).
 TO_HIT_IMPOSSIBLE = 10
 
@@ -76,10 +78,14 @@ def ranged_hit_requirement(model1, moved=False, long_range=False,
         return None   # BS 0: no ranged ability at all
 
     # Some weapons (e.g. Blunderbuss) ignore certain To Hit penalties.
-    ignore = set((getattr(model1, 'equipedWeapon', None) or {}).get(
-        'ignore_to_hit_penalties', None) or [])
+    _weapon = getattr(model1, 'equipedWeapon', None) or {}
+    ignore = set(_weapon.get('ignore_to_hit_penalties', None) or [])
+    # Quick Shot waives the Moving and Shooting penalty (p. 175). Read from the
+    # rule names too, since a save predating the flag still carries them.
+    if _weapon.get('quick_shot') or has_quick_shot(_weapon.get('special_rules')):
+        ignore.add('moved')
     penalty = 0
-    if moved:
+    if moved and 'moved' not in ignore:
         penalty += 1
     if long_range and 'long_range' not in ignore:
         penalty += 1

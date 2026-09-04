@@ -56,23 +56,33 @@ def _weapon_effects(weapon):
 
 
 def _ranged_tohit_report(model):
-    """Effective BS, To Hit target and the modifiers in effect for a shot."""
-    bs = (model.firing_bs(3) if hasattr(model, 'firing_bs')
-          else _si(model.characteristics, 'BS', 3))
-    ignore = set((getattr(model, 'equipedWeapon', None) or {})
-                 .get('ignore_to_hit_penalties', []))
+    """The To Hit target for a shot and the modifiers in effect.
+
+    Read from `ranged_hit_requirement`, not a second copy of the ladder, so the
+    report cannot print a number the dice will not use. Which modifiers a
+    weapon waives is asked the same way rather than restated here.
+    """
+    applied = dict(
+        moved=getattr(model, 'moved_this_turn', False),
+        long_range=getattr(model, 'at_long_range', False),
+        multiple_shots=getattr(model, 'firing_multiple', False),
+        target_skirmisher=getattr(model, 'target_skirmisher', False),
+    )
+    req = ranged_hit_requirement(model, **applied)
+    if req is None:
+        return 7, []
+    base = ranged_hit_requirement(model)
+    labels = {'moved': 'moved', 'long_range': 'long range',
+              'multiple_shots': 'multiple shots',
+              'target_skirmisher': 'skirmisher target'}
     mods = []
-    if getattr(model, 'at_long_range', False) and 'long_range' not in ignore:
-        bs -= 1
-        mods.append('long range -1')
-    if getattr(model, 'firing_multiple', False) and 'multiple_shots' not in ignore:
-        bs -= 1
-        mods.append('multiple shots -1')
-    if getattr(model, 'target_skirmisher', False):
-        bs -= 1
-        mods.append('skirmisher target -1')
-    target = {1: 6, 2: 5, 3: 4, 4: 3, 5: 2}.get(bs, 2 if bs >= 6 else 7)
-    return target, mods, bs
+    for key, on in applied.items():
+        if not on:
+            continue
+        alone = ranged_hit_requirement(model, **{key: True})
+        mods.append(f"{labels[key]} -1" if alone[0] > base[0]
+                    else f"{labels[key]} (waived)")
+    return req[0], mods
 
 
 def build_combat_report(unit1, unit2, charge, attacks):
@@ -88,7 +98,7 @@ def build_combat_report(unit1, unit2, charge, attacks):
             m1.shooting_strength() if hasattr(m1, 'shooting_strength')
             else _si(m1.characteristics, 'S', 3))
         ap = w.get('ranged_AP', 0)
-        to_hit_target, hit_mods, _bs = _ranged_tohit_report(m1)
+        to_hit_target, hit_mods = _ranged_tohit_report(m1)
     else:
         strength = _si(m1.characteristics, 'S', 3)
         ap = m1.melee_ap() if hasattr(m1, 'melee_ap') else m1.AP
@@ -191,7 +201,7 @@ def simulate_attack(model1,model2):
             hit = False
     else:
         def shoot():
-            return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False))
+            return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False),moved=getattr(model1,'moved_this_turn',False))
         hit = shoot()
         # Curse of Arrow Attraction: a natural 1 To Hit may be re-rolled.
         if not hit and model1.attack_roll == 1 and getattr(model2, 'arrow_attraction', False):
