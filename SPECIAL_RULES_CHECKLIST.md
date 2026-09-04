@@ -802,6 +802,51 @@ clamour of battle, friendly units are seldom able to tell the difference"
 (p. 161).
 
 ## Loose ends
+- [x] Marching (p. 123) — a unit may double its Movement to march, but a unit
+      that marched cannot shoot that turn, nor cast a Magic Missile or a
+      Magical Vortex.
+      Marching was not so much missing as **always on and free**: the movement
+      arc offered `M * 2` unconditionally, so every ordinary move in the game
+      was already a march-length move with nothing charged for it. This change
+      mostly takes freedom away — the same reach is now split into an ordinary
+      band (M) and a march band (up to 2M), and crossing into the second costs
+      the unit its Shooting phase.
+      `is_march(distance, movement, spent)` in `movement_system.py` is the
+      whole decision, kept pure so it can be tested: the first M is free, and
+      exactly M is not a march. It reads the arc distance the cursor has
+      already reached — wheel included, and recomputed every frame — so the
+      answer exists before the click rather than after it.
+      The overlay tints warm (`OVERLAY_MARCH`) the moment the cursor crosses
+      into the march band, which is what tells the player what the click will
+      cost. Both `c1.frag` and `terrain.frag` hard-coded the pale blue, so both
+      take a `overlayColor` / `moveColor` uniform now; the terrain one matters
+      because the indicator wraps over hills. Verified by rendering offscreen
+      under each tint and measuring the frame: red +0.086, blue -0.160, so the
+      uniform is genuinely driving the colour rather than being ignored.
+      A pursuit is exempt on both paths — it is a compulsory post-combat move
+      of up to 21", not a march, and would otherwise trip the band every time.
+      The barred spell categories come from the catalogue's own `type` field
+      ('Magic Missile', 28 spells; 'Magical Vortex', 18), not from a list
+      invented here, and a test asserts those strings still match the data.
+      LEFTOVER: Enemy Sighted (p. 123) is not implemented — beginning a march
+      within 8" of a non-fleeing enemy needs a Leadership test, and a *failed*
+      test still counts as having marched even if the unit then does not move
+      at all. Marching is currently unrestricted near the enemy. Deliberately
+      deferred to its own commit.
+      LEFTOVER: "whilst marching a unit can wheel ... but cannot perform any
+      other manoeuvres" is only half enforced. Move Sideways is withdrawn from
+      a unit that has already marched, but the sideways band is part of the
+      same arc widget and is sized before the cursor's band is known, so a
+      unit can still sidestep and then march in the same move.
+      LEFTOVER: the march threshold is only visible once crossed. Drawing both
+      bands at once would show where the line falls beforehand, but it needs a
+      second polygon array in the shader.
+      LEFTOVER: the spell gate reads the flag on `unitToMove`, which is the
+      host unit. A joined Wizard is covered by its host, but the marching flag
+      of a lone character Wizard is its own and has not been exercised.
+      LEFTOVER: only `is_march` and the spell categories are tested. Reading
+      the band from the cursor, tinting the overlay and setting the flag on
+      the click all sit inside Panda3D-bound methods.
 - [x] Redress the Ranks (p. 125) — a unit spends half its Movement to move up
       to five models to or from its front rank; the remaining ranks rearrange,
       every rank full but the rear. `redress_formation()` in

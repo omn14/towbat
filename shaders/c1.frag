@@ -6,6 +6,7 @@ uniform vec3 pos;
 #define maxpoints 83
 uniform vec2 polygonpoints[maxpoints];
 uniform bool isActive;
+uniform vec3 overlayColor;
 uniform sampler2D bakedMap;
 
 // The board rectangle in this card's UV space. The card is deliberately larger
@@ -88,7 +89,7 @@ void main() {
     if (isActive) {
         // Movement / shooting range overlay drawn on top of the grass.
         float d = sdPolygon(uv, polygonpoints);
-        vec3 o = (d > 0.0) ? ground : vec3(0.65, 0.85, 1.0);
+        vec3 o = (d > 0.0) ? ground : overlayColor;
         o *= 1.0 - exp(-24.0 * abs(d));
         // Bright rim right on the boundary line.
         o = mix(o, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));

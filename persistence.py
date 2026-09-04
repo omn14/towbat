@@ -93,6 +93,7 @@ def save_game_state(game, filename=None):
             'color': list(unit.color),
             'isInCombat': unit.isInCombat,
             'hasMovedThisTurn': unit.hasMovedThisTurn,
+            'marchedThisTurn': getattr(unit, 'marchedThisTurn', False),
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
@@ -292,6 +293,7 @@ def load_game_state(game, filename):
 
         unit.isInCombat = unit_data['isInCombat']
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
+        unit.marchedThisTurn = unit_data.get('marchedThisTurn', False)
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)

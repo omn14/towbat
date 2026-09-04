@@ -25,7 +25,7 @@ TURN_FLAGS = (
     'cannotChargeThisTurn', 'panicTestedThisPhase', 'fledThisPhase',
     'usedStubborn', 'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn',
     'cannotCastThisTurn', 'cannotPursueThisTurn', 'moveSpentThisTurn',
-    'manoeuvreThisTurn', 'redressDelta',
+    'manoeuvreThisTurn', 'redressDelta', 'marchedThisTurn',
 )
 
 

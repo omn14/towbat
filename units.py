@@ -92,6 +92,7 @@ class unitGraphics(FSM):
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
         self.hasMovedThisTurn=False
+        self.marchedThisTurn=False   # marched: no shooting or Magic Missiles (p. 123)
         self.hasAttackedThisTurn=False
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn

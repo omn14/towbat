@@ -1375,7 +1375,7 @@ class TerrainManager:
             piece.destroy()
         self.terrain_pieces.clear()
 
-    def set_move_overlay(self, active, points=None):
+    def set_move_overlay(self, active, points=None, color=(0.65, 0.85, 1.0)):
         """Broadcast the movement/shooting range polygon to every terrain
         piece so the indicator wraps over hills/forests/water, not just the
         flat ground card."""
@@ -1383,6 +1383,7 @@ class TerrainManager:
             if points is not None:
                 piece.visual.setShaderInput("movePoints", points)
             piece.visual.setShaderInput("moveActive", active)
+            piece.visual.setShaderInput("moveColor", Vec3(*color))
 
     # ── Debug ─────────────────────────────────────────────────────────
 

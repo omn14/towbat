@@ -48,6 +48,25 @@ def redress_formation(nmodels, files, delta):
     return new_files, -(-nmodels // new_files)
 
 
+# Movement overlay tints. The march band is warmer so the cost of crossing the
+# unit's Movement is visible before the move is committed (p. 123).
+OVERLAY_NORMAL = (0.65, 0.85, 1.0)
+OVERLAY_MARCH = (1.0, 0.72, 0.35)
+
+# The two spell categories that count as shooting, so a marched unit loses them.
+MARCH_BARRED_SPELLS = frozenset({'Magic Missile', 'Magical Vortex'})
+
+
+def is_march(distance: float, movement: float, spent: float = 0.0) -> bool:
+    """True if *distance* takes the unit past an ordinary move (p. 123).
+
+    Exactly the Movement characteristic is not a march: a unit doubles M to
+    march, so the first M is free and the tolerance keeps a float landing on
+    the boundary out of the march band.
+    """
+    return distance > max(0.0, movement - spent) + 1e-6
+
+
 class MovementSystem:
     """Encapsulates movement, pathfinding, sweep tests, and fall-back logic."""
 
@@ -847,11 +866,14 @@ class MovementSystem:
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
             M = max(1, M + terrainMod)   # difficult terrain: -1 Movement, min 1
-            move = M*2
-            move = move * (modifyerM if _model.is_mounted() else modifyer)
-            move = max(0.0, move - unit.moveSpentThisTurn)
-            # Move Sideways is itself a manoeuvre (p. 124).
-            side = 0.0 if unit.manoeuvreThisTurn else M / 2
+            _mod = modifyerM if _model.is_mounted() else modifyer
+            # A march doubles Movement (p. 123); the first M is an ordinary move
+            # that leaves the unit free to shoot.
+            march = M * 2 * _mod
+            move = max(0.0, march - unit.moveSpentThisTurn)
+            # Move Sideways is itself a manoeuvre (p. 124), and a marching unit
+            # may only wheel.
+            side = 0.0 if (unit.manoeuvreThisTurn or unit.marchedThisTurn) else M / 2
             if unit.state == "IsPursuing":
                 move = 21
 
@@ -908,7 +930,16 @@ class MovementSystem:
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])),
                                                 sidemove=side/(2*abs(groundSizeboundingbox[0][1])))
 
-            self.game.setGroundOverlay(True, self.game.polygonpoints)
+            # Marching is judged on the arc distance the cursor has actually
+            # reached, wheel included, so the tint changes before the click.
+            # A pursuit is a compulsory post-combat move, not a march.
+            marching = (unit.state != "IsPursuing"
+                        and is_march(self.game.moveArceDistance, march / 2.0,
+                                     unit.moveSpentThisTurn))
+            unit.wouldMarch = marching
+            self.game.setGroundOverlay(
+                True, self.game.polygonpoints,
+                OVERLAY_MARCH if marching else OVERLAY_NORMAL)
 
             return
 
@@ -1019,9 +1050,13 @@ class MovementSystem:
         self.game.moveArceDistance = clamped
 
         # Circular move-range indicator centred on the unit.
+        marching = (unit.state != "IsPursuing"
+                    and is_march(clamped, maxmove / 2.0))
+        unit.wouldMarch = marching
         self.game.polygonpoints = self.shootingArc(
             cur, num_points=80, radius=maxmove / (half * 2.0), full_circle=True)
-        self.game.setGroundOverlay(True, self.game.polygonpoints)
+        self.game.setGroundOverlay(True, self.game.polygonpoints,
+                                   OVERLAY_MARCH if marching else OVERLAY_NORMAL)
 
         # Ghost footprint showing where the unit will end up.
         if getattr(self.game, 'skirmMoveGhost', None):
@@ -1050,6 +1085,15 @@ class MovementSystem:
         if unit.hasMovedThisTurn:
             print("Unit has already moved this turn.")
             return
+
+        # The tint the player was shown when they clicked is what they get: both
+        # read the same arc distance (p. 123).
+        if getattr(unit, 'wouldMarch', False):
+            unit.marchedThisTurn = True
+            rule_log('Marching', unit,
+                     f"moved {self.game.moveArceDistance:.1f}\", beyond its "
+                     f"Movement -> marched, so it cannot shoot or cast a "
+                     f"Magic Missile this turn")
         
         pos = self.game.arcPoint
         pos=pos*2

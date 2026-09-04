@@ -10,6 +10,7 @@ uniform float edgeLevel;  // hill/forest: discard fragments below this field val
 #define MOVE_MAXPTS 83
 uniform vec2 movePoints[MOVE_MAXPTS];
 uniform bool moveActive;
+uniform vec3 moveColor;
 
 // Auto-bound by Panda3D; falls back to 0.0 if unavailable (shader stays static).
 uniform float osg_FrameTime;
@@ -207,7 +208,7 @@ void main() {
     if (moveActive) {
         vec2 ouv = worldPos.xy * 0.01 + 0.5;
         float d = sdPolygon(ouv, movePoints);
-        vec3 o = (d > 0.0) ? col : vec3(0.65, 0.85, 1.0);
+        vec3 o = (d > 0.0) ? col : moveColor;
         o *= 1.0 - exp(-24.0 * abs(d));
         o = mix(o, vec3(1.0), 1.0 - smoothstep(0.0, 0.015, abs(d) + 0.0075));
         // Keep the indicator a little transparent so terrain shows through.

@@ -62,7 +62,8 @@ from persistence import (load_game_state, load_settings, save_game_state,
 from rules_log import rule_log, rule_skipped
 from characters import JOIN_TAG, enemy_units
 from combat_resolution import CombatResolver
-from movement_system import MovementSystem
+from movement_system import (MovementSystem, OVERLAY_NORMAL, OVERLAY_MARCH,
+                             MARCH_BARRED_SPELLS)
 from terrain_system import TerrainManager, sees_over
 from psychology import (PsychologySystem, select_general, select_battle_standard,
                        command_range, rank_bonus, unit_strength_total)
@@ -1094,9 +1095,23 @@ class MyApp(ShowBase):
         level = m.wizard_level(1)
         cast = getattr(unit, 'spellsCastThisTurn', [])
         spent = getattr(unit, 'cannotCastThisTurn', False)
-        return [name for name, spell in m.spells.items()
-                if spell.get('phase') == phase
-                and may_attempt(cast, name, level, spent)]
+        # A unit that marched may still cast, but not the two categories that
+        # count as shooting (p. 123).
+        marched = getattr(unit, 'marchedThisTurn', False)
+        barred = MARCH_BARRED_SPELLS
+        names = [name for name, spell in m.spells.items()
+                 if spell.get('phase') == phase
+                 and may_attempt(cast, name, level, spent)
+                 and not (marched and spell.get('type') in barred)]
+        if marched:
+            lost = [n for n, s in m.spells.items()
+                    if s.get('phase') == phase and s.get('type') in barred
+                    and may_attempt(cast, n, level, spent)]
+            if lost:
+                rule_log('Marching', unit,
+                         f"marched this turn -> cannot cast "
+                         f"{', '.join(sorted(lost))}")
+        return names
 
     def redressRanks(self, delta):
         """Widen (v) or narrow (shift-v) the selected unit's front rank."""
@@ -1794,6 +1809,10 @@ class MyApp(ShowBase):
         return False
 
     async def shootAt(self, attackerUnit, defenderUnit):
+        if getattr(attackerUnit, 'marchedThisTurn', False):
+            rule_log('Marching', attackerUnit,
+                     "marched this turn -> cannot shoot (p. 123)")
+            return
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
@@ -2182,14 +2201,15 @@ class MyApp(ShowBase):
         surface.setShaderInput("isActive", False)
         self.polygonpoints = []
 
-    def setGroundOverlay(self, active, points=None):
+    def setGroundOverlay(self, active, points=None, color=OVERLAY_NORMAL):
         """Set the movement/shooting range overlay on the ground card and
         broadcast it to terrain so the indicator wraps over hills/water."""
         if points is not None:
             self.ground.setShaderInput("polygonpoints", points)
         self.ground.setShaderInput("isActive", active)
+        self.ground.setShaderInput("overlayColor", Vec3(*color))
         if hasattr(self, 'terrain_manager'):
-            self.terrain_manager.set_move_overlay(active, points)
+            self.terrain_manager.set_move_overlay(active, points, color)
 
     def _wood_box(self, parent, x0, x1, y0, y1, z0, z1, texture, tint,
                   tile=1.0):
