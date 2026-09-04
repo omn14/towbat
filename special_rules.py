@@ -248,6 +248,21 @@ def should_use_swiftstride(kind: str, distance_to_edge=None) -> bool:
     return True
 
 
+def should_fire_multiple(single_chance: float, multi_chance: float,
+                         expected_shots: float) -> bool:
+    """AI policy for the Multiple Shots choice (Rulebook p. 174).
+
+    Volume against accuracy, weighed as expected hits per firing model: one
+    shot at the unmodified To Hit, or *expected_shots* of them at -1. Nothing
+    else about the shot changes, so the comparison is the whole decision.
+
+    A tie goes to the single shot. The extra dice stop paying once the -1 has
+    pushed the roll out of reach, and an unmodified roll keeps its value under
+    any further penalty the target's cover or range might add.
+    """
+    return expected_shots * multi_chance > single_chance
+
+
 def board_edge_distance(x: float, y: float, half_x: float = 36.0,
                         half_y: float = 24.0) -> float:
     """Distance from (x, y) to the nearest table edge, in inches.

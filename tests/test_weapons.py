@@ -378,5 +378,182 @@ class ChargeCombatIntegrationTests(unittest.TestCase):
         self.assertEqual(seen.get("S"), base_s + 1)
 
 
+class MultipleShotsChoiceTests(unittest.TestCase):
+    """Multiple Shots (X) is a choice made before rolling (Rulebook p. 174)."""
+
+    def mk_shooter(self, bs="3", **weapon):
+        m = model("Shooter", "")
+        w = {"name": "Gun", "tag": "ranged", "ranged_strength": 4, "ranged_AP": 0}
+        w.update(weapon)
+        m.weapons["Gun"] = w
+        m.equip_weapon("Gun")
+        m.characteristics["BS"] = bs
+        return m
+
+    def test_dice_expr_mean_matches_the_rolls(self):
+        from models import dice_expr_mean
+        self.assertEqual(dice_expr_mean("2"), 2.0)
+        self.assertEqual(dice_expr_mean("D3"), 2.0)
+        self.assertEqual(dice_expr_mean("D6"), 3.5)
+        self.assertEqual(dice_expr_mean("D3+1"), 3.0)
+        self.assertEqual(dice_expr_mean("2D6"), 7.0)
+
+    def test_declining_fires_exactly_one_shot_per_model(self):
+        # "can either fire a single shot as normal, or ..." -- the single shot
+        # is one, whatever the weapon's dice would have rolled.
+        m = self.mk_shooter(ranged_shots_dice="D6")
+        self.assertTrue(m.has_multiple_shots())
+        for _ in range(50):
+            self.assertEqual(m.roll_ranged_shots(multiple=False), 1)
+        self.assertEqual(m.expected_ranged_shots(multiple=False), 1.0)
+        self.assertEqual(m.expected_ranged_shots(multiple=True), 3.5)
+
+    def test_hit_chance_agrees_with_the_engine(self):
+        from toHitAndToWound import ranged_hit_chance
+        m = self.mk_shooter(bs="3", ranged_shots=2)  # BS3 hits on 4+
+        self.assertAlmostEqual(ranged_hit_chance(m, multiple_shots=False), 3 / 6)
+        # -1 takes it to 5+.
+        self.assertAlmostEqual(ranged_hit_chance(m, multiple_shots=True), 2 / 6)
+
+    def test_hit_chance_leaves_the_pending_roll_alone(self):
+        # It walks all six faces, so it must put the die back or it would
+        # silently decide the shot it was only supposed to predict.
+        from toHitAndToWound import ranged_hit_chance
+        m = self.mk_shooter(ranged_shots=2)
+        m.attack_roll = 5
+        ranged_hit_chance(m, multiple_shots=True)
+        self.assertEqual(m.attack_roll, 5)
+
+    def test_policy_takes_volume_when_it_pays(self):
+        from special_rules import should_fire_multiple
+        # BS3 with D3 shots: 2 x 2/6 = 0.67 expected hits against 1 x 3/6.
+        self.assertTrue(should_fire_multiple(3 / 6, 2 / 6, 2.0))
+
+    def test_policy_declines_when_the_penalty_kills_the_shot(self):
+        from special_rules import should_fire_multiple
+        # BS1 hits on 6+; the -1 needs a 7+, which this engine cannot roll, so
+        # any number of shots is worth nothing.
+        self.assertFalse(should_fire_multiple(1 / 6, 0.0, 3.0))
+
+    def test_policy_breaks_a_tie_towards_the_single_shot(self):
+        from special_rules import should_fire_multiple
+        self.assertFalse(should_fire_multiple(0.5, 0.25, 2.0))
+
+    def test_choice_is_carried_through_to_the_shots_fired(self):
+        # Declining must reach the dice, not just the To Hit modifier: a D6
+        # weapon fired singly is one shot per firing model.
+        m = self.mk_shooter(ranged_shots_dice="D6")
+        with quiet():
+            attacks, *_ = simulate_battle(mk_unit(m, 5, 5, 1),
+                                          mk_unit(model("Black Orc", ""), 10, 5, 2),
+                                          charge=False, multiple_shots=False)
+        self.assertEqual(attacks, 5)
+
+    def test_ignoring_the_penalty_still_costs_nothing_to_fire_multiple(self):
+        # Blunderbusses ignore the Multiple Shots modifier, so volume is free.
+        from toHitAndToWound import ranged_hit_chance
+        from special_rules import should_fire_multiple
+        m = self.mk_shooter(ranged_shots_dice="D3",
+                            ignore_to_hit_penalties=["multiple_shots"])
+        single = ranged_hit_chance(m, multiple_shots=False)
+        multi = ranged_hit_chance(m, multiple_shots=True)
+        self.assertEqual(single, multi)
+        self.assertTrue(should_fire_multiple(single, multi,
+                                             m.expected_ranged_shots(True)))
+
+    def test_the_call_binds_the_whole_unit(self):
+        # "All models in a unit ... must fire either a single or Multiple
+        # Shots" -- one flag on the unit's shared model, not one per firer.
+        m = self.mk_shooter(ranged_shots_dice="D3")
+        with quiet():
+            simulate_battle(mk_unit(m, 5, 5, 1),
+                            mk_unit(model("Black Orc", ""), 10, 5, 2),
+                            charge=False, multiple_shots=False)
+        self.assertFalse(m.firing_multiple)
+        with quiet():
+            simulate_battle(mk_unit(m, 5, 5, 1),
+                            mk_unit(model("Black Orc", ""), 10, 5, 2),
+                            charge=False, multiple_shots=True)
+        self.assertTrue(m.firing_multiple)
+
+
+class RangedToHitLadderTests(unittest.TestCase):
+    """BS of 6 or Higher (p. 138) and 7+ To Hit (p. 139)."""
+
+    def mk(self, bs, **weapon):
+        m = model("Shooter", "")
+        w = {"name": "Gun", "tag": "ranged", "ranged_strength": 4, "ranged_AP": 0}
+        w.update(weapon)
+        m.weapons["Gun"] = w
+        m.equip_weapon("Gun")
+        m.characteristics["BS"] = str(bs)
+        return m
+
+    def test_bs6_and_higher_hit_on_two_with_a_reroll(self):
+        from toHitAndToWound import ranged_hit_requirement
+        for bs, expected in ((6, (2, 6)), (7, (2, 5)), (8, (2, 4)),
+                             (9, (2, 3)), (10, (2, 2))):
+            self.assertEqual(ranged_hit_requirement(self.mk(bs)), expected, f"BS{bs}")
+
+    def test_a_bs6_model_can_actually_hit(self):
+        # The ladder used to stop at BS5, so every BS6+ model in the catalogue
+        # missed with every shot it ever took.
+        from toHitAndToWound import to_hit_ranged
+        m = self.mk(6)
+        m.attack_roll = 6
+        self.assertTrue(to_hit_ranged(m))
+
+    def test_bs1_to_5_keep_the_old_ladder(self):
+        from toHitAndToWound import ranged_hit_requirement
+        for bs, target in ((1, 6), (2, 5), (3, 4), (4, 3), (5, 2)):
+            self.assertEqual(ranged_hit_requirement(self.mk(bs)), (target, None))
+
+    def test_modifiers_move_the_target_not_the_ballistic_skill(self):
+        # Reducing BS7 by one would be a different row of the table (2+/5+ ->
+        # 2+/6+); the rulebook modifies the roll, so both numbers get harder.
+        from toHitAndToWound import ranged_hit_requirement
+        self.assertEqual(ranged_hit_requirement(self.mk(7), long_range=True), (3, 6))
+
+    def test_seven_plus_still_has_a_chance(self):
+        from toHitAndToWound import ranged_hit_chance
+        # BS3 firing multiple at long range into a lone skirmisher needs a 7+:
+        # a natural 6 then a 4+, which is 1/6 x 3/6.
+        m = self.mk(3)
+        p = ranged_hit_chance(m, long_range=True, multiple_shots=True,
+                              target_skirmisher=True)
+        self.assertAlmostEqual(p, 1 / 12)
+
+    def test_ten_or_more_is_impossible(self):
+        from toHitAndToWound import ranged_hit_chance
+        m = self.mk(1)
+        self.assertEqual(ranged_hit_chance(m, long_range=True, multiple_shots=True,
+                                           full_cover=True), 0.0)
+
+    def test_bs_zero_cannot_shoot(self):
+        from toHitAndToWound import ranged_hit_chance, ranged_hit_requirement
+        m = self.mk(0)
+        self.assertIsNone(ranged_hit_requirement(m))
+        self.assertEqual(ranged_hit_chance(m), 0.0)
+
+    def test_predicted_chance_matches_the_dice(self):
+        # The prediction and the roll must read the same table; a drift here is
+        # what a second copy of the ladder would cause.
+        import random
+        from toHitAndToWound import to_hit_ranged, ranged_hit_chance
+        random.seed(20240901)
+        for bs in (1, 3, 5, 6, 8):
+            for mods in ({}, {"long_range": True},
+                         {"long_range": True, "multiple_shots": True}):
+                m = self.mk(bs)
+                expected = ranged_hit_chance(m, **mods)
+                hits = 0
+                for _ in range(20000):
+                    m.attack_roll = random.randint(1, 6)
+                    if to_hit_ranged(m, **mods):
+                        hits += 1
+                self.assertAlmostEqual(hits / 20000, expected, delta=0.02,
+                                       msg=f"BS{bs} {mods}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

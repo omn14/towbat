@@ -113,6 +113,26 @@ def roll_dice_expr(expr) -> int:
     return max(0, sum(random.randint(1, sides) for _ in range(count)) + mod)
 
 
+def dice_expr_mean(expr) -> float:
+    """Average of the same expressions roll_dice_expr() rolls: 'D3' -> 2.0.
+
+    Multiple Shots has to be chosen before the dice are thrown, so the choice
+    is weighed on the average instead. The clamp at zero in roll_dice_expr has
+    no counterpart here because every catalogue expression adds a positive
+    modifier, if any.
+    """
+    s = str(expr).upper().replace(" ", "")
+    if s.isdigit():
+        return float(s)
+    m = re.match(r"(\d*)D(\d+)([+-]\d+)?$", s)
+    if not m:
+        return 1.0
+    count = int(m.group(1)) if m.group(1) else 1
+    sides = int(m.group(2))
+    mod = int(m.group(3)) if m.group(3) else 0
+    return count * (sides + 1) / 2 + mod
+
+
 class model:
     def __init__(self, name: str, url: str):
         self.name = name
@@ -545,12 +565,32 @@ class model:
             self.weapons[w['name']] = w
         return w
 
-    def roll_ranged_shots(self) -> int:
+    def roll_ranged_shots(self, multiple: bool = True) -> int:
         """Shots for one firing model from the equipped ranged weapon.
-        Rolls the dice (e.g. Multiple Shots (D3)) when the count is random."""
+
+        Multiple Shots is a choice, not a property of the weapon (Rulebook
+        p. 174): *multiple* False fires the single accurate shot instead. A
+        random count is rolled here, so a caller rolling once per model gets a
+        separate roll for each, as the rule requires.
+        """
         w = self.equipedWeapon or {}
+        if not multiple:
+            return 1
         dice = w.get('ranged_shots_dice')
         return roll_dice_expr(dice) if dice else (w.get('ranged_shots') or 1)
+
+    def has_multiple_shots(self) -> bool:
+        """True if the equipped ranged weapon offers the choice at all."""
+        w = self.equipedWeapon or {}
+        return bool(w.get('ranged_shots_dice')) or (w.get('ranged_shots') or 1) > 1
+
+    def expected_ranged_shots(self, multiple: bool = True) -> float:
+        """Average shots one firing model gets, for weighing the choice."""
+        w = self.equipedWeapon or {}
+        if not multiple:
+            return 1.0
+        dice = w.get('ranged_shots_dice')
+        return dice_expr_mean(dice) if dice else float(w.get('ranged_shots') or 1)
 
     def active_melee_weapon(self) -> dict:
         """The melee weapon this model is actually fighting with.

@@ -1,4 +1,9 @@
 
+import random
+
+# A needed roll of 10 or more cannot be made even by the 7+ chain (p. 139).
+TO_HIT_IMPOSSIBLE = 10
+
 
 def stat_value(value, default=0):
     """A characteristic as a number. Profiles write an absent characteristic as
@@ -54,43 +59,97 @@ def to_wound(model1,model2,strength=None):
         return 5
     return 6
 
-def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False,target_skirmisher=False):
+def ranged_hit_requirement(model1, moved=False, long_range=False,
+                           stand_and_shoot=False, partial_cover=False,
+                           full_cover=False, multiple_shots=False,
+                           target_skirmisher=False):
+    """The D6 numbers a shot needs: (first, re-roll), or None if it cannot shoot.
+
+    Modifiers move the target number rather than Ballistic Skill. For BS1-5 the
+    two are the same thing, but not for BS6+, where the target is already 2+ and
+    a reduced BS would be a different row of the table rather than a harder roll.
+    """
     # A chariot shoots with its crew's Ballistic Skill; its own profile has none.
     bs1 = (model1.firing_bs() if hasattr(model1, 'firing_bs')
            else stat_value(model1.characteristics.get('BS')))
     if bs1 <= 0:
-        return False   # BS 0: no ranged ability at all
+        return None   # BS 0: no ranged ability at all
 
-    #hit_roll = random.randint(1, 6)
-    hit_roll = model1.attack_roll
-    #print(f"Ranged attack roll: {hit_roll} against BS {bs1}")
     # Some weapons (e.g. Blunderbuss) ignore certain To Hit penalties.
-    ignore = set((getattr(model1, 'equipedWeapon', None) or {}).get('ignore_to_hit_penalties', []))
+    ignore = set((getattr(model1, 'equipedWeapon', None) or {}).get(
+        'ignore_to_hit_penalties', None) or [])
+    penalty = 0
     if moved:
-        bs1 -= 1
+        penalty += 1
     if long_range and 'long_range' not in ignore:
-        bs1 -= 1
+        penalty += 1
     if stand_and_shoot and 'stand_and_shoot' not in ignore:
-        bs1 -= 1
+        penalty += 1
     if partial_cover:
-        bs1 -= 1
+        penalty += 1
     if full_cover:
-        bs1 -= 2
+        penalty += 2
     if multiple_shots and 'multiple_shots' not in ignore:
-        bs1 -= 1
+        penalty += 1
     # Enemy fire at a unit of US1 Skirmishers suffers -1 To Hit (not ignorable).
     if target_skirmisher:
-        bs1 -= 1
-    
-    if bs1 == 1 and hit_roll >= 6:
-        return True
-    elif bs1 == 2 and hit_roll >= 5:
-        return True
-    elif bs1 == 3 and hit_roll >= 4:
-        return True
-    elif bs1 == 4 and hit_roll >= 3:
-        return True
-    elif bs1 == 5 and hit_roll >= 2:
-        return True
-    else:
+        penalty += 1
+
+    if bs1 >= 6:
+        # BS6+ hits on 2+ and re-rolls a failure, the re-roll growing easier
+        # with Ballistic Skill (p. 138): BS6 2+/6+ through BS10+ 2+/2+.
+        return 2 + penalty, max(2, 12 - bs1) + penalty
+    return (7 - bs1) + penalty, None
+
+
+def _target_chance(target: int) -> float:
+    """Probability one D6 attempt meets *target*, following the 7+ chain."""
+    if target <= 1:
+        return 1.0
+    if target <= 6:
+        return (7 - target) / 6
+    if target < TO_HIT_IMPOSSIBLE:
+        return (1 / 6) * (7 - (target - 3)) / 6
+    return 0.0
+
+
+def _attempt(target: int, die: int) -> bool:
+    """Resolve one attempt whose first D6 has already been rolled."""
+    if target <= 6:
+        return die >= target
+    if target >= TO_HIT_IMPOSSIBLE:
         return False
+    # 7+ To Hit: a natural 6 earns a second roll (p. 139) — 7 needs 4+, 8 a 5+,
+    # 9 a 6, and 10 or more cannot be rolled at all.
+    return die == 6 and random.randint(1, 6) >= target - 3
+
+
+def to_hit_ranged(model1,moved=False,long_range=False,stand_and_shoot=False,partial_cover=False,full_cover=False,multiple_shots=False,target_skirmisher=False):
+    req = ranged_hit_requirement(
+        model1, moved=moved, long_range=long_range,
+        stand_and_shoot=stand_and_shoot, partial_cover=partial_cover,
+        full_cover=full_cover, multiple_shots=multiple_shots,
+        target_skirmisher=target_skirmisher)
+    if req is None:
+        return False
+    first, reroll = req
+    if _attempt(first, model1.attack_roll):
+        return True
+    return reroll is not None and _attempt(reroll, random.randint(1, 6))
+
+
+def ranged_hit_chance(model1, **mods) -> float:
+    """Probability that one shot from *model1* hits, given the same keyword
+    modifiers to_hit_ranged() takes.
+
+    Read from the same requirement the roll is resolved against, so a caller
+    weighing a choice cannot disagree with the dice it is predicting.
+    """
+    req = ranged_hit_requirement(model1, **mods)
+    if req is None:
+        return 0.0
+    first, reroll = req
+    chance = _target_chance(first)
+    if reroll is not None:
+        chance += (1 - chance) * _target_chance(reroll)
+    return chance

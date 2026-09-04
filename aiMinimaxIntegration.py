@@ -905,7 +905,7 @@ class EnhancedAI:
                 # Execute shooting
                 # Example: self.game.shootAt(unit, target)
                 #self.game.ball.setPos(target_pos)  # Placeholder for movement command
-                self.game.shootAt(unit,target)
+                await self.game.shootAt(unit,target)
                 self._move_complete = False
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
                 # Mark the unit as having attacked so it can't shoot again this turn

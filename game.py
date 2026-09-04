@@ -37,7 +37,7 @@ from shaders.chargedistshaders import *
 # ─── Project Modules ─────────────────────────────────────────────────────────
 from models import *
 from units import *
-from special_rules import build_special_rules
+from special_rules import build_special_rules, should_fire_multiple
 from toHitAndToWound import *
 from battleFunctions import *
 from dice import *
@@ -1598,7 +1598,7 @@ class MyApp(ShowBase):
                         # mouse1 stays bound: the player still has to be able
                         # to pick the next unit to shoot with.
                         self.cancelAiming('locked on target')
-                        self.shootAt(self.unitToMove, selected_unit)
+                        taskMgr.add(self.shootAt(self.unitToMove, selected_unit))
 
             if self.fsm.state == 'SpellPhase':
                 result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))
@@ -1793,7 +1793,7 @@ class MyApp(ShowBase):
               f"{spell.casting} -> {spell.name} holds.")
         return False
 
-    def shootAt(self, attackerUnit, defenderUnit):
+    async def shootAt(self, attackerUnit, defenderUnit):
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
@@ -1819,6 +1819,63 @@ class MyApp(ShowBase):
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
               f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})"
               f"{'  | on a hill: +1 firing rank' if extra_ranks else ''}")
+        # Multiple Shots is the firer's choice, not a property of the weapon
+        # (p. 174), and it binds the whole unit: "all models in a unit equipped
+        # with weapons with this special rule must fire either a single or
+        # Multiple Shots". That is why the flag ends up on the unit's shared
+        # model rather than on each firing model -- do not move it per-model.
+        # Asked before any dice are rolled, as the choice cannot follow them.
+        fire_multiple = False
+        if attacker.model.has_multiple_shots():
+            _mods = dict(long_range=attacker.model.at_long_range,
+                         target_skirmisher=attacker.model.target_skirmisher)
+            p_single = ranged_hit_chance(attacker.model, multiple_shots=False, **_mods)
+            p_multi = ranged_hit_chance(attacker.model, multiple_shots=True, **_mods)
+            exp_shots = attacker.model.expected_ranged_shots(True)
+            shots_label = weapon.get('ranged_shots_dice') or weapon.get('ranged_shots')
+            multi_label = f"Multiple Shots ({shots_label})"
+            single_label = "Single shot"
+            # The policy's pick is offered first: makeChoiceNew answers for the
+            # AI by taking the first option, and it doubles as a sane default
+            # to present to a player.
+            _opts = ([multi_label, single_label]
+                     if should_fire_multiple(p_single, p_multi, exp_shots)
+                     else [single_label, multi_label])
+            _desc = {
+                multi_label: (f"{exp_shots:g} shots per model at -1 To Hit "
+                              f"({p_multi:.0%} each, {exp_shots * p_multi:.1f} hits/model)"),
+                single_label: (f"one accurate shot per model "
+                               f"({p_single:.0%}, {p_single:.1f} hits/model)"),
+            }
+            _answer = await taskMgr.add(self.makeChoiceNew(
+                _opts, attackerUnit.bodyNP.getPos(),
+                descriptions=_desc, owner=attackerUnit))
+            fire_multiple = (_answer == multi_label)
+            rule_log('Multiple Shots', attackerUnit,
+                     f"{shots_label} shots/model at -1 ({p_multi:.0%}, "
+                     f"{exp_shots * p_multi:.2f} hits/model) v single shot "
+                     f"({p_single:.0%}, {p_single:.2f}) -> "
+                     f"{'firing multiple' if fire_multiple else 'firing single shots'}")
+        # Reported once for the volley, not per shot: to_hit_ranged runs inside
+        # the dice loop, and only these two branches are invisible otherwise.
+        _req = ranged_hit_requirement(
+            attacker.model, long_range=attacker.model.at_long_range,
+            target_skirmisher=attacker.model.target_skirmisher,
+            multiple_shots=fire_multiple)
+        if _req:
+            _first, _reroll = _req
+            if _reroll is not None:
+                _bs = (attacker.model.firing_bs()
+                       if hasattr(attacker.model, 'firing_bs')
+                       else attacker.model.characteristics.get('BS'))
+                rule_log('BS of 6 or Higher', attackerUnit,
+                         f"BS{_bs} -> hits on {_first}+, re-rolling a failure "
+                         f"at {_reroll}+")
+            if _first > 6:
+                _chain = (f"a natural 6 then {_first - 3}+" if _first < 10
+                          else "cannot hit at all")
+                rule_log('7+ To Hit', attackerUnit,
+                         f"needs {_first}+ after modifiers -> {_chain}")
         # A joined character with a missile weapon replaces one unit shooter and
         # fires with its own profile.
         joinedRule = next((r for r in attacker.model.special_rules
@@ -1833,11 +1890,15 @@ class MyApp(ShowBase):
         if charShooter and origFiles > 1:
             attacker.files -= 1
         attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(
-            attacker, defender, charge=False, extra_ranks=extra_ranks)
+            attacker, defender, charge=False, extra_ranks=extra_ranks,
+            multiple_shots=fire_multiple)
         attacker.files = origFiles
         self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
         if charShooter:
-            c_attacks, c_hits, c_suffered, c_saves, c_wounds = simulate_battle(charShooter, defender, charge=False)
+            # The character follows the unit's call; its own weapon may not
+            # have the rule at all, which simulate_battle checks for itself.
+            c_attacks, c_hits, c_suffered, c_saves, c_wounds = simulate_battle(
+                charShooter, defender, charge=False, multiple_shots=fire_multiple)
             self.printBattleResults(attackerUnit, defenderUnit, c_attacks, c_hits, c_suffered, c_saves, c_wounds)
             total_wounds += c_wounds
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))

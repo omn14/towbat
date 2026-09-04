@@ -18,7 +18,51 @@ identical without the log. See `.github/copilot-instructions.md`.
 - [x] Furious Charge (registry builder)
 - [x] Regeneration (registry builder; save value only if in data)
 - [x] Unbreakable (registry builder)
-- [x] Multiple Shots (N) — parsed (D3 approximated as 3)
+- [x] Multiple Shots (X) — the firer chooses, per unit, before rolling (p. 174).
+      `has_multiple_shots()` / `roll_ranged_shots(multiple)` /
+      `expected_ranged_shots()` in `models.py`, `multiple_shots=` through
+      `simulate_battle`, prompt in `MyApp.shootAt` (now async), AI policy in
+      `special_rules.should_fire_multiple`. The -1 To Hit per shot and the
+      per-model dice roll were already correct; the *choice* was what was
+      missing — the old code always fired multiple. `ranged_hit_chance` in
+      `toHitAndToWound.py` derives P(hit) by walking all six faces through
+      `to_hit_ranged`, so the decision cannot drift from the dice.
+      Corrected on the way: the previous line here claimed "D3 approximated
+      as 3", which had not been true since the dice parsing landed.
+      LEFTOVER: a joined character follows the unit's call rather than being
+      asked separately. The rule binds the *unit*, and a character is not one
+      of its models, so it arguably gets its own choice; one prompt per volley
+      was preferred over two.
+      Found from this and fixed with it: `to_hit_ranged` returned a flat miss
+      for any effective BS above 5 or below 1 — see the two To Hit entries
+      below, which Multiple Shots' -1 is what made reachable.
+- [x] BS of 6 or Higher (p. 138) and 7+ To Hit (p. 139) — the ranged To Hit
+      ladder stopped at BS5 and sent everything else to `return False`, so all
+      20 BS6/BS7 models in the catalogue (Keeper of Secrets, Lord of Change,
+      Dark Elf Dreadlord, Glade Captain...) **missed with every shot they ever
+      took**, and a shot pushed past a 6 by modifiers silently missed instead
+      of taking its natural-6 second roll.
+      BS6+ now hits on 2+ and re-rolls a failure, the re-roll growing easier
+      with Ballistic Skill (BS6 2+/6+ through BS10+ 2+/2+). A needed roll of
+      7-9 hits on a natural 6 followed by a 4+, 5+ or 6; 10 or more is
+      genuinely impossible.
+      Modifiers now move the **target number** rather than Ballistic Skill.
+      For BS1-5 those are the same thing, since the target is 7 - BS, which is
+      why the old code got away with it; for BS6+ they are not, because a
+      reduced BS is a different row of the table rather than a harder roll.
+      `ranged_hit_requirement` in `toHitAndToWound.py` is the single table,
+      read both by `to_hit_ranged`, which rolls the dice, and by
+      `ranged_hit_chance`, which works the probability out exactly for the
+      Multiple Shots decision. Keeping one source of truth is the point: the
+      first draft of `ranged_hit_chance` sampled `to_hit_ranged` over all six
+      faces to avoid a second copy of the ladder, which stopped being exact
+      the moment a rule needed a second die.
+      Checked against 200k rolls per case over 54 BS/modifier combinations:
+      predicted and rolled agree to within 0.0022, which is the sampling
+      noise of that many trials.
+      NOTE: Curse of Arrow Attraction re-rolls a natural 1, and a BS6+ model
+      that rolls a 1 has already had the p. 138 re-roll; the rulebook does not
+      say which wins, and the two are left to stack.
 - [x] Volley Fire — parsed from weapon rules
 - [x] Equip best melee weapon in combat — models fight with their strongest
       applicable melee weapon (Lance only while charging) so its stats/hooks
@@ -34,7 +78,6 @@ identical without the log. See `.github/copilot-instructions.md`.
       `break_test_outcome` / `overwhelmed` in `psychology.py`.
 
 ## Weapon rules — TODO (high frequency)
-- [ ] Multiple Shots (D3) — roll D3/D6+N instead of the hardcoded 3
 - [ ] Move or Shoot — cannot shoot after moving
 - [ ] Ponderous — move-or-shoot / initiative penalty
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
