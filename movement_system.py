@@ -9,6 +9,7 @@ are used directly; all other game state is accessed via ``self.game``.
 import math
 from collision_masks import CollisionMask as CM
 from characters import on_host_removed
+from rules_log import rule_log, rule_skipped
 from special_rules import max_charge_range, unit_has_swiftstride
 from terrain_system import dangerous_terrain_wounds, is_disrupted
 from toHitAndToWound import stat_value
@@ -26,6 +27,25 @@ from panda3d.bullet import (
 from direct.interval.IntervalGlobal import (
     LerpPosHprInterval, LerpPosInterval, Sequence, Func, Wait,
 )
+
+# Redress the Ranks moves at most five models to or from the front rank (p. 125).
+REDRESS_MAX = 5
+
+
+def redress_formation(nmodels, files, delta):
+    """The (files, ranks) a redress of *delta* models produces, or None if the
+    rulebook does not allow it (Rulebook p. 125).
+
+    "There must be the same number of models in each rank. Only the rear rank
+    may have fewer" needs no work here: laying the models out row by row into
+    the new frontage fills every rank but the last by construction.
+    """
+    if not delta or abs(delta) > REDRESS_MAX:
+        return None
+    new_files = files + delta
+    if new_files < 1 or new_files > nmodels:
+        return None
+    return new_files, -(-nmodels // new_files)
 
 
 class MovementSystem:
@@ -551,6 +571,85 @@ class MovementSystem:
         return next((t for t in tm.get_all_terrain_at(unit.bodyNP.getPos())
                      if t.terrain_type == 'hill'), None)
 
+    def redressRanks(self, unit, delta):
+        """Redress the Ranks (Rulebook p. 125): move up to five models to or
+        from the front rank, for half the unit's Movement.
+
+        The front rank holds its ground and the frontage grows or shrinks about
+        its own centre line, which is what the FAQ's "as equally as possible on
+        either side" amounts to once the models are interchangeable.
+        """
+        if getattr(unit, 'isSkirmisher', False):
+            rule_skipped('Redress the Ranks', unit,
+                         "skirmishers fight in a loose blob and have no ranks")
+            return False
+        if unit.isInCombat or unit.state in ("IsFleeing", "IsPursuing"):
+            rule_skipped('Redress the Ranks', unit,
+                         f"it is {unit.state} and may not manoeuvre")
+            return False
+        if unit.hasMovedThisTurn:
+            rule_skipped('Redress the Ranks', unit,
+                         "its move this turn is already over")
+            return False
+        if unit.manoeuvreThisTurn not in (None, 'Redress the Ranks'):
+            rule_skipped('Redress the Ranks', unit,
+                         f"it has already performed a {unit.manoeuvreThisTurn} "
+                         f"this move, and only one manoeuvre is allowed (p. 124)")
+            return False
+        if abs(unit.redressDelta + delta) > REDRESS_MAX:
+            rule_skipped('Redress the Ranks', unit,
+                         f"{abs(unit.redressDelta)} of the five models a redress "
+                         f"may shift have already moved")
+            return False
+
+        old_files, old_ranks = unit.unit.files, unit.unit.ranks
+        formation = redress_formation(unit.unit.nmodels, old_files, delta)
+        if formation is None:
+            rule_skipped('Redress the Ranks', unit,
+                         f"a front rank of {old_files + delta} is not a legal "
+                         f"formation for {unit.unit.nmodels} models")
+            return False
+        new_files, new_ranks = formation
+
+        m = unit.unit.model
+        M = m.get_fly_movement(0) if m.is_flying() else m.get_movement(0)
+        cost = M / 2.0
+        first = unit.manoeuvreThisTurn is None
+
+        old_pos = unit.bodyNP.getPos()
+        heading = math.radians(unit.bodyNP.getH())
+        forward = Vec3(-math.sin(heading), math.cos(heading), 0)
+        front = old_pos + forward * (unit.unitHeight / 2.0)
+
+        def reshape(files, ranks):
+            unit.unit.files, unit.unit.ranks = files, ranks
+            if unit.characterSlot is not None:
+                unit.characterSlot = min(unit.characterSlot, files - 1)
+            unit.layOutRanks()
+            unit.rebuildFootprint()
+            unit.placeCharacter()
+            unit.bodyNP.setPos(front - forward * (unit.unitHeight / 2.0))
+
+        reshape(new_files, new_ranks)
+        if self.game.checkUnitContactSmall(unit) is not None:
+            reshape(old_files, old_ranks)
+            unit.bodyNP.setPos(old_pos)
+            rule_skipped('Redress the Ranks', unit,
+                         f"a {new_files}-model front rank does not fit here")
+            return False
+
+        if first:
+            unit.moveSpentThisTurn += cost
+            unit.manoeuvreThisTurn = 'Redress the Ranks'
+        unit.redressDelta += delta
+        self.updateDisrupted(unit)
+        unit.updateTextNode()
+        rule_log('Redress the Ranks', unit,
+                 f"front rank {old_files} -> {new_files}, ranks {old_ranks} -> "
+                 f"{new_ranks}; costs {cost:g}\" of M{M:g}, leaving "
+                 f"{max(0.0, M - unit.moveSpentThisTurn):g}\" to move")
+        return True
+
     def pathTowardsMouse(self,unit,x=None,y=None):
         if not base.mouseWatcherNode.hasMouse():
             return
@@ -670,13 +769,17 @@ class MovementSystem:
             # This arc is the one kept when the path runs into a unit, so it is
             # the charge-declaration range rather than a march.
             move = max_charge_range(M, unit_has_swiftstride(unit))
+            move = max(0.0, move - unit.moveSpentThisTurn)
             if unit.state == "IsPursuing":
                 move = 21
 
+            # Move Sideways is itself a manoeuvre, so it is not on offer once
+            # one has been performed (p. 124).
+            side = 0.0 if unit.manoeuvreThisTurn else M / 2
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])),
-                                               sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
+                                               sidemove=side/(2*abs(groundSizeboundingbox[0][1])))
             #self.game.polygonpoints = self.mirrorPointArc(self.game.polygonpoints)
 
             
@@ -718,7 +821,7 @@ class MovementSystem:
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])),
-                                                sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
+                                                sidemove=side/(2*abs(groundSizeboundingbox[0][1])))
 
                 self.game.setGroundOverlay(True, self.game.polygonpoints)
                 return
@@ -746,6 +849,9 @@ class MovementSystem:
             M = max(1, M + terrainMod)   # difficult terrain: -1 Movement, min 1
             move = M*2
             move = move * (modifyerM if _model.is_mounted() else modifyer)
+            move = max(0.0, move - unit.moveSpentThisTurn)
+            # Move Sideways is itself a manoeuvre (p. 124).
+            side = 0.0 if unit.manoeuvreThisTurn else M / 2
             if unit.state == "IsPursuing":
                 move = 21
 
@@ -758,7 +864,7 @@ class MovementSystem:
             self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                movedistance=move/(2*abs(groundSizeboundingbox[0][1])),
-                                               sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
+                                               sidemove=side/(2*abs(groundSizeboundingbox[0][1])))
             #self.game.polygonpoints = self.mirrorPointArc(self.game.polygonpoints)
 
             
@@ -800,7 +906,7 @@ class MovementSystem:
                 self.game.polygonpoints = self.pointArc(origo=unitposxy, num_points=80, mouse_pos=Vec2(pos.x, pos.y),
                                                 width=unitwidth,height=unitheight, rotationangle=unit.bodyNP.getH(),
                                                 movedistance=newmove/(2*abs(groundSizeboundingbox[0][1])),
-                                                sidemove=(M/2)/(2*abs(groundSizeboundingbox[0][1])))
+                                                sidemove=side/(2*abs(groundSizeboundingbox[0][1])))
 
             self.game.setGroundOverlay(True, self.game.polygonpoints)
 

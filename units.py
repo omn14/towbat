@@ -99,6 +99,9 @@ class unitGraphics(FSM):
         self.cannotPursueThisTurn=False  # joined a new combat mid-phase; restrains and reforms instead (p. 157)
         self.chargeDistance=0.0      # inches actually covered by that charge (Impact Hits need 3"+)
         self.cannotChargeThisTurn=False  # set on rally (Fall Back in Good Order); no charge this turn
+        self.moveSpentThisTurn=0.0   # inches of the allowance a manoeuvre has already used
+        self.manoeuvreThisTurn=None  # a unit may perform ONE manoeuvre per move (p. 124)
+        self.redressDelta=0          # models moved to/from the front rank so far, max 5 (p. 125)
         self.isChargingMove=False    # true while making a charge move (exempt from Panic)
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.fledThisPhase=False         # one flee move per phase (The Limits of Endurance)
@@ -333,6 +336,17 @@ class unitGraphics(FSM):
     def slotCount(self):
         """Grid slots the unit fills: its own models, plus a joined character."""
         return self.unit.nmodels + (1 if self.characterSlot is not None else 0)
+
+    def placeCharacter(self):
+        """Sit a joined character in the slot the ranks were laid out around."""
+        char = getattr(self, 'joinedCharacter', None)
+        if char is None or self.characterSlot is None or char.bodyNP.isEmpty():
+            return
+        files = max(1, self.unit.files)
+        row, col = divmod(self.characterSlot, files)
+        char.bodyNP.setPos(self.model.getPos()
+                           + Point3(col * self.modelWidth,
+                                    -row * self.modelHeight, 0))
 
     def rebuildFootprint(self):
         """Resize the collision box to the current formation.

@@ -97,14 +97,10 @@ def join_unit(game, character, host) -> bool:
 
     # The character stands in the middle of the front rank, and the unit's own
     # models close up around it, so the one it displaces ends up at the back.
-    files = max(1, host.unit.files)
-    host.characterSlot = files // 2
+    host.characterSlot = max(1, host.unit.files) // 2
     host.layOutRanks()
     host.rebuildFootprint()
-    row, col = divmod(host.characterSlot, files)
-    character.bodyNP.setPos(host.model.getPos()
-                            + Point3(col * host.modelWidth,
-                                     -row * host.modelHeight, 0))
+    host.placeCharacter()
 
     # Remember the character's side before it leaves the player lists so a save
     # can still record which player it belongs to.

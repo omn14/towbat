@@ -759,6 +759,35 @@ clamour of battle, friendly units are seldom able to tell the difference"
 (p. 161).
 
 ## Loose ends
+- [x] Redress the Ranks (p. 125) — a unit spends half its Movement to move up
+      to five models to or from its front rank; the remaining ranks rearrange,
+      every rank full but the rear. `redress_formation()` in
+      `movement_system.py` is the pure arithmetic (`ranks = ceil(n/files)`
+      gives the "only the rear rank may have fewer" clause for nothing);
+      `MovementSystem.redressRanks()` performs it. `v` widens the front rank,
+      `shift-v` narrows it, up to five models in total for one cost.
+      The front rank holds its ground: the new frontage is built about the
+      front edge's centre, not the unit's centre, or widening would drag the
+      unit backwards and narrowing would walk it forwards. That also satisfies
+      the FAQ's "as equally as possible on either side" without doing anything
+      further, since the models are interchangeable.
+      Manoeuvres are now metered. A unit may perform only ONE per move
+      (p. 124), held in `unit.manoeuvreThisTurn`, and the half-Movement cost
+      goes into `unit.moveSpentThisTurn`, which both movement arcs subtract.
+      This also fixed a rule the arc broke silently: it offered a wheel and a
+      Move Sideways in the same move, which is two manoeuvres. `sidemove` is
+      now zero once a manoeuvre has been performed.
+      A redress that would not fit is reverted — the reshape happens, the
+      contact test runs, and the old formation and position go back if a
+      widened frontage fouls a neighbour.
+      LEFTOVER: redressing is meant to count as moving for shooting penalties,
+      but nothing applies a to-hit penalty for having moved, so there is
+      nothing to hook it to. `hasMovedThisTurn` is deliberately NOT set —
+      `moveUnit()` refuses to move a unit carrying it, which would forbid the
+      rest of the move the rule explicitly allows.
+      LEFTOVER: the other four manoeuvres (wheel, turn, move backwards, move
+      sideways, reform) do not set `manoeuvreThisTurn`, so only a redress
+      currently blocks a second manoeuvre.
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
 - [x] One hand weapon per model, and it is the catalogue's — every model was

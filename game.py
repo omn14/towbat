@@ -259,6 +259,11 @@ class MyApp(ShowBase):
         self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
         self.accept('f7', self.terrain_manager.toggle_debug)  # F7 toggles river water-detection band
         self.accept('c', self.castSpell)  # C casts with the selected Wizard
+        # Redress the Ranks (p. 125): widen or narrow the selected unit's front
+        # rank. Letters only — Panda3D names punctuation keys after the US
+        # layout, so bracket and comma keys never fire on a Norwegian keyboard.
+        self.accept('v', self.redressRanks, [1])
+        self.accept('shift-v', self.redressRanks, [-1])
         self.accept('wheel_up', self.zoomIn)  # Mouse wheel forward zooms in
         self.accept('wheel_down', self.zoomOut)  # Mouse wheel backward zooms out
         self.analyzer = GameStateAnalyzer(self)
@@ -1092,6 +1097,15 @@ class MyApp(ShowBase):
         return [name for name, spell in m.spells.items()
                 if spell.get('phase') == phase
                 and may_attempt(cast, name, level, spent)]
+
+    def redressRanks(self, delta):
+        """Widen (v) or narrow (shift-v) the selected unit's front rank."""
+        if self.fsm.state != 'MovementPhase':
+            return
+        unit = getattr(self, 'unitToMove', None)
+        if unit is not None and not unit.bodyNP.isEmpty():
+            if self.movement.redressRanks(unit, delta):
+                self.refreshSelectedUnit()
 
     def castSpell(self):
         """Enter the Spell phase with the selected Wizard.

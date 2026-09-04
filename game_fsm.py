@@ -146,6 +146,9 @@ class GamePhaseFSM(FSM):
                 unit.hasMovedThisTurn = False
                 unit.attemptedRallyThisTurn = False
                 unit.cannotChargeThisTurn = False
+                unit.moveSpentThisTurn = 0.0
+                unit.manoeuvreThisTurn = None
+                unit.redressDelta = 0
                 unit.request("Idle")
             unit.updateTextNode()
 
