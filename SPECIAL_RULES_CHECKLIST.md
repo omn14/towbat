@@ -788,6 +788,17 @@ clamour of battle, friendly units are seldom able to tell the difference"
       LEFTOVER: the other four manoeuvres (wheel, turn, move backwards, move
       sideways, reform) do not set `manoeuvreThisTurn`, so only a redress
       currently blocks a second manoeuvre.
+      Corrected since: none of the three fields the metering runs on —
+      `moveSpentThisTurn`, `manoeuvreThisTurn`, `redressDelta` — were written
+      to a save, so a quicksave taken mid-move refunded the half Movement a
+      manoeuvre had cost, lifted the one-per-move limit and handed back the
+      five-model redress allowance. All three are saved and loaded now.
+      The guard test that should have caught this matched flag *names* ending
+      in ThisTurn/ThisPhase/NextTurn, which found the first two and missed
+      `redressDelta` entirely. It now derives the list from the start-of-turn
+      reset in `game_fsm.enterStrategyPhase`, which is what actually defines
+      per-turn state: anything cleared there must appear in the save. That
+      reads 10 fields today, `redressDelta` among them.
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
 - [x] One hand weapon per model, and it is the catalogue's — every model was

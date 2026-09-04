@@ -100,6 +100,11 @@ def save_game_state(game, filename=None):
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'cannotPursueThisTurn': getattr(unit, 'cannotPursueThisTurn', False),
+            # The manoeuvre allowance: without these a reload refunds the half
+            # Movement a manoeuvre cost and lifts the one-per-move limit.
+            'moveSpentThisTurn': getattr(unit, 'moveSpentThisTurn', 0.0),
+            'manoeuvreThisTurn': getattr(unit, 'manoeuvreThisTurn', None),
+            'redressDelta': getattr(unit, 'redressDelta', 0),
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'fledThisPhase': getattr(unit, 'fledThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
@@ -294,6 +299,9 @@ def load_game_state(game, filename):
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.cannotPursueThisTurn = unit_data.get('cannotPursueThisTurn', False)
+        unit.moveSpentThisTurn = unit_data.get('moveSpentThisTurn', 0.0)
+        unit.manoeuvreThisTurn = unit_data.get('manoeuvreThisTurn', None)
+        unit.redressDelta = unit_data.get('redressDelta', 0)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.fledThisPhase = unit_data.get('fledThisPhase', False)
         unit.usedStubborn = unit_data.get('usedStubborn', False)

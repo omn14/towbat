@@ -24,7 +24,8 @@ TURN_FLAGS = (
     'chargedThisTurn', 'countsAsChargedNextTurn', 'chargeDistance',
     'cannotChargeThisTurn', 'panicTestedThisPhase', 'fledThisPhase',
     'usedStubborn', 'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn',
-    'cannotCastThisTurn', 'cannotPursueThisTurn',
+    'cannotCastThisTurn', 'cannotPursueThisTurn', 'moveSpentThisTurn',
+    'manoeuvreThisTurn', 'redressDelta',
 )
 
 
@@ -55,6 +56,9 @@ def _unit(name='Battle Wizard'):
     unit.chargeDistance = 0.0
     unit.woundsOnModel = 0
     unit.spellsCastThisTurn = []
+    unit.moveSpentThisTurn = 0.0
+    unit.manoeuvreThisTurn = None
+    unit.redressDelta = 0
     return unit
 
 
@@ -108,6 +112,35 @@ class TestSavingTurnState(unittest.TestCase):
         self.unit.spellsCastThisTurn = ['Fireball', 'Oaken Shield']
         self.assertEqual(self._save()['spellsCastThisTurn'],
                          ['Fireball', 'Oaken Shield'])
+
+    def test_everything_the_turn_resets_is_saved(self):
+        """The start-of-turn reset in `game_fsm.py` is what *defines* per-turn
+        state, so anything cleared there has to be saved. A name pattern is not
+        enough: `redressDelta` is reset with the rest and reads like a counter,
+        and went unsaved for exactly that reason."""
+        path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'game_fsm.py')
+        src = open(path, encoding='utf-8').read()
+        block = re.search(r'def enterStrategyPhase\(self\):(.*?)\n    def ',
+                          src, re.S)
+        self.assertIsNotNone(block, "could not find the start-of-turn reset")
+        reset = set(re.findall(r'unit\.(\w+)\s*=(?!=)', block.group(1)))
+        saved = set(self._save())
+        self.assertFalse(
+            reset - saved,
+            f"cleared at the start of every turn but not saved: "
+            f"{sorted(reset - saved)}")
+
+    def test_the_manoeuvre_allowance_survives(self):
+        # Without these a reload handed back the half Movement a redress had
+        # spent and let the unit manoeuvre a second time in the same move.
+        self.unit.moveSpentThisTurn = 2.0
+        self.unit.manoeuvreThisTurn = 'Redress the Ranks'
+        self.unit.redressDelta = 3
+        saved = self._save()
+        self.assertEqual(saved['moveSpentThisTurn'], 2.0)
+        self.assertEqual(saved['manoeuvreThisTurn'], 'Redress the Ranks')
+        self.assertEqual(saved['redressDelta'], 3)
 
     def test_a_spent_wizard_is_recorded(self):
         self.unit.cannotCastThisTurn = True
