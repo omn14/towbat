@@ -236,11 +236,40 @@ identical without the log. See `.github/copilot-instructions.md`.
       Now unblocked by this: `Dwarf Crafted` (no -1 To Hit on a Stand & Shoot)
       finally has a modifier to cancel.
 - [ ] Move or Shoot — cannot shoot after moving
-- [ ] Ponderous — . NOTE: the FAQ says a
-      weapon with both Ponderous and Quick Shot has the two "effectively cancel
-      one another out, meaning the weapon would suffer a -1 To Hit modifier for
-      Moving and Shooting" — so whoever codes this must make it beat Quick
-      Shot's waiver rather than sit beside it.
+- [x] Ponderous (p. 175) — "a weapon with this special rule suffers a To Hit
+      modifier of -2 for Moving and Shooting, rather than the usual -1". That
+      is the whole rule. The line here previously described it as
+      "move-or-shoot / initiative penalty", which is two rules it does not
+      have — a guess from the name that would have barred these weapons from
+      firing after moving at all.
+      Parsed as `ponderous` in `battlescribe.py` (9 weapons, one spelling) and
+      applied in `ranged_hit_requirement`, which now decides the Moving and
+      Shooting penalty in one place for all three cases.
+      A weapon with **both** Ponderous and Quick Shot takes the plain -1: the
+      FAQ has them "effectively cancel one another out". Not hypothetical —
+      `Naptha bombs` carries both, so the branch is reachable from the
+      catalogue and is tested against that weapon rather than a fixture.
+      This is not a fringe rule: **the Handgun and the Crossbow are both
+      Ponderous**, which is most of the missile fire in an Empire or Dwarf
+      army. Moving with either now costs 4+ -> 6+.
+      Corrected on the way, and the tests caught it: two Moving and Shooting
+      tests asserted a plain -1 *using a Handgun*, so they were describing the
+      general rule with a weapon that does not follow it. They are re-baselined
+      on an Asrai Longbow, which carries neither rule, and the Handgun now has
+      its own -2 tests.
+      Corrected with it: `_ranged_tohit_report` printed `-1` for any modifier
+      that changed the target at all, so a Ponderous weapon would have reported
+      a number the dice did not use. It reads the size of the change now, which
+      is why it says `moved -2`.
+      Corrected from a game log: the rule line still read `Moving and Shooting
+      — moved this turn -> -1 To Hit (5+ -> 7+)`, which is a two-point change
+      described as one point, and never named Ponderous as the cause. The rule
+      that fired now says its own name and carries the real delta, and the
+      shot readout gained a `To Hit` line showing the whole sum:
+      `BS3 4+  moved -2 (Ponderous)  long range -1  =  7+ (natural 6, then 4+)`.
+      Each modifier names the rule that sized it, so `moved waived (Quick
+      Shot)` and `moved -1 (Ponderous and Quick Shot cancel out)` are both
+      readable without knowing the weapon's rule list.
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
 - [ ] Heroic Killing Blow
 - [ ] Strike First

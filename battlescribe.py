@@ -48,6 +48,12 @@ def has_quick_shot(rules) -> bool:
                for r in (rules or []))
 
 
+def has_ponderous(rules) -> bool:
+    """True if *rules* names Ponderous (p. 175)."""
+    return any(re.search(r"ponderous", str(r), re.I)
+               for r in (rules or []))
+
+
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
@@ -362,6 +368,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
         weapon["move_and_shoot"] = has_move_and_shoot(rules)
         weapon["quick_shot"] = has_quick_shot(rules)
+        weapon["ponderous"] = has_ponderous(rules)
         # Blast template diameter (e.g. '5" blast template') from the Notes.
         bm = re.search(r"(\d+)\s*[\"\u201d]?\s*blast", notes, re.I)
         if bm:

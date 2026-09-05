@@ -1874,14 +1874,23 @@ class MyApp(ShowBase):
                     else 'manoeuvred' if attackerUnit.manoeuvreThisTurn
                     else f'moved {attackerUnit.moveSpentThisTurn:.1f}"'
                     if attackerUnit.moveSpentThisTurn else 'moved')
-            if _after[0] == _still[0]:
+            _delta = _after[0] - _still[0]
+            _range = f"({_still[0]}+ -> {_after[0]}+)"
+            if not _delta:
                 rule_log('Quick Shot', attackerUnit,
                          f"{weapon.get('name', 'weapon')}: {_why} this turn and "
                          f"still hits on {_still[0]}+ (no -1 for Moving and Shooting)")
+            elif weapon.get('ponderous') and weapon.get('quick_shot'):
+                rule_log('Ponderous', attackerUnit,
+                         f"{_why} this turn -> -{_delta} To Hit {_range} — "
+                         f"Quick Shot cancels the second point (FAQ)")
+            elif weapon.get('ponderous'):
+                rule_log('Ponderous', attackerUnit,
+                         f"{weapon.get('name', 'weapon')}: {_why} this turn -> "
+                         f"-{_delta} To Hit rather than the usual -1 {_range}")
             else:
                 rule_log('Moving and Shooting', attackerUnit,
-                         f"{_why} this turn -> -1 To Hit "
-                         f"({_still[0]}+ -> {_after[0]}+)")
+                         f"{_why} this turn -> -{_delta} To Hit {_range}")
         elif _still and _after and _after[0] == _still[0]:
             rule_skipped('Quick Shot', attackerUnit,
                          "the unit stood still, so there was no Moving and "

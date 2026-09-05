@@ -56,11 +56,12 @@ def _weapon_effects(weapon):
 
 
 def _ranged_tohit_report(model):
-    """The To Hit target for a shot and the modifiers in effect.
+    """The To Hit arithmetic for a shot: base, each modifier, final target.
 
-    Read from `ranged_hit_requirement`, not a second copy of the ladder, so the
-    report cannot print a number the dice will not use. Which modifiers a
-    weapon waives is asked the same way rather than restated here.
+    Read from `ranged_hit_requirement`, not a second copy of the ladder, so
+    the report cannot print a number the dice will not use. The size of each
+    modifier is measured the same way rather than assumed, which is what makes
+    a Ponderous -2 read as -2.
     """
     applied = dict(
         moved=getattr(model, 'moved_this_turn', False),
@@ -70,8 +71,9 @@ def _ranged_tohit_report(model):
     )
     req = ranged_hit_requirement(model, **applied)
     if req is None:
-        return 7, []
+        return {'target': 7, 'base': 7, 'mods': [], 'reroll': None, 'bs': 0}
     base = ranged_hit_requirement(model)
+    w = getattr(model, 'equipedWeapon', None) or {}
     labels = {'moved': 'moved', 'long_range': 'long range',
               'multiple_shots': 'multiple shots',
               'target_skirmisher': 'skirmisher target'}
@@ -80,9 +82,35 @@ def _ranged_tohit_report(model):
         if not on:
             continue
         alone = ranged_hit_requirement(model, **{key: True})
-        mods.append(f"{labels[key]} -1" if alone[0] > base[0]
-                    else f"{labels[key]} (waived)")
-    return req[0], mods
+        delta = alone[0] - base[0]
+        why = ''
+        if key == 'moved':
+            if w.get('ponderous') and w.get('quick_shot'):
+                why = ' (Ponderous and Quick Shot cancel out)'
+            elif w.get('ponderous'):
+                why = ' (Ponderous)'
+            elif not delta:
+                why = ' (Quick Shot)'
+        mods.append(f"{labels[key]} -{delta}{why}" if delta
+                    else f"{labels[key]} waived{why}")
+    bs = (model.firing_bs(3) if hasattr(model, 'firing_bs')
+          else _si(model.characteristics, 'BS', 3))
+    return {'target': req[0], 'base': base[0], 'mods': mods,
+            'reroll': req[1], 'bs': bs}
+
+
+def _tohit_summary(rep):
+    """One line showing how the To Hit target was arrived at."""
+    parts = f"BS{rep['bs']} {rep['base']}+"
+    if rep['mods']:
+        parts += "  " + "  ".join(rep['mods'])
+    line = f"{parts}  =  {rep['target']}+"
+    if rep['target'] > 6:
+        line += (f" (natural 6, then {rep['target'] - 3}+)"
+                 if rep['target'] < TO_HIT_IMPOSSIBLE else " (cannot hit)")
+    elif rep['reroll'] is not None:
+        line += f", re-rolling a failure at {rep['reroll']}+"
+    return line
 
 
 def build_combat_report(unit1, unit2, charge, attacks):
@@ -98,11 +126,14 @@ def build_combat_report(unit1, unit2, charge, attacks):
             m1.shooting_strength() if hasattr(m1, 'shooting_strength')
             else _si(m1.characteristics, 'S', 3))
         ap = w.get('ranged_AP', 0)
-        to_hit_target, hit_mods = _ranged_tohit_report(m1)
+        _rep = _ranged_tohit_report(m1)
+        to_hit_target, hit_mods = _rep['target'], []
+        tohit_summary = _tohit_summary(_rep)
     else:
         strength = _si(m1.characteristics, 'S', 3)
         ap = m1.melee_ap() if hasattr(m1, 'melee_ap') else m1.AP
         to_hit_target, hit_mods = to_hit(m1, m2), []
+        tohit_summary = None
 
     # To Wound with the strength actually used for this attack.
     saved_s = m1.characteristics.get('S')
@@ -134,6 +165,7 @@ def build_combat_report(unit1, unit2, charge, attacks):
         'mode': 'ranged' if ranged else 'melee',
         'strength': strength, 'ap': ap,
         'to_hit': to_hit_target, 'to_wound': to_wound_target,
+        'to_hit_summary': tohit_summary,
         'toughness': toughness, 'save': save, 'armour': armour, 'regen': regen,
         'modifiers': mods,
         'attacker_effects': _active_rule_effects(m1, charge) + _weapon_effects(w),
@@ -159,9 +191,12 @@ def format_combat_report(r):
     lines = [
         f"   Weapon : {r['weapon']} ({r['mode']})  S{r['strength']} {ap_str}  "
         f"[hit {hit_str}, wound {tw_str}]{mod_str}",
-        f"   Target : {r['defender']}  T{r['toughness']}  save {save_str}  "
-        f"armour [{armour}]{regen}",
     ]
+    if r.get('to_hit_summary'):
+        lines.append(f"   To Hit : {r['to_hit_summary']}")
+    lines.append(
+        f"   Target : {r['defender']}  T{r['toughness']}  save {save_str}  "
+        f"armour [{armour}]{regen}")
     if r['attacker_effects']:
         lines.append(f"   Attacker rules : {', '.join(r['attacker_effects'])}")
     if r['defender_effects']:

@@ -1,7 +1,7 @@
 
 import random
 
-from battlescribe import has_quick_shot
+from battlescribe import has_ponderous, has_quick_shot
 
 # A needed roll of 10 or more cannot be made even by the 7+ chain (p. 139).
 TO_HIT_IMPOSSIBLE = 10
@@ -80,13 +80,19 @@ def ranged_hit_requirement(model1, moved=False, long_range=False,
     # Some weapons (e.g. Blunderbuss) ignore certain To Hit penalties.
     _weapon = getattr(model1, 'equipedWeapon', None) or {}
     ignore = set(_weapon.get('ignore_to_hit_penalties', None) or [])
-    # Quick Shot waives the Moving and Shooting penalty (p. 175). Read from the
-    # rule names too, since a save predating the flag still carries them.
-    if _weapon.get('quick_shot') or has_quick_shot(_weapon.get('special_rules')):
-        ignore.add('moved')
+    # Read from the rule names too, since a save predating the flags keeps them.
+    _rules = _weapon.get('special_rules')
+    _quick = bool(_weapon.get('quick_shot') or has_quick_shot(_rules))
+    _ponderous = bool(_weapon.get('ponderous') or has_ponderous(_rules))
     penalty = 0
+    # Moving and Shooting is -1, or -2 for a Ponderous weapon (p. 175), and
+    # Quick Shot waives it. A weapon with both rules takes the plain -1: the
+    # FAQ has them "effectively cancel one another out".
     if moved and 'moved' not in ignore:
-        penalty += 1
+        if _ponderous:
+            penalty += 1 if _quick else 2
+        elif not _quick:
+            penalty += 1
     # A Stand & Shoot suffers no additional modifier for long range (p. 139).
     if long_range and not stand_and_shoot and 'long_range' not in ignore:
         penalty += 1

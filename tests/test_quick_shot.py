@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from battlescribe import has_quick_shot, get_catalogue
 from toHitAndToWound import ranged_hit_requirement
-from battleFunctions import _ranged_tohit_report
+from battleFunctions import _ranged_tohit_report, _tohit_summary
 
 
 def _shooter(weapon, bs="3"):
@@ -45,14 +45,52 @@ class QuickShotNameTests(unittest.TestCase):
 
 class MovingAndShootingTests(unittest.TestCase):
     def test_moving_costs_one_to_hit(self):
-        m = _shooter("Handgun")
+        # An Asrai Longbow is plain: neither Ponderous nor Quick Shot. This
+        # asserted -1 against a Handgun at first, which is Ponderous and takes
+        # -2 — the test was describing a rule its weapon does not have.
+        m = _shooter("Asrai Longbow")
         self.assertEqual(4, ranged_hit_requirement(m)[0])
         self.assertEqual(5, ranged_hit_requirement(m, moved=True)[0])
 
     def test_it_stacks_with_the_other_modifiers(self):
-        m = _shooter("Handgun")
+        m = _shooter("Asrai Longbow")
         self.assertEqual(6, ranged_hit_requirement(m, moved=True,
                                                    long_range=True)[0])
+
+
+class PonderousTests(unittest.TestCase):
+    def test_a_ponderous_weapon_costs_two(self):
+        m = _shooter("Handgun")
+        self.assertTrue(m.equipedWeapon.get('ponderous'))
+        self.assertEqual(4, ranged_hit_requirement(m)[0])
+        self.assertEqual(6, ranged_hit_requirement(m, moved=True)[0])
+
+    def test_it_costs_nothing_standing_still(self):
+        m = _shooter("Handgun")
+        self.assertEqual(4, ranged_hit_requirement(m, moved=False)[0])
+
+    def test_ponderous_and_quick_shot_cancel_to_the_usual_minus_one(self):
+        # Naptha bombs carry both, so this is a real weapon rather than a
+        # hypothetical: the FAQ has the two "effectively cancel one another
+        # out, meaning the weapon would suffer a -1 To Hit modifier".
+        m = _shooter("Naptha bombs")
+        w = m.equipedWeapon
+        self.assertTrue(w.get('ponderous'))
+        self.assertTrue(w.get('quick_shot'))
+        self.assertEqual(ranged_hit_requirement(m)[0] + 1,
+                         ranged_hit_requirement(m, moved=True)[0])
+
+    def test_a_save_written_before_the_flag_existed_still_works(self):
+        from models import model
+        m = model("Handgunner", "")
+        m.weapons['Handgun'] = {
+            'name': 'Handgun', 'tag': 'ranged', 'ranged_strength': 4,
+            'ranged_AP': -1, 'special_rules': ['Armour Bane (1)', 'Ponderous'],
+        }
+        m.equip_weapon('Handgun')
+        m.characteristics["BS"] = "3"
+        self.assertNotIn('ponderous', m.equipedWeapon)
+        self.assertEqual(6, ranged_hit_requirement(m, moved=True)[0])
 
 
 class QuickShotWaivesTheMovePenaltyTests(unittest.TestCase):
@@ -94,22 +132,39 @@ class ShotReportTests(unittest.TestCase):
                 m = _shooter(weapon, bs)
                 m.moved_this_turn = True
                 m.at_long_range = True
-                target, _mods = _ranged_tohit_report(m)
+                rep = _ranged_tohit_report(m)
                 self.assertEqual(
                     ranged_hit_requirement(m, moved=True, long_range=True)[0],
-                    target, f"{weapon} BS{bs}")
+                    rep['target'], f"{weapon} BS{bs}")
 
-    def test_a_waived_modifier_is_reported_as_waived(self):
+    def test_a_waived_modifier_says_which_rule_waived_it(self):
         m = _shooter("Clattergun")
         m.moved_this_turn = True
-        _target, mods = _ranged_tohit_report(m)
-        self.assertIn('moved (waived)', mods)
+        self.assertIn('moved waived (Quick Shot)',
+                      _ranged_tohit_report(m)['mods'])
 
     def test_an_applied_modifier_is_reported_as_applied(self):
+        m = _shooter("Asrai Longbow")
+        m.moved_this_turn = True
+        self.assertIn('moved -1', _ranged_tohit_report(m)['mods'])
+
+    def test_a_ponderous_penalty_is_reported_as_minus_two_and_named(self):
+        # A game log showed `-1 To Hit (5+ -> 7+)`, which is a two-point change
+        # described as one, and never named Ponderous as the cause.
         m = _shooter("Handgun")
         m.moved_this_turn = True
-        _target, mods = _ranged_tohit_report(m)
-        self.assertIn('moved -1', mods)
+        self.assertIn('moved -2 (Ponderous)', _ranged_tohit_report(m)['mods'])
+
+    def test_the_summary_shows_the_whole_sum(self):
+        m = _shooter("Handgun")
+        m.moved_this_turn = True
+        m.at_long_range = True
+        line = _tohit_summary(_ranged_tohit_report(m))
+        self.assertIn('BS3 4+', line)
+        self.assertIn('moved -2 (Ponderous)', line)
+        self.assertIn('long range -1', line)
+        self.assertIn('=  7+', line)
+        self.assertIn('natural 6, then 4+', line)
 
 
 if __name__ == "__main__":
