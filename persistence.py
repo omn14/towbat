@@ -85,6 +85,11 @@ def save_game_state(game, filename=None):
     for unit in game.units:
         unit_data = {
             'name': unit.unitName,
+            # The army list's rules, not the catalogue's: Skirmishers, Fire &
+            # Flee and the rest live on the roster, so a unit rebuilt from a
+            # save has no way to find them again.
+            'special_rules': list(
+                unit.unit.model.characteristics.get('Special Rules') or []),
             'position': list(unit.bodyNP.getPos()),
             'heading': unit.bodyNP.getH(),
             'pitch': unit.bodyNP.getP(),
@@ -274,6 +279,14 @@ def load_game_state(game, filename):
             'wizard_level': unit_data.get('wizard_level'),
         }
         game._create_unit(spec, unit_data.get('player', 1), unit_data['name'])
+
+    # Re-apply the army list's rules. A recreated unit has only its catalogue
+    # profile, and even a surviving one may predate a rule the roster grants.
+    by_name = {u.unitName: u for u in game.units}
+    for unit_data in game_state['units']:
+        unit = by_name.get(unit_data['name'])
+        if unit is not None:
+            game.applyDataRules(unit.unit.model, unit_data.get('special_rules'))
 
     unit_map = {unit.unitName: unit for unit in game.units}
 

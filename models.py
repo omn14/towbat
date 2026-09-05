@@ -418,6 +418,11 @@ class model:
         return any(isinstance(r, dict) and r.get('skirmish')
                    for r in self.special_rules)
 
+    def has_fire_and_flee(self) -> bool:
+        """True if the model has the Fire & Flee special rule (p. 169)."""
+        return any(isinstance(r, dict) and r.get('fire_and_flee')
+                   for r in self.special_rules)
+
     def is_venerable(self) -> bool:
         """True if the model has the Venerable special rule."""
         return any(isinstance(r, dict) and r.get('venerable')

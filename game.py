@@ -1814,7 +1814,8 @@ class MyApp(ShowBase):
               f"{spell.casting} -> {spell.name} holds.")
         return False
 
-    async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False):
+    async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
+                      distance=None):
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():
                 rule_log('Marching', attackerUnit,
@@ -1828,7 +1829,10 @@ class MyApp(ShowBase):
         weapon = attacker.model.equipedWeapon or {}
         # Long range (beyond half the weapon's range) imposes -1 To Hit.
         _half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
-        _dist = (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length()
+        # A charge reaction is measured from where the charge was declared: by
+        # the time it resolves the charger is already in contact.
+        _dist = (distance if distance is not None else
+                 (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length())
         attacker.model.at_long_range = bool(_half and _dist > _half)
         # US1 Skirmisher target imposes -1 To Hit on the shooter.
         attacker.model.target_skirmisher = (defender.model.is_skirmisher()

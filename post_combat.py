@@ -127,6 +127,17 @@ def fall_back_roll(dice, already_fled: bool = False) -> int:
     return 0 if already_fled else charge_roll(dice)
 
 
+def fire_and_flee_roll(dice, already_fled: bool = False) -> int:
+    """Fire & Flee rolls 2D6 and discards the lowest (p. 169).
+
+    The volley costs the unit ground rather than winning it any: an ordinary
+    Flee roll *sums* 2D6, so keeping one die is the shorter run. Same
+    arithmetic as a Fall Back, and still a flee move for the Limits of
+    Endurance.
+    """
+    return 0 if already_fled else charge_roll(dice)
+
+
 def pursuit_roll(dice) -> int:
     """A Pursuit roll is 2D6 summed, with no Movement added (p. 156)."""
     return sum(dice)

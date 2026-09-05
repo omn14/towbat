@@ -49,7 +49,8 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
 from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
-                         fall_back_roll, flee_direction, flee_roll, flees_from,
+                         fall_back_roll, fire_and_flee_roll, flee_direction,
+                         flee_roll, flees_from,
                          give_ground_direction, nearest_corner, peril_wounds,
                          pursuit_roll, restraint_test, segment_crosses_box,
                          turn_direction, winner_response)
@@ -104,8 +105,14 @@ class CombatResolver:
 
     # ─── Charge & Charge Reaction ─────────────────────────────────────────
 
-    def standAndShootOption(self, defender, charger):
+    def standAndShootOption(self, defender, charger, fromPos=None, fromHpr=None):
         """Whether *defender* may Stand & Shoot at *charger* (p. 120).
+
+        Measured from where the charge was *declared*, which `fromPos` and
+        `fromHpr` carry: by the time this runs the charger has already been
+        swept into contact, so its own transform reads 0" away and would refuse
+        every reaction in the game. Line of sight is taken from there too —
+        "when the charge reaction is declared" (Official FAQ).
 
         Returns the missile weapon it would fire, or None with the reason
         logged. Every refusal looks the same on the board, so each one says
@@ -124,14 +131,20 @@ class CombatResolver:
             rule_skipped('Stand & Shoot', defender,
                          "already engaged in combat when charged")
             return None
+        chargerPos = charger.bodyNP.getPos() if fromPos is None else fromPos
         blocked = self.game.terrain_manager.los_block_point(
-            defender.bodyNP.getPos(), charger.bodyNP.getPos())
+            defender.bodyNP.getPos(), chargerPos)
         if blocked is not None:
             rule_skipped('Stand & Shoot', defender,
                          f"no line of sight to {charger.unit.name}")
             return None
         psy = self.game.psychology
-        distance = obb_distance(psy._unit_box(defender), psy._unit_box(charger))
+        chargerBox = psy._unit_box(charger)
+        if fromPos is not None:
+            heading = chargerBox[4] if fromHpr is None else fromHpr.x
+            chargerBox = (chargerPos.x, chargerPos.y,
+                          chargerBox[2], chargerBox[3], heading)
+        distance = obb_distance(psy._unit_box(defender), chargerBox)
         movement = charger.unit.model.get_movement(4)
         quick = bool(weapon.get('quick_shot')
                      or has_quick_shot(weapon.get('special_rules')))
@@ -146,9 +159,20 @@ class CombatResolver:
                      f"{weapon.get('name', 'weapon')}: {charger.unit.name} is "
                      f"{distance:.1f}\" away, inside its Movement of {movement}\", "
                      f"and may still be Stood & Shot at (p. 175)")
-        return weapon
+        return SimpleNamespace(weapon=weapon, distance=distance,
+                               movement=movement, quick=quick)
 
-    async def standAndShoot(self, defender, charger, weapon):
+    def fireAndFleeOption(self, defender, charger, opt):
+        """Whether *defender* may Fire & Flee (p. 169), given its shooting option.
+
+        The rule restates the distance gate, but the reaction *is* a Stand &
+        Shoot followed by a flee, so Quick Shot's exemption from that distance
+        carries: whatever may be Stood & Shot at may be Fired & Fled from. The
+        gate is therefore only ever applied in one place.
+        """
+        return bool(opt) and defender.unit.model.has_fire_and_flee()
+
+    async def standAndShoot(self, defender, charger, weapon, distance=None):
         """Fire the charged unit's missile weapon at the charging unit (p. 120).
 
         The weapon is equipped for the shot: a unit expecting a fight may have
@@ -162,7 +186,8 @@ class CombatResolver:
                  f"reacts to {charger.unit.name}'s charge with "
                  f"{weapon.get('name', 'its missile weapon')} at -1 To Hit, "
                  f"and no long range modifier (p. 139)")
-        await self.game.shootAt(defender, charger, stand_and_shoot=True)
+        await self.game.shootAt(defender, charger, stand_and_shoot=True,
+                                distance=distance)
         # equip_weapon also rewrites special_rules, so put the melee weapon
         # back through it rather than by assignment.
         if slot is not None and previous:
@@ -183,26 +208,46 @@ class CombatResolver:
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
-            standShootWeapon = self.standAndShootOption(defender, unit)
-            if standShootWeapon:
+            shootOption = self.standAndShootOption(defender, unit, oposUnit, orotUnit)
+            fireFlee = self.fireAndFleeOption(defender, unit, shootOption)
+            if fireFlee:
+                chargeReaction.insert(0, "fire & flee")
+            if shootOption:
                 chargeReaction.insert(0, "stand & shoot")
+            fireAndFlee = False
             if self.game.autoHold:
                 # A pursuit was never declared as a charge, so the unit it
                 # reaches gets no reaction to it (p. 157).
                 crchoice = "hold"
-                if standShootWeapon:
+                if shootOption:
                     rule_skipped('Stand & Shoot', defender,
                                  f"reached by {unit.unit.name}'s pursuit rather "
                                  f"than a declared charge — no reaction")
             elif self.game.aiControls(defender):
                 # Shooting costs the unit nothing a hold would have kept: it
                 # holds afterwards either way, keeps its Shooting phase, and
-                # the charger tests for Panic in neither case.
-                crchoice = "stand & shoot" if standShootWeapon else "hold"
+                # the charger tests for Panic in neither case. Fire & Flee is
+                # a real trade — the volley for the fight — and the AI has no
+                # policy to weigh it, so it shoots and stands.
+                crchoice = "stand & shoot" if shootOption else "hold"
+                if fireFlee:
+                    rule_skipped('Fire & Flee', defender,
+                                 "the AI stands its ground; it has no policy "
+                                 "for trading the combat away")
             else:
                 crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10), owner=defender))
-            if crchoice == "stand & shoot":
-                await self.standAndShoot(defender, unit, standShootWeapon)
+            if crchoice == "fire & flee":
+                await self.standAndShoot(defender, unit, shootOption.weapon,
+                                         shootOption.distance)
+                rule_log('Fire & Flee', defender,
+                         f"volley fired at {unit.unit.name}, now turning tail: "
+                         f"the Flee roll discards its lowest die rather than "
+                         f"summing both (p. 169)")
+                crchoice = "flee"
+                fireAndFlee = True
+            elif crchoice == "stand & shoot":
+                await self.standAndShoot(defender, unit, shootOption.weapon,
+                                         shootOption.distance)
                 # "Once this shooting has been resolved, the charged unit will
                 # Hold and await the charging unit" (p. 120).
                 crchoice = "hold"
@@ -223,7 +268,7 @@ class CombatResolver:
                 loserUnit = self.game.getSelectedUnit(defenderNP)
                 loserUnit.request("IsFleeing")
                 taskMgr.add(self.fleeInterval, "fleeIntervalTask",
-                            extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit],
+                            extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit, fireAndFlee],
                             appendTask=False)
                 fleeDirection = defenderNP.getPos() - unit.bodyNP.getPos()
                 storeRotation = defenderNP.getHpr()
@@ -243,7 +288,8 @@ class CombatResolver:
 
     # ─── Flee Interval ────────────────────────────────────────────────────
 
-    async def fleeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit):
+    async def fleeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit,
+                           fireAndFlee=False):
         fleeingUnit = self.game.getSelectedUnit(defenderNP.node())
         fleePos = defenderNP.getPos()
         chargeBonus = await self.swiftstrideChargeChoice(unit)
@@ -340,7 +386,26 @@ class CombatResolver:
         for rule in unit.unit.model.special_rules:
             if rule.get('mountUnit'):
                 chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice, rough)
-        fldist = sum(fldice) + fleeBonus
+        # The bonus die is already among *fldice*; adding `fleeBonus` as well
+        # added a literal 1" for taking it. Both flee rolls live in one place
+        # now, which is also where The Limits of Endurance is applied.
+        spent = getattr(fleeingUnit, 'fledThisPhase', False)
+        fldist = (fire_and_flee_roll(fldice, spent) if fireAndFlee
+                  else flee_roll(fldice, spent))
+        fleeingUnit.fledThisPhase = True
+        pair, bonus = fldice[:2], sum(fldice[2:])
+        swift = f" +{bonus} Swiftstride" if bonus else ""
+        if spent:
+            rule_log('The Limits of Endurance', fleeingUnit,
+                     "already fled this phase -> this flee covers 0\" (p. 133)")
+        elif fireAndFlee:
+            rule_log('Fire & Flee', fleeingUnit,
+                     f"flee roll {pair} keeps the {max(pair)} and discards the "
+                     f"{min(pair)}{swift} -> flees {fldist}\", where an ordinary "
+                     f"Flee would have summed them for {sum(fldice)}\" (p. 169)")
+        else:
+            battle_log(f"{fleeingUnit.unit.name} flees {fldist}\" "
+                       f"(2D6 {pair} summed{swift})")
         if chdist < wdistance:
             angle = math.degrees(chdist / width)
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z) * wheel1Angle / abs(wheel1Angle)

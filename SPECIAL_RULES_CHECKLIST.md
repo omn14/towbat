@@ -197,6 +197,21 @@ identical without the log. See `.github/copilot-instructions.md`.
       Verified offscreen with the real armies: State Missile Troopers are
       offered their Handgun against a Captain 20" off, refused at 0" (inside
       his Movement of 7"), and refused while fleeing.
+      Corrected from a game log, and it had disabled the whole reaction: every
+      charge reported `Grave Guard Unit is 0.0" away, inside its own Movement
+      of 4"` and refused. `chargeAndChargeReaction` runs *after* the charger
+      has been swept into contact — that is why it is handed `oposUnit`, to put
+      the unit back if the charge is cancelled — so the charger's own transform
+      always reads zero and no unit could ever have Stood & Shot.
+      The distance and the line of sight are both taken from the declaration
+      position now, which is also what the FAQ asks for: "when are line of
+      sight and cover determined for a unit that declares a Stand & Shoot
+      charge reaction? When the charge reaction is declared."
+      The offscreen check above passed because it called `standAndShootOption`
+      directly with the units where they stood; only a real charge moved the
+      charger first. Two tests now drive the function with the charger nose to
+      nose and its declaration position given separately, which is the shape
+      the bug had.
       **Its casualties count towards the combat that follows** (p. 151): "each
       side's basic combat result is equal to the number of unsaved wounds it
       caused during this Combat phase, plus any unsaved wounds a unit caused by
@@ -231,8 +246,11 @@ identical without the log. See `.github/copilot-instructions.md`.
       LEFTOVER: the FAQ case of being charged by two units where only one is
       too close is not modelled — reactions are resolved per contact, so each
       charge asks its own question and the two never meet.
-      LEFTOVER: Fire & Flee is a separate reaction and is still missing, as is
-      the FAQ's ruling on casting a Magic Missile after reacting.
+      LEFTOVER: the FAQ's ruling that a unit which Stands & Shoots (or Fires &
+      Flees) may not then cast a Magic Missile or Magical Vortex is not
+      enforced.
+      Fire & Flee is built on this reaction and is done — see the Dwarf rules
+      below, where the catalogue keeps it.
       Now unblocked by this: `Dwarf Crafted` (no -1 To Hit on a Stand & Shoot)
       finally has a modifier to cancel.
 - [ ] Move or Shoot — cannot shoot after moving
@@ -402,7 +420,51 @@ army-agnostic and would benefit every faction.
 - [ ] Dwarf Crafted — no -1 To Hit on a Stand & Shoot reaction. Unblocked now
       that the reaction and its -1 exist; `ignore_to_hit_penalties` already
       carries a `stand_and_shoot` key for exactly this.
-- [ ] Fire & Flee — shooting-unit flee reaction
+- [x] Fire & Flee (p. 169) — the fourth charge reaction: the unit Stands &
+      Shoots and *then* flees, "however, due to the time spent shooting at the
+      charging foe, when making its Flee roll the unit rolls two D6 and
+      discards the lowest result".
+      That is a penalty, not a bonus, and it is easy to read the other way
+      round: an ordinary Flee roll *sums* 2D6, so keeping one die is the
+      shorter run. `post_combat.fire_and_flee_roll` is the same arithmetic as
+      a Fall Back, so it delegates to `charge_roll` exactly as `fall_back_roll`
+      does rather than being a third copy of "2D6 discard the lowest".
+      Measured: [2,5] flees 7" normally and 5" here, [6,6] flees 12" and 6".
+      The rule is unit-level and comes from the army list, like Skirmishers, so
+      it goes through a `SPECIAL_RULE_BUILDERS` entry to `fire_and_flee` on the
+      model and is read by `model.has_fire_and_flee()`. Both spellings of the
+      joiner are registered. It is not in the catalogue's model profiles at
+      all — the Gyrocopter carries it in `player1_army.json`, which is the only
+      place it appears.
+      NOTE: the rule restates the distance gate in its own words — "if the
+      distance between this unit and the charging unit is less than the
+      Movement characteristic of the charging unit, this unit must either Hold
+      or Flee" — without repeating Quick Shot's exemption from it. Taken as
+      the same gate rather than a second one: the reaction *is* a Stand &
+      Shoot followed by a flee, so whatever may be Stood & Shot at may be
+      Fired & Fled from, and a Quick Shot weapon may do both from inside the
+      charger's Movement. It is therefore tested in one place —
+      `can_stand_and_shoot` — and `fireAndFleeOption` only asks whether the
+      unit has the rule.
+      Two bugs fell out of the flee path while wiring this up, both predating
+      it and both in `fleeInterval`, which is the charge-reaction flee:
+      `fldist = sum(fldice) + fleeBonus` added `fleeBonus` — a **bool** from
+      `swiftstrideChoice` — to the distance, so any unit that took its
+      Swiftstride die fled a literal 1" too far, on top of the bonus die
+      already among `fldice`.
+      And that line was a second copy of the flee arithmetic, so this path
+      never consulted `fledThisPhase`: The Limits of Endurance (p. 133) was
+      applied to every flee in the game *except* the one a charge causes, and
+      a unit that had already fled could flee again on a fresh 2D6. Both flee
+      rolls now go through `flee_roll` / `fire_and_flee_roll`, which is where
+      that clause lives, and the reaction spends the allowance.
+      LEFTOVER: the AI never takes it. Unlike Stand & Shoot this is a genuine
+      trade — the volley in exchange for giving up the combat and taking a
+      Panic-adjacent flee move — and there is no policy to weigh it, so it
+      shoots and stands, and logs that it declined.
+      LEFTOVER: "if the *majority* of the models in a unit" is read as the
+      unit's shared model having the rule, which is what the engine's one
+      model per unit can express.
 - [ ] Dive Bomb — once-per-game flyer attack
 - [ ] Borne Aloft — Shieldbearers (4 models on one base)
 - [ ] Royal Guard — army-list allowance (list-building, not runtime)
@@ -1085,6 +1147,22 @@ clamour of battle, friendly units are seldom able to tell the difference"
       reset in `game_fsm.enterStrategyPhase`, which is what actually defines
       per-turn state: anything cleared there must appear in the save. That
       reads 10 fields today, `redressDelta` among them.
+- [x] A save carries the army list's special rules — `persistence.py` stored
+      only what the catalogue knows, so the *roster's* rules were lost for any
+      unit a load had to rebuild: Skirmishers, Swiftstride, Fire & Flee, Fear
+      and the rest all arrive from the army list through `applyDataRules`, not
+      from the model profile.
+      It hid because a load normally restores state onto units that already
+      exist, and those keep the rules they were given at army load. Only a unit
+      missing from the scene goes through `_create_unit`, which has nothing but
+      the catalogue profile to build from — and that is exactly the path a save
+      from a different army takes.
+      Found while building a quicksave to test Fire & Flee: the rule vanished
+      on load. The names are saved per unit and re-applied to every unit on
+      load, which is idempotent, so a save also repairs a unit that predates a
+      rule the roster grants.
+      LEFTOVER: `mount_special_rules` are not saved with them, so a mount's
+      rules still depend on the army file being the one that was played.
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
 - [x] One hand weapon per model, and it is the catalogue's — every model was

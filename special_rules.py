@@ -99,6 +99,14 @@ def _skirmishers(model, param, desc):
             "skirmish": True}
 
 
+def _fire_and_flee(model, param, desc):
+    return {"name": "Fire & Flee",
+            "description": desc or ("May Stand & Shoot and then flee as a "
+                                    "charge reaction."),
+            "tag": "reaction",
+            "fire_and_flee": True}
+
+
 def _fly(model, param, desc):
     # 'Fly (9)' -> flies with Movement 9, passing freely over models/terrain.
     entry = {"name": "Fly",
@@ -169,6 +177,8 @@ SPECIAL_RULE_BUILDERS = {
     "regeneration": _regeneration,
     "unbreakable": _unbreakable,
     "skirmishers": _skirmishers,
+    "fire & flee": _fire_and_flee,
+    "fire and flee": _fire_and_flee,
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,

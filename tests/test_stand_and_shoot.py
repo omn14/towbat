@@ -108,8 +108,107 @@ class CombatResultTests(unittest.TestCase):
         # simply worse. A pursuit is the one case that still holds, having
         # never been declared as a charge.
         src = self._source('combat_resolution.py')
-        self.assertIn('crchoice = "stand & shoot" if standShootWeapon else "hold"',
+        self.assertIn('crchoice = "stand & shoot" if shootOption else "hold"',
                       src)
+
+
+class FireAndFleeTests(unittest.TestCase):
+    """Fire & Flee (p. 169): Stand & Shoot, then flee on a shortened roll."""
+
+    def test_the_volley_costs_the_unit_ground(self):
+        # Easy to get backwards: an ordinary Flee roll *sums* 2D6, so keeping
+        # one die is the shorter run, not the longer one.
+        from post_combat import flee_roll, fire_and_flee_roll
+        self.assertEqual(7, flee_roll([2, 5]))
+        self.assertEqual(5, fire_and_flee_roll([2, 5]))
+        self.assertEqual(12, flee_roll([6, 6]))
+        self.assertEqual(6, fire_and_flee_roll([6, 6]))
+
+    def test_swiftstride_adds_its_die_rather_than_being_discarded(self):
+        from post_combat import fire_and_flee_roll
+        self.assertEqual(9, fire_and_flee_roll([3, 5, 4]))
+
+    def test_a_second_flee_in_a_phase_covers_nothing(self):
+        # The Limits of Endurance (p. 133) applies to this flee too.
+        from post_combat import fire_and_flee_roll
+        self.assertEqual(0, fire_and_flee_roll([6, 6], True))
+
+    def test_the_roster_rule_reaches_the_model(self):
+        from special_rules import build_special_rules
+        from models import model
+        m = model("Gyrocopter", "")
+        m.characteristics["Special Rules"] = ['Fire & Flee']
+        m.special_rules = build_special_rules(m)
+        self.assertTrue(m.has_fire_and_flee())
+
+    def test_a_unit_without_the_rule_does_not_have_it(self):
+        from models import model
+        m = model("Handgunner", "")
+        self.assertFalse(m.has_fire_and_flee())
+
+    def test_the_charge_reaction_flee_spends_its_allowance(self):
+        # Both bugs this rule exposed were in that one line: a bool added to
+        # the distance, and a flee that never consulted fledThisPhase.
+        path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'combat_resolution.py')
+        src = open(path, encoding='utf-8').read()
+        self.assertNotIn('sum(fldice) + fleeBonus', src)
+        self.assertIn('fleeingUnit.fledThisPhase = True', src)
+
+
+class DeclarationPositionTests(unittest.TestCase):
+    """The reaction is judged from where the charge was declared (p. 120).
+
+    Found in a game log: every reaction was refused with "is 0.0" away",
+    because `chargeAndChargeReaction` runs *after* the charger has been swept
+    into contact, so its own transform always reads zero.
+    """
+
+    def _resolver(self, charger_movement=4):
+        from types import SimpleNamespace
+        from combat_resolution import CombatResolver
+        from models import model
+
+        def unit(name, weapon=None, x=0.0, y=0.0):
+            m = model(name, "")
+            if weapon:
+                m.give_weapon(weapon)
+                m.equip_weapon(weapon)
+            m.characteristics['M'] = str(charger_movement)
+            body = SimpleNamespace(getPos=lambda x=x, y=y: SimpleNamespace(x=x, y=y))
+            return SimpleNamespace(unit=SimpleNamespace(name=name, model=m),
+                                   state="Idle", bodyNP=body,
+                                   unitWidth=2.0, unitHeight=2.0)
+
+        boxes = {}
+
+        class Psy:
+            @staticmethod
+            def _unit_box(u):
+                return boxes[id(u)]
+
+        game = SimpleNamespace(
+            psychology=Psy(),
+            terrain_manager=SimpleNamespace(los_block_point=lambda a, b: None))
+        return CombatResolver(game), unit, boxes
+
+    def test_the_contact_position_would_refuse_every_reaction(self):
+        res, unit, boxes = self._resolver()
+        d, ch = unit("Handgunners", "Handgun"), unit("Grave Guard")
+        boxes[id(d)] = (0.0, 0.0, 1.0, 1.0, 0.0)
+        boxes[id(ch)] = (0.0, 2.0, 1.0, 1.0, 0.0)   # nose to nose, as after the move
+        self.assertIsNone(res.standAndShootOption(d, ch))
+
+    def test_measured_from_where_the_charge_was_declared(self):
+        from types import SimpleNamespace
+        res, unit, boxes = self._resolver()
+        d, ch = unit("Handgunners", "Handgun"), unit("Grave Guard")
+        boxes[id(d)] = (0.0, 0.0, 1.0, 1.0, 0.0)
+        boxes[id(ch)] = (0.0, 2.0, 1.0, 1.0, 0.0)
+        declared = SimpleNamespace(x=0.0, y=9.0)     # 7" of clear ground away
+        opt = res.standAndShootOption(d, ch, declared)
+        self.assertIsNotNone(opt)
+        self.assertAlmostEqual(7.0, opt.distance, places=6)
 
 
 if __name__ == "__main__":
