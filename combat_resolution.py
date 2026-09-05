@@ -39,9 +39,10 @@ from dice import Dice, checkDice
 from battleFunctions import (MIN_IMPACT_HIT_CHARGE, impact_hit_report,
                              resolve_impact_hits, simulate_battle)
 from characters import JOIN_TAG
-from special_rules import (board_edge_distance, charge_roll, max_charge_range,
-                           max_pursuit_range, should_use_swiftstride,
-                           unit_has_swiftstride)
+from battlescribe import has_quick_shot
+from special_rules import (board_edge_distance, can_stand_and_shoot, charge_roll,
+                           max_charge_range, max_pursuit_range,
+                           should_use_swiftstride, unit_has_swiftstride)
 from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcome,
                        massed_infantry_bonus, obb_distance, overwhelmed,
                        rank_bonus, should_reroll_break, should_use_stubborn,
@@ -103,6 +104,70 @@ class CombatResolver:
 
     # ─── Charge & Charge Reaction ─────────────────────────────────────────
 
+    def standAndShootOption(self, defender, charger):
+        """Whether *defender* may Stand & Shoot at *charger* (p. 120).
+
+        Returns the missile weapon it would fire, or None with the reason
+        logged. Every refusal looks the same on the board, so each one says
+        which condition it failed.
+        """
+        if defender is None or charger is None:
+            return None
+        weapon = defender.unit.model.missile_weapon()
+        if not weapon:
+            return None   # not armed with missile weapons: not a refusal
+        if defender.state == "IsFleeing":
+            rule_skipped('Stand & Shoot', defender,
+                         "fleeing units cannot Stand & Shoot")
+            return None
+        if defender.state == "InCombat":
+            rule_skipped('Stand & Shoot', defender,
+                         "already engaged in combat when charged")
+            return None
+        blocked = self.game.terrain_manager.los_block_point(
+            defender.bodyNP.getPos(), charger.bodyNP.getPos())
+        if blocked is not None:
+            rule_skipped('Stand & Shoot', defender,
+                         f"no line of sight to {charger.unit.name}")
+            return None
+        psy = self.game.psychology
+        distance = obb_distance(psy._unit_box(defender), psy._unit_box(charger))
+        movement = charger.unit.model.get_movement(4)
+        quick = bool(weapon.get('quick_shot')
+                     or has_quick_shot(weapon.get('special_rules')))
+        if not can_stand_and_shoot(distance, movement, quick):
+            rule_skipped('Stand & Shoot', defender,
+                         f"{charger.unit.name} is {distance:.1f}\" away, inside "
+                         f"its own Movement of {movement}\" -> no time to raise "
+                         f"weapons")
+            return None
+        if quick and distance < movement:
+            rule_log('Quick Shot', defender,
+                     f"{weapon.get('name', 'weapon')}: {charger.unit.name} is "
+                     f"{distance:.1f}\" away, inside its Movement of {movement}\", "
+                     f"and may still be Stood & Shot at (p. 175)")
+        return weapon
+
+    async def standAndShoot(self, defender, charger, weapon):
+        """Fire the charged unit's missile weapon at the charging unit (p. 120).
+
+        The weapon is equipped for the shot: a unit expecting a fight may have
+        drawn its sword, and `shootAt` fires whatever is in hand.
+        """
+        previous = (defender.unit.model.equipedWeapon or {}).get('name')
+        slot = defender.unit.model.weapon_slot(weapon.get('name', ''))
+        if slot is not None:
+            defender.unit.model.equip_weapon(slot)
+        rule_log('Stand & Shoot', defender,
+                 f"reacts to {charger.unit.name}'s charge with "
+                 f"{weapon.get('name', 'its missile weapon')} at -1 To Hit, "
+                 f"and no long range modifier (p. 139)")
+        await self.game.shootAt(defender, charger, stand_and_shoot=True)
+        # equip_weapon also rewrites special_rules, so put the melee weapon
+        # back through it rather than by assignment.
+        if slot is not None and previous:
+            defender.unit.model.equip_weapon(previous)
+
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
         chargeYesNo = ["Yes", "No"]
         # Declaring the charge is the charger's call; reacting to it is the
@@ -118,10 +183,29 @@ class CombatResolver:
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
-            if self.game.autoHold or self.game.aiControls(defender):
+            standShootWeapon = self.standAndShootOption(defender, unit)
+            if standShootWeapon:
+                chargeReaction.insert(0, "stand & shoot")
+            if self.game.autoHold:
+                # A pursuit was never declared as a charge, so the unit it
+                # reaches gets no reaction to it (p. 157).
                 crchoice = "hold"
+                if standShootWeapon:
+                    rule_skipped('Stand & Shoot', defender,
+                                 f"reached by {unit.unit.name}'s pursuit rather "
+                                 f"than a declared charge — no reaction")
+            elif self.game.aiControls(defender):
+                # Shooting costs the unit nothing a hold would have kept: it
+                # holds afterwards either way, keeps its Shooting phase, and
+                # the charger tests for Panic in neither case.
+                crchoice = "stand & shoot" if standShootWeapon else "hold"
             else:
                 crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10), owner=defender))
+            if crchoice == "stand & shoot":
+                await self.standAndShoot(defender, unit, standShootWeapon)
+                # "Once this shooting has been resolved, the charged unit will
+                # Hold and await the charging unit" (p. 120).
+                crchoice = "hold"
             if crchoice == "hold":
                 print("Defender holds position.")
 
@@ -1191,9 +1275,23 @@ class CombatResolver:
             if bonus:
                 rule_log('Massed Infantry', who,
                          f"Unit Strength {us} against {other} -> +1 combat result")
+        # Wounds from a Stand & Shoot count for the combat that follows it
+        # (p. 151), so they are banked in the Movement phase and spent here.
+        p1_shot = sum(getattr(u, 'standAndShootWounds', 0) for u in p1_units)
+        p2_shot = sum(getattr(u, 'standAndShootWounds', 0) for u in p2_units)
+        player1_score += p1_shot
+        player2_score += p2_shot
+        for units in (p1_units, p2_units):
+            for u in units:
+                banked = getattr(u, 'standAndShootWounds', 0)
+                if banked:
+                    rule_log('Stand & Shoot', u,
+                             f"{banked} unsaved wound(s) from the charge "
+                             f"reaction count towards this combat (p. 151)")
         self.printCombatResult(
             {'Wounds caused': (p1_wounds, p2_wounds),
              'Impact Hits': (impact1, impact2),
+             'Stand & Shoot': (p1_shot, p2_shot),
              'Flank / rear': (player1_flank_bonus, player2_flank_bonus),
              'Rank Bonus': (player1_rank_bonus, player2_rank_bonus),
              'Battle Standard': (player1_standard, player2_standard),

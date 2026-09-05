@@ -1814,7 +1814,7 @@ class MyApp(ShowBase):
               f"{spell.casting} -> {spell.name} holds.")
         return False
 
-    async def shootAt(self, attackerUnit, defenderUnit):
+    async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False):
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():
                 rule_log('Marching', attackerUnit,
@@ -1862,7 +1862,8 @@ class MyApp(ShowBase):
         # model rather than on each firing model -- do not move it per-model.
         # Asked before any dice are rolled, as the choice cannot follow them.
         _hit_mods = dict(long_range=attacker.model.at_long_range,
-                         target_skirmisher=attacker.model.target_skirmisher)
+                         target_skirmisher=attacker.model.target_skirmisher,
+                         stand_and_shoot=stand_and_shoot)
         # Moving and Shooting (p. 139), and the rule that waives it (p. 175).
         # Compared against the same requirement the dice use, so a weapon that
         # ignores the penalty is reported as ignoring it rather than silently.
@@ -1961,10 +1962,19 @@ class MyApp(ShowBase):
             total_wounds += c_wounds
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))
         defenderUnit.bodyNP.setCollideMask(BitMask32.bit(4))
-        attackerUnit.hasAttackedThisTurn = True
-        taskMgr.add(self.shootingAnimation(attackerUnit, defenderUnit, total_wounds))
+        # A Stand & Shoot is a reaction, not the unit's own Shooting phase, and
+        # this flag doubles as "this combat has been fought" — setting it would
+        # bar the unit from the fight it is about to have.
+        if stand_and_shoot:
+            # Banked for the combat that follows this turn (p. 151).
+            attackerUnit.standAndShootWounds += total_wounds
+        else:
+            attackerUnit.hasAttackedThisTurn = True
+        taskMgr.add(self.shootingAnimation(attackerUnit, defenderUnit,
+                                           total_wounds, stand_and_shoot))
 
-    async def shootingAnimation(self,attackerUnit,defenderUnit,total_wounds):
+    async def shootingAnimation(self, attackerUnit, defenderUnit, total_wounds,
+                                stand_and_shoot=False):
         
         #self.p.start(parent=render, renderParent=render)
         self.p.setPos(defenderUnit.bodyNP.getPos())
@@ -1992,7 +2002,12 @@ class MyApp(ShowBase):
         await parTra
         self.applyWounds(defenderUnit, total_wounds)
         # Heavy casualties from shooting can trigger a Panic test.
-        self.psychology.check_heavy_casualties(defenderUnit, 'shooting', attacker=attackerUnit)
+        if stand_and_shoot:
+            rule_skipped('Panic', defenderUnit,
+                         "charging units are not required to test for Panic "
+                         "from a Stand & Shoot (p. 120)")
+        else:
+            self.psychology.check_heavy_casualties(defenderUnit, 'shooting', attacker=attackerUnit)
         await Task.pause(2.0 / self.speedMultiplier)
         self.p.disable()
         self.p_miss.disable()

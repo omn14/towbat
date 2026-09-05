@@ -263,6 +263,20 @@ def should_fire_multiple(single_chance: float, multi_chance: float,
     return expected_shots * multi_chance > single_chance
 
 
+def can_stand_and_shoot(distance: float, charger_movement: int,
+                        quick_shot: bool = False) -> bool:
+    """Whether the charged unit has time to raise its weapons (p. 120).
+
+    A charger closing from inside its own Movement characteristic is on the
+    unit before it can shoot; Quick Shot ignores the distance entirely
+    (p. 175). Exactly the Movement is far enough — the rule bars a distance
+    *less than* it.
+    """
+    if quick_shot:
+        return True
+    return distance >= charger_movement
+
+
 def board_edge_distance(x: float, y: float, half_x: float = 36.0,
                         half_y: float = 24.0) -> float:
     """Distance from (x, y) to the nearest table edge, in inches.

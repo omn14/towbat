@@ -87,7 +87,8 @@ def ranged_hit_requirement(model1, moved=False, long_range=False,
     penalty = 0
     if moved and 'moved' not in ignore:
         penalty += 1
-    if long_range and 'long_range' not in ignore:
+    # A Stand & Shoot suffers no additional modifier for long range (p. 139).
+    if long_range and not stand_and_shoot and 'long_range' not in ignore:
         penalty += 1
     if stand_and_shoot and 'stand_and_shoot' not in ignore:
         penalty += 1

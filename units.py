@@ -94,6 +94,7 @@ class unitGraphics(FSM):
         self.hasMovedThisTurn=False
         self.marchedThisTurn=False   # marched: no shooting or Magic Missiles (p. 123)
         self.hasAttackedThisTurn=False
+        self.standAndShootWounds=0   # counts towards the combat that follows (p. 151)
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
         self.countsAsChargedNextTurn=False  # caught a unit that fell back; the locked combat is fought next turn

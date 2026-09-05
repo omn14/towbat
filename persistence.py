@@ -95,6 +95,7 @@ def save_game_state(game, filename=None):
             'hasMovedThisTurn': unit.hasMovedThisTurn,
             'marchedThisTurn': getattr(unit, 'marchedThisTurn', False),
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
+            'standAndShootWounds': getattr(unit, 'standAndShootWounds', 0),
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
             'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
@@ -295,6 +296,7 @@ def load_game_state(game, filename):
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
         unit.marchedThisTurn = unit_data.get('marchedThisTurn', False)
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
+        unit.standAndShootWounds = unit_data.get('standAndShootWounds', 0)
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
         unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)

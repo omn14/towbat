@@ -156,15 +156,91 @@ identical without the log. See `.github/copilot-instructions.md`.
       unmodified number, `Moving and Shooting` when it does not, and
       `rule_skipped('Quick Shot')` when the unit stood still and there was no
       penalty to ignore — the three cases are indistinguishable on screen.
-      BLOCKED: "can use them to make a Stand & Shoot charge reaction regardless
-      of how close the charging unit is" cannot be written, because **the
-      Stand & Shoot reaction does not exist**: `combat_resolution.py` offers
-      only `["hold", "flee"]`, and `stand_and_shoot` survives solely as a To
-      Hit parameter nothing passes. This half is unimplementable until that
-      list gains a third option; the -1 waiver above is the whole of what
-      Quick Shot currently does.
+      BLOCKED, then DONE: "can use them to make a Stand & Shoot charge
+      reaction regardless of how close the charging unit is" had nothing to
+      attach to, because the reaction did not exist. It does now — see Stand &
+      Shoot below — and `standAndShootOption` passes the weapon's Quick Shot
+      through to `can_stand_and_shoot`, which waives the distance test and
+      says so. Both halves of the rule are therefore coded.
+- [x] Stand & Shoot (p. 120) and Standing and Shooting (p. 139) — the third
+      charge reaction. `combat_resolution.py` offered only `["hold", "flee"]`,
+      so a unit of handgunners watched a charge come in with its weapons
+      loaded; it is now offered first when the unit is entitled to it.
+      The entitlement is five conditions and each refusal logs which one it
+      failed, because on the board they are indistinguishable: armed with a
+      missile weapon, line of sight to the charger, not fleeing, not already
+      engaged, and the charger no closer than its own Movement characteristic.
+      That last one is `special_rules.can_stand_and_shoot`, kept pure and
+      tested — the rule bars a distance *less than* the Movement, so exactly
+      the Movement may still shoot, and Quick Shot skips the test entirely.
+      Distance is measured edge to edge with `obb_distance`, the same oriented
+      box maths the 1" rule and the Leadership bubbles use, and the charger's
+      Movement comes from `get_movement()`, which looks through to a mount or
+      a chariot's beasts.
+      "Armed with missile weapons" is not the same question as "has one in
+      hand": a unit expecting a fight may have equipped its melee weapon, so
+      `model.missile_weapon()` finds the bow whether or not it is equipped,
+      and the reaction equips it for the shot and puts the melee weapon back
+      afterwards — through `equip_weapon`, which also rewrites `special_rules`,
+      rather than by assigning `equipedWeapon` and leaving the rules behind.
+      The shot itself reuses `MyApp.shootAt`, which already knows about ranks,
+      hills, Multiple Shots and joined characters. Three things differ and all
+      three are the rule rather than convenience: -1 To Hit, **no** long range
+      modifier however far away the charger is (p. 139 — verified: a Handgun
+      needing 4+ needs 5+ either way, where an ordinary shot at long range
+      would need 6+), and no Panic test for the charging unit (p. 120).
+      `hasAttackedThisTurn` is deliberately NOT set. It is the unit's Shooting
+      phase allowance, which a reaction does not spend — and it doubles as
+      "this combat has been fought", so setting it would have barred the unit
+      from the fight it had just shot at. That trap is recorded under Pursuit
+      into a New Combat and would have been silent here.
+      Verified offscreen with the real armies: State Missile Troopers are
+      offered their Handgun against a Captain 20" off, refused at 0" (inside
+      his Movement of 7"), and refused while fleeing.
+      **Its casualties count towards the combat that follows** (p. 151): "each
+      side's basic combat result is equal to the number of unsaved wounds it
+      caused during this Combat phase, plus any unsaved wounds a unit caused by
+      shooting if it chose to Stand & Shoot as a charge reaction during this
+      turn". Missing from the first pass, which resolved the shot and then
+      threw the number away, so the reaction could kill five models and count
+      for nothing in the fight it had just softened.
+      The tally is banked on the shooter as `standAndShootWounds` in the
+      Movement phase and spent in `_verySimpleBattleInner`, because the two
+      halves happen in different phases and nothing else carries state between
+      them. It is reset at the Start of Turn with the other per-turn flags,
+      which is exactly the "during this turn" the rule asks for, and it is
+      persisted — the guard test derived from the FSM's reset block caught it
+      unsaved on the first run, which is the second time that test has paid
+      for itself.
+      It gets its own row in the combat result table rather than being folded
+      into `Wounds caused`, because a combat can be won on it alone: 2 wounds
+      against 3 with equal ranks is a loss by 1, and the same combat with 3
+      banked from the reaction is a win by 2.
+      The AI takes the reaction whenever it is entitled to it. There is no
+      trade-off to weigh: the unit holds afterwards either way, the reaction
+      does not spend its Shooting phase, and the charger tests for Panic in
+      neither case — so holding instead is simply worse. It was written to
+      hold at first, which quietly wasted every volley the AI was owed.
+      `autoHold` is *not* the AI and still holds: it is set for a pursuit, and
+      a unit reached by one was never declared a charge against, so it gets no
+      reaction at all (p. 157). That is logged rather than silent, since it
+      looks identical to the rule failing.
+      LEFTOVER: line of sight is `los_block_point`, which is terrain only. The
+      unit-blocking half is only half modelled anywhere in the engine, so a
+      unit can Stand & Shoot through a friend.
+      LEFTOVER: the FAQ case of being charged by two units where only one is
+      too close is not modelled — reactions are resolved per contact, so each
+      charge asks its own question and the two never meet.
+      LEFTOVER: Fire & Flee is a separate reaction and is still missing, as is
+      the FAQ's ruling on casting a Magic Missile after reacting.
+      Now unblocked by this: `Dwarf Crafted` (no -1 To Hit on a Stand & Shoot)
+      finally has a modifier to cancel.
 - [ ] Move or Shoot — cannot shoot after moving
-- [ ] Ponderous — move-or-shoot / initiative penalty
+- [ ] Ponderous — . NOTE: the FAQ says a
+      weapon with both Ponderous and Quick Shot has the two "effectively cancel
+      one another out, meaning the weapon would suffer a -1 To Hit modifier for
+      Moving and Shooting" — so whoever codes this must make it beat Quick
+      Shot's waiver rather than sit beside it.
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
 - [ ] Heroic Killing Blow
 - [ ] Strike First
@@ -294,7 +370,9 @@ army-agnostic and would benefit every faction.
 - [ ] Runes of Warding — 5+ ward vs Flaming Attacks
 - [ ] Rune Lore — may attempt a Wizardly Dispel
 - [ ] Forgefire — joined unit gains Armour Bane (2) + Flaming Attacks
-- [ ] Dwarf Crafted — no -1 To Hit on a Stand & Shoot reaction
+- [ ] Dwarf Crafted — no -1 To Hit on a Stand & Shoot reaction. Unblocked now
+      that the reaction and its -1 exist; `ignore_to_hit_penalties` already
+      carries a `stand_and_shoot` key for exactly this.
 - [ ] Fire & Flee — shooting-unit flee reaction
 - [ ] Dive Bomb — once-per-game flyer attack
 - [ ] Borne Aloft — Shieldbearers (4 models on one base)

@@ -614,6 +614,18 @@ class model:
             return {}
         return w
 
+    def missile_weapon(self) -> dict:
+        """A missile weapon the model carries, equipped or not.
+
+        Stand & Shoot asks whether the unit *is armed* with one (p. 120), which
+        a unit that has equipped its sword for the coming fight still is.
+        """
+        w = self.equipedWeapon or {}
+        if w.get('tag') == 'ranged':
+            return w
+        return next((x for x in self.weapons.values()
+                     if x.get('tag') == 'ranged'), {})
+
     def melee_strength_bonus(self) -> int:
         """Strength bonus of the equipped melee weapon. Charge-only weapons
         (Lance) count only while charging; others (Halberd, Great Weapon) are

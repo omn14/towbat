@@ -139,6 +139,7 @@ class GamePhaseFSM(FSM):
             spell.scatter(self.game)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
+            unit.standAndShootWounds = 0
             unit.marchedThisTurn = False
             unit.panicTestedThisPhase = False
             unit.fledThisPhase = False
