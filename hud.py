@@ -22,8 +22,8 @@ import math
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
-from panda3d.core import (TextNode, TextProperties, TextPropertiesManager,
-                          TransparencyAttrib)
+from panda3d.core import (Point3, TextNode, TextProperties,
+                          TextPropertiesManager, TransparencyAttrib)
 
 import gui_theme as T
 import rules_log
@@ -93,7 +93,7 @@ class HUD(DirectObject):
     ASIDES = {'SpellPhase': 'CASTING', 'MakeChoice': 'CHOOSING',
               'CampaignPhase': 'CAMPAIGN'}
 
-    LOG_ENTRIES = 6
+    LOG_ENTRIES = 200
     LOG_SCALE = 0.026
     LOG_TOP = 0.350
     LOG_BOTTOM = 0.048
@@ -181,6 +181,10 @@ class HUD(DirectObject):
         self.SECTIONS = self.SECTIONS_V if self._vertical else self.SECTIONS_H
 
         self._entries = deque(maxlen=self.LOG_ENTRIES)
+        self._log_scroll = 0.0
+        self._log_max_scroll = 0.0
+        self._log_w = 1.0
+        self._log_anchor = None
         self._active_phase = self.TRACK[0]
         self._visible = True
         self._collapsed = False
@@ -352,6 +356,7 @@ class HUD(DirectObject):
 
         log_w = self._section_width(self._log_section, total)
         self._log_x = 0.02 * log_w
+        self._log_w = log_w
         self._log_text['wordwrap'] = (log_w - 0.04) / self.LOG_SCALE
         self._fit_phase()
         self._redraw_log()
@@ -461,6 +466,8 @@ class HUD(DirectObject):
         self._log_text = self._label(anchor, 'log', 0.02, self.LOG_TOP,
                                      self.LOG_SCALE, T.INK)
         self._log_text['wordwrap'] = 30
+        self._log_anchor = anchor
+        self._bind_log_wheel()
 
     def _build_centre(self, font):
         anchor = self._section('centre')
@@ -660,6 +667,8 @@ class HUD(DirectObject):
                                      self.LOG_SCALE, T.INK)
         self._log_text['wordwrap'] = 30
         self._tab_panels['log'] = [self._log_text]
+        self._log_anchor = anchor
+        self._bind_log_wheel()
         for key, z in (('rules', -0.230), ('objectives', -0.230)):
             slot = self._slot(anchor, 0.22, 0.22, centred=True)
             self._place(slot, 'tabs', 0.5, z)
@@ -910,10 +919,55 @@ class HUD(DirectObject):
         if category not in _CATEGORY_COLOURS:
             category = 'info'
         self._entries.append((category, text))
+        # A reader who has scrolled back keeps their place; one at the foot of
+        # the log follows the newest line, which is the usual case.
+        if self._log_scroll > 0:
+            self._log_scroll += self._log_line_height()
         self._redraw_log()
 
     def clear_log(self):
         self._entries.clear()
+        self._log_scroll = 0.0
+        self._redraw_log()
+
+    def _log_line_height(self) -> float:
+        return self.LOG_SCALE * 1.1
+
+    def _bind_log_wheel(self):
+        """Route the wheel to the log while the pointer is over its page.
+
+        The page is a plain DirectFrame with no mouse region, so its own
+        WITHIN/WITHOUT events never fire — which is why an earlier version of
+        this never scrolled at all. The pointer is tested against the page's
+        rectangle instead, which needs no region and survives anything drawn
+        over it.
+        """
+        self.accept('wheel_up', self.scroll_log, [1])
+        self.accept('wheel_down', self.scroll_log, [-1])
+
+    def pointer_over_log(self) -> bool:
+        """True while the pointer is inside the log page, so the camera can let
+        the wheel through to it rather than zooming."""
+        if not self._visible or self._log_anchor is None:
+            return False
+        watcher = getattr(base, 'mouseWatcherNode', None)
+        if watcher is None or not watcher.hasMouse():
+            return False
+        mouse = watcher.getMouse()
+        point = self._log_anchor.getRelativePoint(
+            base.render2d, Point3(mouse.getX(), 0, mouse.getY()))
+        top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
+        bottom = self.LOG_BOTTOM_V if self._vertical else self.LOG_BOTTOM
+        return (0.0 <= point.getX() <= self._log_w
+                and bottom <= point.getZ() <= top)
+
+    def scroll_log(self, lines: int):
+        """Scroll *lines* back through the log; negative goes forwards."""
+        if not self.pointer_over_log():
+            return
+        self._log_scroll = max(
+            0.0, min(self._log_max_scroll,
+                     self._log_scroll + lines * self._log_line_height()))
         self._redraw_log()
 
     def _on_rule(self, kind: str, rule: str, subject: str, detail: str):
@@ -937,7 +991,22 @@ class HUD(DirectObject):
         height = raw * self.LOG_SCALE if math.isfinite(raw) else 0.0
         top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
         bottom = self.LOG_BOTTOM_V if self._vertical else self.LOG_BOTTOM
-        self._log_text.setPos(self._log_x, min(bottom + height, top))
+        # Overflow is scrolled through rather than clamped away: clamping put
+        # the newest lines below the page, which is where they used to vanish.
+        self._log_max_scroll = max(0.0, height - (top - bottom))
+        self._log_scroll = min(self._log_scroll, self._log_max_scroll)
+        self._log_text.setPos(self._log_x,
+                              bottom + height - self._log_scroll)
+        self._clip_log(bottom, top)
+
+    def _clip_log(self, bottom, top):
+        """Keep the text inside its page, so scrolled-off lines are not drawn."""
+        anchor = getattr(self, '_log_anchor', None)
+        if anchor is None:
+            return
+        width = max(self._log_w, 0.001)
+        self._log_text.setScissor(anchor, Point3(0, 0, bottom),
+                                  Point3(width, 0, top))
 
     # ─── Chrome visibility ────────────────────────────────────────────
 

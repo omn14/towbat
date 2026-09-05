@@ -2775,6 +2775,8 @@ class MyApp(ShowBase):
 
     def zoomIn(self):
         # Move camera closer (towards Y=0 from Y=-75)
+        if self.hud.pointer_over_log():
+            return   # the wheel is scrolling the battle log
         rot = LRotationf()
         rot.setHpr(self.camera.getHpr())
         fwd = rot.getForward()
@@ -2783,6 +2785,8 @@ class MyApp(ShowBase):
     
     def zoomOut(self):
         # Move camera farther away (towards Y=-200 from Y=-75)
+        if self.hud.pointer_over_log():
+            return
         rot = LRotationf()
         rot.setHpr(self.camera.getHpr())
         fwd = rot.getForward()
