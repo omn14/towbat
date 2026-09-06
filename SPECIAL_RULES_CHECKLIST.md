@@ -636,16 +636,16 @@ army-agnostic and would benefit every faction.
       need re-importing before their mounts' rules reach the table.
 - [ ] Move Through Cover — no difficult-terrain movement penalty
 - [ ] Shieldwall — defensive bonus vs charges
-- [ ] Resolute — strikes with full ranks when charged
 - [ ] Veteran — Ld / re-roll bonus
-- [ ] Rallying Cry — bonus to rally tests
+- [ ] Rallying Cry — 
 - [ ] Close Order / Open Order / Dispersed Formation — formation modes
-- [ ] Gromril Weapons — hand weapon with AP -1 in melee
 - [ ] Detachment — list-building support (may not need a runtime effect)
 
 ## Dwarf-specific (`Dwarfen Mountain Holds.cat`) rules — TODO
 - [ ] Ancestral Grudge — Hatred (enemy characters)
 - [ ] Gromril Armour — re-roll natural 1s on armour saves
+- [ ] Gromril Weapons — hand weapon with AP -1 in melee
+- [ ] Resolute — 
 - [ ] Stoic Defenders — +1 Initiative & Attacks when charged
 - [x] Venerable — DONE: friendly units within 6" of a Venerable unit (edge to
       edge, the same bubble as nearby-friend Panic) re-roll failed Panic tests.
