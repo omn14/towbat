@@ -314,6 +314,12 @@ class model:
     def is_mounted(self) -> bool:
         return self.get_mount() is not None
 
+    def magic_resistance(self) -> int:
+        """This profile's strongest casting penalty, not a sum (p. 173)."""
+        return min((r['magic_resistance'] for r in self.special_rules
+                    if isinstance(r, dict) and r.get('magic_resistance') is not None),
+                   default=0)
+
     def is_chariot(self) -> bool:
         """True if this model is a chariot, which has a split profile."""
         return 'chariot' in str(self.characteristics.get('Troop Type', '')).lower()

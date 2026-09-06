@@ -12,7 +12,33 @@ from panda3d.core import Point3, Vec3, LRotationf
 from panda3d.bullet import BulletBoxShape
 from dice import Dice, checkDice
 from rulesFunctions import plusSTAT
-from rules_log import battle_log
+from rules_log import battle_log, rule_log, rule_skipped
+from characters import side_of
+from special_rules import unit_magic_resistance
+from battlescribe import spell_key
+
+
+def restore_spellbook(model, spells, wizard_level=0):
+    """Saved metadata is authoritative; only coded classes survive from runtime."""
+    known = getattr(model, 'spells', {})
+    restored = {}
+    for data in spells or []:
+        key = spell_key(data)
+        entry = dict(data)
+        cls = known.get(key, {}).get('class')
+        if cls is not None:
+            entry.setdefault('class', cls)
+        restored[key] = entry
+    model.spells = restored
+    rules = [r for r in getattr(model, 'special_rules', [])
+             if not (isinstance(r, dict) and r.get('roster_wizard'))]
+    # Possessing a Bound spell does not make its bearer a Wizard (p. 109).
+    level = int(wizard_level or 0)
+    if level and not any(isinstance(r, dict) and r.get('wizard') for r in rules):
+        rules.append({'name': f'Wizard Level {level}', 'tag': 'wizard',
+                      'wizard': True, 'wizard_level': level, 'roster_wizard': True,
+                      'description': 'May attempt Level spells per turn (p. 108).'})
+    model.special_rules = rules
 
 
 def casting_result(dice_total: int, wizard_level: int) -> int:
@@ -30,17 +56,20 @@ CAST_MISCAST = 'miscast'
 CAST_PERFECT = 'perfect invocation'
 
 
-def casting_outcome(dice, wizard_level: int, casting_value: int):
+def casting_outcome(dice, wizard_level: int, casting_value: int,
+                    modifier: int = 0, *, bound: bool = False, power_level: int = 0):
     """(outcome, casting result) for a Casting roll.
 
     A natural double 6 is a perfect invocation and cannot be dispelled; a
     natural double 1 is a miscast whatever the result would have been.
     """
-    result = casting_result(sum(dice), wizard_level)
+    # Bound spells use Power Level and cannot miscast or invoke perfectly (p. 109).
+    result = (sum(dice) + power_level if bound
+              else casting_result(sum(dice), wizard_level)) + modifier
     pair = list(dice[:2])
-    if pair == [6, 6]:
+    if not bound and pair == [6, 6]:
         return CAST_PERFECT, result
-    if pair == [1, 1]:
+    if not bound and pair == [1, 1]:
         return CAST_MISCAST, result
     if result >= casting_value:
         return CAST_SUCCESS, result
@@ -115,9 +144,11 @@ class Spell:
 
     # True for a spell aimed at a point on the board rather than at a unit.
     targets_ground = False
+    targets_self = False
 
     def __init__(self, name, casting_value, duration_list=None, wizard_level=1,
-                 effect='', game=None, caster=None):
+                 effect='', game=None, caster=None, *, bound=False, power_level=0,
+                 spell_range=None):
         self.name = name
         self.casting_value = casting_value
         self.duration_list = duration_list
@@ -125,6 +156,9 @@ class Spell:
         self.effect = effect
         self.game = game
         self.caster = caster
+        self.bound = bound
+        self.power_level = power_level
+        self.spell_range = spell_range
         self.casting = 0            # result a dispel attempt must beat
         self.perfect = False        # a perfect invocation cannot be dispelled
         self.no_more_spells = False # the caster is spent for this turn
@@ -139,6 +173,8 @@ class Spell:
         engine used to resolve the effect first and undo it afterwards, which
         showed the player damage that was then taken back.
         """
+        if self.targets_self or str(self.spell_range).casefold() == 'self':
+            target = self.caster or target
         if not self.canTarget(target):
             return
         if not await self._attempt(target):
@@ -167,21 +203,64 @@ class Spell:
         """Called at end of turn to revert temporary spell effects."""
         pass
 
+    def _resistance(self, target):
+        """Only an enemy unit actually targeted resists the cast (pp. 108, 173)."""
+        if self.targets_ground:
+            return 0, '', [], 'the spell targets the ground, not a unit'
+        if self.targets_self or str(self.spell_range).casefold() == 'self':
+            value, source, unknown = unit_magic_resistance(self.caster or target)
+            return value, source, unknown, "a Self spell has no enemy target"
+        value, source, unknown = unit_magic_resistance(target)
+        if not value and not unknown:
+            return 0, source, unknown, ''
+        if self.game is None or self.caster is None or not hasattr(target, 'unit'):
+            return value, source, unknown, 'caster/target ownership is unavailable'
+        caster_side = side_of(self.game, self.caster, default=None)
+        target_side = side_of(self.game, target, default=None)
+        if caster_side is None or target_side is None:
+            return value, source, unknown, 'caster/target ownership is unavailable'
+        if caster_side == target_side:
+            return value, source, unknown, 'the spell targets a friendly unit'
+        return value, source, unknown, ''
+
     async def _attempt(self, unit):
         """Roll to cast and report. Returns True if the spell goes off.
 
         Sets `self.casting` to the casting result a dispel attempt must beat,
         and `self.perfect` when the spell cannot be dispelled at all.
         """
+        resistance, source, unresolved, skipped = self._resistance(unit)
+        modifier = 0 if skipped else resistance
         total, values = await self._roll_casting_dice()
         outcome, result = casting_outcome(values, self.wizard_level,
-                                          self.casting_value)
+                          self.casting_value, modifier,
+                          bound=self.bound, power_level=self.power_level)
         self.casting = result
         self.perfect = outcome == CAST_PERFECT
         self.no_more_spells = False
+        bonus = self.power_level if self.bound else casting_result(0, self.wizard_level)
+        kind = f'Bound Power Level {bonus}' if self.bound else f'Level {self.wizard_level}'
+        penalty = f" {modifier:+d} (Magic Resistance)" if modifier else ''
         print(f"{self.name}: casting roll {values} = {total} "
-              f"+ {result - total} (Level {self.wizard_level}) = {result} "
+              f"+ {bonus} ({kind}){penalty} = {result} "
               f"vs {self.casting_value}+ -> {outcome}")
+        for unsupported in unresolved:
+            rule_skipped('Magic Resistance', unit,
+                         f'{unsupported}: no resolved numeric modifier; not guessed or re-rolled')
+        if resistance:
+            if skipped or outcome in (CAST_PERFECT, CAST_MISCAST):
+                reason = skipped or f'natural {values}: {outcome} overrides casting modifiers (p. 109)'
+                rule_skipped('Magic Resistance', unit,
+                             f'{resistance} from {source}: {reason}')
+            else:
+                rule_log('Magic Resistance', unit,
+                         f'{resistance} from {source} (strongest, not cumulative): '
+                         f'{self.name}, dice {total} + bonus {bonus} {modifier:+d} '
+                         f'= {result} vs {self.casting_value}+ -> {outcome} (pp. 108, 173)')
+        if self.bound:
+            rule_log('Bound Spells', self.caster or unit,
+                     f'{self.name}: 2D6 {total} + Power Level {bonus}{penalty} '
+                     f'= {result}; no Wizard bonus, miscast or perfect invocation (p. 109)')
         battle_log(
             f"{self.name}: {values} = {result} v {self.casting_value}+ "
             f"-> {outcome}",
@@ -564,6 +643,7 @@ class OakenShieldSpell(Spell):
     save until the caster's next Start of Turn."""
 
     WARDING_VALUE = 5
+    targets_self = True
 
     affected_unit = None
     rule = None
@@ -648,6 +728,8 @@ def spell_readout(name: str, spell: dict, width: int = 46) -> str:
     reach = f'{reach}"' if isinstance(reach, (int, float)) else (reach or '-')
     head = (f"{name}  ({spell.get('type') or 'Spell'})\n"
             f"Casting {spell.get('casting_value') or '?'}+   Range {reach}")
+    if spell.get('bound'):
+        head += f"\nBound spell — Power Level {spell.get('power_level', 0)}"
     body = ' '.join((spell.get('effect') or '').split())
     return f"{head}\n{textwrap.fill(body, width)}" if body else head
 
@@ -668,6 +750,9 @@ def save_spells(game) -> list:
             'casting_value': spell.casting_value,
             'wizard_level': spell.wizard_level,
             'effect': spell.effect,
+            'bound': spell.bound,
+            'power_level': spell.power_level,
+            'spell_range': spell.spell_range,
             'ticks': spell.ticks_remaining,
             'caster': spell.caster.unitName if spell.caster is not None else None,
             'target': target.unitName if target is not None else None,
@@ -688,7 +773,9 @@ def load_spells(game, records, unit_map):
         spell = cls(data['name'], data.get('casting_value') or 12,
                     game.fsm.endOfTurnSpells,
                     wizard_level=data.get('wizard_level') or 1,
-                    effect=data.get('effect', ''), game=game, caster=caster)
+                    effect=data.get('effect', ''), game=game, caster=caster,
+                    bound=data.get('bound', False), power_level=data.get('power_level', 0),
+                    spell_range=data.get('spell_range'))
         center = data.get('center')
         if center is not None and hasattr(spell, 'place'):
             spell.place(game, Point3(center[0], center[1], 0.1))

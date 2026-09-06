@@ -151,6 +151,54 @@ def _regeneration(model, param, desc):
     return entry
 
 
+def _magic_resistance(model, param, desc):
+    """Magic Resistance is a casting penalty, never a save (pp. 108, 173)."""
+    text = str(param or '').strip().replace('−', '-')
+    # Two Ushabti profiles omit the minus sign; neither grants a casting bonus.
+    value = -abs(int(text)) if re.fullmatch(r'-?\d+', text) else None
+    label = str(value) if value is not None else text
+    return {'name': f'Magic Resistance ({label})' if label else 'Magic Resistance',
+            'description': desc or 'Enemy spells targeting this unit suffer the strongest casting penalty.',
+            'tag': 'magic', 'magic_resistance': value}
+
+
+def unit_magic_resistance(unit):
+    """Strongest modifier, its source, and unresolved grants (pp. 173, 192, 194)."""
+    unit = getattr(unit, 'hostUnit', None) or unit
+    pending = [unit]
+    seen = set()
+    best, source, unresolved = 0, '', []
+    while pending:
+        member = pending.pop()
+        profile = getattr(member, 'unit', member)
+        if getattr(profile, 'nmodels', 1) <= 0:
+            continue
+        m = getattr(profile, 'model', profile)
+        if id(m) in seen:
+            continue
+        seen.add(id(m))
+        joined = getattr(member, 'joinedCharacter', None)
+        if joined is not None:
+            pending.append(joined)
+        for rule in getattr(m, 'special_rules', ()) or ():
+            if not isinstance(rule, dict):
+                continue
+            if 'magic_resistance' in rule:
+                value = rule['magic_resistance']
+                name = getattr(m, 'name', 'model')
+                if value is None:
+                    unresolved.append(f"{name}: {rule['name']}")
+                elif value < best:
+                    best, source = value, name
+            # Split-profile rules apply across their elements unless explicitly restricted.
+            if rule.get('tag') == 'mount' and rule.get('mountUnit') is not None:
+                pending.append(rule['mountUnit'])
+            if (rule.get('tag') in ('crew', 'beasts') and rule.get('partUnit') is not None
+                    and rule.get('count', 1) > 0):
+                pending.append(rule['partUnit'])
+    return best, source, unresolved
+
+
 def _unbreakable(model, param, desc):
     return {"name": "Unbreakable",
             "description": desc or "Never flees; only gives ground when it loses combat.",
@@ -278,6 +326,7 @@ def _impact_hits(model, param, desc):
 SPECIAL_RULE_BUILDERS = {
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
+    "magic resistance": _magic_resistance,
     "unbreakable": _unbreakable,
     "skirmishers": _skirmishers,
     "fire & flee": _fire_and_flee,

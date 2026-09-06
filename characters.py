@@ -38,7 +38,7 @@ def same_player(game, a, b) -> bool:
             (a in game.player2Units and b in game.player2Units))
 
 
-def side_of(game, unit) -> int:
+def side_of(game, unit, default: int | None = 1):
     """Which player *unit* fights for, 1 or 2.
 
     Joining takes a character out of both player lists, so membership alone
@@ -52,7 +52,7 @@ def side_of(game, unit) -> int:
     if side in (1, 2):
         return side
     host = getattr(unit, 'hostUnit', None)
-    return side_of(game, host) if host is not None else 1
+    return side_of(game, host, default) if host is not None else default
 
 
 def friendly_units(game, unit):

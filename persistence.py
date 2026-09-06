@@ -12,8 +12,9 @@ import shutil
 from datetime import datetime
 
 from challenges import Challenge
-from characters import join_unit
-from spell_system import load_spells, save_spells
+from characters import detach_character, join_unit
+from models import model as Model
+from spell_system import load_spells, save_spells, restore_spellbook
 
 
 # ── Where saves live ──────────────────────────────────────────────────
@@ -167,6 +168,7 @@ def save_game_state(game, filename=None):
             'fledThisPhase': getattr(unit, 'fledThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
             'spellsCastThisTurn': list(getattr(unit, 'spellsCastThisTurn', [])),
+            'boundSpellPhases': list(getattr(unit, 'boundSpellPhases', [])),
             'cannotCastThisTurn': getattr(unit, 'cannotCastThisTurn', False),
             'isDisrupted': getattr(unit, 'isDisrupted', False),
             'isGeneral': getattr(unit, 'isGeneral', False),
@@ -196,6 +198,8 @@ def save_game_state(game, filename=None):
             'wizard_level': unit.unit.model.wizard_level(0),
             'mount': (unit.unit.model.get_mount().name
                       if unit.unit.model.is_mounted() else None),
+            'mount_special_rules': (list(unit.unit.model.get_mount().characteristics.get('Special Rules') or [])
+                                    if unit.unit.model.is_mounted() else []),
             # Character joined to this unit's front rank, if any.
             'joined_character': (unit.joinedCharacter.unitName
                                  if getattr(unit, 'joinedCharacter', None) else None),
@@ -295,6 +299,15 @@ def load_game_state(game, filename):
 
     # Remove any current units that aren't in the save (e.g. units destroyed
     # after this save was taken) so a load reflects the saved roster exactly.
+    # Unparent first: deleting an old host must not delete a character the save keeps.
+    for host in list(game.units):
+        character = getattr(host, 'joinedCharacter', None)
+        if character is not None:
+            character.bodyNP.wrtReparentTo(host.bodyNP.getParent())
+            detach_character(host)
+            game.world.attachRigidBody(character.bodyNP.node())
+            host.layOutRanks()
+            host.rebuildFootprint()
     saved_names = {unit_data['name'] for unit_data in game_state['units']}
     for unit in list(game.units):
         if unit.unitName in saved_names:
@@ -333,6 +346,7 @@ def load_game_state(game, filename):
             'files': unit_data['files'],
             'ranks': unit_data['ranks'],
             'mount': unit_data.get('mount'),
+            'mount_special_rules': unit_data.get('mount_special_rules', []),
             'weapons': unit_data.get('weapons', []),
             'spells': unit_data.get('spells', []),
             'wizard_level': unit_data.get('wizard_level'),
@@ -349,8 +363,30 @@ def load_game_state(game, filename):
         if unit is not None:
             game.applyDataRules(unit.unit.model, unit_data.get('special_rules'),
                                 replace=True)
+            mount = unit.unit.model.get_mount()
+            if 'mount' in unit_data:
+                mount_name = unit_data['mount']
+                if mount_name is None:
+                    unit.unit.model.special_rules = [
+                        r for r in unit.unit.model.special_rules
+                        if not (isinstance(r, dict) and r.get('tag') == 'mount')]
+                    mount = None
+                elif mount is None or mount.name != mount_name:
+                    mount = Model(mount_name, '')
+                    unit.unit.model.attach_mount(mount)
+            if mount is not None and 'mount_special_rules' in unit_data:
+                game.applyDataRules(mount, unit_data['mount_special_rules'], replace=True)
+                mount._base_characteristics = copy.deepcopy(mount.characteristics)
 
     unit_map = {unit.unitName: unit for unit in game.units}
+    # Lists are mutated in place because the AI holds references to them.
+    game.player1Units[:] = []
+    game.player2Units[:] = []
+    for data in game_state['units']:
+        member = unit_map.get(data['name'])
+        if member is not None:
+            member._player = data.get('player', 1)
+            (game.player1Units if member._player == 1 else game.player2Units).append(member)
 
     # First pass: restore individual unit state
     for unit_data in game_state['units']:
@@ -387,6 +423,7 @@ def load_game_state(game, filename):
         # A spell attempted after the save was taken has not been attempted in
         # the state being loaded, so the allowance has to come back with it.
         unit.spellsCastThisTurn = list(unit_data.get('spellsCastThisTurn', []))
+        unit.boundSpellPhases = list(unit_data.get('boundSpellPhases', []))
         unit.cannotCastThisTurn = unit_data.get('cannotCastThisTurn', False)
         unit.isDisrupted = unit_data.get('isDisrupted', False)
         # Saves written before the General was tracked keep the load-time nomination.
@@ -416,14 +453,8 @@ def load_game_state(game, filename):
         if unit_data['equipped_weapon']:
             unit.unit.model.equip_weapon(unit_data['equipped_weapon'])
 
-        # A coded spell keeps its class; saves only carry the data.
-        for spell in unit_data.get('spells') or []:
-            known = unit.unit.model.spells.get(spell['name'])
-            if known is None:
-                unit.unit.model.spells[spell['name']] = dict(spell)
-            else:
-                for key, value in spell.items():
-                    known.setdefault(key, value)
+        restore_spellbook(unit.unit.model, unit_data.get('spells', []),
+                          unit_data.get('wizard_level', 0))
 
         unit.isInCombatWith = []
         unit.isInCombatFlank = []
@@ -481,6 +512,7 @@ def load_game_state(game, filename):
         spell.endSpell()
     game.remainsInPlay = []
     load_spells(game, game_state.get('spells_in_play'), unit_map)
+    game.roundCounter.apply_selection_masks()
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
     # offset is derived rather than saved, so a unit restored onto a hill would

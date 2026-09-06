@@ -481,6 +481,13 @@ def _spell_range(text):
     return int(m.group(1)) if m else None
 
 
+def spell_key(spell: dict) -> str:
+    """Ordinary and item-granted copies of a spell have separate identities."""
+    if spell.get('bound'):
+        return f"{spell['name']} [Bound: {spell.get('source') or spell['name']}]"
+    return spell['name']
+
+
 def spell_from_profile(name: str, chars: dict) -> dict:
     """Convert a BattleScribe Spell profile into the game's spell dict."""
     kind = (chars.get("Type") or "").strip()

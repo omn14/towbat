@@ -93,18 +93,24 @@ class Choice:
         z -= header_h + self.PAD
 
         if detail:
-            gui_theme.styled_text(
+            summary = gui_theme.styled_text(
                 text=detail, parent=self.panel, pos=(0, z - 0.026), scale=0.032,
                 fg=gui_theme.INK, align=TextNode.ACenter,
                 wordwrap=(inset * 2 - 0.04) / 0.032)
-            z -= self.LINE_H
+            z -= max(self.LINE_H, summary.textNode.getHeight() * 0.032 + self.PAD)
 
         if self.descriptions:
             self.detail = gui_theme.styled_text(
                 text="", parent=self.panel, pos=(0, z - 0.024), scale=0.03,
                 fg=gui_theme.INK_FADED, align=TextNode.ACenter,
                 wordwrap=(inset * 2 - 0.04) / 0.03)
-            z -= self.LINE_H
+            # Reserve the longest wrapped blurb so hovering never moves an answer.
+            detail_h = self.LINE_H
+            for name in names:
+                self.detail.setText(self.descriptions.get(name, ""))
+                detail_h = max(detail_h, self.detail.textNode.getHeight() * 0.03 + self.PAD)
+            self.detail.setText("")
+            z -= detail_h
 
         for i, name in enumerate(names):
             row, col = divmod(i, self.MAX_PER_ROW)
@@ -126,7 +132,7 @@ class Choice:
         total = -z + self.PAD
         self.panel['frameSize'] = (-self.HALF_W, self.HALF_W, -total, 0)
         sheet['frameSize'] = (-inset, inset, -total + self.BORDER, -self.BORDER)
-        self.panel.setPos(0, 0, 0.30 + total / 2.0)
+        self.panel.setPos(0, 0, min(0.30 + total / 2.0, 1.0 - self.PAD))
 
     def _button(self, name, pos, width, primary=False):
         """One answer. The first is the affirmative, and is dressed as such."""

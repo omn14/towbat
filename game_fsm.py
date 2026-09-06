@@ -36,7 +36,16 @@ class GamePhaseFSM(FSM):
         through nextPhase(), so hooking the transition is the only way the
         HUD sees all of them.
         """
-        result = FSM.request(self, request, *args)
+        if request == 'SpellPhase' and self.state in self.PHASES:
+            self._spell_origin = self.state
+        self._resuming_spell = (self.state == 'SpellPhase'
+                                and request == getattr(self, '_spell_origin', None))
+        try:
+            result = FSM.request(self, request, *args)
+        finally:
+            self._resuming_spell = False
+        if request in self.PHASES:
+            self._spell_origin = None
         messenger.send('hud-phase', [self.state or request])
         return result
 
@@ -64,6 +73,8 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if self.state == 'SpellPhase':
+            return  # Finish or cancel the cast before advancing the battle phase.
         """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
         for unit in units:
             self.game.fallBackContactTest(unit.bodyNP)
@@ -134,6 +145,8 @@ class GamePhaseFSM(FSM):
         )
         print("Entering Strategy Phase")
         self.game.setGroundOverlay(False)
+        if getattr(self, '_resuming_spell', False):
+            return
         # Start of Turn: a Magical Vortex drifts before anything else happens.
         for spell in list(getattr(self.game, 'remainsInPlay', [])):
             spell.scatter(self.game)
@@ -161,10 +174,12 @@ class GamePhaseFSM(FSM):
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
-        for unit in self.game.units:
-            unit.panicTestedThisPhase = False
-            unit.fledThisPhase = False
-            unit.startOfPhaseModels = unit.unit.nmodels
+        self.current_phase_index = 1
+        if not getattr(self, '_resuming_spell', False):
+            for unit in self.game.units:
+                unit.panicTestedThisPhase = False
+                unit.fledThisPhase = False
+                unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName = "taskLoopPathTowardsMouse"
         self.game.accept(
@@ -176,6 +191,8 @@ class GamePhaseFSM(FSM):
         taskMgr.remove("taskLoopPathTowardsMouse")
         self._cleanup_phase()
         self.game.ignore('mouse1')
+        if getattr(self, '_spell_origin', None) == 'MovementPhase':
+            return
         # The charge move is over — clear the Panic exemption.
         for unit in self.game.units:
             unit.isChargingMove = False
@@ -197,10 +214,12 @@ class GamePhaseFSM(FSM):
 
     def enterShootingPhase(self):
         print("Entering Shooting Phase")
-        for unit in self.game.units:
-            unit.panicTestedThisPhase = False
-            unit.fledThisPhase = False
-            unit.startOfPhaseModels = unit.unit.nmodels
+        self.current_phase_index = 2
+        if not getattr(self, '_resuming_spell', False):
+            for unit in self.game.units:
+                unit.panicTestedThisPhase = False
+                unit.fledThisPhase = False
+                unit.startOfPhaseModels = unit.unit.nmodels
         self.game.setActiveUnitTask = self.game.taskShootingArcUpdate
         self.game.setActiveUnitTaskName = "taskShootingArcUpdate"
         self.game.accept(
@@ -223,6 +242,7 @@ class GamePhaseFSM(FSM):
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")
+        self.current_phase_index = 3
         self.game.setActiveUnitTask = self.game.taskStartCombat
         self.game.setActiveUnitTaskName = "taskStartCombat"
         self.game.accept(
@@ -230,6 +250,8 @@ class GamePhaseFSM(FSM):
             [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName]
         )
 
+        if getattr(self, '_resuming_spell', False):
+            return
         for unit in self.game.units:
             if unit.state == "InCombat":
                 unit.hasAttackedThisTurn = False
@@ -248,6 +270,8 @@ class GamePhaseFSM(FSM):
 
     def exitCombatPhase(self):
         self.game.ignore('mouse1')
+        if getattr(self, '_spell_origin', None) == 'CombatPhase':
+            return
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
         # The charge bonus lasts only the turn of the charge.
@@ -263,6 +287,7 @@ class GamePhaseFSM(FSM):
             # to the Strategy phase would refill it every time a spell sent the
             # game back there.
             unit.spellsCastThisTurn = []
+            unit.boundSpellPhases = []
             unit.cannotCastThisTurn = False
         for spell in list(self.end_of_turn_spells):
             spell.ticks_remaining -= 1

@@ -19,7 +19,7 @@ import math
 import os
 import re
 
-from battlescribe import slugify, spell_from_profile, weapon_from_profile
+from battlescribe import get_catalogue, slugify, spell_from_profile, spell_key, weapon_from_profile
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FILES = 5  # default frontage when the roster has no formation info
@@ -137,6 +137,15 @@ def _collect_mount_rules(selection: dict, out: list) -> None:
 def _collect_spells(selection: dict, out: list) -> None:
     """Gather the spells a Wizard knows. The roster resolves the chosen Lore of
     Magic into Spell profiles, so the whole lore comes across with its rules."""
+    # Only a selected item grants its spell; available upgrades grant nothing (p. 342).
+    if (selection.get('name') == 'Ruby Ring of Ruin'
+            or any(p.get('name') == 'Ruby Ring of Ruin'
+                   for p in selection.get('profiles', []))):
+        spell = get_catalogue().spell('Fireball')
+        if spell:
+            out.append(dict(spell, bound=True, power_level=1, source='Ruby Ring of Ruin'))
+        if selection.get('name') == 'Ruby Ring of Ruin':
+            return
     for p in selection.get("profiles", []):
         if p.get("typeName") == "Spell" and p.get("name"):
             chars = {c["name"]: c.get("$text", "") for c in p.get("characteristics", [])}
@@ -208,10 +217,11 @@ def import_roster(path: str) -> dict:
             armour = list(dict.fromkeys(armour))
             spells: list = []
             _collect_spells(unit, spells)
+            seen = set()
             spells = [s for s in spells
-                      if not (s["name"] in seen or seen.add(s["name"]))]
+                      if not (spell_key(s) in seen or seen.add(spell_key(s)))]
             level = _wizard_level(unit)
-            if spells and not level:
+            if any(not s.get('bound') for s in spells) and not level:
                 level = 1
             units.append({
                 "name": _primary_model_name(unit),

@@ -540,7 +540,53 @@ army-agnostic and would benefit every faction.
       'all enemies' or nothing, and both are wrong. A test keeps them gone.
       LEFTOVER: not applied to Impact Hits or Stomp Attacks, which are hits
       rather than To Hit rolls.
-- [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
+- [x] Magic Resistance (-X) — DONE (Rulebook pp. 108, 173): an enemy spell
+      targeting the unit takes the strongest negative casting modifier among
+      its living members, including a joined character and mount/crew/beast
+      profiles. Values never add together. This is **not** a Ward save, damage
+      reduction, or a bonus to a dispel roll.
+      Static signed values are parsed strictly. The two Ushabti profiles that
+      spell it `Magic Resistance (2)` mean -2; an unknown parameter, bare rule,
+      or `-D3` is logged as unresolved, never guessed or rolled per incoming
+      spell. Parameter-aware names allow replacement, downgrade and removal
+      without keeping a stale stronger value.
+      `Spell._attempt` checks the actual target and confirmed ownership before
+      rolling: friendly and Self spells take no penalty; ground-targeted
+      vortices and their subsequent damage never acquire one. The casting
+      value is unchanged, and dispelling must beat the reduced casting result.
+      Natural doubles still decide ordinary miscasts/perfect invocations;
+      Miscast-table overrides retain their stated casting result (p. 109).
+      Logs identify the strongest source, dice, separate casting bonus,
+      resistance, final result and threshold, or the reason it was skipped.
+      **Bound spells (p. 109):** add their full Power Level, not Wizard Level,
+      and never miscast or invoke perfectly. A selected **Ruby Ring of Ruin**
+      imports its real Fireball grant at Power Level 1 (p. 342), is selectable
+      by a non-Wizard, and does not turn the bearer into a Wizard. Ordinary
+      and Bound copies coexist. One Bound attempt per phase is tracked
+      separately from ordinary spell slots, survives reload, and still obeys
+      marching, fleeing, combat and explicit no-more-spells restrictions.
+      CORRECTED on the way: casting detours no longer reset phase state,
+      scatter vortices again, increment combat rounds, or end a player's turn.
+      Self spells resolve on the caster without an arbitrary target click;
+      legal Assailments are no longer rejected by the shooting-only UI gate.
+      Loading now replaces spell metadata while retaining coded classes and
+      rebuilds saved character/mount links: a character or mount acquired
+      after the save cannot leave its resistance on the restored unit.
+      Tests cover real casting/dispel order, logs, parser edge cases, live
+      sources, roster/UI Bound selection, phase detours and offscreen reloads.
+      `saves/magicresistance.json` starts in Shooting: a Level 2 Master Mage,
+      a non-Wizard Ruby Ring bearer, -1 Dwarfs, a -2 Runesmith joined to -1
+      Dwarfs, a friendly resistant unit and an unresistant control. The scene
+      generator is `tests/test_magic_resistance_scene.py`; targets have clear
+      Fireball lanes within 24". The save was loaded and rendered offscreen.
+      LEFTOVER: indirect army/item grants (Mark of Tzeentch, A Tingle in the
+      Air, Witch Hunter choices, etc.) still need their own rules. Sorcerous
+      Void's pre-deployment -D3 must be resolved and saved by that grant.
+      LEFTOVER: other Bound item/special-rule grants, single-use item limits
+      and uncoded spell effects are not implemented by the Ruby Ring path.
+      Multi-model units still share one caster record rather than independent
+      per-model Bound allowances. Existing wider magic limitations, including
+      army-wide Power Drain and Miscast damage, are unchanged.
 - [x] Impact Hits (X) — DONE (Rulebook p. 172): the `(X)` is parsed off the rule
       name (`_param_dice` copes with prose such as `(D6+1, War Wagon only)`), and
       `impactHits` resolves them for every charging unit before any blows are

@@ -56,7 +56,7 @@ from collision_masks import CollisionMask as CM
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
 from game_fsm import GamePhaseFSM
 from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
-                          Spell, dispel_result, is_dispelled, may_attempt,
+                          Spell, dispel_result, is_dispelled, may_attempt, restore_spellbook,
                           spell_class, spell_readout)
 from persistence import (list_saves, load_game_state, load_settings,
                          save_game_state, save_label, save_setting)
@@ -644,16 +644,10 @@ class MyApp(ShowBase):
             # The roster resolves a Wizard's chosen Lore of Magic into spells.
             spells = army_unit_data.get('spells') or []
             if spells:
-                model_instance.spells = {s['name']: dict(s) for s in spells}
-                level = int(army_unit_data.get('wizard_level') or 1)
-                if not model_instance.is_wizard():
-                    model_instance.special_rules.append({
-                        'name': f'Wizard Level {level}',
-                        'description': ('This model may attempt to cast as many '
-                                        'spells a turn as its Level of Wizardry.'),
-                        'tag': 'wizard',
-                        'wizard': True,
-                        'wizard_level': level})
+                level = army_unit_data.get('wizard_level')
+                if level is None and any(not s.get('bound') for s in spells):
+                    level = 1
+                restore_spellbook(model_instance, spells, level)
 
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
             unit_graphics = unitGraphics(
@@ -1101,24 +1095,36 @@ class MyApp(ShowBase):
     def castableSpells(self, unit):
         """Names of the spells *unit* may still attempt in the current phase."""
         m = unit.unit.model
-        if not m.is_wizard():
+        if getattr(unit, 'state', '') == 'IsFleeing':
             return []
         phase = self.castingPhase()
         level = m.wizard_level(1)
         cast = getattr(unit, 'spellsCastThisTurn', [])
         spent = getattr(unit, 'cannotCastThisTurn', False)
+        bound_phases = getattr(unit, 'boundSpellPhases', [])
+        def available(name, spell):
+            if spell.get('bound'):
+                return not spent and phase not in bound_phases
+            return m.is_wizard() and may_attempt(cast, name, level, spent)
+
+        def combat_legal(spell):
+            host = getattr(unit, 'hostUnit', None) or unit
+            engaged = getattr(host, 'isInCombat', False)
+            if spell.get('type') == 'Assailment':
+                return engaged and not getattr(host, 'hasAttackedThisTurn', False)
+            return not engaged or spell.get('range') == 'Self'
         # A unit that marched may still cast, but not the two categories that
         # count as shooting (p. 123).
         marched = getattr(unit, 'marchedThisTurn', False)
         barred = MARCH_BARRED_SPELLS
         names = [name for name, spell in m.spells.items()
                  if spell.get('phase') == phase
-                 and may_attempt(cast, name, level, spent)
+                 and available(name, spell) and combat_legal(spell)
                  and not (marched and spell.get('type') in barred)]
         if marched:
             lost = [n for n, s in m.spells.items()
                     if s.get('phase') == phase and s.get('type') in barred
-                    and may_attempt(cast, n, level, spent)]
+                    and available(n, s)]
             if lost:
                 rule_log('Marching', unit,
                          f"marched this turn -> cannot cast "
@@ -1143,9 +1149,6 @@ class MyApp(ShowBase):
         unit = getattr(self, 'unitToMove', None)
         if unit is None:
             return
-        if not unit.unit.model.is_wizard():
-            print(f"[Magic] {unit.unit.name} is not a Wizard.")
-            return
         if not self.castableSpells(unit):
             print(f"[Magic] {unit.unit.name} has no {self.castingPhase()}-phase "
                   f"spells it may still cast.")
@@ -1156,12 +1159,6 @@ class MyApp(ShowBase):
         for unit in self.units:
             unit.model.setColor(unit.color)
         self.roundCounter.apply_selection_masks()
-        if self.unitToMove.isInCombat:
-            print("Unit is in combat, cant shoot.")
-            return task.done
-        if not any(rule.get('wizard', False) for rule in self.unitToMove.unit.model.special_rules):
-            print("Unit is not a wizard, cant cast.")
-            return task.done
         """ print("equiped weapon is: ",self.unitToMove.unit.model.equipedWeapon)
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
             print("Unit has no equiped weapon equipped, cant shoot.")
@@ -1173,7 +1170,7 @@ class MyApp(ShowBase):
         _spent = getattr(self.unitToMove, 'cannotCastThisTurn', False)
         spellChoices = self.castableSpells(self.unitToMove)
         # A spell the catalogue knows the wording of but the engine does not.
-        spellClasses = [_wizard.spells[n].get('class') or spell_class(n)
+        spellClasses = [_wizard.spells[n].get('class') or spell_class(_wizard.spells[n].get('name', n))
                         or CatalogueSpell for n in spellChoices]
         if not spellChoices:
             if _spent:
@@ -1185,6 +1182,7 @@ class MyApp(ShowBase):
             else:
                 print(f"[Magic] {self.unitToMove.unit.name} has no "
                       f"{_phase}-phase spells left to cast.")
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
             return task.done
         
         
@@ -1205,14 +1203,23 @@ class MyApp(ShowBase):
         self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
         self.fsm.spellClassToCast = spellClasses[index]
         self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(
-            spellchoice, self.fsm.activeSpell.get('casting_value') or 12,
+            self.fsm.activeSpell.get('name', spellchoice), self.fsm.activeSpell.get('casting_value') or 12,
             self.fsm.endOfTurnSpells,
             wizard_level=_level,
             effect=self.fsm.activeSpell.get('effect', ''),
-            game=self, caster=self.unitToMove)
+            game=self, caster=self.unitToMove,
+            bound=self.fsm.activeSpell.get('bound', False),
+            power_level=self.fsm.activeSpell.get('power_level', 0),
+            spell_range=self.fsm.activeSpell.get('range'))
+        self.fsm.spellInstanceToCast.selection_key = spellchoice
         self.fsm.castingUnit = self.unitToMove
         self.debugTextInfo.setText(
             spell_readout(spellchoice, self.fsm.activeSpell))
+
+        if (self.fsm.activeSpell.get('range') == 'Self'
+                or self.fsm.spellInstanceToCast.targets_self):
+            await self.resolveSpell(self.unitToMove)
+            return task.done
 
         if self.fsm.spellClassToCast.targets_ground:
             self.beginGroundTargeting(self.fsm.spellInstanceToCast)
@@ -1778,8 +1785,21 @@ class MyApp(ShowBase):
         Magical Vortex — and hand the phase back."""
         spell = self.fsm.spellInstanceToCast
         caster = getattr(self.fsm, 'castingUnit', self.unitToMove)
+        if spell.targets_self or str(spell.spell_range).casefold() == 'self':
+            target = caster
+        if not spell.canTarget(target):
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
+            return
+        key = getattr(spell, 'selection_key', spell.name)
+        if key not in self.castableSpells(caster):
+            print(f'[Magic] {key}: casting allowance is no longer available.')
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
+            return
         # The attempt is spent whether or not the spell goes off.
-        caster.spellsCastThisTurn.append(spell.name)
+        if spell.bound:
+            caster.boundSpellPhases = [*getattr(caster, 'boundSpellPhases', []), self.castingPhase()]
+        else:
+            caster.spellsCastThisTurn.append(key)
         await spell.spellFunction(target)
         if getattr(spell, 'no_more_spells', False):
             caster.cannotCastThisTurn = True
