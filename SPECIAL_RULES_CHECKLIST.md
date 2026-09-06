@@ -289,7 +289,6 @@ identical without the log. See `.github/copilot-instructions.md`.
       Shot)` and `moved -1 (Ponderous and Quick Shot cancel out)` are both
       readable without knowing the weapon's rule list.
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
-- [ ] Heroic Killing Blow
 - [x] Strike First — DONE (p. 177). Initiative becomes 10 before any other
       modifier; `battleFunctions.base_initiative` does the substitution and
       `strike_initiative` applies the charge bonus after it, so a charge cannot

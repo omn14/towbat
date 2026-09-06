@@ -37,7 +37,8 @@ from shaders.chargedistshaders import *
 # ─── Project Modules ─────────────────────────────────────────────────────────
 from models import *
 from units import *
-from special_rules import build_special_rules, should_fire_multiple
+from special_rules import (apply_rule_keywords, build_special_rules,
+                           should_fire_multiple)
 from toHitAndToWound import *
 from battleFunctions import *
 from dice import *
@@ -57,8 +58,8 @@ from game_fsm import GamePhaseFSM
 from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
                           Spell, dispel_result, is_dispelled, may_attempt,
                           spell_class, spell_readout)
-from persistence import (load_game_state, load_settings, save_game_state,
-                         save_setting)
+from persistence import (list_saves, load_game_state, load_settings,
+                         save_game_state, save_label, save_setting)
 from rules_log import rule_log, rule_skipped
 from characters import JOIN_TAG, enemy_units
 from combat_resolution import CombatResolver
@@ -256,7 +257,7 @@ class MyApp(ShowBase):
         
         self.accept('f5', self.save_game_state, ['quicksave.json'])  # F5 to quick save
         self.accept('f6', self.toggle_campaign_map)  # F6 toggles the campaign map
-        self.accept('f9', self.load_game_state, ['quicksave.json'])  # F9 to quick load
+        self.accept('f9', self.showLoadMenu)  # F9 opens the save list
         self.accept('f10', self.load_game_state, ['previous_phase.json'])  # F10 to load previous phase
         self.accept('f7', self.terrain_manager.toggle_debug)  # F7 toggles river water-detection band
         self.accept('c', self.castSpell)  # C casts with the selected Wizard
@@ -437,27 +438,25 @@ class MyApp(ShowBase):
     
     # ─── Army Loading ─────────────────────────────────────────────────────
 
-    def applyDataRules(self, model_instance, names):
+    @staticmethod
+    def _ruleNamesFor(model_instance, names):
+        """The rule names *names* would build for this model."""
+        keep = model_instance.characteristics.get('Special Rules')
+        model_instance.characteristics['Special Rules'] = list(names)
+        try:
+            return {e.get('name') for e in build_special_rules(model_instance)
+                    if isinstance(e, dict)}
+        finally:
+            model_instance.characteristics['Special Rules'] = keep
+
+    def applyDataRules(self, model_instance, names, replace=False):
         """Add special rules named by the army list and wire their hooks.
 
         Used for the unit's own rules and, separately, for its mount's: the
         catalogue keeps a beast's rules on the beast, and rules that look
         through to the mount read them from there.
         """
-        if not names:
-            return
-        current = model_instance.characteristics.get('Special Rules')
-        current = list(current) if isinstance(current, list) else []
-        for rname in names:
-            if rname and rname not in current:
-                current.append(rname)
-        model_instance.characteristics['Special Rules'] = current
-        have = {r.get('name') for r in model_instance.special_rules
-                if isinstance(r, dict)}
-        for entry in build_special_rules(model_instance):
-            if isinstance(entry, dict) and entry.get('name') not in have:
-                model_instance.special_rules.append(entry)
-                have.add(entry.get('name'))
+        apply_rule_keywords(model_instance, names, replace=replace)
 
     def load_army_from_json(self, filename, player_num=1, start_pos=Point3(0, -20, 0), spacing=12):
         """
@@ -2723,6 +2722,72 @@ class MyApp(ShowBase):
     def load_game_state(self, filename):
         """Delegate to persistence module."""
         load_game_state(self, filename)
+
+    MAX_LOAD_MENU_ENTRIES = 12
+    LOAD_MENU_ROW = 0.075
+    LOAD_MENU_HALF_WIDTH = 0.56
+    LOAD_MENU_TEXT_SCALE = 0.045
+
+    def showLoadMenu(self):
+        """F9: choose a save from saves/ rather than assuming the quicksave."""
+        if getattr(self, '_loadMenu', None) is not None:
+            self.closeLoadMenu()
+            return
+        saves = list_saves()
+        if not saves:
+            messenger.send('hud-log',
+                           ["No saves yet — F5 writes one to saves/.", 'morale'])
+            return
+        saves = saves[:self.MAX_LOAD_MENU_ENTRIES]
+
+        row = self.LOAD_MENU_ROW
+        scale = self.LOAD_MENU_TEXT_SCALE
+        # Rows are sized in the button's own units, which are 1/scale of the
+        # screen's, so every entry comes out the same width whatever it says.
+        half = self.LOAD_MENU_HALF_WIDTH / scale
+        top = (len(saves) + 3) * row / 2
+        panel = gui_theme.styled_panel(
+            (-self.LOAD_MENU_HALF_WIDTH - 0.04, self.LOAD_MENU_HALF_WIDTH + 0.04,
+             -top, top), pos=(0, 0, 0), parent=self.aspect2d)
+        panel.setBin('gui-popup', 0)
+        gui_theme.styled_text("Load game", pos=(0, top - row * 0.9), scale=0.055,
+                              align=TextNode.ACenter, parent=panel)
+        self._loadMenu = panel
+        self._loadMenuButtons = []
+        for i, name in enumerate(saves):
+            btn = gui_theme.flat_button(
+                save_label(name), (0, 0, top - row * (i + 2)),
+                command=self.loadFromMenu, parent=panel, scale=scale)
+            btn['extraArgs'] = [name]
+            btn['frameSize'] = (-half, half, -0.32, 0.92)
+            btn['text_align'] = TextNode.ALeft
+            btn['text_pos'] = (-half + 0.5, 0)
+            self._loadMenuButtons.append(btn)
+        cancel = gui_theme.flat_button(
+            "Cancel", (0, 0, top - row * (len(saves) + 2.4)),
+            command=self.closeLoadMenu, parent=panel, scale=scale)
+        cancel['frameSize'] = (-3.0, 3.0, -0.32, 0.92)
+        cancel['text_align'] = TextNode.ACenter
+        cancel['text_pos'] = (0, 0)
+        self._loadMenuButtons.append(cancel)
+        self.accept('escape', self.closeLoadMenu)
+
+    def closeLoadMenu(self):
+        """Take the save list down, leaving the game as it was."""
+        menu = getattr(self, '_loadMenu', None)
+        if menu is None:
+            return
+        for btn in getattr(self, '_loadMenuButtons', []):
+            btn.destroy()
+        menu.destroy()
+        self._loadMenu = None
+        self._loadMenuButtons = []
+        self.ignore('escape')
+
+    def loadFromMenu(self, name):
+        """Load the save the player clicked."""
+        self.closeLoadMenu()
+        self.load_game_state(name)
 
     # ─── Camera Zoom & Controls ───────────────────────────────────────────
 

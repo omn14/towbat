@@ -337,3 +337,46 @@ def build_special_rules(model) -> list:
         if entry:
             rules.append(entry)
     return rules
+
+
+def _built_names(model, names) -> set:
+    """The rule names *names* would build for this model."""
+    keep = model.characteristics.get("Special Rules")
+    model.characteristics["Special Rules"] = list(names)
+    try:
+        return {e.get("name") for e in build_special_rules(model)
+                if isinstance(e, dict)}
+    finally:
+        model.characteristics["Special Rules"] = keep
+
+
+def apply_rule_keywords(model, names, replace=False) -> None:
+    """Give *model* the rule keywords an army list or a save names.
+
+    With `replace`, *names* is the whole list and anything it no longer
+    mentions is taken away again. A save carries the roster's complete list,
+    and merging instead lets a rule outlive the save that granted it — Strike
+    First stayed on a unit after loading a save that never had it.
+    """
+    current = model.characteristics.get("Special Rules")
+    current = list(current) if isinstance(current, list) else []
+    if replace:
+        wanted = [n for n in (names or []) if n]
+        stale = _built_names(model, current) - _built_names(model, wanted)
+        model.characteristics["Special Rules"] = wanted
+        if stale:
+            model.special_rules = [
+                r for r in model.special_rules
+                if not (isinstance(r, dict) and r.get("name") in stale)]
+    else:
+        if not names:
+            return
+        for name in names:
+            if name and name not in current:
+                current.append(name)
+        model.characteristics["Special Rules"] = current
+    have = {r.get("name") for r in model.special_rules if isinstance(r, dict)}
+    for entry in build_special_rules(model):
+        if isinstance(entry, dict) and entry.get("name") not in have:
+            model.special_rules.append(entry)
+            have.add(entry.get("name"))

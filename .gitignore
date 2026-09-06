@@ -15,6 +15,9 @@ models/**/*.blend
 *.xcf
 *.tif
 
+# Save games: written every time the game is played.
+saves/
+
 # External BattleScribe data (cloned separately as its own git repo)
 Warhammer-The-Old-World/
 

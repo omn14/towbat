@@ -14,10 +14,49 @@ from characters import join_unit
 from spell_system import load_spells, save_spells
 
 
+# ── Where saves live ──────────────────────────────────────────────────
+_HERE = os.path.dirname(os.path.abspath(__file__))
+SAVE_DIR = os.path.join(_HERE, 'saves')
+
+
+def save_path(filename) -> str:
+    """Where a save by that name lives.
+
+    A bare name goes in saves/. A name that already carries a directory is
+    taken as given, so a caller that knows its own path is not second-guessed.
+    """
+    if os.path.isabs(filename) or os.path.dirname(filename):
+        return filename
+    return os.path.join(SAVE_DIR, filename)
+
+
+def list_saves() -> list:
+    """Save file names in saves/, most recently written first.
+
+    `.bak` and `.tmp` companions are left out: neither is a save the player
+    chose to make.
+    """
+    try:
+        names = [n for n in os.listdir(SAVE_DIR) if n.endswith('.json')]
+    except OSError:
+        return []
+    return sorted(names, reverse=True,
+                  key=lambda n: os.path.getmtime(os.path.join(SAVE_DIR, n)))
+
+
+def save_label(name) -> str:
+    """A save's name and when it was written, for the load menu."""
+    stem = name[:-5] if name.endswith('.json') else name
+    try:
+        when = datetime.fromtimestamp(os.path.getmtime(save_path(name)))
+    except OSError:
+        return stem
+    return f"{stem}   {when.strftime('%d %b %H:%M')}"
+
+
 # ── Interface preferences ─────────────────────────────────────────────
 # Kept apart from save games: these follow the player, not the battle.
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'settings.json')
+SETTINGS_FILE = os.path.join(_HERE, 'settings.json')
 
 
 def load_settings() -> dict:
@@ -69,6 +108,7 @@ def save_game_state(game, filename=None):
     if filename is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"savegame_{timestamp}.json"
+    filename = save_path(filename)
 
     game_state = {
         'current_phase': (game.fsm.getCurrentOrNextState()
@@ -160,6 +200,8 @@ def save_game_state(game, filename=None):
     # corrupt the target file (the crash that prompted this safeguard).
     payload = json.dumps(game_state, indent=2)
 
+    os.makedirs(os.path.dirname(filename) or '.', exist_ok=True)
+
     # Keep a backup of the last good save to fall back to on corruption.
     if os.path.exists(filename):
         try:
@@ -202,14 +244,18 @@ def load_game_state(game, filename):
 
     Args:
         game: The MyApp game instance.
-        filename: Path to the save file.
+        filename: Name of a save in saves/, or a path to one.
     """
+    path = save_path(filename)
+    # A save left behind in the old location still loads.
+    if not os.path.exists(path) and os.path.exists(filename):
+        path = filename
     # Fall back to the last-good backup if the main file is corrupt/missing.
-    game_state = _read_save_file(filename)
+    game_state = _read_save_file(path)
     if game_state is None:
-        game_state = _read_save_file(filename + '.bak')
+        game_state = _read_save_file(path + '.bak')
         if game_state is not None:
-            print(f"[persistence] loaded backup save '{filename}.bak' instead.")
+            print(f"[persistence] loaded backup save '{path}.bak' instead.")
 
     if game_state is None:
         message = f"Load failed: '{filename}' is corrupted or missing."
@@ -280,13 +326,16 @@ def load_game_state(game, filename):
         }
         game._create_unit(spec, unit_data.get('player', 1), unit_data['name'])
 
-    # Re-apply the army list's rules. A recreated unit has only its catalogue
-    # profile, and even a surviving one may predate a rule the roster grants.
+    # Restore the army list's rules. A recreated unit has only its catalogue
+    # profile, and a surviving one may still be carrying a rule the *previous*
+    # save granted, so the saved list replaces rather than adds to what is
+    # there.
     by_name = {u.unitName: u for u in game.units}
     for unit_data in game_state['units']:
         unit = by_name.get(unit_data['name'])
         if unit is not None:
-            game.applyDataRules(unit.unit.model, unit_data.get('special_rules'))
+            game.applyDataRules(unit.unit.model, unit_data.get('special_rules'),
+                                replace=True)
 
     unit_map = {unit.unitName: unit for unit in game.units}
 

@@ -12,10 +12,14 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import persistence  # noqa: E402
+from models import model  # noqa: E402
 from persistence import save_game_state  # noqa: E402
+from special_rules import apply_rule_keywords  # noqa: E402
 
 # Flags the rules reset each turn or each battle. Every one has to survive a
 # save; anything missing keeps whatever the running session happened to have.
@@ -155,6 +159,112 @@ class TestSavingTurnState(unittest.TestCase):
     def test_the_whole_save_is_json(self):
         self.unit.spellsCastThisTurn = ['Fireball']
         json.dumps(self._save())
+
+
+class TheSavesFolderTests(unittest.TestCase):
+    """Saves live in saves/, so the working tree stays clear of them."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        patcher = mock.patch.object(persistence, 'SAVE_DIR', self.tmp)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _write(self, name, when=None):
+        path = os.path.join(self.tmp, name)
+        with open(path, 'w') as f:
+            f.write('{}')
+        if when is not None:
+            os.utime(path, (when, when))
+        return path
+
+    def test_a_bare_name_goes_in_the_saves_folder(self):
+        self.assertEqual(persistence.save_path('quicksave.json'),
+                         os.path.join(self.tmp, 'quicksave.json'))
+
+    def test_a_name_with_a_directory_is_left_alone(self):
+        self.assertEqual(persistence.save_path('elsewhere/quicksave.json'),
+                         'elsewhere/quicksave.json')
+
+    def test_an_absolute_path_is_left_alone(self):
+        self.assertEqual(persistence.save_path('/tmp/quicksave.json'),
+                         '/tmp/quicksave.json')
+
+    def test_saving_writes_into_the_folder(self):
+        unit = _unit()
+        persistence.save_game_state(_game([unit]), 'quicksave.json')
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, 'quicksave.json')))
+
+    def test_the_folder_is_created_if_it_is_missing(self):
+        nested = os.path.join(self.tmp, 'fresh')
+        with mock.patch.object(persistence, 'SAVE_DIR', nested):
+            persistence.save_game_state(_game([_unit()]), 'quicksave.json')
+            self.assertTrue(os.path.exists(os.path.join(nested, 'quicksave.json')))
+
+    def test_the_newest_save_is_listed_first(self):
+        self._write('old.json', when=1000)
+        self._write('new.json', when=2000)
+        self.assertEqual(persistence.list_saves(), ['new.json', 'old.json'])
+
+    def test_backups_and_temp_files_are_not_offered(self):
+        self._write('quicksave.json')
+        self._write('quicksave.json.bak')
+        self._write('quicksave.json.tmp')
+        self.assertEqual(persistence.list_saves(), ['quicksave.json'])
+
+    def test_a_missing_folder_lists_nothing(self):
+        with mock.patch.object(persistence, 'SAVE_DIR',
+                               os.path.join(self.tmp, 'nope')):
+            self.assertEqual(persistence.list_saves(), [])
+
+    def test_the_label_drops_the_extension_and_dates_the_save(self):
+        self._write('quicksave.json', when=0)
+        label = persistence.save_label('quicksave.json')
+        self.assertTrue(label.startswith('quicksave'))
+        self.assertNotIn('.json', label)
+
+
+class RoleKeywordsSurviveALoadTests(unittest.TestCase):
+    """A save carries the roster's whole list, so loading one replaces it."""
+
+    def _model(self, *keywords):
+        m = model("State Missile Trooper", "")
+        apply_rule_keywords(m, list(keywords))
+        return m
+
+    def _names(self, m):
+        return {r.get('name') for r in m.special_rules if isinstance(r, dict)}
+
+    def test_a_granted_rule_is_taken_away_by_the_next_save(self):
+        # Loading a save with Strike First and then one without used to leave
+        # the unit striking first for the rest of the session.
+        m = self._model("Strike First")
+        self.assertTrue(m.has_strike_first())
+        apply_rule_keywords(m, [], replace=True)
+        self.assertFalse(m.has_strike_first())
+        self.assertNotIn('Strike First', self._names(m))
+
+    def test_the_rules_the_save_does_name_are_kept(self):
+        m = self._model("Strike First", "Fire & Flee")
+        apply_rule_keywords(m, ["Fire & Flee"], replace=True)
+        self.assertFalse(m.has_strike_first())
+        self.assertTrue(m.has_fire_and_flee())
+
+    def test_the_keyword_list_matches_the_save(self):
+        m = self._model("Strike First")
+        apply_rule_keywords(m, ["Skirmishers"], replace=True)
+        self.assertEqual(m.characteristics['Special Rules'], ["Skirmishers"])
+
+    def test_a_save_can_still_grant_a_rule(self):
+        m = self._model()
+        apply_rule_keywords(m, ["Strike Last"], replace=True)
+        self.assertTrue(m.has_strike_last())
+
+    def test_merging_is_still_available_for_an_army_list(self):
+        m = self._model("Skirmishers")
+        apply_rule_keywords(m, ["Strike First"])
+        self.assertIn('Skirmishers', m.characteristics['Special Rules'])
+        self.assertTrue(m.has_strike_first())
 
 
 if __name__ == "__main__":
