@@ -2617,8 +2617,9 @@ class MyApp(ShowBase):
                     and unit in self.player2Units)
 
     async def makeChoiceNew(self, choices, position, cancellable=False,
-                            descriptions=None, owner=None, prompt=None):
-        cyn = Choice(choices, position, cancellable, descriptions, prompt)
+                            descriptions=None, owner=None, prompt=None,
+                            detail=None):
+        cyn = Choice(choices, position, cancellable, descriptions, prompt, detail)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')

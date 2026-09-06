@@ -209,7 +209,8 @@ class CombatResolver:
         else:
             cynchoice = await taskMgr.add(self.game.makeChoiceNew(
                 chargeYesNo, Vec3(-20, 0, 10), owner=unit,
-                prompt=f"{unit.unit.name}: charge {defender.unit.name}?"))
+                prompt=f"{unit.unit.name}: charge {defender.unit.name}?",
+                detail=self.chargeRangeText(unit, unit.unit.model.get_movement(4))))
 
         if cynchoice == "Yes":
             print("Charging into combat...")
