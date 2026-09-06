@@ -207,7 +207,9 @@ class CombatResolver:
         if self.game.autoCharge or self.game.aiControls(unit):
             cynchoice = "Yes"
         else:
-            cynchoice = await taskMgr.add(self.game.makeChoiceNew(chargeYesNo, Vec3(-20, 0, 10), owner=unit))
+            cynchoice = await taskMgr.add(self.game.makeChoiceNew(
+                chargeYesNo, Vec3(-20, 0, 10), owner=unit,
+                prompt=f"{unit.unit.name}: charge {defender.unit.name}?"))
 
         if cynchoice == "Yes":
             print("Charging into combat...")
@@ -240,7 +242,10 @@ class CombatResolver:
                                  "the AI stands its ground; it has no policy "
                                  "for trading the combat away")
             else:
-                crchoice = await taskMgr.add(self.game.makeChoiceNew(chargeReaction, Vec3(20, 0, 10), owner=defender))
+                crchoice = await taskMgr.add(self.game.makeChoiceNew(
+                    chargeReaction, Vec3(20, 0, 10), owner=defender,
+                    prompt=f"{defender.unit.name}: charged by {unit.unit.name} "
+                           f"— how does it react?"))
             if crchoice == "fire & flee":
                 await self.standAndShoot(defender, unit, shootOption.weapon,
                                          shootOption.distance)
@@ -514,10 +519,12 @@ class CombatResolver:
         if self.game.aiControls(unit):
             use = should_use_swiftstride(kind, distance_to_edge)
         else:
-            choice = [unit.unitName + '\nSwiftstride +D6',
-                      unit.unitName + '\nNo bonus']
+            choice = ['Swiftstride\n+D6', 'No bonus']
             selected = await taskMgr.add(
-                self.game.makeChoiceNew(choice, Vec3(0, 0, 10), owner=unit))
+                self.game.makeChoiceNew(
+                    choice, Vec3(0, 0, 10), owner=unit,
+                    prompt=f"{unit.unit.name}: take the Swiftstride bonus "
+                           f"to its {kind}?"))
             use = selected == choice[0]
         print(f"{unit.unit.name} {'takes' if use else 'declines'} its Swiftstride "
               f"{kind} bonus.")
@@ -1104,7 +1111,9 @@ class CombatResolver:
         self.game.resolvingCombat = True
         weps = self.game.unitToMove.unit.model.weapons
 
-        wepchoice = await taskMgr.add(self.game.makeChoiceNew(weps, Vec3(0, 0, 10), owner=self.game.unitToMove))
+        wepchoice = await taskMgr.add(self.game.makeChoiceNew(
+            weps, Vec3(0, 0, 10), owner=self.game.unitToMove,
+            prompt=f"{self.game.unitToMove.unit.name}: fight with which weapon?"))
 
         self.game.unitToMove.unit.model.equip_weapon(wepchoice)
 
@@ -1246,7 +1255,9 @@ class CombatResolver:
                 continue
             answer = await taskMgr.add(self.game.makeChoiceNew(
                 ["Issue a challenge", "No challenge"],
-                Vec3(0, 0, 12), owner=issuer))
+                Vec3(0, 0, 12), owner=issuer,
+                prompt=f"{challenger.unit.name} may challenge "
+                       f"{target.unit.name}"))
             if answer != "Issue a challenge":
                 rule_skipped('Challenges', challenger,
                              "its player declined to issue a challenge")
@@ -1276,7 +1287,8 @@ class CombatResolver:
                 model.unit.model.equip_best_melee()
                 continue
             choice = await taskMgr.add(self.game.makeChoiceNew(
-                weapons, Vec3(0, 0, 12), owner=host or model))
+                weapons, Vec3(0, 0, 12), owner=host or model,
+                prompt=f"{model.unit.name}: which weapon for the duel?"))
             if choice:
                 model.unit.model.equip_weapon(choice)
             rule_log('Fighting a Challenge', model,
@@ -1300,7 +1312,9 @@ class CombatResolver:
                          f"(p. 211)")
         else:
             answer = await taskMgr.add(self.game.makeChoiceNew(
-                ["Accept", "Refuse"], Vec3(0, 0, 12), owner=target))
+                ["Accept", "Refuse"], Vec3(0, 0, 12), owner=target,
+                prompt=f"{self._duelName(challenge.challenger)} challenges "
+                       f"{accepter.unit.name}"))
         if answer != "Refuse":
             challenge.accepter = accepter
             challenge.accepter_host = target
@@ -1418,7 +1432,9 @@ class CombatResolver:
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
         engagedWith = [x.unitName for x in self.game.unitToMove.isInCombatWith]
 
-        selected_choice = await taskMgr.add(self.game.makeChoiceNew(engagedWith, Vec3(0, 0, 10), owner=self.game.unitToMove))
+        selected_choice = await taskMgr.add(self.game.makeChoiceNew(
+            engagedWith, Vec3(0, 0, 10), owner=self.game.unitToMove,
+            prompt=f"{self.game.unitToMove.unit.name}: which enemy will it fight?"))
 
         for unit in self.game.unitToMove.isInCombatWith:
             if unit.unitName == selected_choice:
@@ -1752,11 +1768,12 @@ class CombatResolver:
                 if self.game.aiControls(loserUnit):
                     useStubborn = should_use_stubborn(ld, diff, overwhelm)
                 else:
-                    stubbornChoice = [loserUnit.unitName + '\nStand Firm',
-                                      loserUnit.unitName + '\nBreak test']
+                    stubbornChoice = ['Stand Firm', 'Break test']
                     selected = await taskMgr.add(
-                        self.game.makeChoiceNew(stubbornChoice, Vec3(0, 0, 10),
-                                                owner=loserUnit))
+                        self.game.makeChoiceNew(
+                            stubbornChoice, Vec3(0, 0, 10), owner=loserUnit,
+                            prompt=f"{loserUnit.unit.name} is Stubborn: "
+                                   f"stand firm?"))
                     useStubborn = selected == stubbornChoice[0]
                 if useStubborn:
                     loserUnit.usedStubborn = True
@@ -1777,11 +1794,12 @@ class CombatResolver:
                 if self.game.aiControls(loserUnit):
                     reroll = should_reroll_break(outcome, ld, diff, overwhelm)
                 else:
-                    rerollChoice = [loserUnit.unitName + f'\nRe-roll ({outcome})',
-                                    loserUnit.unitName + '\nKeep']
+                    rerollChoice = [f'Re-roll\n({outcome})', 'Keep']
                     selected = await taskMgr.add(
-                        self.game.makeChoiceNew(rerollChoice, Vec3(0, 0, 10),
-                                                owner=loserUnit))
+                        self.game.makeChoiceNew(
+                            rerollChoice, Vec3(0, 0, 10), owner=loserUnit,
+                            prompt=f"{loserUnit.unit.name}: re-roll the "
+                                   f"Break test?"))
                     reroll = selected == rerollChoice[0]
                 if reroll:
                     ldDice = await self.rollBreakDice()
@@ -1834,8 +1852,10 @@ class CombatResolver:
                 if len(targets) > 1:
                     names = [u.unitName + '\nChase' for u, _ in targets]
                     picked = await taskMgr.add(
-                        self.game.makeChoiceNew(names, Vec3(0, 0, 10),
-                                                owner=winner))
+                        self.game.makeChoiceNew(
+                            names, Vec3(0, 0, 10), owner=winner,
+                            prompt=f"{winner.unit.name}: which enemy will it "
+                                   f"chase?"))
                     target, targetOutcome = next(
                         (u, o) for (u, o), n in zip(targets, names) if n == picked)
                 else:
@@ -1864,10 +1884,11 @@ class CombatResolver:
         if self.game.aiControls(winner):
             chosen = move
         else:
-            options = [winner.unitName + '\n' + verb,
-                       winner.unitName + '\nRestrain']
+            options = [verb, 'Restrain']
             selected = await taskMgr.add(
-                self.game.makeChoiceNew(options, Vec3(0, 0, 10), owner=winner))
+                self.game.makeChoiceNew(
+                    options, Vec3(0, 0, 10), owner=winner,
+                    prompt=f"{winner.unit.name}: {verb.lower()}{quarry}?"))
             chosen = move if selected == options[0] else 'restrain'
 
         if chosen != 'restrain':

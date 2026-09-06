@@ -1185,7 +1185,8 @@ class MyApp(ShowBase):
             self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True,
                                descriptions=self.spellDescriptions(_wizard,
                                                                    spellChoices),
-                               owner=self.unitToMove))
+                               owner=self.unitToMove,
+                               prompt=f"{_wizard.name}: cast which spell?"))
 
         print("Chosen spell: ", spellchoice)
         if spellchoice not in spellChoices:
@@ -1509,6 +1510,24 @@ class MyApp(ShowBase):
 
         self.taskMgr.add(shake_task, "cameraShakeTask")
     
+    @staticmethod
+    def hoveredModel(unit, hit):
+        """The joined character if the pointer is on its base, else the unit.
+
+        Joining takes a character out of the physics world, so the ray can only
+        ever hit its host and the character had no tooltip of its own. Where in
+        the host's footprint the pointer landed decides which of the two it
+        wants.
+        """
+        char = getattr(unit, 'joinedCharacter', None)
+        if char is None or char.bodyNP.isEmpty() or unit.bodyNP.isEmpty():
+            return unit
+        offset = unit.bodyNP.getRelativePoint(render, hit) - char.bodyNP.getPos()
+        if (abs(offset.getX()) <= unit.modelWidth / 2.0
+                and abs(offset.getY()) <= unit.modelHeight / 2.0):
+            return char
+        return unit
+
     def mouseHoverUnit(self, task):
         """Track the hovered unit and pin the tooltip where it first appears.
 
@@ -1533,6 +1552,7 @@ class MyApp(ShowBase):
                     unit_name = node_name.replace('UnitCollision-', '')
                     hovered = next((u for u in self.units
                                     if u.unitName == unit_name), None)
+                    hovered = self.hoveredModel(hovered, result.getHitPos())
 
         if any(taskMgr.hasTaskNamed(name) for name in MOUSE_DRIVEN_TASKS):
             # Tracked but not shown, so dropping the unit does not immediately
@@ -1921,7 +1941,8 @@ class MyApp(ShowBase):
             }
             _answer = await taskMgr.add(self.makeChoiceNew(
                 _opts, attackerUnit.bodyNP.getPos(),
-                descriptions=_desc, owner=attackerUnit))
+                descriptions=_desc, owner=attackerUnit,
+                prompt=f"{attackerUnit.unit.name}: how will it shoot?"))
             fire_multiple = (_answer == multi_label)
             rule_log('Multiple Shots', attackerUnit,
                      f"{shots_label} shots/model at -1 ({p_multi:.0%}, "
@@ -2596,8 +2617,8 @@ class MyApp(ShowBase):
                     and unit in self.player2Units)
 
     async def makeChoiceNew(self, choices, position, cancellable=False,
-                            descriptions=None, owner=None):
-        cyn = Choice(choices, position, cancellable, descriptions)
+                            descriptions=None, owner=None, prompt=None):
+        cyn = Choice(choices, position, cancellable, descriptions, prompt)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')

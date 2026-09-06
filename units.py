@@ -5,6 +5,7 @@ from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs
 from rules_log import rule_log
+from characters import JOIN_TAG
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -271,7 +272,10 @@ class unitGraphics(FSM):
             # excluding the weapons (listed above) and the mount.
             rule_names = list(m.characteristics.get('Special Rules', []) or [])
             for r in m.special_rules:
-                if not isinstance(r, dict) or id(r) in weapon_ids or r.get('tag') == 'mount':
+                if not isinstance(r, dict) or id(r) in weapon_ids:
+                    continue
+                # The mount and the join marker have their own lines already.
+                if r.get('tag') in ('mount', JOIN_TAG):
                     continue
                 name = r.get('name')
                 if name and name not in rule_names:
@@ -309,6 +313,15 @@ class unitGraphics(FSM):
             row += f"Vs     : {names}\n"
         if self.isInCombatFlank:
             row += f"Flanks : {self.isInCombatFlank}\n"
+
+        char = getattr(self, 'joinedCharacter', None)
+        if char is not None:
+            note = " (retired from combat)" if getattr(
+                char, 'retiredFromCombat', False) else ""
+            row += f"Joined : {char.unitName}{note} — hover its base\n"
+        host = getattr(self, 'hostUnit', None)
+        if host is not None:
+            row += f"Joined : riding with {host.unitName}\n"
 
         if self.tacticalRole:
             role_str = self.tacticalRole['role']
