@@ -140,6 +140,10 @@ class Choice:
         text = TextNode('text')
         text.setText(name)
         text.setAlign(TextNode.ACenter)
+        # Wrapped to the spacing between boxes, in text units before the scale
+        # below: a label longer than its own box used to run across its
+        # neighbour's and the two read as one line of nonsense.
+        text.setWordwrap(7)
         textNodePath = rigidbody_np.attachNewNode(text)
         textNodePath.setScale(2)
         textNodePath.setPos(0, 0, size)  # Position above the rigid body

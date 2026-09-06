@@ -10,6 +10,7 @@ import os
 import shutil
 from datetime import datetime
 
+from challenges import Challenge
 from characters import join_unit
 from spell_system import load_spells, save_spells
 
@@ -119,6 +120,15 @@ def save_game_state(game, filename=None):
         'max_rounds': game.roundCounter.max_rounds,
         'ai_player2_active': game.AIplayer2.active,
         'spells_in_play': save_spells(game),
+        # A challenge outlives the turn it was issued in (To The Death!, p. 211).
+        'challenges': [
+            {'challenger': c.challenger.unitName if c.challenger else None,
+             'host': c.host.unitName if c.host else None,
+             'accepter': c.accepter.unitName if c.accepter else None,
+             'accepter_host': c.accepter_host.unitName if c.accepter_host else None,
+             'refused': c.refused,
+             'rounds': c.rounds}
+            for c in (getattr(game, 'challenges', None) or [])],
         'units': [],
     }
 
@@ -187,6 +197,7 @@ def save_game_state(game, filename=None):
             # Character joined to this unit's front rank, if any.
             'joined_character': (unit.joinedCharacter.unitName
                                  if getattr(unit, 'joinedCharacter', None) else None),
+            'retiredFromCombat': bool(getattr(unit, 'retiredFromCombat', False)),
         }
 
         if unit.unit.model.equipedWeapon:
@@ -429,6 +440,29 @@ def load_game_state(game, filename):
         character = unit_map.get(char_name) if char_name else None
         if host is not None and character is not None:
             join_unit(game, character, host)
+
+    # A model that refused a challenge stays hidden, so its retirement is
+    # restored after joining — join_unit puts it back in the front rank.
+    for unit_data in game_state['units']:
+        unit = unit_map.get(unit_data['name'])
+        if unit is not None:
+            unit.retiredFromCombat = bool(unit_data.get('retiredFromCombat'))
+    for unit in game.units:
+        if getattr(unit, 'joinedCharacter', None) is not None:
+            unit.placeCharacter()
+
+    # A challenge outlives the turn it was issued in (To The Death!, p. 211).
+    game.challenges = []
+    for saved in game_state.get('challenges') or []:
+        challenger = unit_map.get(saved.get('challenger'))
+        if challenger is None:
+            continue
+        challenge = Challenge(challenger, unit_map.get(saved.get('host')),
+                              unit_map.get(saved.get('accepter')),
+                              unit_map.get(saved.get('accepter_host')))
+        challenge.refused = bool(saved.get('refused'))
+        challenge.rounds = int(saved.get('rounds', 0))
+        game.challenges.append(challenge)
 
     # Spells still in play: a hex, a ward or a vortex outlives the turn it was
     # cast in, so it has to come back or the save silently ends it.

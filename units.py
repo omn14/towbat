@@ -4,6 +4,7 @@ from models import *
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs
+from rules_log import rule_log
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -345,7 +346,12 @@ class unitGraphics(FSM):
         if char is None or self.characterSlot is None or char.bodyNP.isEmpty():
             return
         files = max(1, self.unit.files)
-        row, col = divmod(self.characterSlot, files)
+        if getattr(char, 'retiredFromCombat', False):
+            # Refused a challenge and hid in the rear ranks (p. 210).
+            row = max(1, -(-max(1, self.unit.nmodels) // files))
+            col = files // 2
+        else:
+            row, col = divmod(self.characterSlot, files)
         char.bodyNP.setPos(self.model.getPos()
                            + Point3(col * self.modelWidth,
                                     -row * self.modelHeight, 0))
@@ -494,6 +500,19 @@ class unitGraphics(FSM):
         self.isInCombat=False
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
+        # A challenge lasts only as long as the combat that held it (p. 211).
+        for challenge in list(getattr(base, 'challenges', None) or []):
+            if self in challenge.hosts():
+                base.challenges.remove(challenge)
+        # A model that refused a challenge may rejoin the rank once its unit is
+        # no longer engaged (p. 210).
+        char = getattr(self, 'joinedCharacter', None)
+        if char is not None and getattr(char, 'retiredFromCombat', False):
+            char.retiredFromCombat = False
+            self.placeCharacter()
+            rule_log('Refusing a Challenge', char,
+                     "its unit is no longer engaged, so it returns to the "
+                     "fighting rank (p. 210)")
         self.spreadToSkirmish()
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
 

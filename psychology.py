@@ -92,6 +92,19 @@ def _stat_int(characteristics: dict, key: str, default: int = 0) -> int:
         return default
 
 
+def active_character(host):
+    """A host's joined character, unless it has retired from combat.
+
+    A model that refused a challenge "confers no benefits to the unit in the
+    form of Leadership, special rules, or anything else" (p. 210), so a retired
+    General or Battle Standard has to stop counting.
+    """
+    joined = getattr(host, 'joinedCharacter', None)
+    if joined is None or getattr(joined, 'retiredFromCombat', False):
+        return None
+    return joined
+
+
 def leadership_test(ld: int, modifier: int = 0):
     """Roll 2D6 against Leadership (+modifier). Returns ``(passed, roll)``."""
     roll = random.randint(1, 6) + random.randint(1, 6)
@@ -303,7 +316,7 @@ def battle_standard_bonus(units_on_side) -> int:
     for u in units_on_side:
         if is_battle_standard_unit(u):
             return 1
-        joined = getattr(u, 'joinedCharacter', None)
+        joined = active_character(u)
         if joined is not None and is_battle_standard_unit(joined):
             return 1
     return 0
@@ -747,7 +760,7 @@ class PsychologySystem:
         for u in self._friendlies_of(unit):
             if is_source(u):
                 out.append(u)
-            joined = getattr(u, 'joinedCharacter', None)
+            joined = active_character(u)
             if joined is not None and is_source(joined):
                 out.append(joined)
         return out

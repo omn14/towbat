@@ -122,3 +122,43 @@ def on_host_removed(game, host):
     # it; just drop it from the game's unit tracking.
     if character in game.units:
         game.units.remove(character)
+
+
+def detach_character(host):
+    """Forget the character a host was carrying, rank marker and rule with it."""
+    if host is None:
+        return
+    character = get_joined_character(host)
+    host.joinedCharacter = None
+    host.characterSlot = None
+    hm = host.unit.model
+    hm.special_rules = [r for r in hm.special_rules
+                        if not (isinstance(r, dict) and r.get('tag') == JOIN_TAG)]
+    if character is not None:
+        character.hostUnit = None
+    return character
+
+
+def slay_character(game, character):
+    """Take a slain character off the board and out of its host's rank.
+
+    The reverse of joining: the host closes its ranks over the gap. Not the
+    same path as an ordinary casualty — a joined character has no rigid body
+    of its own (joining took it out of the physics world) and its nodes hang
+    under the host, so `removeModelsFromUnit` would remove a body twice and
+    leave the host pointing at a destroyed model.
+    """
+    host = getattr(character, 'hostUnit', None)
+    detach_character(host)
+    if not character.model.isEmpty():
+        character.model.removeNode()
+    if not character.bodyNP.isEmpty():
+        character.bodyNP.removeNode()
+    if character in game.units:
+        game.units.remove(character)
+    for lst in (game.player1Units, game.player2Units):
+        if character in lst:
+            lst.remove(character)
+    if host is not None and not host.model.isEmpty():
+        host.layOutRanks()
+        host.rebuildFootprint()

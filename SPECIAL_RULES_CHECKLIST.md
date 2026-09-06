@@ -757,6 +757,67 @@ existing `cannon_fire.py` / `bombardment.py` work.
 Ridden Monster is listed for monstrous creatures and behemoths but is defined
 under Characters, so it belongs with that work rather than here.
 
+## Challenges (Rulebook p. 210-211)
+
+Planned in `CHALLENGE_PLAN.md`. The rules with no Panda3D in them live in
+`challenges.py`; `combat_resolution` runs the exchange and the duel.
+
+- [x] Challenges / Issuing / Accepting — DONE (p. 210). `challengeExchange`
+      runs at Step 1.1, right after the combat is chosen and before Impact
+      Hits. The active player is offered first and only then the inactive one,
+      one challenge per combat. `duellist(unit)` finds the model that may fight.
+- [x] Refusing a Challenge — DONE (p. 210). The refusing model is retired:
+      `retiredFromCombat` takes it out of its unit's attacks, and
+      `units.placeCharacter` moves it behind the last rank so the retreat is
+      visible. `psychology.active_character` makes it confer nothing — a
+      retired General or Battle Standard stops counting, which is the clause
+      that actually bites. `units.exitInCombat` lets it return once the unit is
+      no longer engaged.
+- [x] Nowhere to Run — DONE (p. 211). `refusal_barred` reports *why* a model
+      cannot refuse so the log can say it: not part of a unit, the last model,
+      or surrounded.
+- [x] Fighting a Challenge — DONE (p. 211). `resolveChallenge` fights the duel
+      in Initiative order using the same `strike_initiative` as everything else.
+      A duellist adds nothing to its unit's fight, which is why the `joinedRule`
+      block is skipped for it.
+- [x] Overkill — DONE (p. 211). `overkill_bonus` is the excess unsaved wounds
+      over the loser's remaining Wounds, capped at +5, and only when the rival
+      actually falls. It has its own row in the combat result, and is subtracted
+      out of 'Wounds caused' so it is not counted twice.
+- [x] To The Death! — DONE (p. 211). Challenges live on `game.challenges` and
+      are saved, so one carries across turns; `challengeExchange` finds a live
+      one and refuses to start another in that combat.
+- [x] Challenges & Mounts — DONE (p. 211). `duelCombatants` adds a mount and a
+      chariot's crew to the duel with their own Initiative, and a participant
+      slain before its attacks are made loses them.
+      CORRECTED on the way: a joined character could not be wounded at all.
+      `applyWounds` is only ever called on the host unitGraphics, so a character
+      dealt attacks but nothing could direct wounds at it — it died only when
+      its host was destroyed. `woundDuellist` and `characters.slay_character`
+      close that. Slaying a joined character is deliberately not
+      `removeModelsFromUnit`: joining takes the character out of the physics
+      world and parents its nodes under the host, so the ordinary path would
+      remove a rigid body twice and leave the host pointing at a dead model.
+      LEFTOVER: **champions are not modelled at all**, so "character or
+      champion" is read as "joined character". Unit champions are the commoner
+      duellist at the table, and none of this reaches them.
+      LEFTOVER: "within, or adjacent to, the fighting rank" is never tested. A
+      joined character always stands in the front rank at `host.characterSlot`,
+      so it is always eligible.
+      LEFTOVER: "engaged in all four arcs" is approximated. The engine records
+      only `front`, `flank` and `rear` per engagement and cannot tell a left
+      flank from a right one, so `surrounded` asks for a front, a rear and two
+      flanks.
+      LEFTOVER: the AI never issues and always accepts. A real heuristic would
+      weigh the two profiles against what refusing would cost.
+      LEFTOVER: the duel is resolved as its own pass rather than woven into the
+      unit-level strike order. p. 211 seals a challenge off — the duellists
+      attack only each other and nothing else may attack them — so the ordering
+      only has to be internally consistent, but a rule that cares about the
+      order of the whole combat would not see it.
+      LEFTOVER: the pair are not moved into base contact. p. 211 says that is
+      optional ("perfectly acceptable to leave them in place").
+
 ## Post-Combat: Break Test, Follow Up & Pursuit (Rulebook p. 144-157)
 
 The fourth sub-phase of a combat, and the one the engine had least of. The

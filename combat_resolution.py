@@ -40,7 +40,10 @@ from battleFunctions import (MIN_IMPACT_HIT_CHARGE, base_initiative,
                              charge_initiative_bonus, impact_hit_report,
                              resolve_impact_hits, simulate_battle,
                              strike_initiative)
-from characters import JOIN_TAG
+from characters import JOIN_TAG, slay_character
+from challenges import (Challenge, MAX_OVERKILL, add_challenge, can_accept,
+                        duellist, end_challenge, find_challenge,
+                        overkill_bonus, refusal_barred, wounds_remaining)
 from battlescribe import has_quick_shot
 from special_rules import (board_edge_distance, can_stand_and_shoot, charge_roll,
                            max_charge_range, max_pursuit_range,
@@ -1208,6 +1211,208 @@ class CombatResolver:
                              f"other's attacks (p. 146)")
         return order
 
+    # ─── Challenges (Rulebook p. 210-211) ─────────────────────────────────
+
+    @staticmethod
+    def _duelName(model):
+        return model.unit.name if model is not None else '-'
+
+    async def challengeExchange(self, attackerUnit, defenderUnit):
+        """Issue, accept or refuse, at Step 1.1 (p. 210).
+
+        The active player is offered first; only if they decline may the
+        inactive player issue. One challenge per combat, and none at all while
+        an earlier one is still running (To The Death!, p. 211).
+        """
+        live = find_challenge(self.game, attackerUnit, defenderUnit)
+        if live is not None:
+            live.rounds += 1
+            rule_log('To The Death!', live.challenger,
+                     f"the challenge against {self._duelName(live.accepter)} carries "
+                     f"into round {live.rounds + 1}; no other may be issued in this "
+                     f"combat until it resolves (p. 211)")
+            await self.armDuellists(live)
+            return live
+
+        for issuer, target in ((attackerUnit, defenderUnit),
+                               (defenderUnit, attackerUnit)):
+            challenger = duellist(issuer)
+            if challenger is None:
+                continue
+            # The AI never issues, so it is only ever asked to accept.
+            if self.game.aiControls(issuer):
+                rule_skipped('Challenges', issuer,
+                             "the AI does not issue challenges")
+                continue
+            answer = await taskMgr.add(self.game.makeChoiceNew(
+                ["Issue a challenge", "No challenge"],
+                Vec3(0, 0, 12), owner=issuer))
+            if answer != "Issue a challenge":
+                rule_skipped('Challenges', challenger,
+                             "its player declined to issue a challenge")
+                continue
+            challenge = Challenge(challenger, issuer)
+            rule_log('Challenges', challenger,
+                     f"issues a challenge to {target.unit.name} (p. 210)")
+            await self.answerChallenge(challenge, target)
+            add_challenge(self.game, challenge)
+            await self.armDuellists(challenge)
+            return challenge
+        return None
+
+    async def armDuellists(self, challenge):
+        """Each duellist picks its own weapon — the duel is its own fight.
+
+        The weapon chosen at the start of the combat was the *unit's*; a
+        character keeps its own profile and weapons, so nothing had asked it.
+        """
+        for model, host in ((challenge.challenger, challenge.host),
+                            (challenge.accepter, challenge.accepter_host)):
+            if model is None:
+                continue
+            weapons = [name for name, w in model.unit.model.weapons.items()
+                       if (w or {}).get('tag') != 'ranged']
+            if len(weapons) < 2 or self.game.aiControls(host or model):
+                model.unit.model.equip_best_melee()
+                continue
+            choice = await taskMgr.add(self.game.makeChoiceNew(
+                weapons, Vec3(0, 0, 12), owner=host or model))
+            if choice:
+                model.unit.model.equip_weapon(choice)
+            rule_log('Fighting a Challenge', model,
+                     f"duels with its {model.unit.model.equipedWeapon['name']}")
+
+    async def answerChallenge(self, challenge, target):
+        """Accept or refuse, and retire a coward (p. 210-211)."""
+        if not can_accept(target):
+            rule_log('Challenges', challenge.challenger,
+                     f"{target.unit.name} has no character to answer, so the "
+                     f"challenge goes unanswered (p. 210)")
+            return
+        accepter = duellist(target)
+        barred = refusal_barred(accepter, target if accepter is not target else None)
+        # The AI always accepts.
+        if self.game.aiControls(target) or barred is not None:
+            answer = "Accept"
+            if barred is not None:
+                rule_log('Nowhere to Run', accepter,
+                         f"cannot refuse — {barred} — and must meet the challenge "
+                         f"(p. 211)")
+        else:
+            answer = await taskMgr.add(self.game.makeChoiceNew(
+                ["Accept", "Refuse"], Vec3(0, 0, 12), owner=target))
+        if answer != "Refuse":
+            challenge.accepter = accepter
+            challenge.accepter_host = target
+            rule_log('Challenges', accepter,
+                     f"accepts the challenge from "
+                     f"{self._duelName(challenge.challenger)} (p. 210)")
+            return
+        challenge.refused = True
+        self.retireFromCombat(accepter, target)
+
+    def retireFromCombat(self, model, host):
+        """A model that refused a challenge hides in the rear ranks (p. 210)."""
+        model.retiredFromCombat = True
+        if host is not None and host is not model:
+            host.placeCharacter()
+        rule_log('Refusing a Challenge', model,
+                 "retires from combat: makes no attacks, has none directed at it, "
+                 "and confers no Leadership or special rules on its unit while its "
+                 "unit stays engaged (p. 210)")
+
+    def duelCombatants(self, model, host):
+        """A duellist and whatever fights alongside it, each with its own I.
+
+        A mount, or a chariot's crew, must direct its attacks at the other
+        participant (p. 211).
+        """
+        out = [(model.unit, '')]
+        for rule in model.unit.model.special_rules:
+            if isinstance(rule, dict) and rule.get('mountUnit'):
+                out.append((rule['mountUnit'], ' (mount)'))
+        for part in self.chariotParts(model):
+            out.append((part, ' (crew)'))
+        return out
+
+    def woundDuellist(self, model, wounds):
+        """Put unsaved wounds on one duellist. Returns True if it falls."""
+        if wounds <= 0:
+            return False
+        left = wounds_remaining(model)
+        model.woundsOnModel = getattr(model, 'woundsOnModel', 0) + wounds
+        if wounds < left:
+            return False
+        if getattr(model, 'hostUnit', None) is not None:
+            slay_character(self.game, model)
+        else:
+            self.game.movement.removeModelsFromUnit(model, 1)
+        return True
+
+    def resolveChallenge(self, challenge):
+        """Fight the duel, in Initiative order (p. 211).
+
+        Returns (player 1 wounds, player 2 wounds, player 1 overkill,
+        player 2 overkill). The duellists attack only each other and nothing
+        else may attack them, so this is sealed off from the combat around it.
+        """
+        if not challenge.answered:
+            return 0, 0, 0, 0
+        order = []
+        for model, host in ((challenge.challenger, challenge.host),
+                            (challenge.accepter, challenge.accepter_host)):
+            charged = bool(getattr(host or model, 'chargedThisTurn', False))
+            inches = float(getattr(host or model, 'chargeDistance', 0.0) or 0.0)
+            for unit, label in self.duelCombatants(model, host):
+                order.append((strike_initiative(unit.model, charged=charged,
+                                                inches=inches),
+                              model, unit, label, charged))
+        order.sort(key=lambda e: -e[0])
+        battle_log("Challenge: " + " vs ".join(
+            self._duelName(m) for m in challenge.participants()))
+        scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
+        overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
+        fallen = set()
+        for initiative, model, unit, label, charged in order:
+            rival = challenge.opponent_of(model)
+            if id(model) in fallen:
+                rule_log('Challenges & Mounts', model,
+                         f"was slain before its{label or ' own'} attacks could be "
+                         f"made, and they are lost (p. 211)")
+                continue
+            if id(rival) in fallen:
+                continue
+            weapon = unit.model.equipedWeapon
+            if weapon is None or weapon.get('tag') == 'ranged':
+                unit.model.equip_best_melee()
+            attacks, hits, suffered, saved, wounds = simulate_battle(
+                unit, rival.unit, charge=charged)
+            rule_log('Fighting a Challenge', model,
+                     f"strikes{label} at I{initiative}: {attacks} attack(s) -> "
+                     f"{hits} hit -> {wounds} unsaved wound(s) on "
+                     f"{self._duelName(rival)} (p. 211)")
+            scores[id(model)] += wounds
+            left = wounds_remaining(rival)
+            if self.woundDuellist(rival, wounds):
+                fallen.add(id(rival))
+                bonus = overkill_bonus(wounds, left)
+                overkill[id(model)] += bonus
+                rule_log('Challenges', model,
+                         f"slays {self._duelName(rival)} in the challenge")
+                if bonus:
+                    rule_log('Overkill', model,
+                             f"{wounds} unsaved wound(s) against {left} Wound(s) "
+                             f"remaining -> +{bonus} combat result (max "
+                             f"{MAX_OVERKILL}) (p. 211)")
+        if fallen:
+            end_challenge(self.game, challenge)
+        p1 = challenge.host in self.game.player1Units
+        first, second = challenge.challenger, challenge.accepter
+        if not p1:
+            first, second = second, first
+        return (scores[id(first)], scores[id(second)],
+                overkill[id(first)], overkill[id(second)])
+
     async def _verySimpleBattleInner(self, task):
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
@@ -1264,6 +1469,12 @@ class CombatResolver:
         impact1, impact2 = self.impactHits(modRemoveSequence)
         player1_score += impact1
         player2_score += impact2
+        # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
+        challenge = await self.challengeExchange(attackerUnit, defenderUnit)
+        duel1, duel2, overkill1, overkill2 = (
+            self.resolveChallenge(challenge) if challenge else (0, 0, 0, 0))
+        player1_score += duel1 + overkill1
+        player2_score += duel2 + overkill2
         stepModels = dict(self._combatStartModels)
         stepInitiative = None
         for initiative, i in self.strikeOrder():
@@ -1311,6 +1522,14 @@ class CombatResolver:
             # attacks below.
             joinedRule = next((r for r in defenderUnit.unit.model.special_rules
                                if isinstance(r, dict) and r.get('tag') == JOIN_TAG), None)
+            # A character fighting a challenge, or hiding from one, adds nothing
+            # to its unit's fight (p. 210 and p. 211).
+            if joinedRule:
+                charGraphics = joinedRule.get('characterGraphics')
+                if challenge is not None and challenge.involves(charGraphics):
+                    joinedRule = None
+                elif getattr(charGraphics, 'retiredFromCombat', False):
+                    joinedRule = None
             origFiles = defenderUnit.unit.files
             if joinedRule and origFiles > 1:
                 defenderUnit.unit.files -= 1
@@ -1417,9 +1636,11 @@ class CombatResolver:
         foesBefore = {id(u): list(u.isInCombatWith) for u in engaged}
         p1_units = [u for u in engaged if u in self.game.player1Units]
         p2_units = [u for u in engaged if u in self.game.player2Units]
-        # Wounds are everything banked so far bar the Impact Hits.
-        p1_wounds = player1_score - impact1
-        p2_wounds = player2_score - impact2
+        # Wounds are everything banked so far bar the Impact Hits. The
+        # challenge's own wounds count as wounds like any other, but Overkill
+        # is a separate bonus and has its own row.
+        p1_wounds = player1_score - impact1 - overkill1
+        p2_wounds = player2_score - impact2 - overkill2
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
         player1_standard = battle_standard_bonus(p1_units)
@@ -1454,6 +1675,7 @@ class CombatResolver:
             {'Wounds caused': (p1_wounds, p2_wounds),
              'Impact Hits': (impact1, impact2),
              'Stand & Shoot': (p1_shot, p2_shot),
+             'Overkill': (overkill1, overkill2),
              'Flank / rear': (player1_flank_bonus, player2_flank_bonus),
              'Rank Bonus': (player1_rank_bonus, player2_rank_bonus),
              'Battle Standard': (player1_standard, player2_standard),

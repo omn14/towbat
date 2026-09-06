@@ -525,9 +525,10 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
         spare -= rank
         able = survivors(rank)
         attacks += able
-        rule_log('Press of Battle', unit,
-                 f"fighting rank is two deep: {able} model(s) in the second "
-                 f"rank attack once each")
+        if able:
+            rule_log('Press of Battle', unit,
+                     f"fighting rank is two deep: {able} model(s) in the second "
+                     f"rank attack once each")
 
     if m.fights_in_extra_rank():
         rank = min(spare, files)
