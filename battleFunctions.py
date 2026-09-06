@@ -228,6 +228,14 @@ def take_last_slaying_blows() -> int:
     return n
 
 
+def _apply_to_hit_modifiers(model, roll):
+    """Put a To Hit die through the model's own modifiers, as the first one was."""
+    for rule in model.special_rules:
+        if rule.get('to_hit'):
+            roll = rule['to_hit'](roll, model)
+    return roll
+
+
 def simulate_attack(model1,model2):
     model1.attack_roll = random.randint(1, 6)
     model1.wound_roll = random.randint(1, 6)
@@ -243,6 +251,7 @@ def simulate_attack(model1,model2):
     if model1.equipedWeapon.get('tag') == 'ranged':
         weaponIsRanged = True
     #print(f"Weapon is ranged: {weaponIsRanged}")
+    model1.hatred_rerolled = False
     if not weaponIsRanged: # for to hit modifications
         to_hit_target_roll = to_hit(model1,model2)
         model1.AP = model1.melee_ap()
@@ -250,6 +259,13 @@ def simulate_attack(model1,model2):
             hit = True
         else:
             hit = False
+        # Hatred (p. 171): a failed To Hit may be re-rolled in the first round
+        # of combat. Once only — a re-roll is never itself re-rolled.
+        if not hit and getattr(model1, 'hatred_rerolls', False):
+            model1.attack_roll = _apply_to_hit_modifiers(model1,
+                                                         random.randint(1, 6))
+            hit = model1.attack_roll >= to_hit_target_roll
+            model1.hatred_rerolled = True
     else:
         def shoot():
             return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False),moved=getattr(model1,'moved_this_turn',False))
@@ -313,6 +329,34 @@ def slaying_blow_struck(attacker, defender, natural_wound, to_wound_target,
     if to_wound_target > 6:
         return None
     return slaying_rule_for(attacker, defender)
+
+
+def _report_hatred(unit1, unit2, attacks, first_round, hated,
+                   rerolls, converted):
+    """One line per exchange for Hatred (p. 171), including when it declines.
+
+    A rule that quietly does nothing looks exactly like a rule that is broken,
+    and Hatred spends most of the battle declining: it lasts one round.
+    """
+    names = unit1.model.hatred_names()
+    if not names:
+        return
+    hates = ", ".join(names)
+    if rerolls:
+        rule_log('Hatred', unit1,
+                 f"hates {hates}: {rerolls} failed To Hit re-rolled in the "
+                 f"first round of combat, {converted} of them hit (p. 171)")
+    elif not first_round:
+        rule_skipped('Hatred', unit1,
+                     f"hates {hates}, but this is not the first round of the "
+                     f"combat and Hatred lasts only that long")
+    elif not hated:
+        faction = unit2.model.characteristics.get('Faction') or 'no known army'
+        rule_skipped('Hatred', unit1,
+                     f"hates {hates}, but {unit2.name} is {faction}")
+    elif attacks:
+        rule_skipped('Hatred', unit1,
+                     f"hates {hates}, but none of {attacks} attack(s) missed")
 
 
 
@@ -608,7 +652,8 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
 
 
 def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
-                    extra_ranks: int = 0, multiple_shots: bool = True):
+                    extra_ranks: int = 0, multiple_shots: bool = True,
+                    first_round: bool = False):
 
     # how many attacks
     unit1.nmodels = max(0, unit1.nmodels)  # Ensure at least one model
@@ -652,6 +697,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     saves_made = 0
     slaying_blows = 0
     slaying_rule = None
+    hatred_rerolls = 0
+    hatred_converted = 0
+    hated = first_round and unit1.model.hates(unit2.model)
+    unit1.model.hatred_rerolls = hated
     global LAST_SLAYING_BLOWS
     LAST_SLAYING_BLOWS = 0
     # Reported once for the exchange, not once per save roll.
@@ -667,6 +716,9 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     for i in range(attacks1):
         hit,wound = simulate_attack(unit1.model, unit2.model)
         struck = getattr(unit1.model, 'slaying_blow', None)
+        if getattr(unit1.model, 'hatred_rerolled', False):
+            hatred_rerolls += 1
+            hatred_converted += 1 if hit else 0
         if hit:
             total_hits += 1
         if wound:
@@ -685,6 +737,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
     troop_type = unit2.model.characteristics.get('Troop Type', 'infantry')
+    _report_hatred(unit1, unit2, attacks1, first_round, hated,
+                   hatred_rerolls, hatred_converted)
     if slaying_blows:
         rule_log(slaying_rule, unit1,
                  f"{slaying_blows} natural 6(s) To Wound against "

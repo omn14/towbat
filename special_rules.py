@@ -62,6 +62,72 @@ def _flag(name: str, desc: str | None, tag: str = "special") -> dict:
     return {"name": name, "description": desc or "", "tag": tag}
 
 
+# ── Hatred (X): naming the hated enemy (Rulebook p. 171) ───────────────────
+
+# What the catalogue writes in the brackets is prose, and not one of the eight
+# spellings in the data is a faction name the engine could compare against.
+# Each entry maps that prose to the factions it means and the keywords it means;
+# a keyword is matched against the target's own Special Rules.
+HATRED_ALL_ENEMIES = "all enemies"
+HATRED_TARGETS = {
+    "orcs & goblins": (("Orc and Goblin Tribes",), ()),
+    "beastman brayherds": (("Beastmen Brayherds",), ()),
+    # Spelled 'Breyherds' in one Cathayan entry. Aliased rather than corrected:
+    # the catalogues are vendored and get re-cloned.
+    "beastmen breyherds": (("Beastmen Brayherds",), ()),
+    "beastmen brayherds": (("Beastmen Brayherds",), ()),
+    "high elves": (("High Elf Realms",), ()),
+    "dwarfs": (("Dwarfen Mountain Holds", "Chaos Dwarfs"), ()),
+    "warriors of chaos": (("Warriors of Chaos",), ()),
+    "daemonic models": ((), ("Daemonic",)),
+    "daemonic": ((), ("Daemonic",)),
+}
+
+
+def resolve_hatred_target(param):
+    """Turn the brackets of 'Hatred (X)' into (factions, keywords, all_enemies).
+
+    The whole string is looked up first and only then split, because 'Orcs &
+    Goblins' is one faction while 'Warriors of Chaos & Daemonic models' is two
+    different tests \u2014 splitting on '&' first would invent an army called Orcs.
+    """
+    text = " ".join(str(param or "").split()).lower()
+    if not text:
+        return (), (), False
+    if text in ("all enemies", "all enemy models"):
+        return (), (), True
+    if text in HATRED_TARGETS:
+        factions, keywords = HATRED_TARGETS[text]
+        return tuple(factions), tuple(keywords), False
+    factions, keywords = [], []
+    for piece in re.split(r",|&|\band\b", text):
+        piece = piece.strip()
+        if not piece:
+            continue
+        known = HATRED_TARGETS.get(piece)
+        if known is None:
+            known = HATRED_TARGETS.get(re.sub(r"\s+models$", "", piece))
+        if known:
+            factions.extend(known[0])
+            keywords.extend(known[1])
+    return tuple(dict.fromkeys(factions)), tuple(dict.fromkeys(keywords)), False
+
+
+def _hatred(model, param, desc):
+    factions, keywords, all_enemies = resolve_hatred_target(param)
+    named = param or HATRED_ALL_ENEMIES
+    return {"name": f"Hatred ({named})" if param else "Hatred",
+            "description": desc or ("May re-roll any failed rolls To Hit "
+                                    "against a hated enemy during the first "
+                                    "round of combat."),
+            "tag": "combat",
+            "hatred": True,
+            "hates_all": all_enemies,
+            "hates_factions": factions,
+            "hates_keywords": keywords,
+            "hated_name": named}
+
+
 # ── Builders for keywords that have a coded engine effect ──────────────────
 # Each builder takes (model, param, description) and returns a special_rules
 # dict, or None to skip. Keys are matched case-insensitively on the rule name.
@@ -222,6 +288,7 @@ SPECIAL_RULE_BUILDERS = {
     "strikes last": _strike_last,
     "killing blow": _killing_blow,
     "monster slayer": _monster_slayer,
+    "hatred": _hatred,
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,

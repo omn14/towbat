@@ -484,7 +484,62 @@ army-agnostic and would benefit every faction.
       `battle_standard_bonus` / `should_reroll_break` in `psychology.py`.
       NOTE: ordinary standard bearers are not modelled at all, so the Battle
       Standard is currently the only source of a combat result standard bonus.
-- [ ] Hatred (X) — re-roll misses to hit in the first combat round
+- [x] Hatred (X) (p. 171) — DONE. A failed To Hit may be re-rolled against a
+      hated enemy, in the first round of a combat only, in melee only. The
+      rules page carries no FAQ or errata, so the printed wording is all of it.
+      Three separate problems, only one of which was the rule; see
+      `HATRED_PLAN.md`.
+      **The engine could not tell which round of a combat it was in.**
+      `chargedThisTurn` is cleared every turn, so it cannot see round one of a
+      combat that began last turn, and `startOfPhaseEngaged` answers a
+      different question (for pursuits). So `roundsFought` on the unit, counted
+      up in `enterCombatPhase` beside `startOfPhaseEngaged`, reset in
+      `exitInCombat` beside `isInCombatWith`, and saved — without that last
+      part a reload mid-combat hands Hatred back. Pursuit into a New Combat is
+      the awkward case: those units are dragged in *after* the phase has
+      counted, so the two of them are set to their first round there.
+      This counter is worth more than Hatred: Frenzy and Impetuous both want
+      it, and it is the honest version of what "first round of combat" means.
+      DECIDED: the counter is **per unit, not per pairing**. When a fresh enemy
+      charges a fight already in progress, the charger gets its Hatred and the
+      unit already fighting does not. LEFTOVER: strictly the rule is per
+      combat, which would cost a dict on every unit and in every save.
+      **X is prose, and not one of the eight spellings in the data is a faction
+      name.** `Orcs & Goblins` is the army called `Orc and Goblin Tribes`;
+      `Dwarfs` is `Dwarfen Mountain Holds`; `High Elves` is `High Elf Realms`.
+      `HATRED_TARGETS` in `special_rules.py` maps the prose to factions and to
+      keywords, and `resolve_hatred_target` looks up the **whole string first**
+      and only then splits — because `Orcs & Goblins` is one faction while
+      `Warriors of Chaos & Daemonic models` is two different tests, and
+      splitting on `&` first invents an army called Orcs.
+      `Daemonic` is a keyword, not an army: it is a real rule on 31 models, so
+      that half of the test reads the target's own rules list.
+      DECIDED: `Hatred (Dwarfs)` covers Chaos Dwarfs as well as the mountain
+      holds.
+      One entry in the data reads `Beastmen Breyherds`, a typo for
+      `Brayherds`. Aliased rather than corrected: the catalogues are vendored
+      and get re-cloned. The Bretonnian Grand Master's roster rule grants the
+      same Hatred spelled correctly, so both spellings reach the matcher.
+      Identifying the enemy needed no new plumbing: `characteristics['Faction']`
+      is on a live model, survives `reset_characteristics()`, and survives a
+      reload since the rebase fix that went in with Monster Slayer. A model the
+      catalogue has never heard of has no faction and can only be hated by
+      'all enemies' — which is a logged line, not a crash.
+      The re-roll is in the melee branch of `simulate_attack`. Two things that
+      were easy to get wrong and are done deliberately: the re-rolled die goes
+      back through the same `to_hit` rule modifiers the first one did rather
+      than being compared raw, and a re-roll is never itself re-rolled.
+      The guard-rail test is that **every Hatred spelling in the catalogue
+      resolves to a non-empty set of factions or keywords**, so an army book
+      adding `Hatred (Skaven)` fails loudly instead of silently hating nobody.
+      REMOVED on the way: seven profiles under
+      `army_units_cat/orc_and_goblin_tribes/` carried a bare `"Hatred"` with no
+      enemy named. Every one of those models is in the catalogue, which
+      supplies `Hatred (Dwarfs)` and wins, so the entries were unreachable.
+      Deleted rather than guessed at — a bare `Hatred` could only have meant
+      'all enemies' or nothing, and both are wrong. A test keeps them gone.
+      LEFTOVER: not applied to Impact Hits or Stomp Attacks, which are hits
+      rather than To Hit rolls.
 - [ ] Magic Resistance (-1/-2) — to-cast / ward penalty vs magic
 - [x] Impact Hits (X) — DONE (Rulebook p. 172): the `(X)` is parsed off the rule
       name (`_param_dice` copes with prose such as `(D6+1, War Wagon only)`), and

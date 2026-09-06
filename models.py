@@ -473,6 +473,39 @@ class model:
         """Whether Monster Slayer can fell this model outright (p. 173)."""
         return troop_types.is_monster(self.characteristics.get('Troop Type'))
 
+    def hates(self, other) -> bool:
+        """Whether this model hates *other* (p. 171).
+
+        The enemy is named by faction, or by a keyword carried in its own rules
+        such as 'Daemonic'. A model the catalogue has never heard of has no
+        faction and so cannot be hated by name, only by 'all enemies'.
+        """
+        faction = str(other.characteristics.get('Faction') or '').lower()
+        keywords = None
+        for rule in self.special_rules:
+            if not isinstance(rule, dict) or not rule.get('hatred'):
+                continue
+            if rule.get('hates_all'):
+                return True
+            if faction and any(faction == str(f).lower()
+                               for f in rule.get('hates_factions') or ()):
+                return True
+            wanted = rule.get('hates_keywords') or ()
+            if not wanted:
+                continue
+            if keywords is None:
+                keywords = [str(r.get('name') if isinstance(r, dict) else r).lower()
+                            for r in (other.special_rules or [])]
+            if any(any(k.lower() == w or k.startswith(w.lower() + ' ')
+                       for k in keywords) for w in (x.lower() for x in wanted)):
+                return True
+        return False
+
+    def hatred_names(self) -> list:
+        """The enemies this model hates, for the log line."""
+        return [str(r.get('hated_name')) for r in self.special_rules
+                if isinstance(r, dict) and r.get('hatred')]
+
     def is_venerable(self) -> bool:
         """True if the model has the Venerable special rule."""
         return any(isinstance(r, dict) and r.get('venerable')

@@ -240,6 +240,10 @@ class GamePhaseFSM(FSM):
             # Pursuit into a New Combat asks whether the enemy was *already*
             # fighting when the phase began, which pursuits themselves change.
             unit.startOfPhaseEngaged = unit.isInCombat
+            # Which round of its combat this is, for the rules that only apply
+            # in the first one (Hatred, p. 171).
+            if unit.isInCombat:
+                unit.roundsFought = getattr(unit, 'roundsFought', 0) + 1
             self.game.movement.updateDisrupted(unit)
 
     def exitCombatPhase(self):

@@ -175,6 +175,7 @@ def save_game_state(game, filename=None):
             'startOfBattleModels': getattr(unit, 'startOfBattleModels', unit.unit.nmodels),
             'startOfPhaseModels': getattr(unit, 'startOfPhaseModels', unit.unit.nmodels),
             'startOfPhaseEngaged': getattr(unit, 'startOfPhaseEngaged', False),
+            'roundsFought': getattr(unit, 'roundsFought', 0),
             'isDeployed': unit.isDeployed,
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
@@ -395,6 +396,7 @@ def load_game_state(game, filename):
         unit.startOfBattleModels = unit_data.get('startOfBattleModels', unit.unit.nmodels)
         unit.startOfPhaseModels = unit_data.get('startOfPhaseModels', unit.unit.nmodels)
         unit.startOfPhaseEngaged = unit_data.get('startOfPhaseEngaged', False)
+        unit.roundsFought = unit_data.get('roundsFought', 0)
         unit.isDeployed = unit_data['isDeployed']
 
         unit.unit.nmodels = unit_data['nmodels']

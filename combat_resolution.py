@@ -1378,17 +1378,18 @@ class CombatResolver:
                             (challenge.accepter, challenge.accepter_host)):
             charged = bool(getattr(host or model, 'chargedThisTurn', False))
             inches = float(getattr(host or model, 'chargeDistance', 0.0) or 0.0)
+            first = getattr(host or model, 'roundsFought', 0) == 1
             for unit, label in self.duelCombatants(model, host):
                 order.append((strike_initiative(unit.model, charged=charged,
                                                 inches=inches),
-                              model, unit, label, charged))
+                              model, unit, label, charged, first))
         order.sort(key=lambda e: -e[0])
         battle_log("Challenge: " + " vs ".join(
             self._duelName(m) for m in challenge.participants()))
         scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         fallen = set()
-        for initiative, model, unit, label, charged in order:
+        for initiative, model, unit, label, charged, first in order:
             rival = challenge.opponent_of(model)
             if id(model) in fallen:
                 rule_log('Challenges & Mounts', model,
@@ -1401,7 +1402,7 @@ class CombatResolver:
             if weapon is None or weapon.get('tag') == 'ranged':
                 unit.model.equip_best_melee()
             attacks, hits, suffered, saved, wounds = simulate_battle(
-                unit, rival.unit, charge=charged)
+                unit, rival.unit, charge=charged, first_round=first)
             rule_log('Fighting a Challenge', model,
                      f"strikes{label} at I{initiative}: {attacks} attack(s) -> "
                      f"{hits} hit -> {wounds} unsaved wound(s) on "
@@ -1562,10 +1563,12 @@ class CombatResolver:
             casualties = max(0, self._combatStartModels.get(
                 id(defenderUnit.unit), stepStart) - stepStart)
             defenderUnit.unit.nmodels = stepStart
+            # Hatred and its kin last only the first round of a combat (p. 171).
+            firstRound = getattr(defenderUnit, 'roundsFought', 0) == 1
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                 defenderUnit.unit, attackerUnit.unit,
                 charge=getattr(defenderUnit, 'chargedThisTurn', False),
-                casualties=casualties)
+                casualties=casualties, first_round=firstRound)
             defenderUnit.unit.files = origFiles
             defenderUnit.unit.nmodels = liveModels
             combSlain = take_last_slaying_blows()
@@ -1604,7 +1607,8 @@ class CombatResolver:
                 if rule.get('mountUnit'):
                     attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                         rule['mountUnit'], attackerUnit.unit,
-                        charge=getattr(defenderUnit, 'chargedThisTurn', False))
+                        charge=getattr(defenderUnit, 'chargedThisTurn', False),
+                        first_round=firstRound)
                     combSlain += take_last_slaying_blows()
                     self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                             suffered_wounds, saves_made, total_wounds)
@@ -1618,7 +1622,8 @@ class CombatResolver:
             for partUnit in self.chariotParts(defenderUnit):
                 attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                     partUnit, attackerUnit.unit,
-                    charge=getattr(defenderUnit, 'chargedThisTurn', False))
+                    charge=getattr(defenderUnit, 'chargedThisTurn', False),
+                    first_round=firstRound)
                 combSlain += take_last_slaying_blows()
                 self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                         suffered_wounds, saves_made, total_wounds)
@@ -1636,7 +1641,8 @@ class CombatResolver:
                     charUnit.model.equip_weapon('hand weapon')
                 attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                     charUnit, attackerUnit.unit,
-                    charge=getattr(defenderUnit, 'chargedThisTurn', False))
+                    charge=getattr(defenderUnit, 'chargedThisTurn', False),
+                    first_round=firstRound)
                 combSlain += take_last_slaying_blows()
                 self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                         suffered_wounds, saves_made, total_wounds)
@@ -2030,6 +2036,11 @@ class CombatResolver:
             # anyone carrying that, so the allowance has to be given back.
             winner.hasAttackedThisTurn = False
             winner.cannotPursueThisTurn = True
+            # Both fight this phase, after enterCombatPhase has already counted
+            # the round, so anyone not already fighting is on their first.
+            for u in (winner, blocker):
+                if not getattr(u, 'roundsFought', 0):
+                    u.roundsFought = 1
             rule_log('Pursuit into a New Combat', winner,
                      f"overran into {blocker.unit.name}'s unfought combat by "
                      f"its {flank}: fights again this phase counting as "

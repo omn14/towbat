@@ -513,6 +513,7 @@ class unitGraphics(FSM):
         self.isInCombat=False
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
+        self.roundsFought=0
         # A challenge lasts only as long as the combat that held it (p. 211).
         for challenge in list(getattr(base, 'challenges', None) or []):
             if self in challenge.hosts():
