@@ -985,7 +985,7 @@ class MyApp(ShowBase):
 
     # ─── Phase Task Loops ─────────────────────────────────────────────────
 
-    def taskLoopDeploy(self, task):
+    async def taskLoopDeploy(self, task):
         #base.messenger.toggleVerbose()
         if allUnitsDeployed(self.units):
             print("All units deployed, moving to next phase.")
@@ -994,6 +994,25 @@ class MyApp(ShowBase):
         if self.unitToMove.isDeployed:
             print("Unit is already deployed, cannot move.")
             return task.done
+        held = self.unitToMove
+        if held not in deployment_candidates(self, self.roundCounter.current_player):
+            battle_log('This unit must wait for its Scouts deployment turn.', 'info')
+            return task.done
+        if (getattr(self, 'deploymentStage', 'ordinary') == 'ordinary'
+                and has_scouts(held) and held.scoutDeploymentChoice is None):
+            choice = await self.makeChoiceNew(
+                ['Deploy as Scouts later', 'Deploy normally'], Vec3(0, 0, 10),
+                owner=held, prompt=f'{held.unit.name}: deployment',
+                detail='Scouts deploy after both armies, more than 12" from enemies. '
+                       'No first-turn charge or Vanguard move, even in your own zone.')
+            held.scoutDeploymentChoice = 'scouts' if choice == 'Deploy as Scouts later' else 'normal'
+            if held.scoutDeploymentChoice == 'scouts':
+                rule_log('Scouts', held, 'set aside until both armies finish ordinary deployment')
+                # Reservation does not consume a deployment drop.
+                from deployPhase import _advance_after_deploy
+                _advance_after_deploy(self, placed=False)
+                return task.done
+            rule_skipped('Scouts', held, 'ordinary deployment chosen; no Scouts charge restriction')
         self.ignore('mouse1')
         movetask = taskMgr.add(taskMoveUnit, "taskMoveUnit", extraArgs=[self,self.unitToMove], appendTask=True)
         self.accept('mouse1', endMoveUnit, [self,movetask])

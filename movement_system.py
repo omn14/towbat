@@ -8,7 +8,7 @@ are used directly; all other game state is accessed via ``self.game``.
 
 import math
 from collision_masks import CollisionMask as CM
-from characters import on_host_removed
+from characters import on_host_removed, same_player
 from rules_log import rule_log, rule_skipped
 from special_rules import max_charge_range, unit_has_swiftstride
 from terrain_system import dangerous_terrain_wounds, is_disrupted
@@ -1067,6 +1067,7 @@ class MovementSystem:
             color=(0.4, 1.0, 0.4, 1.0))
 
     def moveUnit(self, unit):
+        from scouts import scout_charge_blocked
         if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             taskMgr.remove("taskLoopPathTowardsMouse")
         # Clear the skirmisher destination ghost once the move is committed.
@@ -1086,15 +1087,6 @@ class MovementSystem:
             print("Unit has already moved this turn.")
             return
 
-        # The tint the player was shown when they clicked is what they get: both
-        # read the same arc distance (p. 123).
-        if getattr(unit, 'wouldMarch', False):
-            unit.marchedThisTurn = True
-            rule_log('Marching', unit,
-                     f"moved {self.game.moveArceDistance:.1f}\", beyond its "
-                     f"Movement -> marched, so it cannot shoot or cast a "
-                     f"Magic Missile this turn")
-        
         pos = self.game.arcPoint
         pos=pos*2
         pos -= Vec2(1,1)
@@ -1116,6 +1108,26 @@ class MovementSystem:
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
             defenderUnit=self.game.getSelectedUnit(defenderNP.node())
 
+            if (unit.state != 'IsPursuing' and not same_player(self.game, unit, defenderUnit)
+                    and scout_charge_blocked(self.game, unit)):
+                rule_log('Scouts', unit, 'first own turn: charge declaration refused; movement restored')
+                unit.bodyNP.setPos(oposUnit)
+                unit.bodyNP.setHpr(orotUnit)
+                unit.bodyNP.node().setTransformDirty()
+                self.game.autoCharge = False
+                self.game.autoHold = False
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+                return
+
+        # Do not mark or announce marching for a refused Scout charge.
+        if getattr(unit, 'wouldMarch', False):
+            unit.marchedThisTurn = True
+            rule_log('Marching', unit,
+                     f"moved {self.game.moveArceDistance:.1f}\", beyond its "
+                     f"Movement -> marched, so it cannot shoot or cast a "
+                     f"Magic Missile this turn")
+
+        if c:
             if unit.state == "IsPursuing":
                 pass
             else:

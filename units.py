@@ -124,6 +124,8 @@ class unitGraphics(FSM):
         self.tacticalRole=None      # set by AI: e.g. {'role': 'CHARGE', 'target': '...', 'reason': '...'}
         self.madePursuitChoice=False
         self.isDeployed=False
+        self.scoutDeploymentChoice=None  # None, 'normal', or 'scouts'
+        self.deployedAsScouts=False      # deployment history; survives turn resets (p. 177)
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
         
         """ self.text_node = OnscreenText(

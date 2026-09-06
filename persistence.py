@@ -120,6 +120,9 @@ def save_game_state(game, filename=None):
         'current_round': game.roundCounter.currentRoundPlayer,
         'current_player': game.roundCounter.current_player,
         'max_rounds': game.roundCounter.max_rounds,
+        'deployment_stage': getattr(game, 'deploymentStage', 'ordinary'),
+        'scout_deploy_first': getattr(game, 'scoutDeployFirst', None),
+        'first_finished_deploying': getattr(game, 'firstFinishedDeploying', None),
         'ai_player2_active': game.AIplayer2.active,
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
@@ -179,6 +182,8 @@ def save_game_state(game, filename=None):
             'startOfPhaseEngaged': getattr(unit, 'startOfPhaseEngaged', False),
             'roundsFought': getattr(unit, 'roundsFought', 0),
             'isDeployed': unit.isDeployed,
+            'scoutDeploymentChoice': getattr(unit, 'scoutDeploymentChoice', None),
+            'deployedAsScouts': getattr(unit, 'deployedAsScouts', False),
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
             'ranks': unit.unit.ranks,
@@ -435,6 +440,8 @@ def load_game_state(game, filename):
         unit.startOfPhaseEngaged = unit_data.get('startOfPhaseEngaged', False)
         unit.roundsFought = unit_data.get('roundsFought', 0)
         unit.isDeployed = unit_data['isDeployed']
+        unit.scoutDeploymentChoice = unit_data.get('scoutDeploymentChoice')
+        unit.deployedAsScouts = unit_data.get('deployedAsScouts', False)
 
         unit.unit.nmodels = unit_data['nmodels']
         unit.unit.files = unit_data['files']
@@ -512,7 +519,17 @@ def load_game_state(game, filename):
         spell.endSpell()
     game.remainsInPlay = []
     load_spells(game, game_state.get('spells_in_play'), unit_map)
+    # Restore after phase entry and rebuilding units; neither may re-roll or
+    # advance a half-finished Scout deployment. Older saves deployed normally.
+    game.deploymentStage = game_state.get('deployment_stage', 'ordinary')
+    game.scoutDeployFirst = game_state.get('scout_deploy_first')
+    game.firstFinishedDeploying = game_state.get('first_finished_deploying')
     game.roundCounter.apply_selection_masks()
+    if game_state['current_phase'] == 'DeployPhase':
+        from deployPhase import refresh_deployment
+        refresh_deployment(game)
+        if game.roundCounter.current_player == 2 and game.AIplayer2.active:
+            game.AIplayer2.deployUnits()
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
     # offset is derived rather than saved, so a unit restored onto a hill would

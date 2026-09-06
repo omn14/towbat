@@ -999,11 +999,11 @@ class EnhancedAI:
               f"({self.heuristic_decisions/max(1, self.decisions_made)*100:.1f}%)")
 
     def deployUnits(self):
-        for unit in self.player_units:
-            if not unit.isDeployed:
-                self.game.unitToMove=unit
-                taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
-                break
+        from scouts import deployment_candidates
+        for unit in deployment_candidates(self.game, self.game.roundCounter.current_player):
+            self.game.unitToMove=unit
+            taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
+            break
     
     def loopWaitForMoveComplete(self,unit,task):
         if not hasattr(task, '_wait_elapsed'):

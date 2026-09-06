@@ -86,10 +86,10 @@ class ClassAI:
         return
     
     def deployUnits(self):
-        for unit in self.playerUnits:
-            if not unit.isDeployed:
-                self.game.unitToMove=unit
-                taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
-                break
+        from scouts import deployment_candidates
+        for unit in deployment_candidates(self.game, self.game.roundCounter.current_player):
+            self.game.unitToMove=unit
+            taskMgr.add(self.game.taskLoopDeploy, "taskLoopDeploy", extraArgs=[], appendTask=True)
+            break
 
     

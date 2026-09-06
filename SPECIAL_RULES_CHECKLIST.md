@@ -607,7 +607,57 @@ army-agnostic and would benefit every faction.
       terrain nuance — see SKIRMISHERS_PLAN.md. Note: skirmisher status comes
       from the army list's special_rules (unit-level rule), not the base
       catalogue model profile.
-- [ ] Scouts / Vanguard — pre-game deployment / free move
+- [x] Scouts — DONE for deployment and first-own-turn charges (Rulebook p. 177;
+      Official FAQ & Errata v1.5.3). Selecting an eligible unit offers ordinary
+      deployment or setting it aside. Reserving Scouts is not a deployment drop:
+      both armies finish ordinary deployment before any reserved unit is placed.
+      When both sides scout, a D6 roll-off (ties re-rolled) chooses the first
+      player, then drops alternate, skipping an exhausted side. Scouts count
+      towards `firstFinishedDeploying`, not just ordinary deployment completion.
+      Split-profile grants are recognised from rider/mount and live crew/beasts
+      (pp. 192, 194, 204); a joined character must qualify separately.
+      Placement is strictly MORE THAN 12" from each deployed enemy model's base,
+      measured between rotated base rectangles, including joined characters and
+      real skirmisher positions rather than empty corners of a regiment box.
+      FAQ correction: there is NO own-deployment-zone exception. All bases must
+      be on the table; overlap and impassable terrain are refused. Ordinary
+      deployment also requires every base to fit inside its own deployment zone.
+      Joining a character validates the final host footprint and restores ranks,
+      ownership, physics and position if the join would make placement illegal.
+      `deployedAsScouts` is deployment history, not the current keyword. Both
+      human/AI movement commits and direct charge declarations refuse Scouts
+      during their owner's first turn, before reactions or dice. The other
+      player's completed turn does not remove the ban. Ordinary-deployed Scouts
+      are unrestricted; normal movement and pursuit are not charge declarations.
+      Refusal restores position/facing without spending movement or announcing
+      a fictitious march. A joined late Scout also prevents its host charging.
+      Corrected on the way: deployment could be skipped with End Phase, and the
+      old wall-contact test accepted bases entirely beyond the walls. Bullet's
+      broadphase contact query also missed units moved since the last physics
+      frame; synchronous pair queries now find actual charge/join contact.
+      Deployment stage, roll-off winner, first-finished player, per-unit choices
+      and history are saved/restored. Loading does not re-roll, retains the active
+      deployment player, clears stale placement tasks and resumes AI deployment.
+      Old saves clear later Scout state. Both AI implementations select only
+      current-stage candidates; a 200-attempt placement limit pauses the AI for
+      manual placement instead of spinning forever. Rule decisions/refused drops
+      log reasons and the decisive clearance/rolls; frame-by-frame previews stay
+      quiet. `tests/test_scouts.py` and `tests/test_scouts_scene.py` cover 47 cases,
+      including real offscreen application save/load, async AI task chaining,
+      character joins, first-turn expiry, allowed pursuits and move rollback.
+      Running the scene test as a script creates `saves/scouts.json`, ready for
+      Player 1's first late Scout drop, and `screenshots/scouts.png`; the generated
+      save was loaded and rendered offscreen.
+      LEFTOVER: Vanguard movement itself is not implemented. Its FAQ prohibition
+      is represented by `scouts_block_vanguard`, saved deployment history and
+      the deployment log, ready for a future Vanguard phase.
+      LEFTOVER: the engine still starts battle with Player 1; `firstFinishedDeploying`
+      is recorded correctly but no scenario first-turn roll-off/bonus consumes it.
+      LEFTOVER: irregular impassable terrain uses conservative bounding rectangles;
+      custom scenario deployment zones and army-specific Scouts variants are not
+      covered. AI charge planning is unchanged: illegal first-turn proposals are
+      rejected by the shared execution gate rather than tactically replanned.
+- [ ] Vanguard — pre-game free move (separate from Scouts deployment)
 - [x] Swiftstride — DONE: a unit made entirely of Swiftstride models (the rule
       may come from the mount; a joined character without it breaks the unit's
       claim) adds 3" to its maximum possible charge range and may add a D6 to

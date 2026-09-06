@@ -2,7 +2,11 @@ from panda3d.core import Point3, BitMask32
 import random
 from strategyAdvisor import StrategyAdvisor
 from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
-from characters import is_character, has_joined_character, same_player, join_unit
+from characters import (is_character, has_joined_character, same_player,
+                        join_unit, detach_character, side_of)
+from rules_log import rule_log, rule_skipped, battle_log, dice_roll
+from scouts import (deployment_candidates, has_scouts, nearest_enemy,
+                    placement_error, scouts_block_vanguard)
 
 
 # ── Deployment zone ───────────────────────────────────────────────────
@@ -352,7 +356,18 @@ def _clamp(val, lo, hi):
 def taskMoveUnit(game,unit,task):
     #game.ignore('mouse1')
     if game.roundCounter.current_player == 2 and game.AIplayer2.active:
-        pxy = _get_ai_deploy_position(game, unit)
+        attempts = getattr(task, '_deploy_attempts', 0) + 1
+        task._deploy_attempts = attempts
+        if attempts > 200:
+            game.AIplayer2.active = False
+            battle_log('AI deployment paused after 200 attempts; select and place this unit manually.', 'info')
+            game.accept('mouse1', game.setActiveUnit,
+                        [game.setActiveUnitTask, game.setActiveUnitTaskName])
+            return task.done
+        if getattr(game, 'deploymentStage', 'ordinary') == 'scouts':
+            pxy = (random.uniform(-34, 34), random.uniform(-22, 22))
+        else:
+            pxy = _get_ai_deploy_position(game, unit)
 
     else:
         pxy = getMouseXY()
@@ -368,13 +383,8 @@ def taskMoveUnit(game,unit,task):
     # Raise the visual models onto any hill/forest surface under them.
     if hasattr(game, 'movement'):
         game.movement.alignModelsToHillNormal(unit)
-    outBounds = False
-    c = game.checkUnitContactSmall(unit)
-    if c:
-        outBounds = True
-    unit.bodyNP.node().setTransformDirty()
-    if not is_shape_inside(base.world, unit.bodyNP.node(), game.boundary_ghost):
-        outBounds = True
+    outBounds = placement_error(
+        game, unit, scouting=getattr(game, 'deploymentStage', 'ordinary') == 'scouts')
     if outBounds:
         unit.model.setColor(.6,0.6,0.6,1)
     else:
@@ -391,68 +401,136 @@ def taskMoveUnit(game,unit,task):
 
 def endMoveUnit(game,taskToEnd):
     held = game.unitToMove
+    if held not in deployment_candidates(game, game.roundCounter.current_player):
+        return
+    scouting = getattr(game, 'deploymentStage', 'ordinary') == 'scouts'
     inContact = game.checkUnitContactSmall(held)
     held.bodyNP.node().setTransformDirty()
-    inZone = is_shape_inside(base.world, held.bodyNP.node(), game.boundary_ghost)
-
-    # Character dropped onto a friendly unit inside the zone: join its ranks
-    # instead of refusing (rather than stacking on top of it).
-    if inContact and inZone and is_character(held):
+    # Joining changes the host's footprint. Validate the final ranks, not the
+    # cursor position, and roll back a join that pushes any base out of bounds.
+    if inContact and is_character(held):
         host = game.getSelectedUnit(inContact.getNode1())
         if (host is not None and host is not held and not is_character(host)
-                and same_player(game, held, host) and not has_joined_character(host)):
-            print(f"{held.unitName} joins {host.unitName}.")
+                and host.isDeployed and same_player(game, held, host)
+                and not has_joined_character(host)):
+            root = held.bodyNP.getParent()
+            old_transform = held.bodyNP.getTransform()
+            side_units = game.player1Units if side_of(game, held) == 1 else game.player2Units
+            index = side_units.index(held)
             join_unit(game, held, host)
+            error = (placement_error(game, host, scouting=host.deployedAsScouts)
+                     or placement_error(game, held, scouting=scouting, ignore=host))
+            if error:
+                detach_character(host)
+                held.bodyNP.reparentTo(root)
+                held.bodyNP.setTransform(old_transform)
+                game.world.attachRigidBody(held.bodyNP.node())
+                held.isDeployed = False
+                side_units.insert(index, held)
+                host.layOutRanks()
+                host.rebuildFootprint()
+                game.roundCounter.apply_selection_masks()
+                _deployment_refused(held, error, scouting)
+                return
+            _record_deployment(game, held, scouting)
+            print(f"{held.unitName} joins {host.unitName}.")
             taskMgr.remove(taskToEnd)
             _advance_after_deploy(game)
             return
 
-    if not inZone:
-        # Dropped outside the deploy zone: cancel this pickup (leave it
-        # undeployed) so the player can change their mind and pick another unit.
-        print("Unit is out of bounds, cannot deploy here.")
+    error = placement_error(game, held, scouting=scouting)
+    if error:
+        _deployment_refused(held, error, scouting)
         held.model.setColor(.6,0.6,0.6,1)
-        held.isDeployed = False
         taskMgr.remove(taskToEnd)
         game.accept('mouse1', game.setActiveUnit,
                     [game.setActiveUnitTask, game.setActiveUnitTaskName])
         return
 
-    if inContact:
-        # Inside the zone but overlapping another unit: refuse the drop and keep
-        # holding so the player can reposition (never place on top of a unit).
-        print("Unit is in contact with another unit, cannot deploy here.")
-        held.model.setColor(.6,0.6,0.6,1)
-        return
-
     held.model.setColor(held.color)
     taskMgr.remove(taskToEnd)
-    held.isDeployed=True
+    _record_deployment(game, held, scouting)
     _advance_after_deploy(game)
 
 
-def _advance_after_deploy(game):
-    """Rebind selection and advance the deploy turn/phase after a placement."""
-    game.accept('mouse1', game.setActiveUnit,[game.setActiveUnitTask, game.setActiveUnitTaskName])
-    depH = DEPLOY_ZONE_DEPTH
-    if game.roundCounter.current_player == 2:
-        if not allUnitsDeployed(game.player1Units):
-            game.roundCounter.request('PlayerOne')
-            #game.boundary_np.setPos(0, -7.5-7.5/2, 0)
-            game.boundary_np.setPos(0, -depH-depH/2, 0)
-
+def _deployment_refused(unit, error, scouting):
+    if scouting:
+        rule_skipped('Scouts', unit, error)
     else:
-        if not allUnitsDeployed(game.player2Units):
-            game.roundCounter.request('PlayerTwo')
-            game.boundary_np.setPos(0, depH+depH/2, 0)
-            if game.roundCounter.current_player == 2 and game.AIplayer2.active:
-                game.AIplayer2.deployUnits()
-            
+        print(error)
+    battle_log(error, 'info')
+
+
+def _record_deployment(game, held, scouting):
+    held.isDeployed = True
+    held.deployedAsScouts = scouting
+    if scouting:
+        distance, enemy = nearest_enemy(game, held)
+        clearance = (f'{distance:.3f}" from {enemy.unit.name}' if enemy is not None
+                     else 'no enemy models on the battlefield')
+        rule_log('Scouts', held, f'late deployment, {clearance}; no charge declarations '
+                 'during its first turn and no Vanguard move')
+        if scouts_block_vanguard(held) and any(
+                r.get('name', '').lower() == 'vanguard'
+                for r in held.unit.model.special_rules if isinstance(r, dict)):
+            rule_skipped('Vanguard', held, 'deployed using Scouts (Official FAQ)')
+
+
+def refresh_deployment(game):
+    """Refresh controls after a placement or reload without rolling again."""
+    player = game.roundCounter.current_player
+    scouting = getattr(game, 'deploymentStage', 'ordinary') == 'scouts'
+    game.boundary_np.setCollideMask(BitMask32.allOff() if scouting else BitMask32.bit(11))
+    game.boundary_np.setPos(0, (-1 if player == 1 else 1) * 18, 0)
+    game.roundCounter.update_round_display()
+    game.accept('mouse1', game.setActiveUnit,
+                [game.setActiveUnitTask, game.setActiveUnitTaskName])
+    text = (f'Player {player}: deploy Scouts, more than 12" from every enemy base.'
+            if scouting else f'Player {player}: deploy a unit or set Scouts aside for later.')
+    battle_log(text, 'info')
+
+
+def _advance_after_deploy(game, placed=True):
+    """Alternate drops, then roll off once for late Scouts (p. 177).
+
+    Setting Scouts aside is not a drop. They still count when deciding who
+    finished deploying first (Official FAQ v1.5.3).
+    """
+    player = game.roundCounter.current_player
+    if placed and getattr(game, 'firstFinishedDeploying', None) is None:
+        side = game.player1Units if player == 1 else game.player2Units
+        if allUnitsDeployed(side):
+            game.firstFinishedDeploying = player
+            battle_log(f'Player {player} finished deploying first (including Scouts).', 'info')
     if allUnitsDeployed(game.units):
         print("All units deployed, moving to next phase.")
         game.fsm.request("StrategyPhase")
-    
-    
+        return
+    if (getattr(game, 'deploymentStage', 'ordinary') == 'ordinary'
+            and not any(deployment_candidates(game, p) for p in (1, 2))):
+        game.deploymentStage = 'scouts'
+        sides = [p for p in (1, 2) if deployment_candidates(game, p)]
+        if len(sides) == 2:
+            while True:
+                rolls = [random.randint(1, 6), random.randint(1, 6)]
+                dice_roll(rolls)
+                if rolls[0] != rolls[1]:
+                    player = 1 if rolls[0] > rolls[1] else 2
+                    rule_log('Scouts', 'deployment', f'roll-off P1={rolls[0]}, '
+                             f'P2={rolls[1]} -> Player {player} deploys first')
+                    break
+                rule_log('Scouts', 'deployment', f'roll-off {rolls[0]}–{rolls[1]} tied; re-roll')
+        else:
+            player = sides[0]
+        game.scoutDeployFirst = player
+    else:
+        other = 3 - player
+        if (placed or not deployment_candidates(game, player)) and deployment_candidates(game, other):
+            player = other
+    game.roundCounter.request('PlayerOne' if player == 1 else 'PlayerTwo')
+    refresh_deployment(game)
+    if player == 2 and game.AIplayer2.active:
+        game.AIplayer2.deployUnits()
 
 def getMouseXY():
     if base.mouseWatcherNode.hasMouse():

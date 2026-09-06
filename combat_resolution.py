@@ -60,6 +60,7 @@ from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
                          pursuit_roll, restraint_test, segment_crosses_box,
                          turn_direction, winner_response)
 from rules_log import rule_log, rule_skipped, battle_log
+from scouts import scout_charge_blocked
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -89,10 +90,15 @@ class CombatResolver:
     # ─── Contact Detection ────────────────────────────────────────────────
 
     def checkUnitContactSmall(self, unit):
-        contacts = self.game.world.contactTest(unit.bodyNP.node())
-        for contact in contacts.getContacts():
-            mpoint = contact.getManifoldPoint()
-            if 'UnitCollision-' in contact.getNode1().getName():
+        # Deployment and move commits teleport the body before asking about
+        # contact. Bullet's world query still uses the last physics frame's
+        # broadphase bounds; pair tests use the new transforms immediately.
+        for other in self.game.units:
+            if (other is unit or other.bodyNP.isEmpty()
+                    or getattr(other, 'hostUnit', None) is not None):
+                continue
+            contacts = self.game.world.contactTestPair(unit.bodyNP.node(), other.bodyNP.node())
+            for contact in contacts.getContacts():
                 return contact
         return None
 
@@ -199,6 +205,16 @@ class CombatResolver:
             defender.unit.model.equip_weapon(previous)
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
+        if unit.state != 'IsPursuing' and scout_charge_blocked(self.game, unit):
+            rule_log('Scouts', unit, 'first own turn: charge declaration refused; no reaction or dice rolled')
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            unit.isChargingMove = False
+            self.game.autoCharge = False
+            self.game.autoHold = False
+            self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+            return task.done
         chargeYesNo = ["Yes", "No"]
         # Declaring the charge is the charger's call; reacting to it is the
         # defender's, and they need not belong to the same player.

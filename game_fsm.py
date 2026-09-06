@@ -10,7 +10,8 @@ from panda3d.core import Point3, Vec3, BitMask32, TransformState
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 
 from deployPhase import (DEPLOY_ZONE_DEPTH, DEPLOY_ZONE_WIDTH,
-                         stage_undeployed)
+                         stage_undeployed, refresh_deployment, allUnitsDeployed)
+from rules_log import battle_log
 
 
 class GamePhaseFSM(FSM):
@@ -73,6 +74,12 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if self.state == 'DeployPhase':
+            if not allUnitsDeployed(self.game.units):
+                battle_log('Deploy every unit, including reserved Scouts, before starting the battle.', 'info')
+                return
+            self.request('StrategyPhase')
+            return
         if self.state == 'SpellPhase':
             return  # Finish or cancel the cast before advancing the battle phase.
         """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
@@ -91,6 +98,9 @@ class GamePhaseFSM(FSM):
 
     def enterDeployPhase(self):
         print("Entering Deploy Phase")
+        self.game.deploymentStage = 'ordinary'
+        self.game.scoutDeployFirst = None
+        self.game.firstFinishedDeploying = None
         messenger.send('tutorial-phase-change', ['DeployPhase'])
         self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
 
@@ -128,8 +138,11 @@ class GamePhaseFSM(FSM):
             [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName]
         )
         stage_undeployed(self.game)
+        refresh_deployment(self.game)
 
     def exitDeployPhase(self):
+        taskMgr.remove('taskLoopDeploy')
+        taskMgr.remove('taskMoveUnit')
         base.world.removeRigidBody(self.game.boundary_ghost)
         self.game.boundary_np.removeNode()
         # Ensure turn starts with player 1 after deployment

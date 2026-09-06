@@ -322,8 +322,15 @@ def _impact_hits(model, param, desc):
             "impact_hits": _param_dice(param, "1")}
 
 
+def _scouts(model, param, desc):
+    """Scouts is an optional deployment mode, not a permanent charge ban (p. 177)."""
+    return {"name": "Scouts", "description": desc or "May deploy after both armies.",
+            "tag": "deployment", "scouts": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
+    "scouts": _scouts,
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
     "magic resistance": _magic_resistance,
