@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import battleFunctions  # noqa: E402
 import troop_types  # noqa: E402
-from battleFunctions import (check_saves, killing_blow_struck,  # noqa: E402
-                             simulate_battle, take_last_killing_blows)
+from battleFunctions import (check_saves, simulate_battle,  # noqa: E402
+                             slaying_blow_struck, take_last_slaying_blows)
 from battlescribe import has_killing_blow  # noqa: E402
 from models import model  # noqa: E402
 from special_rules import build_special_rules  # noqa: E402
@@ -76,8 +76,8 @@ class WhenItIsStruckTests(unittest.TestCase):
         self.victim = _model("Spearman", 'Regular infantry')
 
     def _struck(self, natural=6, target=4, wound=True, ranged=False):
-        return killing_blow_struck(self.attacker, self.victim, natural, target,
-                                   wound=wound, ranged=ranged)
+        return slaying_blow_struck(self.attacker, self.victim, natural, target,
+                                   wound=wound, ranged=ranged) == 'Killing Blow'
 
     def test_a_natural_six_strikes_one(self):
         self.assertTrue(self._struck())
@@ -139,23 +139,23 @@ class SavesItDeniesTests(unittest.TestCase):
     def test_a_killing_blow_ignores_armour(self):
         with mock.patch.object(random, 'randint', return_value=6):
             self.assertFalse(check_saves(self._victim(armour=2), 2, 0,
-                                         killing_blow=True))
+                                         slaying_blow=True))
 
     def test_a_killing_blow_ignores_regeneration(self):
         with mock.patch.object(random, 'randint', return_value=6):
             victim = self._victim(armour=7, regen=4)
             self.assertTrue(check_saves(victim, 7, 0))
-            self.assertFalse(check_saves(victim, 7, 0, killing_blow=True))
+            self.assertFalse(check_saves(victim, 7, 0, slaying_blow=True))
 
     def test_a_ward_save_still_works(self):
         with mock.patch.object(random, 'randint', return_value=6):
             self.assertTrue(check_saves(self._victim(armour=7, ward=4), 7, 0,
-                                        killing_blow=True))
+                                        slaying_blow=True))
 
     def test_a_failed_ward_save_does_not_stop_it(self):
         with mock.patch.object(random, 'randint', return_value=1):
             self.assertFalse(check_saves(self._victim(armour=7, ward=4), 7, 0,
-                                         killing_blow=True))
+                                         slaying_blow=True))
 
 
 class CountingThemTests(unittest.TestCase):
@@ -174,8 +174,8 @@ class CountingThemTests(unittest.TestCase):
         with mock.patch.object(random, 'randint', return_value=6):
             simulate_battle(self._unit(attacker, name="Hunters"),
                             self._unit(victim, name="Spearmen"), charge=False)
-        self.assertEqual(take_last_killing_blows(), 3)
-        self.assertEqual(take_last_killing_blows(), 0, "not cleared")
+        self.assertEqual(take_last_slaying_blows(), 3)
+        self.assertEqual(take_last_slaying_blows(), 0, "not cleared")
 
     def test_nothing_is_reported_without_the_rule(self):
         attacker = _model("Spearman")
@@ -186,7 +186,7 @@ class CountingThemTests(unittest.TestCase):
         with mock.patch.object(random, 'randint', return_value=6):
             simulate_battle(self._unit(attacker), self._unit(victim),
                             charge=False)
-        self.assertEqual(take_last_killing_blows(), 0)
+        self.assertEqual(take_last_slaying_blows(), 0)
 
 
 if __name__ == '__main__':

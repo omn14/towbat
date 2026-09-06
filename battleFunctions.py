@@ -12,9 +12,11 @@ LAST_COMBAT_REPORT = None
 
 # Killing Blows struck by the most recent exchange. Carried out of band because
 # simulate_battle's five-value return is read from a dozen call sites, and a
-# Killing Blow has to reach applyWounds as a whole model slain rather than as
-# one more wound in the pool.
-LAST_KILLING_BLOWS = 0
+# Killing Blows and Monster Slaying Blows struck by the most recent exchange.
+# Carried out of band because simulate_battle's five-value return is read from
+# a dozen call sites, and such a blow has to reach applyWounds as a whole model
+# slain rather than as one more wound in the pool.
+LAST_SLAYING_BLOWS = 0
 
 # Special-rule hook -> human label.  Any rule carrying one of these hooks is
 # reported as "in effect", so new rules that reuse a hook appear automatically.
@@ -218,11 +220,11 @@ def take_last_combat_report():
     return r
 
 
-def take_last_killing_blows() -> int:
-    """Return and clear the Killing Blows struck by the last exchange."""
-    global LAST_KILLING_BLOWS
-    n = LAST_KILLING_BLOWS
-    LAST_KILLING_BLOWS = 0
+def take_last_slaying_blows() -> int:
+    """Return and clear the Killing / Monster Slaying Blows of the last exchange."""
+    global LAST_SLAYING_BLOWS
+    n = LAST_SLAYING_BLOWS
+    LAST_SLAYING_BLOWS = 0
     return n
 
 
@@ -271,29 +273,46 @@ def simulate_attack(model1,model2):
     # Armour Bane (X): a natural 6 to wound improves this attack's AP by X.
     bane = model1.armour_bane_for_attack() if (wound and natural_wound == 6) else 0
     model1.attack_AP = model1.AP + bane
-    model1.killing_blow = killing_blow_struck(
+    model1.slaying_blow = slaying_blow_struck(
         model1, model2, natural_wound, to_wound_roll,
         wound=wound, ranged=weaponIsRanged)
     return hit, wound
 
 
-def killing_blow_struck(attacker, defender, natural_wound, to_wound_target,
-                        wound: bool, ranged: bool) -> bool:
-    """Whether this attack struck a Killing Blow (p. 172).
+# Killing Blow (p. 172) and Monster Slayer (p. 173) are one mechanic aimed at
+# different troop types, and four weapons carry both, so which of them lands is
+# the target's doing rather than the weapon's.
+SLAYING_RULE_PAGE = {'Killing Blow': 'p. 172', 'Monster Slayer': 'p. 173'}
 
-    A natural 6 To Wound in *combat*, so a missile attack cannot strike one,
-    and only against infantry or cavalry. The FAQ adds that a model which
-    cannot wound its enemy cannot kill it, so a target too tough to be wounded
-    at all is safe from it — which is also why an attack that wounds
-    automatically, having rolled nothing, cannot use the rule.
+
+def slaying_rule_for(attacker, defender):
+    """Which blow *attacker* could strike against *defender*, or None.
+
+    Infantry-or-cavalry and monster are disjoint categories, so at most one of
+    the two rules can ever be in play against a given target.
+    """
+    if attacker.has_killing_blow() and defender.is_infantry_or_cavalry():
+        return 'Killing Blow'
+    if attacker.has_monster_slayer() and defender.is_monster():
+        return 'Monster Slayer'
+    return None
+
+
+def slaying_blow_struck(attacker, defender, natural_wound, to_wound_target,
+                        wound: bool, ranged: bool):
+    """The rule that struck a blow costing every remaining Wound, or None.
+
+    A natural 6 To Wound in *combat*, so a missile attack cannot strike one.
+    The FAQ adds that a model which cannot wound its enemy cannot kill it, so a
+    target too tough to be wounded at all is safe from both — which is also why
+    an attack that wounds automatically, having rolled nothing, cannot use
+    either rule.
     """
     if ranged or not wound or natural_wound != 6:
-        return False
+        return None
     if to_wound_target > 6:
-        return False
-    if not attacker.has_killing_blow():
-        return False
-    return defender.is_infantry_or_cavalry()
+        return None
+    return slaying_rule_for(attacker, defender)
 
 
 
@@ -322,22 +341,22 @@ def ward_save_value(model) -> int:
     return best
 
 
-def check_saves(model, armor_save_value, AP, killing_blow: bool = False):
+def check_saves(model, armor_save_value, AP, slaying_blow: bool = False):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
     Rules that modify armour values leave Warding and Regeneration values
     alone, so neither of those is touched by the attack's AP.
 
-    A Killing Blow allows no armour or Regeneration save; only the Ward save
-    is attempted (p. 172).
+    A Killing Blow or Monster Slaying Blow allows no armour or Regeneration
+    save; only the Ward save is attempted (p. 172, p. 173).
     """
-    if not killing_blow and check_armor_save(model, armor_save_value, AP):
+    if not slaying_blow and check_armor_save(model, armor_save_value, AP):
         return True
     ward = ward_save_value(model)
     if ward and random.randint(1, 6) >= ward:
         return True
-    if killing_blow:
+    if slaying_blow:
         return False
     for rule in getattr(model, 'special_rules', []) or []:
         if rule.get('regen') and check_armor_save(model, rule['regen'], 0):
@@ -631,9 +650,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     total_wounds = 0
     suffered_wounds = 0
     saves_made = 0
-    killing_blows = 0
-    global LAST_KILLING_BLOWS
-    LAST_KILLING_BLOWS = 0
+    slaying_blows = 0
+    slaying_rule = None
+    global LAST_SLAYING_BLOWS
+    LAST_SLAYING_BLOWS = 0
     # Reported once for the exchange, not once per save roll.
     if unit2.model.parry_applies():
         rule_log('Parry', unit2, f"hand weapon and shield: armour "
@@ -646,7 +666,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                      f"not a hand weapon")
     for i in range(attacks1):
         hit,wound = simulate_attack(unit1.model, unit2.model)
-        killing = bool(getattr(unit1.model, 'killing_blow', False))
+        struck = getattr(unit1.model, 'slaying_blow', None)
         if hit:
             total_hits += 1
         if wound:
@@ -655,30 +675,35 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
         if wound:
             if check_saves(unit2.model, unit2.model.melee_armour_save(),
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
-                           killing_blow=killing):
+                           slaying_blow=bool(struck)):
                 saves_made += 1
                 total_wounds -= 1
-            elif killing:
-                killing_blows += 1
+            elif struck:
+                slaying_blows += 1
+                slaying_rule = struck
             #if total_wounds >= unit2.nmodels:
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
-    if killing_blows:
-        rule_log('Killing Blow', unit1,
-                 f"{killing_blows} natural 6(s) To Wound against "
-                 f"{unit2.model.characteristics.get('Troop Type', 'infantry')}: "
-                 f"no armour or Regeneration save, and each victim loses all "
-                 f"of its remaining Wounds (p. 172)")
-    elif attacks1 and unit1.model.has_killing_blow():
-        if not unit2.model.is_infantry_or_cavalry():
-            rule_skipped('Killing Blow', unit1,
-                         f"{unit2.name} is "
-                         f"{unit2.model.characteristics.get('Troop Type', 'not infantry')}, "
-                         f"which Killing Blow cannot fell (p. 172)")
-        else:
-            rule_skipped('Killing Blow', unit1,
+    troop_type = unit2.model.characteristics.get('Troop Type', 'infantry')
+    if slaying_blows:
+        rule_log(slaying_rule, unit1,
+                 f"{slaying_blows} natural 6(s) To Wound against "
+                 f"{troop_type}: no armour or Regeneration save, and each "
+                 f"victim loses all of its remaining Wounds "
+                 f"({SLAYING_RULE_PAGE[slaying_rule]})")
+    elif attacks1 and (unit1.model.has_killing_blow()
+                       or unit1.model.has_monster_slayer()):
+        applicable = slaying_rule_for(unit1.model, unit2.model)
+        if applicable:
+            rule_skipped(applicable, unit1,
                          f"no natural 6 To Wound in {attacks1} attack(s)")
-    LAST_KILLING_BLOWS = killing_blows
+        else:
+            name = ('Killing Blow' if unit1.model.has_killing_blow()
+                    else 'Monster Slayer')
+            rule_skipped(name, unit1,
+                         f"{unit2.name} is {troop_type}, which {name} cannot "
+                         f"fell ({SLAYING_RULE_PAGE[name]})")
+    LAST_SLAYING_BLOWS = slaying_blows
     
     # Capture the descriptive report before stats are reset (best-effort).
     global LAST_COMBAT_REPORT

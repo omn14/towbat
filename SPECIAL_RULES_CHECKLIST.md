@@ -317,7 +317,8 @@ identical without the log. See `.github/copilot-instructions.md`.
       **in combat** allows an infantry or cavalry model no armour or
       Regeneration save (a Ward save is attempted as normal), and an unsaved
       wound from one costs the victim **all of its remaining Wounds**.
-      `killing_blow_struck` in `battleFunctions.py` is the whole condition, and
+      `slaying_blow_struck` in `battleFunctions.py` is the whole condition
+      (named for the pair once Monster Slayer joined it), and
       each clause is one the rule or its FAQ states outright: not a missile
       attack, a natural 6, the attack actually wounded, the model has the rule,
       and the target is infantry or cavalry.
@@ -327,16 +328,17 @@ identical without the log. See `.github/copilot-instructions.md`.
       `is_cavalry` covers monstrous cavalry. A behemoth, monstrous creature,
       chariot, war beast or war machine cannot be felled by it.
       FAQ: "If a model cannot wound an enemy, it cannot kill it" — so a target
-      the attacker could not have wounded at all is safe, which `killing_blow_-
-      struck` reads from the To Wound target being above 6. That has no effect
+      the attacker could not have wounded at all is safe, which
+      `slaying_blow_struck` reads from the To Wound target being above 6. That
+      has no effect
       yet, because Too Tough to Wound (below) is still unimplemented and the
       target never exceeds 6; the guard is in place for when it lands. It is
       also why an attack that wounds *automatically* cannot use the rule: there
       is no roll to be a natural 6.
-      `check_saves` grew a `killing_blow` flag rather than a second copy of the
+      `check_saves` grew a `slaying_blow` flag rather than a second copy of the
       save sequence, so the Ward save keeps its place in the middle of the
       order.
-      The count is carried out of band, as `take_last_killing_blows()` beside
+      The count is carried out of band, as `take_last_slaying_blows()` beside
       the existing `take_last_combat_report()`. `simulate_battle`'s five-value
       return is read from a dozen call sites, and a Killing Blow cannot simply
       be one more wound in the pool: `applyWounds` divides the pool by the
@@ -361,6 +363,47 @@ identical without the log. See `.github/copilot-instructions.md`.
       LEFTOVER: spells never get it, which the FAQ is blunt about
       ("Absolutely not") and which holds for free, since `resolve_magic_hits`
       has no attacking model to carry the rule.
+- [x] Monster Slayer (p. 173) — DONE. Word for word Killing Blow with one
+      word changed: a natural 6 To Wound in combat, no armour or Regeneration
+      save, Ward as normal, and the victim loses every Wound it has left — but
+      only where the target's troop type is **monster**.
+      Implemented by generalising Killing Blow rather than copying it, because
+      the two are one mechanic and share every part of the machinery: the
+      counter (`take_last_slaying_blows`), the `slaying_blow` flag on
+      `check_saves`, and the whole-model removal in `applyWounds`. What differs
+      is only which target each can fell, so `slaying_rule_for` answers that in
+      one place and `slaying_blow_struck` returns the *name* of the rule that
+      struck instead of a bool.
+      That generalisation is not tidiness for its own sake — it is the only way
+      to get **the weapons that carry both** right. Clearver-Limbs,
+      Decapitating Claws, Decapitating Strike and Great Blade (Deadly Strike)
+      have Killing Blow *and* Monster Slayer, so the weapon cannot decide which
+      applies; the target does. Since infantry-or-cavalry and monster are
+      disjoint, at most one can ever be in play, which is also why `applyWounds`
+      can name the rule from the victim's troop type without being told.
+      TRAP, and it has its own test: **"monstrous" is not "monster"**.
+      Monstrous infantry and monstrous cavalry are sub-categories of infantry
+      and cavalry, and are felled by Killing Blow, not by this. Only monstrous
+      creatures and behemoths are monsters (p. 196), which is what
+      `troop_types.MONSTERS` holds. Any substring match on "monst" would have
+      got this exactly backwards for two whole troop types.
+      Where it lands is on 7 weapons and, unlike Killing Blow, **no model
+      profile at all** — so it only ever reaches a model through the weapon in
+      hand, which is what `_strike_rule` already handled.
+      The same FAQ answers apply, being asked of both rules together: an enemy
+      too tough to be wounded cannot be killed, and an attack that wounds
+      automatically cannot use it.
+      LEFTOVER: as with Killing Blow, not applied to Impact Hits or Stomp
+      Attacks, and never to spells.
+      CORRECTED on the way, and nothing to do with the rule: building the test
+      save exposed that **a reloaded profile reverts to the catalogue after the
+      first combat**. `reset_characteristics()` restores
+      `_base_characteristics`, which a fresh model fills from the catalogue,
+      and the load set only `characteristics` — so a save's stats held until
+      the first exchange ended and were then silently thrown away, taking any
+      roster change with them. The monster on the test board turned back into
+      a Dire Wolf between rounds, which is how it was noticed. The load rebases
+      the profile now.
 - [x] Strike First — DONE (p. 177). Initiative becomes 10 before any other
       modifier; `battleFunctions.base_initiative` does the substitution and
       `strike_initiative` applies the charge bonus after it, so a charge cannot

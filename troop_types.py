@@ -179,6 +179,10 @@ def has_rule(troop_type, rule_name: str) -> bool:
 # names 'infantry' means monstrous infantry and swarms as well (p. 188).
 INFANTRY = ("regular infantry", "heavy infantry", "monstrous infantry", "swarms")
 CAVALRY = ("light cavalry", "heavy cavalry", "monstrous cavalry")
+# 'Monstrous' is not the same word as 'monster': monstrous infantry and
+# monstrous cavalry are sub-categories of infantry and cavalry, and only these
+# two are monsters (p. 196).
+MONSTERS = ("monstrous creature", "behemoth")
 
 
 def is_infantry(troop_type) -> bool:
@@ -187,3 +191,7 @@ def is_infantry(troop_type) -> bool:
 
 def is_cavalry(troop_type) -> bool:
     return normalise(troop_type) in CAVALRY
+
+
+def is_monster(troop_type) -> bool:
+    return normalise(troop_type) in MONSTERS

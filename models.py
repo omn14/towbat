@@ -10,6 +10,7 @@ import re
 
 from battlescribe import (get_catalogue, NAME_ALIASES as _NAME_ALIASES,
                           has_killing_blow as _has_killing_blow,
+                          has_monster_slayer as _has_monster_slayer,
                           has_move_and_shoot,
                           has_move_or_shoot as _has_move_or_shoot,
                           has_strike_first as _has_strike_first,
@@ -428,11 +429,12 @@ class model:
                    for r in self.special_rules)
 
     def _strike_rule(self, key, from_weapon) -> bool:
-        """Whether a Strike First / Strike Last rule is in force.
+        """Whether a rule carried by weapon or profile is in force.
 
         Strike Last is almost always the weapon's doing rather than the
-        model's — a great weapon carries it — so the melee weapon actually in
-        hand counts as well as the profile.
+        model's — a great weapon carries it, and Monster Slayer is on nothing
+        but weapons — so the melee weapon actually in hand counts as well as
+        the profile.
         """
         if any(isinstance(r, dict) and r.get(key) for r in self.special_rules):
             return True
@@ -455,10 +457,21 @@ class model:
         """
         return self._strike_rule('killing_blow', _has_killing_blow)
 
+    def has_monster_slayer(self) -> bool:
+        """True if the model strikes Monster Slaying Blows (p. 173).
+
+        Only ever the weapon's doing: no model profile in the data carries it.
+        """
+        return self._strike_rule('monster_slayer', _has_monster_slayer)
+
     def is_infantry_or_cavalry(self) -> bool:
         """Whether Killing Blow can fell this model outright (p. 172)."""
         tt = self.characteristics.get('Troop Type')
         return troop_types.is_infantry(tt) or troop_types.is_cavalry(tt)
+
+    def is_monster(self) -> bool:
+        """Whether Monster Slayer can fell this model outright (p. 173)."""
+        return troop_types.is_monster(self.characteristics.get('Troop Type'))
 
     def is_venerable(self) -> bool:
         """True if the model has the Venerable special rule."""

@@ -2746,8 +2746,8 @@ class MyApp(ShowBase):
     def removeModelsFromUnit(self, unit, models_to_remove):
         self.movement.removeModelsFromUnit(unit, models_to_remove)
 
-    def applyWounds(self, unit, wounds, killing_blows=0):
-        self.movement.applyWounds(unit, wounds, killing_blows)
+    def applyWounds(self, unit, wounds, slaying_blows=0):
+        self.movement.applyWounds(unit, wounds, slaying_blows)
         # The card carries the model count and the flee/panic thresholds, so it
         # is wrong the moment casualties land.
         if unit is getattr(self, 'unitToMove', None):

@@ -39,7 +39,7 @@ from dice import Dice, checkDice
 from battleFunctions import (MIN_IMPACT_HIT_CHARGE, base_initiative,
                              charge_initiative_bonus, impact_hit_report,
                              resolve_impact_hits, simulate_battle,
-                             strike_initiative, take_last_killing_blows)
+                             strike_initiative, take_last_slaying_blows)
 from characters import JOIN_TAG, slay_character
 from challenges import (Challenge, MAX_OVERKILL, add_challenge, can_accept,
                         duellist, end_challenge, find_challenge,
@@ -1568,7 +1568,7 @@ class CombatResolver:
                 casualties=casualties)
             defenderUnit.unit.files = origFiles
             defenderUnit.unit.nmodels = liveModels
-            combKills = take_last_killing_blows()
+            combSlain = take_last_slaying_blows()
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                     suffered_wounds, saves_made, total_wounds)
             attackerUnit.unit.nmodels -= total_wounds
@@ -1605,7 +1605,7 @@ class CombatResolver:
                     attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                         rule['mountUnit'], attackerUnit.unit,
                         charge=getattr(defenderUnit, 'chargedThisTurn', False))
-                    combKills += take_last_killing_blows()
+                    combSlain += take_last_slaying_blows()
                     self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                             suffered_wounds, saves_made, total_wounds)
                     attackerUnit.unit.nmodels -= total_wounds
@@ -1619,7 +1619,7 @@ class CombatResolver:
                 attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                     partUnit, attackerUnit.unit,
                     charge=getattr(defenderUnit, 'chargedThisTurn', False))
-                combKills += take_last_killing_blows()
+                combSlain += take_last_slaying_blows()
                 self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                         suffered_wounds, saves_made, total_wounds)
                 attackerUnit.unit.nmodels -= total_wounds
@@ -1637,7 +1637,7 @@ class CombatResolver:
                 attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                     charUnit, attackerUnit.unit,
                     charge=getattr(defenderUnit, 'chargedThisTurn', False))
-                combKills += take_last_killing_blows()
+                combSlain += take_last_slaying_blows()
                 self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                         suffered_wounds, saves_made, total_wounds)
                 attackerUnit.unit.nmodels -= total_wounds
@@ -1648,7 +1648,7 @@ class CombatResolver:
                 combWounds += total_wounds
             modRemoveSequence.append(
                 Func(self.game.applyWounds, attackerUnit,
-                     combWounds - combKills, combKills))
+                     combWounds - combSlain, combSlain))
 
         engaged = set(self.game.attackers) | set(self.game.defenders)
         # Who was fighting whom, taken before any casualty is removed: a unit

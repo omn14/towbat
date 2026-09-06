@@ -91,6 +91,17 @@ def has_killing_blow(rules) -> bool:
                for r in (rules or []))
 
 
+def has_monster_slayer(rules) -> bool:
+    """True if *rules* names Monster Slayer (p. 173).
+
+    One spelling, on 7 weapons and no model profile at all; four of those
+    weapons carry Killing Blow too, and which one applies is the target's
+    doing rather than the weapon's.
+    """
+    return any(re.search(r"monster\s*slay", str(r), re.I)
+               for r in (rules or []))
+
+
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
@@ -356,6 +367,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
     weapon["strike_first"] = has_strike_first(rules)
     weapon["strike_last"] = has_strike_last(rules)
     weapon["killing_blow"] = has_killing_blow(rules)
+    weapon["monster_slayer"] = has_monster_slayer(rules)
     if not is_ranged:
         # Combat modifiers: 'S+2' -> +2 Strength; '-2' -> AP 2 penetration.
         sb = re.search(r"S\s*\+\s*(\d+)", strength)

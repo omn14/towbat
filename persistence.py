@@ -5,6 +5,7 @@ All functions accept the game (MyApp) instance as their first argument
 so they can be imported and called without subclassing.
 """
 
+import copy
 import json
 import os
 import shutil
@@ -401,6 +402,11 @@ def load_game_state(game, filename):
         unit.unit.ranks = unit_data['ranks']
 
         unit.unit.model.characteristics = unit_data['characteristics']
+        # A save is the source of truth for the profile it stores. Without this
+        # the first reset_characteristics() after a combat reverts to the bare
+        # catalogue entry and quietly drops whatever the roster gave the model.
+        unit.unit.model._base_characteristics = copy.deepcopy(
+            unit_data['characteristics'])
         unit.unit.model.armor_save = unit_data['armor_save']
         unit.unit.model.armour = list(unit_data.get('armour', []) or [])
         unit.unit.model.charging = unit_data['charging']

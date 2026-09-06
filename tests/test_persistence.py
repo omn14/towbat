@@ -161,6 +161,45 @@ class TestSavingTurnState(unittest.TestCase):
         json.dumps(self._save())
 
 
+class TheReloadedProfileTests(unittest.TestCase):
+    """A save is the source of truth for the stats it stores.
+
+    `reset_characteristics()` runs at the end of every exchange, and it restores
+    `_base_characteristics` — which a fresh model fills from the catalogue. A
+    load that set only `characteristics` therefore held its saved profile until
+    the first combat and then silently reverted to the bare catalogue entry,
+    taking any roster change with it.
+    """
+
+    def test_a_restored_profile_survives_a_reset(self):
+        m = model('Grave Guard', '')
+        m.characteristics['A'] = '4'
+        m._base_characteristics = dict(m.characteristics)
+        m.characteristics['A'] = '9'    # a temporary combat modifier
+        m.reset_characteristics()
+        self.assertEqual(m.characteristics['A'], '4')
+
+    def test_the_catalogue_profile_is_what_it_reverts_to_otherwise(self):
+        m = model('Grave Guard', '')
+        catalogue_attacks = m.characteristics['A']
+        m.characteristics['A'] = '4'
+        m.reset_characteristics()
+        self.assertEqual(m.characteristics['A'], catalogue_attacks)
+
+    def test_the_load_rebases_the_profile_it_restores(self):
+        """Source-level, because the assignment sits inside `load_game_state`,
+        which needs a running app. Reverting the one line would otherwise pass
+        every test in this file."""
+        src = open(persistence.__file__, encoding='utf-8').read()
+        block = re.search(
+            r"model\.characteristics = unit_data\['characteristics'\](.{0,400})",
+            src, re.S)
+        self.assertIsNotNone(block, "the load no longer restores characteristics")
+        self.assertIn('_base_characteristics', block.group(1),
+                      "a loaded profile is not rebased, so it reverts to the "
+                      "catalogue at the end of the first combat")
+
+
 class TheSavesFolderTests(unittest.TestCase):
     """Saves live in saves/, so the working tree stays clear of them."""
 
