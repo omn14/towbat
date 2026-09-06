@@ -313,7 +313,54 @@ identical without the log. See `.github/copilot-instructions.md`.
       Each modifier names the rule that sized it, so `moved waived (Quick
       Shot)` and `moved -1 (Ponderous and Quick Shot cancel out)` are both
       readable without knowing the weapon's rule list.
-- [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
+- [x] Killing Blow (p. 172) — DONE. A natural 6 To Wound for an attack made
+      **in combat** allows an infantry or cavalry model no armour or
+      Regeneration save (a Ward save is attempted as normal), and an unsaved
+      wound from one costs the victim **all of its remaining Wounds**.
+      `killing_blow_struck` in `battleFunctions.py` is the whole condition, and
+      each clause is one the rule or its FAQ states outright: not a missile
+      attack, a natural 6, the attack actually wounded, the model has the rule,
+      and the target is infantry or cavalry.
+      "Infantry" and "cavalry" are the *parent* categories, and a sub-category
+      follows its parent unless it says otherwise (p. 188), so
+      `troop_types.is_infantry` covers monstrous infantry and swarms, and
+      `is_cavalry` covers monstrous cavalry. A behemoth, monstrous creature,
+      chariot, war beast or war machine cannot be felled by it.
+      FAQ: "If a model cannot wound an enemy, it cannot kill it" — so a target
+      the attacker could not have wounded at all is safe, which `killing_blow_-
+      struck` reads from the To Wound target being above 6. That has no effect
+      yet, because Too Tough to Wound (below) is still unimplemented and the
+      target never exceeds 6; the guard is in place for when it lands. It is
+      also why an attack that wounds *automatically* cannot use the rule: there
+      is no roll to be a natural 6.
+      `check_saves` grew a `killing_blow` flag rather than a second copy of the
+      save sequence, so the Ward save keeps its place in the middle of the
+      order.
+      The count is carried out of band, as `take_last_killing_blows()` beside
+      the existing `take_last_combat_report()`. `simulate_battle`'s five-value
+      return is read from a dozen call sites, and a Killing Blow cannot simply
+      be one more wound in the pool: `applyWounds` divides the pool by the
+      profile's Wounds, so a Killing Blow against a W3 model would have spilled
+      its excess onto the next model. The FAQ is explicit that it does not —
+      "the excess wounds are lost" — so `applyWounds` takes killing blows off
+      first, a whole model at a time, and pools only the ordinary wounds.
+      The same FAQ gives the order to apply them in: Killing Blows first, then
+      Multiple Wounds, then single wounds. Only the first half of that ordering
+      is modelled, since Multiple Wounds (X) is still a deferred item.
+      CORRECTED on the way, and it predates this rule: the whole weapon-flag
+      block in `weapon_from_profile` sits **inside the `if is_ranged:` branch**,
+      so `strike_first` and `strike_last` were only ever set on ranged weapons
+      — which is to say never on the melee weapons that are the only ones
+      carrying them. Strike Last worked at all only through its fallback to the
+      rule *names*. The three melee flags are set for every weapon now, and the
+      test that every Killing Blow weapon is flagged is what found it.
+      LEFTOVER: not applied to Impact Hits. Those are hits rather than attacks,
+      and the rule says "an attack made in combat" — but the FAQ does let a
+      model's *own* Armour Bane reach Impact Hits, so the same might be argued
+      here.
+      LEFTOVER: spells never get it, which the FAQ is blunt about
+      ("Absolutely not") and which holds for free, since `resolve_magic_hits`
+      has no attacking model to carry the rule.
 - [x] Strike First — DONE (p. 177). Initiative becomes 10 before any other
       modifier; `battleFunctions.base_initiative` does the substitution and
       `strike_initiative` applies the charge bonus after it, so a charge cannot

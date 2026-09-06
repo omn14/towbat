@@ -173,3 +173,17 @@ def has_rule(troop_type, rule_name: str) -> bool:
     rule_name = rule_name.lower()
     return any(rule_name == r.lower().split("(")[0].strip()
                or rule_name == r.lower() for r in props["rules"])
+
+
+# A sub-category follows its parent unless it says otherwise, so a rule that
+# names 'infantry' means monstrous infantry and swarms as well (p. 188).
+INFANTRY = ("regular infantry", "heavy infantry", "monstrous infantry", "swarms")
+CAVALRY = ("light cavalry", "heavy cavalry", "monstrous cavalry")
+
+
+def is_infantry(troop_type) -> bool:
+    return normalise(troop_type) in INFANTRY
+
+
+def is_cavalry(troop_type) -> bool:
+    return normalise(troop_type) in CAVALRY

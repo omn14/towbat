@@ -123,6 +123,17 @@ def _strike_last(model, param, desc):
             "strike_last": True}
 
 
+def _killing_blow(model, param, desc):
+    return {"name": "Killing Blow",
+            "description": desc or ("A natural 6 To Wound in combat allows no "
+                                    "armour or Regeneration save, and an "
+                                    "infantry or cavalry model that suffers an "
+                                    "unsaved wound from it loses all of its "
+                                    "remaining Wounds."),
+            "tag": "combat",
+            "killing_blow": True}
+
+
 def _fly(model, param, desc):
     # 'Fly (9)' -> flies with Movement 9, passing freely over models/terrain.
     entry = {"name": "Fly",
@@ -199,6 +210,7 @@ SPECIAL_RULE_BUILDERS = {
     "strikes first": _strike_first,
     "strike last": _strike_last,
     "strikes last": _strike_last,
+    "killing blow": _killing_blow,
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,

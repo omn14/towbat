@@ -9,6 +9,7 @@ import random
 import re
 
 from battlescribe import (get_catalogue, NAME_ALIASES as _NAME_ALIASES,
+                          has_killing_blow as _has_killing_blow,
                           has_move_and_shoot,
                           has_move_or_shoot as _has_move_or_shoot,
                           has_strike_first as _has_strike_first,
@@ -445,6 +446,19 @@ class model:
     def has_strike_last(self) -> bool:
         """True if the model strikes at Initiative 1 (p. 178)."""
         return self._strike_rule('strike_last', _has_strike_last)
+
+    def has_killing_blow(self) -> bool:
+        """True if the model strikes Killing Blows (p. 172).
+
+        From the weapon in hand as well as the profile: 20 weapons carry it
+        against 4 models.
+        """
+        return self._strike_rule('killing_blow', _has_killing_blow)
+
+    def is_infantry_or_cavalry(self) -> bool:
+        """Whether Killing Blow can fell this model outright (p. 172)."""
+        tt = self.characteristics.get('Troop Type')
+        return troop_types.is_infantry(tt) or troop_types.is_cavalry(tt)
 
     def is_venerable(self) -> bool:
         """True if the model has the Venerable special rule."""

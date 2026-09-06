@@ -1223,15 +1223,28 @@ class MovementSystem:
         world_center = unit.model.getPos(render) + center
         return world_center
         
-    def applyWounds(self, unit, wounds):
+    def applyWounds(self, unit, wounds, killing_blows: int = 0):
         """Turn unsaved wounds into slain models.
 
         Multi-wound models (a chariot has 6) soak several wounds each, and the
         leftovers stay on the wounded model rather than carrying to the next.
+
+        A Killing Blow costs its victim all of its remaining Wounds and the
+        excess is lost rather than spilling onto the next model (p. 172 and the
+        FAQ), so those are taken off first, a whole model at a time.
         """
+        W = max(1, stat_value(unit.unit.model.characteristics.get('W'), 1))
+        if killing_blows > 0:
+            slain = min(killing_blows, max(0, unit.unit.nmodels))
+            if slain:
+                # The first victim is whichever model was already wounded.
+                unit.woundsOnModel = 0
+                rule_log('Killing Blow', unit,
+                         f"{slain} model(s) lose all remaining Wounds "
+                         f"(W{W}) rather than one each (p. 172)")
+                self.removeModelsFromUnit(unit, slain)
         if wounds <= 0:
             return
-        W = max(1, stat_value(unit.unit.model.characteristics.get('W'), 1))
         if W == 1:
             self.removeModelsFromUnit(unit, wounds)
             return

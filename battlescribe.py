@@ -82,6 +82,15 @@ def has_strike_last(rules) -> bool:
     return any(_STRIKE_LAST.match(str(r)) for r in (rules or []))
 
 
+def has_killing_blow(rules) -> bool:
+    """True if *rules* names Killing Blow (p. 172).
+
+    One spelling across the catalogues, on 20 weapons and 4 models.
+    """
+    return any(re.search(r"killing\s*blow", str(r), re.I)
+               for r in (rules or []))
+
+
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
@@ -341,6 +350,12 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
                 ignore.append("stand_and_shoot")
             if ignore:
                 weapon["ignore_to_hit_penalties"] = ignore
+    # Melee rules, so set for every weapon rather than inside the ranged branch
+    # below — where they sat at first, which left them off exactly the weapons
+    # that carry them.
+    weapon["strike_first"] = has_strike_first(rules)
+    weapon["strike_last"] = has_strike_last(rules)
+    weapon["killing_blow"] = has_killing_blow(rules)
     if not is_ranged:
         # Combat modifiers: 'S+2' -> +2 Strength; '-2' -> AP 2 penetration.
         sb = re.search(r"S\s*\+\s*(\d+)", strength)
@@ -398,8 +413,6 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         weapon["move_or_shoot"] = has_move_or_shoot(rules)
         weapon["quick_shot"] = has_quick_shot(rules)
         weapon["ponderous"] = has_ponderous(rules)
-        weapon["strike_first"] = has_strike_first(rules)
-        weapon["strike_last"] = has_strike_last(rules)
         # Blast template diameter (e.g. '5" blast template') from the Notes.
         bm = re.search(r"(\d+)\s*[\"\u201d]?\s*blast", notes, re.I)
         if bm:
