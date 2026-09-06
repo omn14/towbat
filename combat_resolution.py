@@ -36,7 +36,8 @@ from direct.interval.FunctionInterval import Func
 from direct.task.Task import Task
 
 from dice import Dice, checkDice
-from battleFunctions import (MIN_IMPACT_HIT_CHARGE, impact_hit_report,
+from battleFunctions import (MIN_IMPACT_HIT_CHARGE, base_initiative,
+                             charge_initiative_bonus, impact_hit_report,
                              resolve_impact_hits, simulate_battle,
                              strike_initiative)
 from characters import JOIN_TAG
@@ -1160,20 +1161,39 @@ class CombatResolver:
             facing = self._engagedFacing(target, striker)
             charged = bool(getattr(striker, 'chargedThisTurn', False))
             inches = float(getattr(striker, 'chargeDistance', 0.0) or 0.0)
-            base = strike_initiative(striker.unit.model)
-            initiative = strike_initiative(
-                striker.unit.model, charged=charged, inches=inches,
-                flank_or_rear=facing in ('flank', 'rear'))
+            model = striker.unit.model
+            flanking = facing in ('flank', 'rear')
+            profile = _stat_int(model.characteristics, 'I', 1)
+            base = base_initiative(model)
+            initiative = strike_initiative(model, charged=charged, inches=inches,
+                                           flank_or_rear=flanking)
+            if base != profile:
+                name = 'Strike First' if base > profile else 'Strike Last'
+                weapon = (model.active_melee_weapon() or {}).get('name')
+                source = f" from its {weapon}" if weapon and weapon != 'Hand Weapon' else ''
+                rule_log(name, striker,
+                         f"strikes at I{base} instead of its profile I{profile}"
+                         f"{source}, before any other modifier "
+                         f"(p. {177 if base > profile else 178})")
+            elif model.has_strike_first() and model.has_strike_last():
+                rule_skipped('Strike First', striker,
+                             f"cancelled out by Strike Last, so it strikes at its "
+                             f"profile I{profile} (p. 178)")
             if charged:
-                if initiative > base:
+                bonus = charge_initiative_bonus(inches, flanking)
+                if not bonus:
+                    rule_skipped('Charging Units', striker,
+                                 f"charged only {inches:.1f}\", not a full inch, so no "
+                                 f"Initiative bonus (stays I{initiative})")
+                elif initiative > base:
                     rule_log('Charging Units', striker,
                              f"charged {inches:.1f}\" into {target.unit.name}'s {facing} "
                              f"-> +{initiative - base} Initiative (I{base} -> I{initiative}, "
-                             f"max +{4 if facing in ('flank', 'rear') else 3}) (p. 146)")
+                             f"max +{4 if flanking else 3}) (p. 146)")
                 else:
                     rule_skipped('Charging Units', striker,
-                                 f"charged only {inches:.1f}\", not a full inch, so no "
-                                 f"Initiative bonus (stays I{base})")
+                                 f"charged {inches:.1f}\" for +{bonus} Initiative, but "
+                                 f"I{base} is already the maximum of 10 (p. 146)")
             order.append((initiative, i))
         order.sort(key=lambda e: -e[0])
         if len(order) > 1:

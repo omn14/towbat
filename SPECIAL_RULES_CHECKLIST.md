@@ -290,9 +290,31 @@ identical without the log. See `.github/copilot-instructions.md`.
       readable without knowing the weapon's rule list.
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
 - [ ] Heroic Killing Blow
-- [ ] Strike First — sorts outside the Initiative sequence; the hook is
-      `CombatResolver.strikeOrder`
-- [ ] Strike Last — as above, at the bottom of the sequence
+- [x] Strike First — DONE (p. 177). Initiative becomes 10 before any other
+      modifier; `battleFunctions.base_initiative` does the substitution and
+      `strike_initiative` applies the charge bonus after it, so a charge cannot
+      push it past the cap of 10.
+- [x] Strike Last — DONE (p. 178). Initiative becomes 1 the same way. A model
+      with both is left on its own characteristic, because the rules say they
+      cancel one another out.
+      Both come from the weapon far more often than the profile: 12 weapons
+      carry Strike Last against no models at all, and the plain **great weapon**
+      is one of them, so this fires constantly. `model.has_strike_first` and
+      `has_strike_last` therefore read the melee weapon actually in hand
+      (`active_melee_weapon`, so a sheathed great weapon or a Lance outside a
+      charge does not count) as well as the model's own rules.
+      The catalogue spells them `Strike First`/`Strikes First` and
+      `Strike Last`/`Strikes Last`, so `battlescribe.has_strike_first` and
+      `has_strike_last` take the optional 's'. The match is anchored: the Warp
+      Lightning Cannon has **Lightning Strike**, which a substring test reads as
+      a Strike rule. Weapons parsed by `weapon_from_profile` also get
+      `strike_first`/`strike_last` flags, and the string test is kept as a
+      fallback for weapons a save wrote before the flags existed.
+      LEFTOVER: "before any other modifiers are applied" is read literally, so
+      a Strike Last model that charges 5" strikes at I4, not I1 — the charge
+      bonus is a modifier and the rule only replaces the characteristic. That
+      is what the wording says, but it does mean a great-weapon unit that
+      charges is not actually striking last.
 - [x] Requires Two Hands — disables the shield's +1 in melee (a two-handed
       weapon cannot also use a shield); melee_armour_save() drops the shield
       bonus when the active melee weapon has this rule. Shooting save keeps it.
@@ -668,9 +690,9 @@ monstrous infantry and swarms too.
       unit's step, though each has its own Initiative and should be placed in
       the order separately — a I6 hero in a I3 regiment ought to strike before
       the rank and file, not with them.
-      LEFTOVER: Strike First and Strike Last (below) are still unimplemented,
-      but the ordering pass is now the hook they need — both are a matter of
-      sorting a model outside the Initiative sequence rather than by it.
+      LEFTOVER: Strike First and Strike Last (above) are now DONE — they turned
+      out to be a substitution of the characteristic before modifiers rather
+      than a sort outside the sequence, so they needed no ordering hook at all.
       LEFTOVER: Stomp Attacks are absent entirely, and the errata to p. 177 has
       them made last of all, after attacks at Initiative 1.
 - [ ] Cavalry Support — when a cavalry model makes a supporting attack, only

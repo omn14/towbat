@@ -9,7 +9,9 @@ import random
 import re
 
 from battlescribe import (get_catalogue, NAME_ALIASES as _NAME_ALIASES,
-                          has_move_and_shoot)
+                          has_move_and_shoot,
+                          has_strike_first as _has_strike_first,
+                          has_strike_last as _has_strike_last)
 from special_rules import build_special_rules
 import troop_types
 
@@ -422,6 +424,26 @@ class model:
         """True if the model has the Fire & Flee special rule (p. 169)."""
         return any(isinstance(r, dict) and r.get('fire_and_flee')
                    for r in self.special_rules)
+
+    def _strike_rule(self, key, from_weapon) -> bool:
+        """Whether a Strike First / Strike Last rule is in force.
+
+        Strike Last is almost always the weapon's doing rather than the
+        model's — a great weapon carries it — so the melee weapon actually in
+        hand counts as well as the profile.
+        """
+        if any(isinstance(r, dict) and r.get(key) for r in self.special_rules):
+            return True
+        w = self.active_melee_weapon()
+        return bool(w.get(key) or from_weapon(w.get('special_rules')))
+
+    def has_strike_first(self) -> bool:
+        """True if the model strikes at Initiative 10 (p. 177)."""
+        return self._strike_rule('strike_first', _has_strike_first)
+
+    def has_strike_last(self) -> bool:
+        """True if the model strikes at Initiative 1 (p. 178)."""
+        return self._strike_rule('strike_last', _has_strike_last)
 
     def is_venerable(self) -> bool:
         """True if the model has the Venerable special rule."""

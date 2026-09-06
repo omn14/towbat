@@ -107,6 +107,22 @@ def _fire_and_flee(model, param, desc):
             "fire_and_flee": True}
 
 
+def _strike_first(model, param, desc):
+    return {"name": "Strike First",
+            "description": desc or ("Improves its Initiative to 10 before any "
+                                    "other modifiers are applied."),
+            "tag": "combat",
+            "strike_first": True}
+
+
+def _strike_last(model, param, desc):
+    return {"name": "Strike Last",
+            "description": desc or ("Reduces its Initiative to 1 before any "
+                                    "other modifiers are applied."),
+            "tag": "combat",
+            "strike_last": True}
+
+
 def _fly(model, param, desc):
     # 'Fly (9)' -> flies with Movement 9, passing freely over models/terrain.
     entry = {"name": "Fly",
@@ -179,6 +195,10 @@ SPECIAL_RULE_BUILDERS = {
     "skirmishers": _skirmishers,
     "fire & flee": _fire_and_flee,
     "fire and flee": _fire_and_flee,
+    "strike first": _strike_first,
+    "strikes first": _strike_first,
+    "strike last": _strike_last,
+    "strikes last": _strike_last,
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,

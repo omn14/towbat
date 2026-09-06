@@ -324,6 +324,7 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
 # ── Who Strikes First (Rulebook p. 146) ────────────────────────────────────
 
 MAX_INITIATIVE = 10
+MIN_INITIATIVE = 1
 MAX_CHARGE_INITIATIVE_FRONT = 3
 MAX_CHARGE_INITIATIVE_FLANK = 4
 
@@ -335,6 +336,23 @@ def charge_initiative_bonus(inches: float, flank_or_rear: bool = False) -> int:
     return max(0, min(int(inches), cap))
 
 
+def base_initiative(model) -> int:
+    """A model's Initiative before any modifier.
+
+    Strike First sets it to 10 and Strike Last to 1 (p. 177 and p. 178), both
+    "before any other modifiers are applied", and a model with both is left on
+    its own characteristic because the two cancel out.
+    """
+    profile = _si(model.characteristics, 'I', 1)
+    first = model.has_strike_first() if hasattr(model, 'has_strike_first') else False
+    last = model.has_strike_last() if hasattr(model, 'has_strike_last') else False
+    if first and not last:
+        return MAX_INITIATIVE
+    if last and not first:
+        return MIN_INITIATIVE
+    return profile
+
+
 def strike_initiative(model, charged: bool = False, inches: float = 0.0,
                       flank_or_rear: bool = False) -> int:
     """The Initiative a model strikes at this round.
@@ -342,7 +360,7 @@ def strike_initiative(model, charged: bool = False, inches: float = 0.0,
     The charge bonus is capped at +3 into a front arc and +4 into a flank or
     rear, and the total may not exceed 10 (p. 146, as amended by the errata).
     """
-    base = _si(model.characteristics, 'I', 1)
+    base = base_initiative(model)
     if not charged:
         return base
     return min(MAX_INITIATIVE,

@@ -54,6 +54,24 @@ def has_ponderous(rules) -> bool:
                for r in (rules or []))
 
 
+# Anchored, because the catalogue also has a Lightning Strike that is neither.
+_STRIKE_FIRST = re.compile(r"\s*strikes?\s*first\s*$", re.I)
+_STRIKE_LAST = re.compile(r"\s*strikes?\s*last\s*$", re.I)
+
+
+def has_strike_first(rules) -> bool:
+    """True if *rules* names Strike First (p. 177).
+
+    The catalogue spells it both `Strike First` and `Strikes First`.
+    """
+    return any(_STRIKE_FIRST.match(str(r)) for r in (rules or []))
+
+
+def has_strike_last(rules) -> bool:
+    """True if *rules* names Strike Last (p. 178)."""
+    return any(_STRIKE_LAST.match(str(r)) for r in (rules or []))
+
+
 # Map display-name slugs to the canonical catalogue model slug when they differ.
 NAME_ALIASES = {
     "orc_boyz": "orc_boy",
@@ -369,6 +387,8 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
         weapon["move_and_shoot"] = has_move_and_shoot(rules)
         weapon["quick_shot"] = has_quick_shot(rules)
         weapon["ponderous"] = has_ponderous(rules)
+        weapon["strike_first"] = has_strike_first(rules)
+        weapon["strike_last"] = has_strike_last(rules)
         # Blast template diameter (e.g. '5" blast template') from the Notes.
         bm = re.search(r"(\d+)\s*[\"\u201d]?\s*blast", notes, re.I)
         if bm:

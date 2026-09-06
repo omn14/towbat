@@ -7,10 +7,14 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from battleFunctions import (charge_initiative_bonus,  # noqa: E402
-                             melee_attacks, strike_initiative)
+from battleFunctions import (base_initiative,  # noqa: E402
+                             charge_initiative_bonus, melee_attacks,
+                             strike_initiative)
+from battlescribe import (get_catalogue, has_strike_first,  # noqa: E402
+                          has_strike_last)
 from combat_resolution import CombatResolver  # noqa: E402
 from models import model  # noqa: E402
+from special_rules import build_special_rules  # noqa: E402
 
 
 def _model(name, initiative):
@@ -175,6 +179,106 @@ class SimultaneousCombatTests(unittest.TestCase):
         unit.nmodels = 17
         after = melee_attacks(unit, charge=False, casualties=3)
         self.assertLess(after, before)
+
+
+def _rule_model(initiative, *keywords):
+    """A model carrying *keywords* the way an imported roster supplies them."""
+    m = _model("Warrior", initiative)
+    m.characteristics['Special Rules'] = list(keywords)
+    have = {r.get('name') for r in m.special_rules if isinstance(r, dict)}
+    for entry in build_special_rules(m):
+        if entry.get('name') not in have:
+            m.special_rules.append(entry)
+    return m
+
+
+def _armed(initiative, slug):
+    """A model wielding the catalogue weapon *slug*."""
+    m = _model("Warrior", initiative)
+    m.weapons['Test Weapon'] = dict(get_catalogue().weapons_by_slug[slug])
+    m.equip_weapon('Test Weapon')
+    return m
+
+
+class RuleSpellingTests(unittest.TestCase):
+
+    def test_both_spellings_are_recognised(self):
+        for raw in ("Strike First", "Strikes First"):
+            self.assertTrue(has_strike_first([raw]), raw)
+        for raw in ("Strike Last", "Strikes Last"):
+            self.assertTrue(has_strike_last([raw]), raw)
+
+    def test_lightning_strike_is_neither(self):
+        # The catalogue's Warp Lightning Cannon has Lightning Strike, which a
+        # loose substring match would read as Strike First.
+        self.assertFalse(has_strike_first(["Lightning Strike"]))
+        self.assertFalse(has_strike_last(["Lightning Strike"]))
+
+
+class StrikeFirstTests(unittest.TestCase):
+    """Initiative becomes 10 before any other modifier (p. 177)."""
+
+    def test_the_profile_is_replaced(self):
+        self.assertEqual(base_initiative(_rule_model(3, "Strike First")), 10)
+
+    def test_a_weapon_can_grant_it(self):
+        self.assertEqual(base_initiative(_armed(3, 'celestial_blade')), 10)
+
+    def test_a_charge_cannot_push_it_past_ten(self):
+        m = _rule_model(3, "Strike First")
+        self.assertEqual(strike_initiative(m, charged=True, inches=8.0), 10)
+
+
+class StrikeLastTests(unittest.TestCase):
+    """Initiative becomes 1 before any other modifier (p. 178)."""
+
+    def test_the_profile_is_replaced(self):
+        self.assertEqual(base_initiative(_rule_model(6, "Strike Last")), 1)
+
+    def test_a_great_weapon_grants_it(self):
+        # The plain great weapon carries Strike Last, so this is the common case.
+        self.assertEqual(base_initiative(_armed(3, 'great_weapon')), 1)
+
+    def test_the_charge_bonus_is_added_afterwards(self):
+        # "before any other modifiers are applied" — the charge still counts.
+        m = _armed(3, 'great_weapon')
+        self.assertEqual(strike_initiative(m, charged=True, inches=5.0), 4)
+
+    def test_a_weapon_not_in_hand_does_not_count(self):
+        m = _armed(4, 'great_weapon')
+        m.equip_weapon('Hand Weapon')
+        self.assertFalse(m.has_strike_last())
+        self.assertEqual(base_initiative(m), 4)
+
+
+class CancellingOutTests(unittest.TestCase):
+
+    def test_a_model_with_both_uses_its_profile(self):
+        m = _rule_model(4, "Strike First", "Strike Last")
+        self.assertTrue(m.has_strike_first())
+        self.assertTrue(m.has_strike_last())
+        self.assertEqual(base_initiative(m), 4)
+
+    def test_a_strike_first_model_wielding_a_great_weapon_cancels(self):
+        m = _rule_model(5, "Strike First")
+        m.weapons['Great Weapon'] = dict(
+            get_catalogue().weapons_by_slug['great_weapon'])
+        m.equip_weapon('Great Weapon')
+        self.assertEqual(base_initiative(m), 5)
+
+
+class StrikeOrderWithTheStrikeRulesTests(unittest.TestCase):
+
+    def test_strike_first_overtakes_a_charge(self):
+        charger = _fighter("Knight", 3, charged=True, distance=7.0)
+        holder = _fighter("Assassin", 5)
+        holder.unit.model.characteristics['Special Rules'] = ["Strike First"]
+        for entry in build_special_rules(holder.unit.model):
+            holder.unit.model.special_rules.append(entry)
+        _engage(charger, holder)
+        order = _order((charger, holder), (holder, charger))
+        self.assertEqual([v for v, _ in order], [10, 6])
+        self.assertEqual(order[0][1], 1)
 
 
 if __name__ == '__main__':
