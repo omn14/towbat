@@ -290,8 +290,9 @@ identical without the log. See `.github/copilot-instructions.md`.
       readable without knowing the weapon's rule list.
 - [ ] Killing Blow — natural 6 to wound = no armour save (auto-kill)
 - [ ] Heroic Killing Blow
-- [ ] Strike First
-- [ ] Strike Last
+- [ ] Strike First — sorts outside the Initiative sequence; the hook is
+      `CombatResolver.strikeOrder`
+- [ ] Strike Last — as above, at the bottom of the sequence
 - [x] Requires Two Hands — disables the shield's +1 in melee (a two-handed
       weapon cannot also use a shield); melee_armour_save() drops the shield
       bonus when the active melee weapon has this rule. Shooting save keeps it.
@@ -633,12 +634,45 @@ monstrous infantry and swarms too.
       wording on p. 102, but the combat rule speaks only of stepping into the
       fighting rank, so the supporting rank is left alone.
       LEFTOVER: Simultaneous Combat (p. 146) says casualties do *not* reduce
-      the attacks of enemy models with the same Initiative value. The engine
-      has no Initiative ordering at all — the charger always strikes first and
-      always thins the defender. That is usually right by accident, since a
-      charge grants +1 Initiative per inch moved to a maximum of +3 (p. 146),
-      but a defender with equal or higher Initiative should be striking back at
-      full strength and currently does not.
+      the attacks of enemy models with the same Initiative value. CLOSED — see
+      Who Strikes First below.
+- [x] Who Strikes First / Charging Units / Simultaneous Combat — DONE (p. 146,
+      Charging Units as amended by the errata). `battleFunctions`
+      `charge_initiative_bonus` and `strike_initiative` do the arithmetic:
+      +1 Initiative per *full* inch moved before contact, capped at +3 into a
+      front arc and +4 into a flank or rear, with the total capped at 10 by the
+      errata. `CombatResolver.strikeOrder` sorts the engagement list by that
+      value, highest first, and `_engagedFacing` reads which arc a striker
+      charged into — `isInCombatWith` and `isInCombatFlank` are appended in
+      step, so the arc is the entry at the striker's own index in its victim's
+      list.
+      Before this the loop simply walked `self.game.attackers` in list order:
+      the charger struck first because it happened to be built first, and a
+      defender with equal or higher Initiative struck back thinned. Now
+      `_verySimpleBattleInner` re-snapshots every unit's model count each time
+      the Initiative value changes, and a striker fights with the models it had
+      when its step began — so a blow landed alongside its own cannot cost it
+      attacks, while one landed at a higher Initiative still does.
+      CORRECTED on the way: `strike_initiative` defaults a missing `I` to 1
+      rather than 0, so an unparsed profile still strikes rather than being
+      sorted below everything and then treated as Initiative 0.
+      CORRECTED on the way: `self.game.attackers` lists a unit reachable from
+      both sides of the engagement twice, and the old loop weeded the copy out
+      with `hasAttackedThisTurn` as each striker came up. Drawing the order up
+      in advance reads that flag before anyone has fought, so both copies got
+      through and the unit attacked twice — seen in play, Skeleton Warriors
+      making two sets of 5 attacks either side of the reply. `strikeOrder` now
+      keeps the first occurrence of each striker.
+      LEFTOVER: a unit strikes as one at its own model's Initiative. A joined
+      character, a mount and a chariot's parts are all resolved inside that
+      unit's step, though each has its own Initiative and should be placed in
+      the order separately — a I6 hero in a I3 regiment ought to strike before
+      the rank and file, not with them.
+      LEFTOVER: Strike First and Strike Last (below) are still unimplemented,
+      but the ordering pass is now the hook they need — both are a matter of
+      sorting a model outside the Initiative sequence rather than by it.
+      LEFTOVER: Stomp Attacks are absent entirely, and the errata to p. 177 has
+      them made last of all, after attacks at Initiative 1.
 - [ ] Cavalry Support — when a cavalry model makes a supporting attack, only
       the rider attacks, not the mount. Needs the supporting-attack maths in
       `simulate_battle` to know rider from mount, which `get_mount()` gives it.

@@ -37,7 +37,8 @@ from direct.task.Task import Task
 
 from dice import Dice, checkDice
 from battleFunctions import (MIN_IMPACT_HIT_CHARGE, impact_hit_report,
-                             resolve_impact_hits, simulate_battle)
+                             resolve_impact_hits, simulate_battle,
+                             strike_initiative)
 from characters import JOIN_TAG
 from battlescribe import has_quick_shot
 from special_rules import (board_edge_distance, can_stand_and_shoot, charge_roll,
@@ -1126,6 +1127,67 @@ class CombatResolver:
                 psy.release_panic()
         return task.done
 
+    @staticmethod
+    def _engagedFacing(target, striker):
+        """Which of *target*'s arcs *striker* is engaged in.
+
+        isInCombatWith and isInCombatFlank are appended in step, so the arc a
+        striker charged into is the entry at its own index in its victim's list.
+        """
+        try:
+            return target.isInCombatFlank[target.isInCombatWith.index(striker)]
+        except (ValueError, IndexError):
+            return 'front'
+
+    def strikeOrder(self):
+        """(Initiative, index) for every striker, highest Initiative first.
+
+        Who Strikes First (p. 146): work down the Initiative values, models
+        attacking as their value is reached.
+        """
+        order = []
+        # A unit reachable from both sides of the engagement is listed twice,
+        # and it strikes once.
+        seen = set()
+        for i, striker in enumerate(self.game.attackers):
+            if striker.hasAttackedThisTurn:
+                print(f"Unit {striker.unit.name} has already attacked this turn, skipping.")
+                continue
+            if id(striker) in seen:
+                continue
+            seen.add(id(striker))
+            target = self.game.defenders[i]
+            facing = self._engagedFacing(target, striker)
+            charged = bool(getattr(striker, 'chargedThisTurn', False))
+            inches = float(getattr(striker, 'chargeDistance', 0.0) or 0.0)
+            base = strike_initiative(striker.unit.model)
+            initiative = strike_initiative(
+                striker.unit.model, charged=charged, inches=inches,
+                flank_or_rear=facing in ('flank', 'rear'))
+            if charged:
+                if initiative > base:
+                    rule_log('Charging Units', striker,
+                             f"charged {inches:.1f}\" into {target.unit.name}'s {facing} "
+                             f"-> +{initiative - base} Initiative (I{base} -> I{initiative}, "
+                             f"max +{4 if facing in ('flank', 'rear') else 3}) (p. 146)")
+                else:
+                    rule_skipped('Charging Units', striker,
+                                 f"charged only {inches:.1f}\", not a full inch, so no "
+                                 f"Initiative bonus (stays I{base})")
+            order.append((initiative, i))
+        order.sort(key=lambda e: -e[0])
+        if len(order) > 1:
+            names = ", ".join(f"{self.game.attackers[i].unit.name} I{v}" for v, i in order)
+            battle_log(f"Strike order: {names}")
+            for (v1, i1), (v2, i2) in zip(order, order[1:]):
+                if v1 == v2:
+                    rule_log('Simultaneous Combat', self.game.attackers[i2],
+                             f"strikes at I{v2} alongside "
+                             f"{self.game.attackers[i1].unit.name}: the active player "
+                             f"resolves first, but neither side's casualties reduce the "
+                             f"other's attacks (p. 146)")
+        return order
+
     async def _verySimpleBattleInner(self, task):
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
@@ -1182,11 +1244,20 @@ class CombatResolver:
         impact1, impact2 = self.impactHits(modRemoveSequence)
         player1_score += impact1
         player2_score += impact2
-        for i in range(len(self.game.attackers)):
+        stepModels = dict(self._combatStartModels)
+        stepInitiative = None
+        for initiative, i in self.strikeOrder():
             unit = self.game.attackers[i]
             if unit.hasAttackedThisTurn:
-                print(f"Unit {unit.unit.name} has already attacked this turn, skipping.")
                 continue
+            # Simultaneous Combat (p. 146): models sharing an Initiative value
+            # strike together, so every striker in the step counts its models
+            # from the same snapshot and nobody is thinned by a blow struck
+            # alongside their own.
+            if initiative != stepInitiative:
+                stepInitiative = initiative
+                stepModels = {id(g.unit): g.unit.nmodels
+                              for g in set(self.game.attackers) | set(self.game.defenders)}
             attackerUnit = self.game.defenders[i]
             attacker = attackerUnit.bodyNP
             defender = unit.bodyNP
@@ -1225,16 +1296,22 @@ class CombatResolver:
                 defenderUnit.unit.files -= 1
             # The charging unit fights with its charge bonus (and front rank
             # only); everyone else fights as normal (front + supporting rank).
-            # Casualties suffered this round (charger struck first) come off
-            # the fighting rank of a unit that strikes back: the slain and the
-            # models that stepped into their place cannot attack.
+            # Casualties suffered at a *higher* Initiative come off the
+            # fighting rank of a unit that strikes back: the slain and the
+            # models that stepped into their place cannot attack. Blows landed
+            # at this same Initiative do not count, so the unit fights with the
+            # models it had when the step began.
+            liveModels = defenderUnit.unit.nmodels
+            stepStart = stepModels.get(id(defenderUnit.unit), liveModels)
             casualties = max(0, self._combatStartModels.get(
-                id(defenderUnit.unit), defenderUnit.unit.nmodels) - defenderUnit.unit.nmodels)
+                id(defenderUnit.unit), stepStart) - stepStart)
+            defenderUnit.unit.nmodels = stepStart
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
                 defenderUnit.unit, attackerUnit.unit,
                 charge=getattr(defenderUnit, 'chargedThisTurn', False),
                 casualties=casualties)
             defenderUnit.unit.files = origFiles
+            defenderUnit.unit.nmodels = liveModels
             self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
                                     suffered_wounds, saves_made, total_wounds)
             attackerUnit.unit.nmodels -= total_wounds

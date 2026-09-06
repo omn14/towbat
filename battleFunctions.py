@@ -321,6 +321,34 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     return wounds, saves, wounds - saves
 
 
+# ── Who Strikes First (Rulebook p. 146) ────────────────────────────────────
+
+MAX_INITIATIVE = 10
+MAX_CHARGE_INITIATIVE_FRONT = 3
+MAX_CHARGE_INITIATIVE_FLANK = 4
+
+
+def charge_initiative_bonus(inches: float, flank_or_rear: bool = False) -> int:
+    """+1 Initiative per *full* inch a charge moved before contact (p. 146)."""
+    cap = (MAX_CHARGE_INITIATIVE_FLANK if flank_or_rear
+           else MAX_CHARGE_INITIATIVE_FRONT)
+    return max(0, min(int(inches), cap))
+
+
+def strike_initiative(model, charged: bool = False, inches: float = 0.0,
+                      flank_or_rear: bool = False) -> int:
+    """The Initiative a model strikes at this round.
+
+    The charge bonus is capped at +3 into a front arc and +4 into a flank or
+    rear, and the total may not exceed 10 (p. 146, as amended by the errata).
+    """
+    base = _si(model.characteristics, 'I', 1)
+    if not charged:
+        return base
+    return min(MAX_INITIATIVE,
+               base + charge_initiative_bonus(inches, flank_or_rear))
+
+
 # ── Impact Hits (Rulebook p. 172) ──────────────────────────────────────────
 
 MIN_IMPACT_HIT_CHARGE = 3.0
