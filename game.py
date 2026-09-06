@@ -1043,10 +1043,17 @@ class MyApp(ShowBase):
             return task.done
         # War-machine cannons use the dedicated Cannon Fire targeting flow.
         if self.cannon.is_cannon(self.unitToMove):
+            if self.barredByMoveOrShoot(
+                    self.unitToMove, self.cannon.cannon_weapon(self.unitToMove)):
+                return task.done
             self.cannon.begin_targeting(self.unitToMove)
             return task.done
         # Bombardment war machines (Mortar, etc.) use the blast-template flow.
         if self.bombard.is_bombardment(self.unitToMove):
+            if self.barredByMoveOrShoot(
+                    self.unitToMove,
+                    self.bombard.bombardment_weapon(self.unitToMove)):
+                return task.done
             self.bombard.begin_targeting(self.unitToMove)
             return task.done
         if self.unitToMove.unit.model.equipedWeapon is None:# or not self.unitToMove.unit.model.equippedWeapon.is_ranged:
@@ -1833,8 +1840,40 @@ class MyApp(ShowBase):
               f"{spell.casting} -> {spell.name} holds.")
         return False
 
+    def movedThisTurn(self, unit) -> bool:
+        """Moved for *any* reason this turn (p. 139, p. 174).
+
+        Wider than `hasMovedThisTurn`, which a manoeuvre deliberately does not
+        set; the rules name rallying and reforming, and both are in here.
+        """
+        return bool(unit.hasMovedThisTurn or unit.manoeuvreThisTurn
+                    or unit.moveSpentThisTurn or unit.attemptedRallyThisTurn)
+
+    def barredByMoveOrShoot(self, unit, weapon=None) -> bool:
+        """Move or Shoot (p. 174): artillery cannot fire on the move.
+
+        Reported either way — a war machine that does not fire looks exactly
+        like one the player forgot to shoot with.
+        """
+        model = unit.unit.model
+        if not model.cannot_shoot_after_moving(weapon):
+            return False
+        name = (weapon or model.equipedWeapon or {}).get('name', 'weapon')
+        if not self.movedThisTurn(unit):
+            rule_skipped('Move or Shoot', unit,
+                         f"{name} fires — the unit stood still this turn")
+            return False
+        why = ('marched' if getattr(unit, 'marchedThisTurn', False)
+               else 'rallied' if unit.attemptedRallyThisTurn
+               else f"performed a {unit.manoeuvreThisTurn}"
+               if unit.manoeuvreThisTurn else 'moved')
+        rule_log('Move or Shoot', unit,
+                 f"{name} cannot fire: the unit {why} this turn (p. 174)")
+        return True
+
     async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
                       distance=None):
+        _moved = self.movedThisTurn(attackerUnit)
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():
                 rule_log('Marching', attackerUnit,
@@ -1843,6 +1882,10 @@ class MyApp(ShowBase):
             rule_log('Move & Shoot', attackerUnit,
                      f"{attackerUnit.unit.model.equipedWeapon.get('name', 'weapon')} "
                      f"fires despite the march (p. 174)")
+        # A Stand & Shoot is a charge reaction rather than the Shooting phase
+        # the rule names, so it is not barred by it.
+        if not stand_and_shoot and self.barredByMoveOrShoot(attackerUnit):
+            return
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
@@ -1858,11 +1901,7 @@ class MyApp(ShowBase):
                                              and defender.model.unit_strength() == 1)
         # Moving and Shooting (p. 139): moved for *any* reason this turn, which
         # includes a manoeuvre the move flag deliberately does not record.
-        attacker.model.moved_this_turn = bool(
-            attackerUnit.hasMovedThisTurn
-            or attackerUnit.manoeuvreThisTurn
-            or attackerUnit.moveSpentThisTurn
-            or attackerUnit.attemptedRallyThisTurn)
+        attacker.model.moved_this_turn = _moved
         _tag = 'LONG RANGE, -1 To Hit' if attacker.model.at_long_range else 'short range'
         # Vantage Point: a unit entirely on a hill fires with one extra rank.
         _on_hill, _models = self.movement.modelsInTerrain(

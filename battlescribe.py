@@ -38,6 +38,16 @@ def has_move_and_shoot(rules) -> bool:
                for r in (rules or []))
 
 
+def has_move_or_shoot(rules) -> bool:
+    """True if *rules* names Move or Shoot (p. 174).
+
+    The opposite of the rule above, and one word apart from it, so the joiner
+    is again what has to match. 25 weapons carry it, all of them artillery.
+    """
+    return any(re.search(r"move\s*or\s*shoot", str(r), re.I)
+               for r in (rules or []))
+
+
 def has_quick_shot(rules) -> bool:
     """True if *rules* names Quick Shot (p. 175).
 
@@ -385,6 +395,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
                 weapon["multiple_wounds"] = mw.group(1).strip().upper().replace(" ", "")
         weapon["volley_fire"] = any("volley" in r.lower() for r in rules)
         weapon["move_and_shoot"] = has_move_and_shoot(rules)
+        weapon["move_or_shoot"] = has_move_or_shoot(rules)
         weapon["quick_shot"] = has_quick_shot(rules)
         weapon["ponderous"] = has_ponderous(rules)
         weapon["strike_first"] = has_strike_first(rules)
@@ -539,7 +550,10 @@ def _model_parts(model_entry: ET.Element, by_name: dict) -> dict:
     of each the entry takes.
 
     A chariot's crew is a nested entry marked subType='crew'; the beasts that
-    draw it are linked out and tagged with a CHARIOT CREW category.
+    draw it are linked out and tagged with a CHARIOT CREW category. A war
+    machine's crew is neither — it is a plain entry link, named for what the
+    crew are ('Gun Crew', 'Dwarf Crew'), which is why war machines came back
+    with no crew at all and so no Movement of their own.
     """
     crew, beasts = [], []
     entries = _direct_child(model_entry, "selectionEntries")
@@ -550,14 +564,16 @@ def _model_parts(model_entry: ET.Element, by_name: dict) -> dict:
     links = _direct_child(model_entry, "entryLinks")
     if links is not None:
         for link in links:
+            name = (link.get("name") or "").strip()
             cats = _direct_child(link, "categoryLinks")
-            if cats is None:
-                continue
-            for cat in cats:
+            drawn = False
+            for cat in (cats if cats is not None else []):
                 if (cat.get("name") or "").strip().upper() == "CHARIOT CREW":
-                    beasts.append({"name": link.get("name"),
-                                   "count": _entry_count(link)})
+                    beasts.append({"name": name, "count": _entry_count(link)})
+                    drawn = True
                     break
+            if not drawn and name.lower().endswith("crew"):
+                crew.append({"name": name, "count": _entry_count(link)})
     return {"Crew": crew, "Beasts": beasts}
 
 

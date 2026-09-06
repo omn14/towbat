@@ -127,5 +127,71 @@ class MoveAndShootTests(unittest.TestCase):
         self.assertFalse(m.fires_after_marching())
 
 
+class MoveOrShootTests(unittest.TestCase):
+    """Move or Shoot (p. 174) — artillery cannot fire on the move."""
+
+    def _weapons(self):
+        from battlescribe import get_catalogue
+        return get_catalogue().weapons_by_slug.values()
+
+    def _rule_names(self, weapon):
+        return [str(r.get('name') if isinstance(r, dict) else r)
+                for r in (weapon.get('special_rules') or [])]
+
+    def test_every_move_or_shoot_weapon_is_flagged(self):
+        missed = [w.get('name') for w in self._weapons()
+                  if not w.get('move_or_shoot')
+                  and any('or shoot' in n.lower() for n in self._rule_names(w))]
+        self.assertEqual(missed, [], "Move or Shoot weapons left unflagged")
+
+    def test_move_and_shoot_is_not_mistaken_for_it(self):
+        # The mirror of the trap above: matching "move ... shoot" here would
+        # silence 16 weapons written to fire on the move.
+        wrong = [w.get('name') for w in self._weapons()
+                 if w.get('move_or_shoot')
+                 and any('& shoot' in n.lower() or 'and shoot' in n.lower()
+                         for n in self._rule_names(w))]
+        self.assertEqual(wrong, [], "Move & Shoot weapons flagged as Move or Shoot")
+
+    def test_the_spelling_with_a_capital_or_is_caught(self):
+        from battlescribe import has_move_or_shoot
+        for raw in ("Move or Shoot", "Move Or Shoot", "move or shoot"):
+            self.assertTrue(has_move_or_shoot([raw]), raw)
+
+    def test_move_and_shoot_does_not_match(self):
+        from battlescribe import has_move_or_shoot
+        for raw in ("Move & Shoot", "Move and Shoot"):
+            self.assertFalse(has_move_or_shoot([raw]), raw)
+
+    def test_the_rule_reaches_an_equipped_model(self):
+        from models import model
+        m = model("Great Cannon", "")
+        m.give_weapon("Cannon"); m.equip_weapon("Cannon")
+        self.assertTrue(m.cannot_shoot_after_moving())
+
+    def test_an_ordinary_weapon_is_free_to_move(self):
+        from models import model
+        m = model("State Missile Trooper", "")
+        m.give_weapon("Handgun"); m.equip_weapon("Handgun")
+        self.assertFalse(m.cannot_shoot_after_moving())
+
+    def test_a_save_written_before_the_flag_existed_still_works(self):
+        from models import model
+        m = model("Great Cannon", "")
+        m.weapons['Cannon'] = {
+            'name': 'Cannon', 'tag': 'ranged', 'ranged_strength': 10,
+            'ranged_AP': -3, 'special_rules': ['Move or Shoot'],
+        }
+        m.equip_weapon('Cannon')
+        self.assertNotIn('move_or_shoot', m.equipedWeapon)
+        self.assertTrue(m.cannot_shoot_after_moving())
+
+    def test_a_model_with_no_weapon_is_not_barred(self):
+        from models import model
+        m = model("State Missile Trooper", "")
+        m.equipedWeapon = None
+        self.assertFalse(m.cannot_shoot_after_moving())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

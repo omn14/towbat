@@ -10,6 +10,7 @@ import re
 
 from battlescribe import (get_catalogue, NAME_ALIASES as _NAME_ALIASES,
                           has_move_and_shoot,
+                          has_move_or_shoot as _has_move_or_shoot,
                           has_strike_first as _has_strike_first,
                           has_strike_last as _has_strike_last)
 from special_rules import build_special_rules
@@ -559,6 +560,12 @@ class model:
         beasts = self.get_beasts()
         if beasts is not None:
             return stat_int(beasts.characteristics, 'M', default)
+        # A split profile is two rows with gaps in each (p. 97). A war machine
+        # has no Movement of its own: it is shifted by the crew that work it.
+        if stat_int(self.characteristics, 'M', 0) <= 0:
+            crew = self.get_crew()
+            if crew is not None:
+                return stat_int(crew.characteristics, 'M', default)
         return stat_int(self.characteristics, 'M', default)
 
     def get_toughness(self, default: int = 4) -> int:
@@ -627,6 +634,19 @@ class model:
             return bool(w['move_and_shoot'])
         # A save written before the flag existed still carries the rule names.
         return has_move_and_shoot(w.get('special_rules'))
+
+    def cannot_shoot_after_moving(self, weapon=None) -> bool:
+        """Move or Shoot: artillery is impossible to fire on the move (p. 174).
+
+        The weapon is passed in by the war-machine paths, which pick their own
+        rather than firing whatever happens to be equipped.
+        """
+        w = self.equipedWeapon if weapon is None else weapon
+        w = w or {}
+        if 'move_or_shoot' in w:
+            return bool(w['move_or_shoot'])
+        # A save written before the flag existed still carries the rule names.
+        return _has_move_or_shoot(w.get('special_rules'))
 
     def active_melee_weapon(self) -> dict:
         """The melee weapon this model is actually fighting with.

@@ -253,7 +253,32 @@ identical without the log. See `.github/copilot-instructions.md`.
       below, where the catalogue keeps it.
       Now unblocked by this: `Dwarf Crafted` (no -1 To Hit on a Stand & Shoot)
       finally has a modifier to cancel.
-- [ ] Move or Shoot — cannot shoot after moving
+- [x] Move or Shoot (p. 174) — DONE. "Cannot be used in the Shooting phase if
+      the model equipped with it moved for any reason during this turn
+      (including rallying and reforming)." All 25 weapons that carry it are
+      artillery, which is what the flavour text describes.
+      The hard part was already built. "Moved for any reason" is wider than
+      `hasMovedThisTurn`, which a manoeuvre deliberately does not set, and
+      Moving and Shooting had already had to answer that question — so the
+      same four flags decide both, computed once at the top of `shootAt` and
+      read by each. The rule names rallying and reforming explicitly, and both
+      are among them.
+      Parsed as `move_or_shoot` in `battlescribe.py` and read by
+      `model.cannot_shoot_after_moving()`, with the same fallback to the rule
+      *names* that Move & Shoot uses, so a quicksave written before the flag
+      existed is still barred.
+      The `&`-not-`or` trap is now guarded from both directions: matching
+      "move ... shoot" here would silence the 16 weapons written to fire on the
+      move, exactly as the reverse would have let 25 artillery pieces fire
+      after moving. Each rule has a test asserting the other's weapons are not
+      caught.
+      A Stand & Shoot is exempt. The rule bars the *Shooting phase*, and a
+      charge reaction is not it — nor has the defender moved, since the flags
+      are cleared at the start of every turn.
+      Logged both ways, because a cannon that does not fire looks identical to
+      a cannon the player forgot to shoot with: the bar names what the unit did
+      (`marched`, `rallied`, the manoeuvre, or `moved`), and a war machine that
+      held still says so as it fires.
 - [x] Ponderous (p. 175) — "a weapon with this special rule suffers a To Hit
       modifier of -2 for Moving and Shooting, rather than the usual -1". That
       is the whole rule. The line here previously described it as
@@ -747,6 +772,26 @@ existing `cannon_fire.py` / `bombardment.py` work.
 - [ ] Split Profile (War Machine) — crew's Toughness and Wounds in combat, the
       machine's when not; -1 Attack per Wound the crew has lost; armour save
       from the crew; either element at zero Wounds removes the model.
+      PART DONE — **Movement**. A split profile is two rows with gaps in each
+      (p. 97), and a war machine's own row has no Movement at all: it is shifted
+      by the crew that work it. `get_movement` fell through to whatever default
+      the caller happened to pass, so an artillery piece moved 4", 0" or
+      anything else depending on which code asked.
+      The crew were not being read either. A chariot declares its crew as a
+      nested entry marked `subType='crew'`, which is what `_model_parts` looked
+      for; a war machine's crew is a plain entry link named for what the crew
+      are — `Gun Crew`, `Dwarf Crew`, `Peasant Crew`. All 26 of them end in
+      "Crew", so that is what the parser matches, and 33 models now carry crew
+      where 7 did before — every one of them a war machine or a chariot.
+      `get_movement` only falls through to the crew when the model's own
+      Movement is missing, so a Stegadon (M6, with Skink Crew) is untouched and
+      a chariot still moves at the speed of the beasts that draw it.
+      Verified: Great Cannon, Helblaster and Helstorm all resolve to M4 from
+      their Gun Crew; the War Wagon stays at 7 from its horses.
+      NOTE: `model('Mortar')` resolves to the Renegade Crowns profile, which
+      genuinely has no crew in the data, rather than the Empire's. Bare model
+      names collide across factions — that predates this and is unrelated to
+      the split profile.
 - [ ] "We're Not Paid to Fight" — a war machine that Breaks and flees from
       combat is destroyed outright. Fall Back and Give Ground are normal.
 - [ ] Weapon of War — cannot march, declare a charge or pursue; -1 to any Flee
