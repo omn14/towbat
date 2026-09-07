@@ -98,6 +98,7 @@ class unitGraphics(FSM):
         self.hasAttackedThisTurn=False
         self.standAndShootWounds=0   # counts towards the combat that follows (p. 151)
         self.attemptedRallyThisTurn=False
+        self.usedRallyingCry=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
         self.wasChargedThisTurn=False
         self.countsAsChargeTargetNextTurn=False

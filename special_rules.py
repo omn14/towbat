@@ -285,6 +285,13 @@ def _veteran(model, param, desc):
                                     're-roll failed Leadership tests, but not Break tests.')}
 
 
+def _rallying_cry(model, param, desc):
+    """An extra friendly Rally during Command, once per sub-phase (pp. 117, 175)."""
+    return {"name": "Rallying Cry", "tag": "psychology", "rallying_cry": True,
+            "description": desc or ('During Command, nominate one fleeing friendly unit '
+                                    'within Command range to make an immediate Rally test.')}
+
+
 def _stubborn(model, param, desc):
     return {"name": "Stubborn",
             "description": desc or ("The first Break test this unit is required to "
@@ -379,6 +386,7 @@ SPECIAL_RULE_BUILDERS = {
     "fly": _fly,
     "venerable": _venerable,
     "veteran": _veteran,
+    "rallying cry": _rallying_cry,
     "stubborn": _stubborn,
     "shieldwall": _shieldwall,
     "general": _general,

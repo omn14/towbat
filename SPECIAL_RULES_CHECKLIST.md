@@ -874,7 +874,7 @@ army-agnostic and would benefit every faction.
       physical dice method named `rollBreakDice`.
       FAQ: a personal character test must pass the character itself, its own
       Leadership and `personal=True`; an ordinary character cannot borrow
-      its host's Veteran. This does not implement Rallying Cry itself.
+      its host's Veteran. See Rallying Cry below for that rule's target test.
       Correction made along the way: Leadership tests now automatically pass
       on natural double 1 and fail on natural double 6 (p. 97), including
       Rally and Restraint. Older tests assuming Ld 1/12 always fail/pass were
@@ -895,13 +895,84 @@ army-agnostic and would benefit every faction.
       keeping the failure. Dice are not forced; an initial pass needs no
       re-roll. Complete the existing free reform after a successful Rally.
       These are test profiles, not a legal army list.
-      LEFTOVER: Fear, Terror, Rallying Cry and other not-yet-implemented
+      LEFTOVER: Fear, Terror and other not-yet-implemented
       Leadership-test causes must call the shared re-roll flow when added.
       No new test causes or general Leadership-source rules are implemented
       here. Majority counts use the existing homogeneous regiment profile
       plus one joined character; arbitrary mixed-model regiments are not
       represented. AI does not evaluate reasons to keep a failed test.
-- [ ] Rallying Cry — 
+- [x] Rallying Cry (Rulebook pp. 117, 175, 202-203) — once per Command
+      sub-phase, a non-fleeing, unengaged character may nominate one fleeing
+      friendly unit within Command range for an immediate Rally test.
+      Sources checked: https://tow.whfb.app/special-rules/rallying-cry,
+      https://tow.whfb.app/the-strategy-phase/command,
+      https://tow.whfb.app/the-strategy-phase/rally-fleeing-units,
+      https://tow.whfb.app/the-strategy-phase/rallied-units,
+      https://tow.whfb.app/the-strategy-phase/insurmountable-losses,
+      https://tow.whfb.app/characters/command-range, and Official FAQ v1.5.3
+      at https://tow.whfb.app/faq/universal-special-rules.
+      `rallying_cry.py` owns eligibility, target nomination and Command flow.
+      Ordinary characters use their own Ld in inches; General/BSB use 12",
+      or 18" with Large Target. Range is inclusive, base-edge to base-edge,
+      from the character's own world position even when joined to a regiment.
+      A fleeing or engaged host, retired character, wrong turn, enemy target,
+      non-fleeing target or spent use is rejected with a reason. The keyword
+      supports shared mount/live crew/beast profiles without extra uses.
+      Strategy opens a Command window when the active side has a character
+      with Rallying Cry. Selecting that character, or its host regiment,
+      opens the eligible-target menu. Cancelling retains the use; confirming
+      a valid nomination spends it before the target rolls. End Phase closes
+      Command before the existing Conjuration/Rally actions become available.
+      End Phase cannot interrupt nomination, dice resolution or free reform.
+      AI chooses the largest eligible unit and declines the optional reform.
+      The target uses the shared Rally path, including its own Veteran and
+      BSB eligibility, with at most one re-roll of each test. Failed Command
+      Rally does not consume normal Rally; success permits a free reform,
+      bars charges and counts as moved for shooting, but does not consume
+      the ordinary move. A later normal Rally is a fresh test, not a third
+      roll of the earlier one. Different callers may each nominate a unit
+      that is still fleeing; each caller is limited to one use.
+      `usedRallyingCry` and `strategyCommandDone` survive save/load. A fresh
+      Strategy entry resets uses exactly once; returning from a spell does
+      not. Legacy saves default to Command already complete, avoiding an
+      extra opportunity in a turn whose Command history was never saved.
+      FAQ interpretation: the Veteran answer mentions Rallying Cry as an
+      example of a character's personal test, but p. 175 explicitly gives
+      the nominated UNIT a Rally test and specifies no character test.
+      This implementation follows that operative text, adds no extra test,
+      and does not lend the caller's or its host's Veteran to the target.
+      Existing personal-character test restrictions remain unchanged.
+      Corrections made while implementing: normal failed Rally attempts now
+      reset even for units still fleeing on the next Strategy entry; shared
+      Rally applies Insurmountable Losses (-1 Ld below half starting models,
+      only natural double 1 below a quarter); Large Target command detection
+      recognises the catalogue keyword and mounts; joined AI characters use
+      their actual side. Command initialization was moved outside the unit
+      reset loop. Setting `hasMovedThisTurn` on Rally incorrectly barred
+      normal movement; the existing `attemptedRallyThisTurn` shooting query
+      supplies the required penalty without spending movement instead.
+      Logs report caller, target, measured range, spent use, dice/Ld, outcome,
+      loss penalties and why actions were unavailable or declined.
+      Tests: `tests/test_rallying_cry.py` and `tests/test_rallying_cry_scene.py`.
+      Run `python -m tests.test_rallying_cry_scene` to regenerate
+      `saves/rallying_cry.json`, `screenshots/rallying_cry.png` and the target
+      menu screenshot `screenshots/rallying_cry_choice.png`.
+      Save: Player 1 Strategy/Command, AI off. Select Ready Caller on the
+      left, then Left Veterans or Left Ordinary. The centre Veteran Guard
+      contains an ordinary Joined Caller who can nominate Centre Runners.
+      Spent Caller on the right cannot act again; enemy and out-of-range
+      runners are excluded. Callers have test-only Ld 8; runners Ld 6, with
+      no General/BSB support. Dice are not forced. After an early failure,
+      press End Phase once and select that fleeing unit for normal Rally.
+      Complete the existing free reform on success. Reload to repeat.
+      These are test profiles, not a legal army list.
+      LEFTOVER: this adds a Command window to Strategy, not a complete
+      four-sub-phase interface. Conjuration and normal Rally still share
+      the existing selection flow, and End Phase does not force every normal
+      Rally attempt. Other Command abilities are not added. AI chooses by
+      model count, not tactical value, and does not optimise the free reform.
+      The FAQ's example remains inconsistent with the published operative
+      Rallying Cry text; no unsupported character Leadership test is added.
 - [ ] Close Order / Open Order / Dispersed Formation — formation modes
 - [ ] Detachment — list-building support (may not need a runtime effect)
 

@@ -88,6 +88,19 @@ class GamePhaseFSM(FSM):
             return
         if self.state == 'SpellPhase':
             return  # Finish or cancel the cast before advancing the battle phase.
+        if self.state == 'StrategyPhase':
+            if (getattr(self.game, 'awaitingChoice', False)
+                    or getattr(self.game, 'rallyingCryBusy', False)
+                    or any(taskMgr.hasTaskNamed(name) for name in
+                           ('rallyingCryTask', 'rallyUnitTask', 'freeReformUnitTask'))):
+                return
+            if not getattr(self.game, 'strategyCommandDone', True):
+                from rallying_cry import ai_command, finish_command
+                if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
+                    taskMgr.add(ai_command(self.game), 'rallyingCryTask')
+                else:
+                    finish_command(self.game)
+                return
         """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
         for unit in units:
             self.game.fallBackContactTest(unit.bodyNP)
@@ -179,6 +192,7 @@ class GamePhaseFSM(FSM):
             unit.panicTestedThisPhase = False
             unit.fledThisPhase = False
             unit.startOfPhaseModels = unit.unit.nmodels
+            unit.attemptedRallyThisTurn = False
             if unit.state != "InCombat" and unit.state != "IsFleeing":
                 unit.hasMovedThisTurn = False
                 unit.attemptedRallyThisTurn = False
@@ -188,6 +202,9 @@ class GamePhaseFSM(FSM):
                 unit.redressDelta = 0
                 unit.request("Idle")
             unit.updateTextNode()
+
+        from rallying_cry import begin_command
+        begin_command(self.game)
 
     def exitStrategyPhase(self):
         self.game.ignore('mouse1')

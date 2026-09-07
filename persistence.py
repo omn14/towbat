@@ -126,6 +126,7 @@ def save_game_state(game, filename=None):
         'vanguard_first': getattr(game, 'vanguardFirst', None),
         'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
+        'strategy_command_done': getattr(game, 'strategyCommandDone', True),
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
         'challenges': [
@@ -165,6 +166,7 @@ def save_game_state(game, filename=None):
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'standAndShootWounds': getattr(unit, 'standAndShootWounds', 0),
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
+            'usedRallyingCry': getattr(unit, 'usedRallyingCry', False),
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
             'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
@@ -427,6 +429,7 @@ def load_game_state(game, filename):
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.standAndShootWounds = unit_data.get('standAndShootWounds', 0)
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
+        unit.usedRallyingCry = unit_data.get('usedRallyingCry', False)
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
         unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
@@ -547,6 +550,8 @@ def load_game_state(game, filename):
     game.firstFinishedDeploying = game_state.get('first_finished_deploying')
     game.vanguardFirst = game_state.get('vanguard_first')
     game.vanguardActive = game_state.get('vanguard_active')
+    game.strategyCommandDone = game_state.get('strategy_command_done', True)
+    game.rallyingCryBusy = False
     game.roundCounter.apply_selection_masks()
     if game_state['current_phase'] == 'DeployPhase':
         from deployPhase import refresh_deployment

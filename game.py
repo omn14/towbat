@@ -952,14 +952,18 @@ class MyApp(ShowBase):
             terning.remove(self.world)
         return ldDice
 
-    async def rallyUnit(self, unit):
-        """Rally on Leadership with one eligible re-roll (Rulebook pp. 97, 180)."""
-        from psychology import leadership_passed, reroll_leadership
+    async def rallyUnit(self, unit, *, command=False):
+        """Rally; a failed Command attempt preserves normal Rally (pp. 117, 175)."""
+        from psychology import leadership_passed, rally_leadership, reroll_leadership
 
+        if not command and not getattr(self, 'strategyCommandDone', True):
+            rule_skipped('Rally', unit, 'normal Rally follows the Command sub-phase')
+            return False
         leadership, general = self.psychology.leadership_of(unit)
         if general is not None:
             print(f"{unit.unit.name} rallies on the General's Leadership "
                   f"({general.unit.name}, Ld {leadership}) - Inspiring Presence.")
+        leadership = rally_leadership(unit, leadership)
         dice = await self.rollLeadershipDice()
         standard = self.psychology.battle_standard_of(unit)
         dice = await reroll_leadership(
@@ -967,19 +971,25 @@ class MyApp(ShowBase):
             other_rule=f'Hold Your Ground: {standard.unit.name}' if standard is not None else None)
         print("Leadership dice results for fleeing unit:", dice, "sum:", sum(dice),
               "Ld:", leadership)
-        if leadership_passed(sum(dice), leadership):
+        rallied = leadership_passed(sum(dice), leadership)
+        if rallied:
             print(f"Rallying unit: {unit.unit.name}")
-            self.ignore('mouse1')
-            self.accept('mouse1', self.giveSignal)
-            await taskMgr.add(self.freeReformUnit, "freeReformUnitTask", extraArgs=[unit], appendTask=True)
-            print(f"Unit {unit.unit.name} has rallied successfully.")
-            self.ignore('mouse1')
-            self.accept('mouse1', self.setActiveUnit,[self.taskLoopStrategy, "taskLoopStrategy"])
+            if not getattr(self, 'aiControls', lambda unit: False)(unit):
+                self.ignore('mouse1')
+                self.accept('mouse1', self.giveSignal)
+                await taskMgr.add(self.freeReformUnit, "freeReformUnitTask", extraArgs=[unit], appendTask=True)
+                self.ignore('mouse1')
+                self.accept('mouse1', self.setActiveUnit,[self.taskLoopStrategy, "taskLoopStrategy"])
             unit.request("Idle")
+            unit.cannotChargeThisTurn = True
         else:
             print(f"Unit {unit.unit.name} fails to rally and keeps fleeing.")
-        unit.attemptedRallyThisTurn=True
-        return
+        rule_log('Rally', unit,
+                 f'2D6={sum(dice)} vs Ld {leadership}: ' +
+                 ('PASS; cannot charge and counts as moved for shooting' if rallied else 'FAIL; still fleeing'))
+        if rallied or not command:
+            unit.attemptedRallyThisTurn = True
+        return rallied
 
     # ─── Phase Task Loops ─────────────────────────────────────────────────
 
@@ -1020,7 +1030,13 @@ class MyApp(ShowBase):
 
 
     def taskLoopStrategy(self, task):
-        # Placeholder for strategy phase logic
+        if getattr(self, 'rallyingCryBusy', False):
+            return task.done
+        if not getattr(self, 'strategyCommandDone', True):
+            from rallying_cry import choose_rallying_cry
+            if not taskMgr.hasTaskNamed('rallyingCryTask'):
+                taskMgr.add(choose_rallying_cry(self, self.unitToMove), 'rallyingCryTask')
+            return task.done
         if self.unitToMove.state == "IsFleeing" and not self.unitToMove.attemptedRallyThisTurn:
             if not taskMgr.hasTaskNamed("rallyUnitTask"):
                 print("Attempt to rally fleeing unit.")
@@ -1113,6 +1129,9 @@ class MyApp(ShowBase):
 
     def castableSpells(self, unit):
         """Names of the spells *unit* may still attempt in the current phase."""
+        if (getattr(self.fsm, 'state', None) == 'StrategyPhase'
+            and not getattr(self, 'strategyCommandDone', True)):
+            return []
         m = unit.unit.model
         if getattr(unit, 'state', '') == 'IsFleeing':
             return []
@@ -2694,10 +2713,12 @@ class MyApp(ShowBase):
         is not currently moving, so keying off the active player hands the
         AI decisions that belong to the human.
         """
+        from characters import side_of
+
         return bool(unit is not None
                     and getattr(self, 'AIplayer2', None) is not None
                     and self.AIplayer2.active
-                    and unit in self.player2Units)
+                and side_of(self, unit, default=None) == 2)
 
     async def makeChoiceNew(self, choices, position, cancellable=False,
                             descriptions=None, owner=None, prompt=None,

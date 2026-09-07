@@ -197,6 +197,21 @@ async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
     return result
 
 
+def rally_leadership(unit, leadership):
+    """Insurmountable Losses: below half -1, below quarter double 1 (p. 117)."""
+    remaining = unit.unit.nmodels
+    starting = getattr(unit, 'startOfBattleModels', remaining) or remaining
+    if remaining * 4 < starting:
+        rule_log('Insurmountable Losses', unit,
+                 f'{remaining}/{starting} models remain, below 25%; Rally needs natural double 1')
+        return 0
+    if remaining * 2 < starting:
+        rule_log('Insurmountable Losses', unit,
+                 f'{remaining}/{starting} models remain, below 50%; Rally Ld {leadership} -> {leadership - 1}')
+        return leadership - 1
+    return leadership
+
+
 def leadership_test(ld: int, modifier: int = 0):
     """Roll 2D6 against Leadership (+modifier). Returns ``(passed, roll)``."""
     roll = random.randint(1, 6) + random.randint(1, 6)
@@ -304,8 +319,12 @@ def is_character_unit(unit) -> bool:
 def is_large_target(unit) -> bool:
     """True if *unit* has the Large Target special rule (or is mounted on one)."""
     model = getattr(getattr(unit, 'unit', None), 'model', None)
-    rules = getattr(model, 'special_rules', None) or []
-    return any(isinstance(r, dict) and r.get('large_target') for r in rules)
+    mount = getattr(model, 'get_mount', lambda: None)()
+    rules = list(getattr(model, 'special_rules', None) or [])
+    rules.extend(getattr(mount, 'special_rules', None) or [])
+    return any(isinstance(rule, dict) and (
+        rule.get('large_target') or str(rule.get('name', '')).lower() == 'large target')
+        for rule in rules)
 
 
 def command_range(general) -> float:

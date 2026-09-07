@@ -529,6 +529,18 @@ class model:
             parts.append(self.get_beasts())
         return any(part is not None and part.is_veteran() for part in parts)
 
+    def is_rallying_cry(self) -> bool:
+        """Rallying Cry on the character's split profile (pp. 175, 192, 194)."""
+        if any(isinstance(rule, dict) and rule.get('rallying_cry')
+               for rule in self.special_rules):
+            return True
+        parts = [self.get_mount()]
+        if self.part_count('crew') > 0:
+            parts.append(self.get_crew())
+        if self.part_count('beasts') > 0:
+            parts.append(self.get_beasts())
+        return any(part is not None and part.is_rallying_cry() for part in parts)
+
     def is_stubborn(self) -> bool:
         """True if the model has the Stubborn special rule."""
         return any(isinstance(r, dict) and r.get('stubborn')
