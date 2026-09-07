@@ -31,15 +31,13 @@ class LeadershipTestTests(unittest.TestCase):
             self.assertTrue(2 <= roll <= 12)
             self.assertEqual(passed, roll <= 7)
 
-    def test_always_passes_on_ld12(self):
-        for _ in range(50):
-            passed, _roll = leadership_test(12)
-            self.assertTrue(passed)
+    def test_double_six_fails_even_on_ld12(self):
+        with mock.patch.object(psychology.random, 'randint', return_value=6):
+            self.assertFalse(leadership_test(12)[0])
 
-    def test_always_fails_on_ld1(self):
-        for _ in range(50):
-            passed, _roll = leadership_test(1)  # 2D6 minimum is 2
-            self.assertFalse(passed)
+    def test_double_one_passes_even_on_ld1(self):
+        with mock.patch.object(psychology.random, 'randint', return_value=1):
+            self.assertTrue(leadership_test(1)[0])
 
     def test_modifier_applied(self):
         # Ld 5 with -2 modifier behaves like Ld 3.
@@ -346,17 +344,20 @@ class VenerableTests(unittest.TestCase):
     # ─── the re-roll itself ───────────────────────────────────────────────
 
     def test_reroll_only_on_failure(self):
-        passed, rolls = leadership_test_with_reroll(12, reroll=True)
+        with mock.patch.object(psychology.random, 'randint', return_value=3):
+            passed, rolls = leadership_test_with_reroll(12, reroll=True)
         self.assertTrue(passed)
         self.assertEqual(len(rolls), 1)
 
     def test_reroll_taken_when_failed_and_allowed(self):
-        passed, rolls = leadership_test_with_reroll(1, reroll=True)
-        self.assertFalse(passed)          # 2D6 minimum is 2 — both rolls fail
+        with mock.patch.object(psychology.random, 'randint', return_value=3):
+            passed, rolls = leadership_test_with_reroll(1, reroll=True)
+        self.assertFalse(passed)
         self.assertEqual(len(rolls), 2)
 
     def test_no_reroll_when_not_allowed(self):
-        passed, rolls = leadership_test_with_reroll(1, reroll=False)
+        with mock.patch.object(psychology.random, 'randint', return_value=3):
+            passed, rolls = leadership_test_with_reroll(1, reroll=False)
         self.assertFalse(passed)
         self.assertEqual(len(rolls), 1)
 

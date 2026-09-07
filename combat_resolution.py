@@ -53,7 +53,7 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        rank_bonus, should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
-from psychology import shieldwall_unavailable_reason
+from psychology import shieldwall_unavailable_reason, reroll_leadership, veteran_reroll_allowed
 from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
                          fall_back_roll, fire_and_flee_roll, flee_direction,
                          flee_roll, flees_from,
@@ -1844,6 +1844,7 @@ class CombatResolver:
                   "sum:", sum(ldDice), "Ld:", ld, "combat result diff:", diff,
                   "overwhelmed:", overwhelm)
             outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
+            veteran_reroll_allowed(loserUnit, 'Break', sum(ldDice), ld)
 
             bsb = psy.battle_standard_of(loserUnit) if psy is not None else None
             if bsb is not None:
@@ -2013,6 +2014,8 @@ class CombatResolver:
         if psy is not None:
             ld, _ = psy.leadership_of(winner)
         dice = await self.rollBreakDice()
+        dice = await reroll_leadership(self.game, winner, 'Restraint', dice, ld,
+                          self.rollBreakDice)
         if restraint_test(ld, dice):
             rule_log('Restrain & Reform', winner,
                      f"Restraint test {dice} = {sum(dice)} vs Ld {ld} -> holds "

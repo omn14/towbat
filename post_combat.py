@@ -12,7 +12,7 @@ NodePath belongs in `combat_resolution`.
 import math
 import random
 
-from psychology import GIVE_GROUND
+from psychology import GIVE_GROUND, leadership_passed
 from special_rules import charge_roll
 
 __all__ = [
@@ -224,7 +224,7 @@ def restraint_test(ld: int, dice) -> bool:
     Passing holds the unit where it is and earns a free reform; failing forces
     the follow up or the pursuit whether the player wants it or not.
     """
-    return sum(dice) <= ld
+    return leadership_passed(sum(dice), ld)
 
 
 def may_pursue(still_in_base_contact: bool) -> bool:

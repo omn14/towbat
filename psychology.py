@@ -23,7 +23,7 @@ from direct.interval.FunctionInterval import Func
 
 from special_rules import (board_edge_distance, should_use_swiftstride,
                            unit_has_swiftstride)
-from rules_log import battle_log
+from rules_log import battle_log, rule_log, rule_skipped
 
 
 # ── Oriented-box (footprint) geometry ──────────────────────────────────────
@@ -105,10 +105,102 @@ def active_character(host):
     return joined
 
 
+def veteran_counts(unit, *, personal=False):
+    """Veteran models / total models, not Unit Strength (Rulebook p. 180).
+
+    A character's own test never borrows its host's rules (Official FAQ v1.5.3).
+    Retired characters remain models but confer no benefits (p. 210).
+    """
+    participants = [unit]
+    if not personal:
+        joined = getattr(unit, 'joinedCharacter', None)
+        if joined is not None:
+            participants.append(joined)
+    veterans = total = 0
+    for participant in participants:
+        count = max(0, participant.unit.nmodels)
+        total += count
+        check = getattr(participant.unit.model, 'is_veteran', lambda: False)
+        if check() and (participant is unit or
+                        not getattr(participant, 'retiredFromCombat', False)):
+            veterans += count
+    return veterans, total
+
+
+def veteran_available(unit, *, personal=False):
+    veterans, total = veteran_counts(unit, personal=personal)
+    return total > 0 and veterans * 2 > total
+
+
+def leadership_passed(roll: int, ld: int, modifier: int = 0) -> bool:
+    """Natural 2 passes and natural 12 fails a Leadership test (p. 97)."""
+    return roll == 2 or (roll != 12 and roll <= ld + modifier)
+
+
+def veteran_reroll_allowed(unit, kind, roll, ld, *, personal=False):
+    """Report Veteran's gate only when a test resolves (p. 180, FAQ v1.5.3)."""
+    veterans, total = veteran_counts(unit, personal=personal)
+    host = getattr(unit, 'hostUnit', None)
+    if not veterans:
+        if personal and host is not None and veteran_available(host):
+            rule_skipped('Veteran', unit,
+                         f'{kind}: personal test on own Ld {ld}; cannot borrow the host unit\'s Veteran')
+        return False
+    if kind == 'Break':
+        reason = 'a Break test is not a Leadership test'
+    elif veterans * 2 <= total:
+        reason = f'only {veterans}/{total} models have Veteran; a strict majority is required'
+    elif leadership_passed(roll, ld):
+        reason = f'2D6={roll} vs Ld {ld} already passed; only failures may be re-rolled'
+    else:
+        return True
+    rule_skipped('Veteran', unit, f'{kind}: {reason}')
+    return False
+
+
+async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
+                           other_rule=None, personal=False):
+    """One optional Veteran re-roll, shared with any existing source (p. 180).
+
+    The caller supplies the test's dice roller, not a Break-test outcome.
+    Personal tests must pass the character itself and its own Leadership
+    (Official FAQ v1.5.3). The replacement always stands (Rulebook p. 93).
+    """
+    original = sum(dice)
+    veteran = veteran_reroll_allowed(unit, kind, original, ld, personal=personal)
+    if kind == 'Break' or leadership_passed(original, ld):
+        return dice
+    if not veteran and other_rule is None:
+        return dice
+    if veteran and other_rule is None and not game.aiControls(unit):
+        selected = await game.makeChoiceNew(
+            ['Re-roll', 'Keep'], Vec3(0, 0, 10), owner=unit,
+            prompt=f'{unit.unit.name}: Veteran re-roll failed {kind} test?',
+            detail=f'2D6={original} vs Ld {ld}')
+        if selected != 'Re-roll':
+            rule_skipped('Veteran', unit,
+                         f'{kind}: player keeps failed 2D6={original} vs Ld {ld}')
+            return dice
+    result = await roll_dice()
+    passed = leadership_passed(sum(result), ld)
+    if veteran:
+        veterans, total = veteran_counts(unit, personal=personal)
+        rule_log('Veteran', unit,
+                 f'{kind}: {veterans}/{total} Veteran models; '
+                 f'2D6={original} vs Ld {ld} failed -> re-roll {sum(result)} '
+                 f'({"PASS" if passed else "FAIL"}); no further re-roll'
+                 + (f'; also eligible for {other_rule}' if other_rule else ''))
+    else:
+        rule_log(other_rule, unit,
+                 f'{kind}: failed 2D6={original} vs Ld {ld} -> re-roll {sum(result)} '
+                 f'({"PASS" if passed else "FAIL"})')
+    return result
+
+
 def leadership_test(ld: int, modifier: int = 0):
     """Roll 2D6 against Leadership (+modifier). Returns ``(passed, roll)``."""
     roll = random.randint(1, 6) + random.randint(1, 6)
-    return roll <= (ld + modifier), roll
+    return leadership_passed(roll, ld, modifier), roll
 
 
 def leadership_test_with_reroll(ld: int, modifier: int = 0, reroll: bool = False):
@@ -573,14 +665,35 @@ class PsychologySystem:
         venerable = self.venerable_source(unit)
         bsb = self.battle_standard_of(unit)
         reroll_source = venerable or bsb
-        passed, rolls = leadership_test_with_reroll(ld, reroll=reroll_source is not None)
-        roll = rolls[-1]
-        if len(rolls) > 1:
+        passed, roll = leadership_test(ld)
+        if not passed and veteran_available(unit):
+            other_rule = (f'Venerable: {venerable.unit.name}' if venerable is not None
+                          else f'Hold Your Ground: {bsb.unit.name}' if bsb is not None else None)
+            self.game.taskMgr.add(self._veteran_panic(
+                unit, flee_from, cause, on_done, forced, ld, roll, other_rule))
+            return
+        veteran_reroll_allowed(unit, 'Panic', roll, ld)
+        if not passed and reroll_source is not None:
+            initial = roll
+            passed, roll = leadership_test(ld)
             why = ("Venerable" if venerable is not None
                    else "Hold Your Ground")
             print(f"[Panic] {unit.unit.name} re-rolls a failed Panic test "
                   f"({why}: {reroll_source.unit.name}): "
-                  f"2D6={rolls[0]} -> {rolls[-1]}")
+                  f"2D6={initial} -> {roll}")
+        self._panic_result(unit, flee_from, cause, on_done, forced, ld, passed, roll)
+
+    async def _veteran_panic(self, unit, flee_from, cause, on_done, forced, ld, roll, other_rule):
+        """Keep the Panic queue paused while the owner chooses Veteran (p. 180)."""
+        async def roll_dice():
+            return [random.randint(1, 6), random.randint(1, 6)]
+
+        dice = await reroll_leadership(self.game, unit, 'Panic', [roll], ld, roll_dice,
+                                      other_rule=other_rule)
+        self._panic_result(unit, flee_from, cause, on_done, forced, ld,
+                           leadership_passed(sum(dice), ld), sum(dice))
+
+    def _panic_result(self, unit, flee_from, cause, on_done, forced, ld, passed, roll):
         remaining = unit.unit.nmodels
         start = getattr(unit, 'startOfBattleModels', remaining) or remaining
         pct = 100.0 * remaining / max(1, start)

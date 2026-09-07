@@ -953,23 +953,21 @@ class MyApp(ShowBase):
         return ldDice
 
     async def rallyUnit(self, unit):
-        # Attempts to rally a fleeing unit by testing against its Leadership characteristic and allowing a free reform on success
-        Ld, general = self.psychology.leadership_of(unit)
+        """Rally on Leadership with one eligible re-roll (Rulebook pp. 97, 180)."""
+        from psychology import leadership_passed, reroll_leadership
+
+        leadership, general = self.psychology.leadership_of(unit)
         if general is not None:
             print(f"{unit.unit.name} rallies on the General's Leadership "
-                  f"({general.unit.name}, Ld {Ld}) — Inspiring Presence.")
-        ldDice = await self.rollLeadershipDice()
-        leadership_score = sum(ldDice)
-        print("Leadership dice results for fleeing unit:", ldDice, "sum:", leadership_score,
-              "Ld:", Ld)
-        bsb = self.psychology.battle_standard_of(unit)
-        if leadership_score > Ld and bsb is not None:
-            print(f"{unit.unit.name} re-rolls its failed Rally test "
-                  f"(Hold Your Ground: {bsb.unit.name}).")
-            ldDice = await self.rollLeadershipDice()
-            leadership_score = sum(ldDice)
-            print("Re-rolled Leadership dice:", ldDice, "sum:", leadership_score)
-        if leadership_score <= Ld:
+                  f"({general.unit.name}, Ld {leadership}) - Inspiring Presence.")
+        dice = await self.rollLeadershipDice()
+        standard = self.psychology.battle_standard_of(unit)
+        dice = await reroll_leadership(
+            self, unit, 'Rally', dice, leadership, self.rollLeadershipDice,
+            other_rule=f'Hold Your Ground: {standard.unit.name}' if standard is not None else None)
+        print("Leadership dice results for fleeing unit:", dice, "sum:", sum(dice),
+              "Ld:", leadership)
+        if leadership_passed(sum(dice), leadership):
             print(f"Rallying unit: {unit.unit.name}")
             self.ignore('mouse1')
             self.accept('mouse1', self.giveSignal)

@@ -278,6 +278,13 @@ def _venerable(model, param, desc):
             "venerable": True}
 
 
+def _veteran(model, param, desc):
+    """Majority-model failed Leadership re-rolls, never Break tests (p. 180)."""
+    return {"name": "Veteran", "tag": "psychology", "veteran": True,
+            "description": desc or ('A unit with a majority of Veteran models may '
+                                    're-roll failed Leadership tests, but not Break tests.')}
+
+
 def _stubborn(model, param, desc):
     return {"name": "Stubborn",
             "description": desc or ("The first Break test this unit is required to "
@@ -371,6 +378,7 @@ SPECIAL_RULE_BUILDERS = {
     "hatred": _hatred,
     "fly": _fly,
     "venerable": _venerable,
+    "veteran": _veteran,
     "stubborn": _stubborn,
     "shieldwall": _shieldwall,
     "general": _general,

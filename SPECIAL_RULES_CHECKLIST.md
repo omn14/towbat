@@ -851,7 +851,56 @@ army-agnostic and would benefit every faction.
       Close/Open Order transitions. Old saves cannot recover incoming-charge
       history they never recorded. AI always uses an eligible Shieldwall,
       rather than evaluating whether retreating further would be preferable.
-- [ ] Veteran — Ld / re-roll bonus
+- [x] Veteran (Rulebook p. 180, Official FAQ v1.5.3) — a strict majority of
+      models with Veteran permits one re-roll of a failed Leadership test.
+      It grants no Leadership bonus and never re-rolls a Break test.
+      Sources checked: https://tow.whfb.app/special-rules/veteran,
+      https://tow.whfb.app/model-profiles/leadership-tests (p. 97),
+      https://tow.whfb.app/faq/universal-special-rules, and Split Profile
+      (Cavalry/Chariots), pp. 192/194. The keyword is active in the registry;
+      `model.is_veteran` includes mount and surviving crew/beast profiles.
+      A split-profile model counts once, not once per component or wound.
+      `veteran_counts` counts the regiment's surviving models plus its joined
+      character, not Unit Strength. Ties fail. Casualties change eligibility
+      immediately. A retired character counts as a model but contributes no
+      rule benefit (p. 210). There is no once-per-game limit or spent flag.
+      Shared `reroll_leadership` is wired into Rally, Panic and Restraint.
+      A human may Re-roll or Keep; AI re-rolls automatically. Existing
+      Venerable/BSB re-rolls remain automatic and cannot grant a third roll.
+      The replacement stands even if it fails (p. 93). Panic's queue remains
+      paused until the owner's choice and subsequent movement finish.
+      Actual Break resolution explicitly rejects Veteran, independently of
+      BSB Break re-rolls. Restraint is still eligible even though it uses the
+      physical dice method named `rollBreakDice`.
+      FAQ: a personal character test must pass the character itself, its own
+      Leadership and `personal=True`; an ordinary character cannot borrow
+      its host's Veteran. This does not implement Rallying Cry itself.
+      Correction made along the way: Leadership tests now automatically pass
+      on natural double 1 and fail on natural double 6 (p. 97), including
+      Rally and Restraint. Older tests assuming Ld 1/12 always fail/pass were
+      corrected. Rule logs carry model counts, initial/final rolls and Ld,
+      or explain the failed majority, passed test, Break exclusion, personal
+      test restriction or player's decision to keep the failure.
+      Tests: `tests/test_veteran.py` and `tests/test_veteran_scene.py` cover
+      majority, split profiles, FAQ, single re-roll, live Rally/Restraint/Break
+      methods, queued Panic, actual casualties and real save/load/render.
+      Run `python -m tests.test_veteran_scene` to regenerate
+      `saves/veteran.json` and `screenshots/veteran.png`.
+      Save: Player 1 Strategy phase, AI off. Five fleeing cases left to right:
+      five Veterans; five ordinary models; five Veterans with an ordinary
+      captain (5/6); one Veteran with an ordinary captain (1/2, no majority);
+      and a Veteran captain alone. Select a red unit to attempt Rally.
+      All have test-only Ld 6, with no General/BSB support. A failed test
+      offers Veteran only in cases 1, 3 and 5. Reload to repeat or compare
+      keeping the failure. Dice are not forced; an initial pass needs no
+      re-roll. Complete the existing free reform after a successful Rally.
+      These are test profiles, not a legal army list.
+      LEFTOVER: Fear, Terror, Rallying Cry and other not-yet-implemented
+      Leadership-test causes must call the shared re-roll flow when added.
+      No new test causes or general Leadership-source rules are implemented
+      here. Majority counts use the existing homogeneous regiment profile
+      plus one joined character; arbitrary mixed-model regiments are not
+      represented. AI does not evaluate reasons to keep a failed test.
 - [ ] Rallying Cry — 
 - [ ] Close Order / Open Order / Dispersed Formation — formation modes
 - [ ] Detachment — list-building support (may not need a runtime effect)
@@ -865,7 +914,7 @@ army-agnostic and would benefit every faction.
 - [x] Venerable — DONE: friendly units within 6" of a Venerable unit (edge to
       edge, the same bubble as nearby-friend Panic) re-roll failed Panic tests.
       The Venerable unit benefits itself; a fleeing one inspires nobody. See
-      `PsychologySystem.venerable_source` / `leadership_test_with_reroll` in
+      `PsychologySystem.venerable_source` / `_resolve_panic` in
       `psychology.py`.
 - [ ] Runes of Warding — 5+ ward vs Flaming Attacks
 - [ ] Rune Lore — may attempt a Wizardly Dispel
