@@ -99,6 +99,8 @@ class unitGraphics(FSM):
         self.standAndShootWounds=0   # counts towards the combat that follows (p. 151)
         self.attemptedRallyThisTurn=False
         self.chargedThisTurn=False   # set when charging into combat; grants the charge bonus this turn
+        self.wasChargedThisTurn=False
+        self.countsAsChargeTargetNextTurn=False
         self.countsAsChargedNextTurn=False  # caught a unit that fell back; the locked combat is fought next turn
         self.cannotPursueThisTurn=False  # joined a new combat mid-phase; restrains and reforms instead (p. 157)
         self.chargeDistance=0.0      # inches actually covered by that charge (Impact Hits need 3"+)
@@ -110,6 +112,7 @@ class unitGraphics(FSM):
         self.panicTestedThisPhase=False  # one Panic test per phase (No Need for Hysterics)
         self.fledThisPhase=False         # one flee move per phase (The Limits of Endurance)
         self.usedStubborn=False      # Stubborn may refuse only the FIRST Break test of the battle
+        self.usedShieldwall=False
         self.isDisrupted=False       # a quarter or more of the models in difficult terrain: no Rank Bonus
         self.spellsCastThisTurn=[]   # a Wizard may attempt each spell once, and only Level of them
         self.boundSpellPhases=[]    # one Bound attempt per phase, independent of Wizard slots (p. 109)

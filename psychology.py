@@ -332,6 +332,31 @@ def stubborn_available(unit) -> bool:
     return is_stubborn_unit(unit) and not getattr(unit, 'usedStubborn', False)
 
 
+def shieldwall_unavailable_reason(unit, *, check_weapon=True):
+    """Shieldwall eligibility at the Break-test result (Rulebook pp. 100, 177).
+
+    A single surviving model retains Close Order (Official FAQ v1.5.3).
+    Forming Skirmishers up for combat does not change their formation type.
+    """
+    model = unit.unit.model
+    if not getattr(model, 'is_shieldwall', lambda: False)():
+        return 'the unit does not have Shieldwall'
+    if getattr(unit, 'usedShieldwall', False):
+        return 'already used its once-per-game Shieldwall'
+    if not getattr(unit, 'wasChargedThisTurn', False):
+        return 'was not charged this turn'
+    close_order = any(str(rule.get('name', '')).strip().lower() == 'close order'
+                      for rule in model.special_rules if isinstance(rule, dict))
+    if is_skirmish_unit(unit) or not close_order:
+        return 'not arrayed in Close Order'
+    if not model.has_shield():
+        return 'not equipped with shields'
+    if check_weapon and model.melee_weapon_requires_two_hands():
+        weapon = model.equipedWeapon.get('name', 'active weapon')
+        return f'using {weapon}, which Requires Two Hands, instead of shields'
+    return None
+
+
 MAX_RANK_BONUS = 2
 # The rules are written around regular infantry, so that is the fallback for a
 # troop type the table does not know.

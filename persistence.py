@@ -178,6 +178,9 @@ def save_game_state(game, filename=None):
             'panicTestedThisPhase': getattr(unit, 'panicTestedThisPhase', False),
             'fledThisPhase': getattr(unit, 'fledThisPhase', False),
             'usedStubborn': getattr(unit, 'usedStubborn', False),
+            'usedShieldwall': getattr(unit, 'usedShieldwall', False),
+            'wasChargedThisTurn': getattr(unit, 'wasChargedThisTurn', False),
+            'countsAsChargeTargetNextTurn': getattr(unit, 'countsAsChargeTargetNextTurn', False),
             'spellsCastThisTurn': list(getattr(unit, 'spellsCastThisTurn', [])),
             'boundSpellPhases': list(getattr(unit, 'boundSpellPhases', [])),
             'cannotCastThisTurn': getattr(unit, 'cannotCastThisTurn', False),
@@ -435,6 +438,9 @@ def load_game_state(game, filename):
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)
         unit.fledThisPhase = unit_data.get('fledThisPhase', False)
         unit.usedStubborn = unit_data.get('usedStubborn', False)
+        unit.usedShieldwall = unit_data.get('usedShieldwall', False)
+        unit.wasChargedThisTurn = unit_data.get('wasChargedThisTurn', False)
+        unit.countsAsChargeTargetNextTurn = unit_data.get('countsAsChargeTargetNextTurn', False)
         # A spell attempted after the save was taken has not been attempted in
         # the state being loaded, so the allowance has to come back with it.
         unit.spellsCastThisTurn = list(unit_data.get('spellsCastThisTurn', []))

@@ -30,6 +30,7 @@ TURN_FLAGS = (
     'usedStubborn', 'isDisrupted', 'woundsOnModel', 'spellsCastThisTurn',
     'cannotCastThisTurn', 'cannotPursueThisTurn', 'moveSpentThisTurn',
     'manoeuvreThisTurn', 'redressDelta', 'marchedThisTurn',
+    'usedShieldwall', 'wasChargedThisTurn', 'countsAsChargeTargetNextTurn',
 )
 
 

@@ -522,6 +522,11 @@ class model:
         return any(isinstance(r, dict) and r.get('stubborn')
                    for r in self.special_rules)
 
+    def is_shieldwall(self) -> bool:
+        """Shieldwall belongs to this unit's profile (Rulebook p. 177)."""
+        return any(isinstance(rule, dict) and rule.get('shieldwall')
+                   for rule in self.special_rules)
+
     def is_general(self) -> bool:
         """True if the army list nominates this model as the General."""
         return any(isinstance(r, dict) and r.get('general')
@@ -577,8 +582,9 @@ class model:
         w = self.equipedWeapon
         if not w or w.get('tag') == 'ranged':
             return False
-        return any('requires two hands' in str(r).lower()
-                   for r in (w.get('special_rules') or []))
+        return any(text in str(rule).lower()
+               for rule in (w.get('special_rules') or [])
+               for text in ('requires two hands', 'require two hands'))
 
     def has_shield(self) -> bool:
         return any(str(a).strip().lower() == 'shield' for a in (self.armour or []))

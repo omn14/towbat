@@ -791,7 +791,66 @@ army-agnostic and would benefit every faction.
       rank-and-file and joined characters. Narrow features and edge-only
       contact can be missed. Optional beneficial re-rolls are automatically
       taken, consistent with the existing automatic Dangerous Terrain roller.
-- [ ] Shieldwall — defensive bonus vs charges
+- [x] Shieldwall (Rulebook p. 177) — once per game, a unit charged this turn,
+      in Close Order and using shields, may Give Ground instead of Falling
+      Back in Good Order. It is not an armour or combat-result bonus.
+      Sources checked: https://tow.whfb.app/special-rules/shieldwall,
+      https://tow.whfb.app/forming-units/close-order-formation (p. 100),
+      https://tow.whfb.app/movement-in-detail/give-ground and
+      https://tow.whfb.app/movement-in-detail/fall-back-in-good-order (p. 134),
+      plus Official FAQ v1.5.3 at https://tow.whfb.app/faq. A single survivor
+      retains Close Order; no minimum rank bonus, frontage or Unit Strength
+      is required. Disruption does not prevent Shieldwall.
+      Registry keyword and model predicate feed `shieldwall_unavailable_reason`
+      and `CombatResolver.shieldwallOutcome`. The defending player may spend
+      or retain the rule after the final Break roll, including a BSB re-roll,
+      or after choosing Stubborn's automatic Fall Back. A Break (including
+      an overwhelmed result) cannot be converted. Stubborn followed by
+      Shieldwall spends both rules. Giving Ground does not trigger flee Panic,
+      roll flee dice or mark the unit as having fled; the existing 2-inch
+      Give Ground / Follow Up movement, collision and Surrounded rules apply.
+      Shields must be equipped and usable with the chosen melee weapon.
+      An eligible unit auto-equipped with a two-handed weapon gets a choice
+      of keeping it or using hand weapon and shield BEFORE attacks. Choosing
+      shields does not itself spend Shieldwall. AI chooses shields and spends
+      the rule on an eligible Fall Back result. Unit-level checks do not grant
+      an ordinary regiment Shieldwall merely because a character has it.
+      `wasChargedThisTurn` records successful incoming charges independently
+      of the unit's own charge bonuses; failed charges do not set it. Pursuit
+      and overrun contacts carry `countsAsChargeTargetNextTurn` when their
+      combat is deferred, matching the charger's existing next-turn flag.
+      Both flags and `usedShieldwall` survive save/load. Turn end clears or
+      promotes charge history but never refunds Shieldwall. Old saves default
+      to unused Shieldwall and no recorded incoming charge.
+      Effect and skipped logs explain the outcome, spent use, missing charge,
+      formation, missing shields, two-handed weapon or player decision.
+      Corrections made while implementing: Stubborn's early return bypassed
+      ordinary Break-result processing; the defender was always auto-equipped
+      with its strongest melee weapon; and the catalogue's Additional Hand
+      Weapon uses "Require Two Hands" rather than "Requires Two Hands".
+      The shield-use predicate now accepts both spellings (also fixing its
+      shield armour-save check).
+      Tests: `tests/test_shieldwall.py`, `tests/test_shieldwall_scene.py`, and
+      persistence flag coverage. Real offscreen combats verify shield choice,
+      Stubborn + Shieldwall, no flee Panic and paired 2-inch movement. Charge,
+      pursuit and overrun handlers, legacy saves and spent-state reloads are
+      exercised. Run `python -m tests.test_shieldwall_scene` to regenerate
+      `saves/shieldwall.json` and `screenshots/shieldwall.png`.
+      Save: Player 2 Combat phase, AI off. Three pairs left to right: ready
+      Shieldwall, already-spent Shieldwall, and a great-weapon/shield choice.
+      Select a blue Charger, resolve combat, then choose Stand Firm for the
+      red defender; choose Shieldwall when offered. Choose Follow up to watch
+      both sides move 2 inches. All profiles have test-only A0: red defenders
+      have one rank of five (no second-rank Press of Battle attacks), blue
+      units two ranks of five, ensuring the defenders lose without random
+      casualties. Stubborn is also granted for repeatable results. Reload to
+      compare keeping Shieldwall or keeping the great weapon. Not a legal list.
+      LEFTOVER: formation switching is still unimplemented: Shieldwall uses
+      the Close Order keyword and excludes Skirmishers (even when formed up
+      for combat); Open Order-only units cannot use it. It does not introduce
+      Close/Open Order transitions. Old saves cannot recover incoming-charge
+      history they never recorded. AI always uses an eligible Shieldwall,
+      rather than evaluating whether retreating further would be preferable.
 - [ ] Veteran — Ld / re-roll bonus
 - [ ] Rallying Cry — 
 - [ ] Close Order / Open Order / Dispersed Formation — formation modes

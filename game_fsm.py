@@ -302,6 +302,8 @@ class GamePhaseFSM(FSM):
             # the turn that locked combat is fought, which is the next one.
             unit.chargedThisTurn = unit.countsAsChargedNextTurn
             unit.countsAsChargedNextTurn = False
+            unit.wasChargedThisTurn = getattr(unit, 'countsAsChargeTargetNextTurn', False)
+            unit.countsAsChargeTargetNextTurn = False
             if not unit.chargedThisTurn:
                 unit.chargeDistance = 0.0
             unit.cannotPursueThisTurn = False

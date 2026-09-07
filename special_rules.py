@@ -287,6 +287,14 @@ def _stubborn(model, param, desc):
             "stubborn": True}
 
 
+def _shieldwall(model, param, desc):
+    """Once-per-game Give Ground instead of Falling Back (Rulebook p. 177)."""
+    return {"name": "Shieldwall", "tag": "psychology", "shieldwall": True,
+            "description": desc or ('Once per game, when charged in Close Order '
+                                    'and using shields, may Give Ground instead '
+                                    'of Falling Back in Good Order.')}
+
+
 def _general(model, param, desc):
     # Marks the army commander; Inspiring Presence is applied from the unit.
     return {"name": "General",
@@ -364,6 +372,7 @@ SPECIAL_RULE_BUILDERS = {
     "fly": _fly,
     "venerable": _venerable,
     "stubborn": _stubborn,
+    "shieldwall": _shieldwall,
     "general": _general,
     "battle standard bearer": _battle_standard,
     "swiftstride": _swiftstride,

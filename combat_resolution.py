@@ -53,6 +53,7 @@ from psychology import (MAX_RANK_BONUS, battle_standard_bonus, break_test_outcom
                        rank_bonus, should_reroll_break, should_use_stubborn,
                        side_unit_strength, stubborn_available,
                        unit_strength_total)
+from psychology import shieldwall_unavailable_reason
 from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
                          fall_back_roll, fire_and_flee_roll, flee_direction,
                          flee_roll, flees_from,
@@ -814,6 +815,7 @@ class CombatResolver:
         unit.isInCombat = True
         unit.chargedThisTurn = True
         # Impact Hits need to know the charge covered 3" or more (p. 172).
+        defenderUnit.wasChargedThisTurn = True
         unit.chargeDistance = float(self.game.moveArceDistance)
         if wasPursuing:
             joins, whyNot = (self.joinsCombatThisPhase(defenderUnit) if strayed
@@ -838,12 +840,14 @@ class CombatResolver:
                 # cleared at the end of this phase, so the claim has to be
                 # carried over separately.
                 unit.countsAsChargedNextTurn = True
+                defenderUnit.countsAsChargeTargetNextTurn = True
                 rule_log('Pursuit into a Fresh Enemy', unit,
                          f"ran into {defenderUnit.unit.name}'s {flank} instead: "
                          f"locked together and fought next turn, counting as "
                          f"charged, because {whyNot}{escaped}")
             else:
                 unit.countsAsChargedNextTurn = True
+                defenderUnit.countsAsChargeTargetNextTurn = True
                 rule_log('Catching the Curs!', unit,
                          f"caught {defenderUnit.unit.name}, which fell back: "
                          f"locked together, and counts as charging next turn")
@@ -940,6 +944,7 @@ class CombatResolver:
         unit.isInCombat = True
         unit.chargedThisTurn = True
         unit.chargeDistance = float(travel)
+        defenderUnit.wasChargedThisTurn = True
         self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
@@ -1507,6 +1512,8 @@ class CombatResolver:
         for unit in defenderUnit.isInCombatWith:
             self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
             self.game.defenders.append(defenderUnit)
+        for unit in dict.fromkeys(self.game.attackers + self.game.defenders):
+            await self.shieldwallWeaponChoice(unit)
         # Snapshot each unit's model count at the start of combat so that
         # casualties inflicted earlier this round (e.g. by a charger striking
         # first) thin the fighting ranks of a unit that strikes back.
@@ -1826,8 +1833,10 @@ class CombatResolver:
                     loserUnit.usedStubborn = True
                     print(f"{loserUnit.unit.name} is Stubborn and refuses its Break "
                           f"test — Falls Back in Good Order.")
-                    self.notifyFleesCombat(loserUnit)
-                    outcomes.append((loserUnit, 'fall_back'))
+                    outcome = await self.shieldwallOutcome(loserUnit, 'fall_back')
+                    if outcome == 'fall_back':
+                        self.notifyFleesCombat(loserUnit)
+                    outcomes.append((loserUnit, outcome))
                     continue
 
             ldDice = await self.rollBreakDice()
@@ -1856,6 +1865,7 @@ class CombatResolver:
                           f"(Hold Your Ground: {bsb.unit.name}): {ldDice} "
                           f"sum {sum(ldDice)} -> {outcome}")
 
+            outcome = await self.shieldwallOutcome(loserUnit, outcome)
             if outcome in ('break', 'fall_back'):
                 print("losing unit flees from combat!" if outcome == 'break'
                       else "losing unit FBIG!")
@@ -1866,6 +1876,62 @@ class CombatResolver:
         return outcomes
 
     # ─── Post-Combat: pass 2, the winners declare ─────────────────────────
+
+    async def shieldwallWeaponChoice(self, unit):
+        """Choose shields before fighting, never after seeing the result (p. 177)."""
+        model = unit.unit.model
+        if shieldwall_unavailable_reason(unit, check_weapon=False) is not None:
+            return
+        if not model.melee_weapon_requires_two_hands():
+            return
+        weapon = model.equipedWeapon['name']
+        shields = 'Hand weapon & shield'
+        choice = shields if self.game.aiControls(unit) else await taskMgr.add(
+            self.game.makeChoiceNew(
+                [shields, weapon], Vec3(0, 0, 10), owner=unit,
+                prompt=f'{unit.unit.name}: shields or {weapon}?'))
+        if choice == shields:
+            model.equip_weapon('hand weapon')
+            rule_log('Shieldwall', unit,
+                     f'chooses hand weapon and shield instead of {weapon} before fighting; '
+                     'once-per-game use remains available')
+        else:
+            rule_skipped('Shieldwall', unit,
+                         f'chooses {weapon} instead of shields for this combat')
+
+    async def shieldwallOutcome(self, unit, outcome):
+        """Optional Shieldwall after Stubborn or the final Break roll (p. 177).
+
+        Resolve before flee notifications: Giving Ground does not cause Panic.
+        A Break, including one caused by overwhelming Unit Strength, is not a
+        Fall Back in Good Order result and cannot be replaced.
+        """
+        if not getattr(unit.unit.model, 'is_shieldwall', lambda: False)():
+            return outcome
+        if outcome != 'fall_back':
+            rule_skipped('Shieldwall', unit,
+                         f'result is {outcome.replace("_", " ")}, not Fall Back in Good Order')
+            return outcome
+        reason = shieldwall_unavailable_reason(unit)
+        if reason is not None:
+            rule_skipped('Shieldwall', unit, f'{reason}; Falls Back in Good Order')
+            return outcome
+        use_shieldwall = self.game.aiControls(unit)
+        if not use_shieldwall:
+            choices = ['Shieldwall', 'Fall Back in Good Order']
+            selected = await taskMgr.add(self.game.makeChoiceNew(
+                choices, Vec3(0, 0, 10), owner=unit,
+                prompt=f'{unit.unit.name}: spend Shieldwall to Give Ground?'))
+            use_shieldwall = selected == choices[0]
+        if not use_shieldwall:
+            rule_skipped('Shieldwall', unit,
+                         'player keeps its once-per-game use; Falls Back in Good Order')
+            return outcome
+        unit.usedShieldwall = True
+        rule_log('Shieldwall', unit,
+                 'charged this turn, in Close Order and using shields; '
+                 'spends its once-per-game use: Fall Back in Good Order -> Give Ground 2"')
+        return 'give_ground'
 
     def stillEngaged(self, unit, exclude=None):
         """Still Engaged (p. 156): base contact with any enemy other than the
@@ -2056,6 +2122,7 @@ class CombatResolver:
         if blocker.state != "InCombat":
             blocker.request("InCombat")
         blocker.isInCombat = True
+        blocker.wasChargedThisTurn = True
         winner.isInCombatWith.append(blocker)
         winner.isInCombatFlank.append("front")
         blocker.isInCombatWith.append(winner)
@@ -2082,6 +2149,7 @@ class CombatResolver:
                      f"charged, and may not pursue again")
         else:
             winner.countsAsChargedNextTurn = True
+            blocker.countsAsChargeTargetNextTurn = True
             rule_log('Pursuit into a Fresh Enemy', winner,
                      f"overran into {blocker.unit.name}'s {flank}, wheeling to "
                      f"align: locked together and fought next turn, counting "
