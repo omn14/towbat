@@ -86,6 +86,10 @@ class ClassAI:
         return
     
     def deployUnits(self):
+        from vanguard import in_vanguard, refresh_vanguard
+        if in_vanguard(self.game):
+            refresh_vanguard(self.game)
+            return
         from scouts import deployment_candidates
         for unit in deployment_candidates(self.game, self.game.roundCounter.current_player):
             self.game.unitToMove=unit

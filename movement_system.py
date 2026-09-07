@@ -11,6 +11,9 @@ from collision_masks import CollisionMask as CM
 from characters import on_host_removed, same_player
 from rules_log import rule_log, rule_skipped
 from special_rules import max_charge_range, unit_has_swiftstride
+from vanguard import (commit_vanguard_move, in_vanguard, record_vanguard_move,
+                      vanguard_charge_blocked, vanguard_flying, vanguard_movement,
+                      vanguard_position_error)
 from terrain_system import dangerous_terrain_wounds, is_disrupted
 from toHitAndToWound import stat_value
 
@@ -300,6 +303,23 @@ class MovementSystem:
         quarternion = LQuaterniond()
         quarternion.set_from_axis_angle(rotationangle, LVector3d(0,0,1))
         behind= quarternion.getForward().dot(LVector3d(midpoint_mouse_vector.normalized().x, midpoint_mouse_vector.normalized().y,0))
+        if in_vanguard(self.game) and behind < 0:
+            forward = Vec2(quarternion.getForward().x, quarternion.getForward().y)
+            right = Vec2(quarternion.getRight().x, quarternion.getRight().y)
+            centre = midpoint - forward * (height / 2)
+            requested = raw_mouse_pos - centre
+            if abs(behind) > 0.8:
+                displacement = -forward * min(sidemove, max(0, -requested.dot(forward)))
+            else:
+                displacement = right * max(-sidemove, min(sidemove, requested.dot(right)))
+            points = [origo, origo + right * width,
+                      origo + right * width + displacement, origo + displacement]
+            self.game.arcPoint = midpoint + displacement
+            self.game.arcPointRotation = 0.0
+            self.game.moveArceDistance = displacement.length() * 100
+            self.game.numsPoints = len(points)
+            points.extend([points[-1]] * max(0, num_points + 3 - len(points)))
+            return points
         nums=0
         if behind < 0 and abs(behind) > 0.8:
             if abs(behind) > 0.8:
@@ -377,6 +397,14 @@ class MovementSystem:
                 if width * angle >= movedistance:
                     break
 
+            if in_vanguard(self.game) and width > 0 and angle * width > movedistance:
+                angle = movedistance / width
+                points[-1] = self.rotatePoint(
+                    origo + Vec2(width * math.cos(angle), width * math.sin(angle)),
+                    rotationangle, origo=origo)
+                vector = points[-1] - origo
+                pointmid = origo + vector * .5
+                vectormouse = mouse_pos - pointmid if mouse_pos else Vec2(1, 1)
             movedistance = min(movedistance, vectormouse.length()+angle*width)
             if movedistance - angle*width > 0:
                 movedistance -= angle*width
@@ -598,6 +626,9 @@ class MovementSystem:
         its own centre line, which is what the FAQ's "as equally as possible on
         either side" amounts to once the models are interchangeable.
         """
+        if in_vanguard(self.game) and unit.unitName != self.game.vanguardActive:
+            rule_skipped('Vanguard', unit, 'choose this unit for Vanguard before manoeuvring')
+            return False
         if getattr(unit, 'isSkirmisher', False):
             rule_skipped('Redress the Ranks', unit,
                          "skirmishers fight in a loose blob and have no ranks")
@@ -632,6 +663,8 @@ class MovementSystem:
 
         m = unit.unit.model
         M = m.get_fly_movement(0) if m.is_flying() else m.get_movement(0)
+        if in_vanguard(self.game):
+            M = vanguard_movement(unit)
         cost = M / 2.0
         first = unit.manoeuvreThisTurn is None
 
@@ -650,17 +683,22 @@ class MovementSystem:
             unit.bodyNP.setPos(front - forward * (unit.unitHeight / 2.0))
 
         reshape(new_files, new_ranks)
-        if self.game.checkUnitContactSmall(unit) is not None:
+        position_error = vanguard_position_error(self.game, unit) if in_vanguard(self.game) else None
+        if self.game.checkUnitContactSmall(unit) is not None or position_error:
             reshape(old_files, old_ranks)
             unit.bodyNP.setPos(old_pos)
             rule_skipped('Redress the Ranks', unit,
-                         f"a {new_files}-model front rank does not fit here")
+                         position_error or f"a {new_files}-model front rank does not fit here")
             return False
 
         if first:
             unit.moveSpentThisTurn += cost
             unit.manoeuvreThisTurn = 'Redress the Ranks'
         unit.redressDelta += delta
+        if in_vanguard(self.game):
+            record_vanguard_move(unit)
+            if first:
+                rule_log('Vanguard', unit, f'redressing uses {cost:g}" of M{M:g}; first-own-turn charges now barred')
         self.updateDisrupted(unit)
         unit.updateTextNode()
         rule_log('Redress the Ranks', unit,
@@ -670,9 +708,9 @@ class MovementSystem:
         return True
 
     def pathTowardsMouse(self,unit,x=None,y=None):
-        if not base.mouseWatcherNode.hasMouse():
+        if x is None and y is None and (base.mouseWatcherNode is None or not base.mouseWatcherNode.hasMouse()):
             return
-        if base.mouseWatcherNode.hasMouse() and x is None and y is None:
+        if x is None and y is None:
             self.game.unitToMove=unit
             x = base.mouseWatcherNode.getMouseX()
             y = base.mouseWatcherNode.getMouseY()
@@ -703,6 +741,10 @@ class MovementSystem:
 
             result = self.game.world.rayTestClosest(pFrom, pTo, BitMask32.bit(1))
 
+            if in_vanguard(self.game) and not result.hasHit():
+                self.game.arcPoint = None
+                self.game.setGroundOverlay(False)
+                return
             # Skirmishers move as a loose group: free 360° translation, no wheel.
             if getattr(unit, 'isSkirmisher', False) and result.hasHit():
                 self._skirmishMovePreview(unit, result.getHitPos())
@@ -779,6 +821,9 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
+            if in_vanguard(self.game):
+                M = vanguard_movement(unit)
+                _flying = vanguard_flying(unit)
             # ── Terrain penalty ── (flyers pass over terrain freely)
             terrainMod = 0
             if not _flying and result.hasHit():
@@ -787,7 +832,7 @@ class MovementSystem:
             M = max(1, M + terrainMod)
             # This arc is the one kept when the path runs into a unit, so it is
             # the charge-declaration range rather than a march.
-            move = max_charge_range(M, unit_has_swiftstride(unit))
+            move = M if in_vanguard(self.game) else max_charge_range(M, unit_has_swiftstride(unit))
             move = max(0.0, move - unit.moveSpentThisTurn)
             if unit.state == "IsPursuing":
                 move = 21
@@ -865,11 +910,14 @@ class MovementSystem:
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
             M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
+            if in_vanguard(self.game):
+                M = vanguard_movement(unit)
+                _flying = vanguard_flying(unit)
             M = max(1, M + terrainMod)   # difficult terrain: -1 Movement, min 1
             _mod = modifyerM if _model.is_mounted() else modifyer
             # A march doubles Movement (p. 123); the first M is an ordinary move
             # that leaves the unit free to shoot.
-            march = M * 2 * _mod
+            march = M * (1 if in_vanguard(self.game) else 2) * _mod
             move = max(0.0, march - unit.moveSpentThisTurn)
             # Move Sideways is itself a manoeuvre (p. 124), and a marching unit
             # may only wheel.
@@ -877,7 +925,8 @@ class MovementSystem:
             if unit.state == "IsPursuing":
                 move = 21
 
-            move = int(move)
+            if not in_vanguard(self.game):
+                move = int(move)
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
             for rule in self.game.unitToMove.unit.model.special_rules:
@@ -933,7 +982,7 @@ class MovementSystem:
             # Marching is judged on the arc distance the cursor has actually
             # reached, wheel included, so the tint changes before the click.
             # A pursuit is a compulsory post-combat move, not a march.
-            marching = (unit.state != "IsPursuing"
+            marching = (not in_vanguard(self.game) and unit.state != "IsPursuing"
                         and is_march(self.game.moveArceDistance, march / 2.0,
                                      unit.moveSpentThisTurn))
             unit.wouldMarch = marching
@@ -1022,9 +1071,15 @@ class MovementSystem:
         half = abs(self.game.ground.getTightBounds()[0][0]) or 50.0
         cur = unit.bodyNP.getPos()
         _model = unit.unit.model
+        flying = vanguard_flying(unit) if in_vanguard(self.game) else _model.is_flying()
         # Flyers use their Fly Movement characteristic instead of M.
         m = _model.get_fly_movement(0) if _model.is_flying() else _model.get_movement(0)
         maxmove = 21.0 if unit.state == "IsPursuing" else m * 2.0
+        if in_vanguard(self.game):
+            allowance = vanguard_movement(unit)
+            if not flying:
+                allowance = max(1.0, allowance + self.pathTerrainModifier(unit, cur, target))
+            maxmove = max(0.0, allowance - unit.moveSpentThisTurn)
 
         d = Vec3(target.x - cur.x, target.y - cur.y, 0)
         dist = d.length()
@@ -1035,7 +1090,7 @@ class MovementSystem:
         # Non-flyers always stop at a blocking body.  Flyers pass over units,
         # but if the preview lands on top of a unit it becomes a charge, so we
         # sweep to stop against that unit and let moveUnit set up the charge.
-        if not _model.is_flying() or self._destOnUnit(unit, endp):
+        if not flying or self._destOnUnit(unit, endp):
             frac, _hit = self.sweepTestDir(unit, unit.bodyNP.getTransform(),
                                            dirn, clamped, pass_over=False)
             if frac < 1.0:
@@ -1050,7 +1105,7 @@ class MovementSystem:
         self.game.moveArceDistance = clamped
 
         # Circular move-range indicator centred on the unit.
-        marching = (unit.state != "IsPursuing"
+        marching = (not in_vanguard(self.game) and unit.state != "IsPursuing"
                     and is_march(clamped, maxmove / 2.0))
         unit.wouldMarch = marching
         self.game.polygonpoints = self.shootingArc(
@@ -1068,6 +1123,8 @@ class MovementSystem:
 
     def moveUnit(self, unit):
         from scouts import scout_charge_blocked
+        if in_vanguard(self.game):
+            return commit_vanguard_move(self.game, unit)
         if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
             taskMgr.remove("taskLoopPathTowardsMouse")
         # Clear the skirmisher destination ghost once the move is committed.
@@ -1108,9 +1165,11 @@ class MovementSystem:
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
             defenderUnit=self.game.getSelectedUnit(defenderNP.node())
 
+            pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
+                            'Vanguard' if vanguard_charge_blocked(self.game, unit) else None)
             if (unit.state != 'IsPursuing' and not same_player(self.game, unit, defenderUnit)
-                    and scout_charge_blocked(self.game, unit)):
-                rule_log('Scouts', unit, 'first own turn: charge declaration refused; movement restored')
+                    and pregame_rule):
+                rule_log(pregame_rule, unit, 'first own turn: charge declaration refused; movement restored')
                 unit.bodyNP.setPos(oposUnit)
                 unit.bodyNP.setHpr(orotUnit)
                 unit.bodyNP.node().setTransformDirty()
@@ -1374,7 +1433,7 @@ class MovementSystem:
         if mask is None:
             mask = CM.MOVE_BLOCKERS
         if pass_over is None:
-            pass_over = unit.unit.model.is_flying()
+            pass_over = vanguard_flying(unit) if in_vanguard(self.game) else unit.unit.model.is_flying()
         if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
         startPos=unit.bodyNP.getPos()
@@ -1415,7 +1474,7 @@ class MovementSystem:
         if mask is None:
             mask = CM.MOVE_BLOCKERS
         if pass_over is None:
-            pass_over = unit.unit.model.is_flying()
+            pass_over = vanguard_flying(unit) if in_vanguard(self.game) else unit.unit.model.is_flying()
         if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
         

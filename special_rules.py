@@ -328,9 +328,16 @@ def _scouts(model, param, desc):
             "tag": "deployment", "scouts": True}
 
 
+def _vanguard(model, param, desc):
+    """An optional Basic Movement move after deployment, without marching (p. 180)."""
+    return {"name": "Vanguard", "description": desc or "May move after deployment.",
+            "tag": "deployment", "vanguard": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "scouts": _scouts,
+    "vanguard": _vanguard,
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
     "magic resistance": _magic_resistance,

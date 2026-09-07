@@ -12,7 +12,7 @@ BOARD_HALF_WIDTH = 36.0
 BOARD_HALF_DEPTH = 24.0
 
 
-def has_scouts(unit):
+def has_deployment_rule(unit, flag):
     # Split-profile grants apply to the whole model (pp. 192, 194, 204),
     # unlike a joined character, who must qualify separately.
     pending, seen, own = [unit], set(), False
@@ -25,14 +25,19 @@ def has_scouts(unit):
         for rule in getattr(profile, 'special_rules', []):
             if not isinstance(rule, dict):
                 continue
-            own = own or bool(rule.get('scouts'))
+            own = own or bool(rule.get(flag))
             if rule.get('tag') == 'mount' and rule.get('mountUnit') is not None:
                 pending.append(rule['mountUnit'])
             if (rule.get('tag') in ('crew', 'beasts') and rule.get('partUnit') is not None
                     and rule.get('count', 1) > 0):
                 pending.append(rule['partUnit'])
+    return own
+
+
+def has_scouts(unit):
     joined = getattr(unit, 'joinedCharacter', None)
-    return bool(own and (joined is None or has_scouts(joined)))
+    return bool(has_deployment_rule(unit, 'scouts')
+                and (joined is None or has_scouts(joined)))
 
 
 def scout_charge_blocked(game, unit):
@@ -93,7 +98,7 @@ def nearest_enemy(game, unit, boxes=None):
     return best, enemy
 
 
-def placement_error(game, unit, *, scouting=False, ignore=None):
+def placement_error(game, unit, *, scouting=False, ignore=None, deployment_zone=True):
     """A quiet preview/drop validator; the caller logs only a refused drop.
 
     The own-zone exception sometimes assumed for Scouts does NOT exist (FAQ).
@@ -110,7 +115,7 @@ def placement_error(game, unit, *, scouting=False, ignore=None):
         for x, y in _box_corners(*box):
             if abs(x) > BOARD_HALF_WIDTH or abs(y) > BOARD_HALF_DEPTH:
                 return 'Every model base must be completely on the battlefield.'
-            if not scouting and not ymin <= y <= ymax:
+            if deployment_zone and not scouting and not ymin <= y <= ymax:
                 return 'Every model base must be completely inside its deployment zone.'
 
     if scouting:

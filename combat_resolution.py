@@ -61,6 +61,7 @@ from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
                          turn_direction, winner_response)
 from rules_log import rule_log, rule_skipped, battle_log
 from scouts import scout_charge_blocked
+from vanguard import in_vanguard, vanguard_charge_blocked
 
 # The Swiftstride die is thrown in its own colour so it is never mistaken for
 # one of the dice a Charge or Fall Back roll discards between.
@@ -205,8 +206,10 @@ class CombatResolver:
             defender.unit.model.equip_weapon(previous)
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
-        if unit.state != 'IsPursuing' and scout_charge_blocked(self.game, unit):
-            rule_log('Scouts', unit, 'first own turn: charge declaration refused; no reaction or dice rolled')
+        pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
+                        'Vanguard' if in_vanguard(self.game) or vanguard_charge_blocked(self.game, unit) else None)
+        if unit.state != 'IsPursuing' and pregame_rule:
+            rule_log(pregame_rule, unit, 'charge declaration refused before reactions or dice: pre-game move or first own turn')
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
             unit.bodyNP.node().setTransformDirty()

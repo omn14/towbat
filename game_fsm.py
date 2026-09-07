@@ -75,10 +75,16 @@ class GamePhaseFSM(FSM):
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
         if self.state == 'DeployPhase':
+            if getattr(self.game, 'awaitingChoice', False):
+                return
+            from vanguard import begin_vanguard, in_vanguard, skip_vanguard
+            if in_vanguard(self.game):
+                skip_vanguard(self.game)
+                return
             if not allUnitsDeployed(self.game.units):
                 battle_log('Deploy every unit, including reserved Scouts, before starting the battle.', 'info')
                 return
-            self.request('StrategyPhase')
+            begin_vanguard(self.game)
             return
         if self.state == 'SpellPhase':
             return  # Finish or cancel the cast before advancing the battle phase.
@@ -101,6 +107,8 @@ class GamePhaseFSM(FSM):
         self.game.deploymentStage = 'ordinary'
         self.game.scoutDeployFirst = None
         self.game.firstFinishedDeploying = None
+        self.game.vanguardFirst = None
+        self.game.vanguardActive = None
         messenger.send('tutorial-phase-change', ['DeployPhase'])
         self.game.boundary_ghost = BulletRigidBodyNode('deployZone')
 
@@ -143,6 +151,7 @@ class GamePhaseFSM(FSM):
     def exitDeployPhase(self):
         taskMgr.remove('taskLoopDeploy')
         taskMgr.remove('taskMoveUnit')
+        taskMgr.remove('taskLoopPathTowardsMouse')
         base.world.removeRigidBody(self.game.boundary_ghost)
         self.game.boundary_np.removeNode()
         # Ensure turn starts with player 1 after deployment

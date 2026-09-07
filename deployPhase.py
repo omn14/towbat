@@ -478,6 +478,10 @@ def _record_deployment(game, held, scouting):
 
 def refresh_deployment(game):
     """Refresh controls after a placement or reload without rolling again."""
+    if getattr(game, 'deploymentStage', None) == 'vanguard':
+        from vanguard import refresh_vanguard
+        refresh_vanguard(game)
+        return
     player = game.roundCounter.current_player
     scouting = getattr(game, 'deploymentStage', 'ordinary') == 'scouts'
     game.boundary_np.setCollideMask(BitMask32.allOff() if scouting else BitMask32.bit(11))
@@ -503,8 +507,8 @@ def _advance_after_deploy(game, placed=True):
             game.firstFinishedDeploying = player
             battle_log(f'Player {player} finished deploying first (including Scouts).', 'info')
     if allUnitsDeployed(game.units):
-        print("All units deployed, moving to next phase.")
-        game.fsm.request("StrategyPhase")
+        from vanguard import begin_vanguard
+        begin_vanguard(game)
         return
     if (getattr(game, 'deploymentStage', 'ordinary') == 'ordinary'
             and not any(deployment_candidates(game, p) for p in (1, 2))):

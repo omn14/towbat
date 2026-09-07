@@ -987,9 +987,11 @@ class MyApp(ShowBase):
 
     async def taskLoopDeploy(self, task):
         #base.messenger.toggleVerbose()
+        from vanguard import begin_vanguard, in_vanguard, select_vanguard
+        if in_vanguard(self):
+            return await select_vanguard(self, self.unitToMove, task)
         if allUnitsDeployed(self.units):
-            print("All units deployed, moving to next phase.")
-            self.fsm.request("StrategyPhase")
+            begin_vanguard(self)
             return task.done
         if self.unitToMove.isDeployed:
             print("Unit is already deployed, cannot move.")
@@ -1152,7 +1154,8 @@ class MyApp(ShowBase):
 
     def redressRanks(self, delta):
         """Widen (v) or narrow (shift-v) the selected unit's front rank."""
-        if self.fsm.state != 'MovementPhase':
+        from vanguard import in_vanguard
+        if self.awaitingChoice or (self.fsm.state != 'MovementPhase' and not in_vanguard(self)):
             return
         unit = getattr(self, 'unitToMove', None)
         if unit is not None and not unit.bodyNP.isEmpty():
@@ -1609,6 +1612,10 @@ class MyApp(ShowBase):
 
     async def setActiveUnit(self,taskfunction,taskname):
         if self.awaitingChoice:
+            return
+        from vanguard import in_vanguard
+        if in_vanguard(self) and self.vanguardActive is not None:
+            battle_log('Finish the active Vanguard unit first.', 'info')
             return
         if base.mouseWatcherNode.hasMouse():
             # Get mouse position in normalized device coordinates

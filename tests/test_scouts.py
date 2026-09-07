@@ -43,7 +43,7 @@ def make_game(p1, p2):
     game = NS(units=p1 + p2, player1Units=p1, player2Units=p2,
               deploymentStage='ordinary', scoutDeployFirst=None, firstFinishedDeploying=None,
               AIplayer2=NS(active=False, deployUnits=Mock()),
-              boundary_np=NodePath('boundary'), fsm=NS(request=Mock()),
+              boundary_np=NodePath('boundary'), fsm=NS(state='DeployPhase', request=Mock()),
               accept=Mock(), ignore=Mock(), setActiveUnit=Mock(),
               setActiveUnitTask=Mock(), setActiveUnitTaskName='taskLoopDeploy',
               terrain_manager=NS(terrain_pieces=[]))
@@ -241,6 +241,7 @@ def test_rolloff_rerolls_ties_alternates_and_counts_last_scout(pair):
 def test_end_phase_cannot_skip_ordinary_or_scouts(pair):
     game, scout, _ = pair
     fsm = NS(state='DeployPhase', game=game, request=Mock())
+    game.fsm = fsm
     for step in ('ordinary', 'scouts'):
         game.deploymentStage = step
         GamePhaseFSM.nextPhase(fsm)

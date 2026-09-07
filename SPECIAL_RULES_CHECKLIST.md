@@ -648,16 +648,71 @@ army-agnostic and would benefit every faction.
       Running the scene test as a script creates `saves/scouts.json`, ready for
       Player 1's first late Scout drop, and `screenshots/scouts.png`; the generated
       save was loaded and rendered offscreen.
-      LEFTOVER: Vanguard movement itself is not implemented. Its FAQ prohibition
-      is represented by `scouts_block_vanguard`, saved deployment history and
-      the deployment log, ready for a future Vanguard phase.
+      Vanguard now consumes `scouts_block_vanguard` and saved deployment history:
+      an actual late Scout deployment excludes the unit from the Vanguard step.
       LEFTOVER: the engine still starts battle with Player 1; `firstFinishedDeploying`
       is recorded correctly but no scenario first-turn roll-off/bonus consumes it.
       LEFTOVER: irregular impassable terrain uses conservative bounding rectangles;
       custom scenario deployment zones and army-specific Scouts variants are not
       covered. AI charge planning is unchanged: illegal first-turn proposals are
       rejected by the shared execution gate rather than tactically replanned.
-- [ ] Vanguard — pre-game free move (separate from Scouts deployment)
+- [x] Vanguard — implemented with the movement-control limitations below
+      (Rulebook p. 180, updated 25 June 2025; Official FAQ v1.5.3). Separate final
+      substage of Deploy Phase, after every ordinary and Scout drop. Optional
+      Move/Skip choice; both eligible armies roll off, re-roll ties and alternate
+      units, continuing with the remaining side when the other has finished.
+      End Phase declines the current player's remaining moves or completes its
+      active manoeuvre; it cannot bypass an opponent or an open choice.
+      `vanguard.py` owns eligibility, sequencing, movement commits and history.
+      Basic Movement uses the slowest participating model (including mounts and
+      joined Vanguard characters), with flight only when all participants can
+      fly. No march multiplier or charge-range bonus. Table bounds, model-base
+      overlaps, terrain and the normal 1" enemy end-position clearance apply
+      (p. 118); there is no fixed 12" move or Vanguard-specific 12" exclusion.
+      Existing wheel/advance, backwards/sideways at half M, Skirmisher movement
+      and half-M redress controls work in Vanguard. Commit-time validation
+      rejects excess distance and combining redress with another manoeuvre.
+      Pre-game allowances are cleared on completion without spending the first
+      battle turn's movement, marching, shooting or charge flags.
+      FAQ: actual late Scouts cannot Vanguard, but normally deployed Scouts can.
+      A non-Vanguard character prevents its formed host moving; Skirmishers may
+      leave it at its original world position, restoring independent selection,
+      physics and ownership. Invalid/zero-distance moves do not detach it. Moving
+      Vanguard characters share their host's history. Only actual movement or
+      redress records `madeVanguardMove`: both move-contact and direct charge
+      paths refuse a first-own-turn charge before reactions/dice, using the
+      owner's completed-turn counter. Declining keeps ordinary charge rights;
+      pursuit and later-turn charges remain available.
+      Save/load retains stage, roll-off winner, active unit, completion/history
+      and spent manoeuvre allowance. No re-roll, movement refund or duplicate
+      deployment resume on loading; older saves clear stale Vanguard fields.
+      Both AI selectors use a bounded forward-move policy and alternate through
+      real Panda tasks. Eligibility failures, declines, moves and refused charge
+      declarations log the deciding values/reasons; previews remain quiet.
+      Corrected on the way: explicit AI coordinates no longer require a mouse;
+      Vanguard uses the actual front edge, not the inset movement marker; wheel
+      sampling is capped at the allowance, backwards uses half M, and loading an
+      active move restores its right-click binding. Selection cannot switch
+      units halfway through Vanguard.
+      Tests: 40 cases across `tests/test_vanguard.py` and
+      `tests/test_vanguard_scene.py`, including actual offscreen movement/render,
+      both AI task chains, wheel/redress, own-turn charge enforcement, character
+      separation/rollback, enemy clearance, saved active manoeuvres and old saves.
+      `python -m tests.test_vanguard_scene` creates `saves/vanguard.json` and
+      `screenshots/vanguard.png`, then verifies the saved state by loading it.
+      Starts at Player 1's Vanguard choice with AI off: Normal Rangers may leave
+      their non-Vanguard character behind, P1 Ranked Vanguard can manoeuvre,
+      P1 Blocked Vanguard cannot move with its character, Warriors provide the
+      opposing Vanguard move, and the late Scouts remain ineligible. These are
+      test-only Vanguard grants, not a legal army list.
+      LEFTOVER: inherited movement UI offers one wheel followed by advance, not
+      repeated wheel/advance segments, paid turns or full reforms (pp. 124-125).
+      These missing ordinary manoeuvres are not supplied by Vanguard itself.
+      LEFTOVER: path collision sweeps use the regiment footprint (conservative
+      for Skirmishers), and irregular impassable terrain uses bounding rectangles.
+      The AI advances or holds rather than choosing tactical pre-game manoeuvres.
+      Scenario-specific deployment/first-turn rolls are unchanged: battle still
+      starts with Player 1, independently of the Vanguard roll-off.
 - [x] Swiftstride — DONE: a unit made entirely of Swiftstride models (the rule
       may come from the mount; a joined character without it breaks the unit's
       claim) adds 3" to its maximum possible charge range and may add a D6 to

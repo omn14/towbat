@@ -126,6 +126,8 @@ class unitGraphics(FSM):
         self.isDeployed=False
         self.scoutDeploymentChoice=None  # None, 'normal', or 'scouts'
         self.deployedAsScouts=False      # deployment history; survives turn resets (p. 177)
+        self.vanguardDone=False
+        self.madeVanguardMove=False
         text=f"{self.isInCombat}\n{self.hasMovedThisTurn}\n{self.hasAttackedThisTurn}"
         
         """ self.text_node = OnscreenText(

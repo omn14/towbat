@@ -123,6 +123,8 @@ def save_game_state(game, filename=None):
         'deployment_stage': getattr(game, 'deploymentStage', 'ordinary'),
         'scout_deploy_first': getattr(game, 'scoutDeployFirst', None),
         'first_finished_deploying': getattr(game, 'firstFinishedDeploying', None),
+        'vanguard_first': getattr(game, 'vanguardFirst', None),
+        'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
@@ -184,6 +186,8 @@ def save_game_state(game, filename=None):
             'isDeployed': unit.isDeployed,
             'scoutDeploymentChoice': getattr(unit, 'scoutDeploymentChoice', None),
             'deployedAsScouts': getattr(unit, 'deployedAsScouts', False),
+            'vanguardDone': getattr(unit, 'vanguardDone', False),
+            'madeVanguardMove': getattr(unit, 'madeVanguardMove', False),
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
             'ranks': unit.unit.ranks,
@@ -442,6 +446,8 @@ def load_game_state(game, filename):
         unit.isDeployed = unit_data['isDeployed']
         unit.scoutDeploymentChoice = unit_data.get('scoutDeploymentChoice')
         unit.deployedAsScouts = unit_data.get('deployedAsScouts', False)
+        unit.vanguardDone = unit_data.get('vanguardDone', False)
+        unit.madeVanguardMove = unit_data.get('madeVanguardMove', False)
 
         unit.unit.nmodels = unit_data['nmodels']
         unit.unit.files = unit_data['files']
@@ -524,11 +530,14 @@ def load_game_state(game, filename):
     game.deploymentStage = game_state.get('deployment_stage', 'ordinary')
     game.scoutDeployFirst = game_state.get('scout_deploy_first')
     game.firstFinishedDeploying = game_state.get('first_finished_deploying')
+    game.vanguardFirst = game_state.get('vanguard_first')
+    game.vanguardActive = game_state.get('vanguard_active')
     game.roundCounter.apply_selection_masks()
     if game_state['current_phase'] == 'DeployPhase':
         from deployPhase import refresh_deployment
         refresh_deployment(game)
-        if game.roundCounter.current_player == 2 and game.AIplayer2.active:
+        if (game.roundCounter.current_player == 2 and game.AIplayer2.active
+            and game.deploymentStage != 'vanguard'):
             game.AIplayer2.deployUnits()
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
