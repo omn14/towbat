@@ -552,6 +552,19 @@ class model:
                 return int(r['fly_movement'])
         return default
 
+    def is_move_through_cover(self) -> bool:
+        """The model's own or shared split-profile rule, never a joined character's
+        (Rulebook pp. 174, 192, 194, 204)."""
+        if any(isinstance(rule, dict) and rule.get('move_through_cover')
+               for rule in self.special_rules):
+            return True
+        parts = [self.get_mount()]
+        if self.part_count('crew') > 0:
+            parts.append(self.get_crew())
+        if self.part_count('beasts') > 0:
+            parts.append(self.get_beasts())
+        return any(part is not None and part.is_move_through_cover() for part in parts)
+
     def set_armour(self, items):
         """Record equipped armour item names and recompute the armour save."""
         self.armour = list(items or [])

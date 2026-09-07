@@ -179,6 +179,7 @@ def commit_vanguard_move(game, unit):
         game.roundCounter.apply_selection_masks()
     if moved:
         record_vanguard_move(unit)
+        game.movement.movementAllowance(unit, origin, destination, log=True)
         rule_log('Vanguard', unit, f'moved {distance:.3f}" of M{allowance:g}; no march, no charge declarations during its first own turn')
         game.movement.alignModelsToHillNormal(unit)
         game.movement.dangerousTerrainTests(unit, origin, destination)

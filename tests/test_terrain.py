@@ -126,6 +126,15 @@ class TestDangerousTerrainTests(unittest.TestCase):
         with mock.patch('terrain_system.random.randint', return_value=2):
             self.assertEqual(ts.dangerous_terrain_wounds(5, 20), 0)
 
+    def test_move_through_cover_rerolls_only_initial_ones(self):
+        with mock.patch('terrain_system.random.randint', side_effect=[1, 2, 2, 1, 1]) as roll:
+            self.assertEqual(ts.dangerous_terrain_wounds(1, 3, reroll_ones=True), 1)
+        self.assertEqual(roll.call_count, 5)
+
+    def test_move_through_cover_tests_each_feature(self):
+        with mock.patch('terrain_system.random.randint', side_effect=[1, 6, 1, 1]):
+            self.assertEqual(ts.dangerous_terrain_wounds(2, 1, reroll_ones=True), 1)
+
     def test_the_damage_can_be_more_than_one_wound(self):
         # Iron Shod Wheels costs a chariot D3 Wounds instead of 1. Every D6
         # mishaps; every D3 rolls its maximum.

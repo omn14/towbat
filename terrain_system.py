@@ -170,20 +170,38 @@ def sees_over(shooter_pos, blocker_pos, hill_center) -> bool:
     return to_top(blocker_pos) > to_top(shooter_pos)
 
 
-def dangerous_terrain_wounds(features: int, models: int, damage='1') -> int:
+def dangerous_terrain_wounds(features: int, models: int, damage='1', *,
+                             reroll_ones=False, subject=None) -> int:
     """Wounds a unit suffers crossing *features* dangerous terrain features.
 
     Every model that begins in, passes through or ends in dangerous terrain
     tests, once per separate feature, and loses a Wound on a roll of 1.
     *damage* is a dice expression so Iron Shod Wheels can cost a chariot D3.
+    Move Through Cover re-rolls initial ones once only (Rulebook p. 174).
     """
     if features <= 0 or models <= 0:
         return 0
     from models import roll_dice_expr
     wounds = 0
+    rerolls = []
     for _ in range(features * models):
-        if random.randint(1, 6) == 1:
+        result = random.randint(1, 6)
+        if result == 1 and reroll_ones:
+            result = random.randint(1, 6)
+            rerolls.append(result)
+        if result == 1:
             wounds += roll_dice_expr(damage)
+    if reroll_ones and subject is not None:
+        from rules_log import rule_log, rule_skipped
+        if rerolls:
+            rule_log('Move Through Cover', subject,
+                     f'{features * models} Dangerous Terrain tests: '
+                     f're-rolled {len(rerolls)} initial 1(s) -> {rerolls}; '
+                     f'{sum(result != 1 for result in rerolls)} mishap(s) avoided, '
+                     f'{wounds} wound(s) remain')
+        else:
+            rule_skipped('Move Through Cover', subject,
+                         f'{features * models} Dangerous Terrain tests: no 1s to re-roll')
     return wounds
 
 
@@ -1077,6 +1095,7 @@ class TerrainPiece:
         # Movement/shooting range overlay defaults (updated by TerrainManager).
         self.visual.setShaderInput("moveActive", False)
         self.visual.setShaderInput("movePoints", [Vec2(0, 0)])
+        self.visual.setShaderInput("moveColor", Vec3(0.65, 0.85, 1.0))
 
     # ── Scattered trees for forests ───────────────────────────────────
 
@@ -1547,7 +1566,10 @@ class TerrainManager:
         """
         with open(filepath) as f:
             data = json.load(f)
-        for entry in data['terrain']:
+        self.load_records(data['terrain'])
+
+    def load_records(self, records):
+        for entry in records:
             self.add_terrain(
                 entry['type'],
                 Point3(*entry['center']),
@@ -1556,9 +1578,8 @@ class TerrainManager:
                 entry.get('going'),
             )
 
-    def save_to_json(self, filepath: str):
-        data = {
-            'terrain': [
+    def to_records(self, exclude=()):
+        return [
                 {
                     'type': t.terrain_type,
                     'center': [t.center.x, t.center.y, t.center.z],
@@ -1566,8 +1587,10 @@ class TerrainManager:
                     'height': t.height,
                     'going': t.going,
                 }
-                for t in self.terrain_pieces
+                for t in self.terrain_pieces if t not in exclude
             ]
-        }
+
+    def save_to_json(self, filepath: str):
+        data = {'terrain': self.to_records()}
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)

@@ -139,6 +139,12 @@ def save_game_state(game, filename=None):
         'units': [],
     }
 
+    terrain = getattr(game, 'terrain_manager', None)
+    if terrain is not None:
+        spell_pieces = [getattr(spell, 'piece', None)
+                        for spell in getattr(game, 'remainsInPlay', [])]
+        game_state['terrain'] = terrain.to_records(exclude=spell_pieces)
+
     for unit in game.units:
         unit_data = {
             'name': unit.unitName,
@@ -524,6 +530,9 @@ def load_game_state(game, filename):
     for spell in list(getattr(game, 'remainsInPlay', [])):
         spell.endSpell()
     game.remainsInPlay = []
+    if 'terrain' in game_state and getattr(game, 'terrain_manager', None) is not None:
+        game.terrain_manager.clear()
+        game.terrain_manager.load_records(game_state['terrain'])
     load_spells(game, game_state.get('spells_in_play'), unit_map)
     # Restore after phase entry and rebuilding units; neither may re-roll or
     # advance a half-finished Scout deployment. Older saves deployed normally.

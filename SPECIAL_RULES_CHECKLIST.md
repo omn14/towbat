@@ -739,7 +739,58 @@ army-agnostic and would benefit every faction.
       LEFTOVER: converted army files under `strategy_armies/` predate this and
       carry no `mount_special_rules`; `Bm_army.json` was regenerated, the rest
       need re-importing before their mounts' rules reach the table.
-- [ ] Move Through Cover — no difficult-terrain movement penalty
+- [x] Move Through Cover — DONE (Rulebook p. 174; difficult/dangerous terrain
+      p. 269; Official FAQ & Errata v1.5.3). Checked the
+      [rule](https://tow.whfb.app/special-rules/move-through-cover),
+      [difficult terrain](https://tow.whfb.app/battlefield-terrain/difficult-terrain),
+      [dangerous terrain](https://tow.whfb.app/battlefield-terrain/dangerous-terrain),
+      [joined-character FAQ](https://tow.whfb.app/faq#what-happens-if-a-unit-with-the-move-through-cover-special-rule-is-joined-by)
+      and [charge FAQ](https://tow.whfb.app/faq#does-a-unit-with-move-through-cover-discard-the-highest-dice-when-making-a-charg).
+      Registered the keyword; the model ignores terrain's -1 Movement and
+      re-rolls initial Dangerous Terrain 1s once, not repeatedly until safe.
+      A second 1 still loses a Wound. Tests remain once per model per feature;
+      the existing variable-damage hook is retained. Shared mount/live crew/
+      draught-beast profiles qualify, but a joined character must have its
+      own protection and suffers its own wounds, not the regiment's.
+      Movement now uses the slowest participant AFTER each model's own
+      penalty: M4 troops with an unprotected M4 character move 3", while M3
+      troops with an unprotected M5 character still move 3". This applies to
+      ordinary ranked/Skirmisher previews, march allowances, Vanguard and
+      charge resolution. A Vanguard character left behind is not counted.
+      Protected charges keep the highest of the first two dice, with any
+      Swiftstride bonus die added separately. Mixed units containing an
+      unprotected model still discard the highest; pursuit keeps its normal
+      summed dice. Move Through Cover does NOT remove Disruption, grant
+      passage through impassable terrain, or cancel non-terrain modifiers.
+      Logs at move commitment and charge resolution include adjusted model
+      Movements and the resulting allowance; Dangerous Terrain logs aggregate
+      rerolled dice, avoided mishaps and remaining wounds. No-1s and mixed
+      charge refusals explain why the benefit did not apply, without logging
+      per-preview or per-test-roll spam.
+      Corrected on the way: ordinary Skirmishers skipped terrain penalties,
+      charges used raw M instead of the adjusted allowance, joined characters
+      were omitted from Dangerous Terrain tests, and saves omitted terrain.
+      Saves now store static terrain using the map record format; old saves
+      without terrain retain the current battlefield. Spell-created terrain
+      is restored through spells, not duplicated in the static terrain list.
+      Initialized the terrain shader's missing movement-overlay colour so
+      newly loaded terrain renders before the first movement preview.
+      Tests: `tests/test_move_through_cover.py`,
+      `tests/test_move_through_cover_scene.py`, plus reroll regressions in
+      `tests/test_terrain.py`. Run `python -m tests.test_move_through_cover_scene`
+      to create `saves/move_through_cover.json` and its offscreen screenshot.
+      The save starts Player 1's Movement phase, AI off: Cover Woods (M4),
+      Ordinary Woods (M4 -> 3), Cover Slow Escort (M4 with unprotected M4
+      captain -> 3), Ordinary Marsh (M4 -> 3), and Cover Fast Escort (M3 with
+      unprotected M5 captain -> 3). Two enemy units face the woods units for
+      charge comparisons. Marsh is dangerous, woods difficult. These are
+      test-only rule/stat grants, not a legal army list.
+      LEFTOVER: inherited terrain detection samples the regiment's straight
+      centre-to-centre path, not every base's swept area during a wheel;
+      Dangerous Terrain tests consequently use that shared feature list for
+      rank-and-file and joined characters. Narrow features and edge-only
+      contact can be missed. Optional beneficial re-rolls are automatically
+      taken, consistent with the existing automatic Dangerous Terrain roller.
 - [ ] Shieldwall — defensive bonus vs charges
 - [ ] Veteran — Ld / re-roll bonus
 - [ ] Rallying Cry — 

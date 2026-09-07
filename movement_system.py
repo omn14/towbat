@@ -523,19 +523,50 @@ class MovementSystem:
     # ─── Movement & Pathfinding ───────────────────────────────────────────
 
     def pathTerrainModifier(self, unit, from_pos, to_pos) -> int:
-        """Movement characteristic modifier from terrain on the move path.
+        """Terrain's change to the slowest model's Movement (pp. 174, 269; FAQ)."""
+        return (self.movementAllowance(unit, from_pos, to_pos)
+                - self.movementAllowance(unit))
 
-        Difficult terrain is -1 to Movement whether the unit starts in it,
-        passes through it or ends in it (Rulebook p. 135). Uses the terrain
-        field, so the penalty matches the shape the player can see.
+    def movementParticipants(self, unit):
+        participants = [unit]
+        character = getattr(unit, 'joinedCharacter', None)
+        if character is not None and character.unit.nmodels > 0:
+            from scouts import has_deployment_rule
+            if not in_vanguard(self.game) or has_deployment_rule(character, 'vanguard'):
+                participants.append(character)
+        return participants
+
+    def movementAllowance(self, unit, from_pos=None, to_pos=None, *, log=False):
+        """Slowest participating model after its own terrain penalty (pp. 123, 174,
+        269; Official FAQ v1.5.3). An unprotected character need not slow the host.
         """
         tm = getattr(self.game, 'terrain_manager', None)
-        if tm is None:
-            return 0
-        mod = 0
-        for t in tm.get_terrain_between(from_pos, to_pos):
-            mod = min(mod, t.movement_modifier)
-        return mod
+        modifier = 0
+        if tm is not None and from_pos is not None and to_pos is not None:
+            modifier = min([0] + [piece.movement_modifier
+                                 for piece in tm.get_terrain_between(from_pos, to_pos)])
+        participants = self.movementParticipants(unit)
+        profiles = [participant.unit.model for participant in participants]
+        flying = all(profile.is_flying() for profile in profiles)
+        base = [profile.get_fly_movement(0) if flying else profile.get_movement(0)
+                for profile in profiles]
+        protected = [profile.is_move_through_cover() for profile in profiles]
+        adjusted = [movement if flying or immune or modifier == 0
+                    else max(1, movement + modifier)
+                    for movement, immune in zip(base, protected)]
+        allowance = min(adjusted)
+        if log and modifier < 0 and any(protected):
+            detail = '; '.join(
+                f'{participant.unit.name}: M{before:g} -> {after:g}'
+                f'{" (Move Through Cover)" if immune else " (no Move Through Cover)"}'
+                for participant, before, after, immune
+                in zip(participants, base, adjusted, protected))
+            if flying:
+                rule_skipped('Move Through Cover', unit, 'flying over terrain; no Movement penalty')
+            else:
+                rule_log('Move Through Cover', unit,
+                         f'terrain {modifier:+g}M; {detail}; unit allowance {allowance:g}"')
+        return allowance
 
     def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1') -> int:
         """Test every model against each dangerous feature the move met, and
@@ -547,12 +578,22 @@ class MovementSystem:
         features = tm.dangerous_between(from_pos, to_pos)
         if not features:
             return 0
-        wounds = dangerous_terrain_wounds(len(features), unit.unit.nmodels, damage)
         names = ', '.join(sorted({t.terrain_type for t in features}))
-        print(f"{unit.unit.name}: Dangerous Terrain test ({names}) "
-              f"-> {wounds} wound(s)")
-        self.applyWounds(unit, wounds)
-        return wounds
+        participants = [unit]
+        character = getattr(unit, 'joinedCharacter', None)
+        if character is not None:
+            participants.append(character)
+        total = 0
+        for participant in participants:
+            wounds = dangerous_terrain_wounds(
+                len(features), participant.unit.nmodels, damage,
+                reroll_ones=participant.unit.model.is_move_through_cover(),
+                subject=participant)
+            print(f"{participant.unit.name}: Dangerous Terrain test ({names}) "
+                  f"-> {wounds} wound(s)")
+            self.applyWounds(participant, wounds)
+            total += wounds
+        return total
 
     def magicalVortexTests(self, unit, from_pos, to_pos):
         """Burn *unit* for every enemy Magical Vortex its move passed through.
@@ -820,7 +861,7 @@ class MovementSystem:
             # Flyers use their Fly Movement characteristic instead.
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
-            M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
+            M = self.movementAllowance(unit)
             if in_vanguard(self.game):
                 M = vanguard_movement(unit)
                 _flying = vanguard_flying(unit)
@@ -909,7 +950,7 @@ class MovementSystem:
             # Flyers use their Fly Movement characteristic instead.
             _model = self.game.unitToMove.unit.model
             _flying = _model.is_flying()
-            M = _model.get_fly_movement(default=0) if _flying else _model.get_movement(default=0)
+            M = self.movementAllowance(unit)
             if in_vanguard(self.game):
                 M = vanguard_movement(unit)
                 _flying = vanguard_flying(unit)
@@ -1073,12 +1114,10 @@ class MovementSystem:
         _model = unit.unit.model
         flying = vanguard_flying(unit) if in_vanguard(self.game) else _model.is_flying()
         # Flyers use their Fly Movement characteristic instead of M.
-        m = _model.get_fly_movement(0) if _model.is_flying() else _model.get_movement(0)
-        maxmove = 21.0 if unit.state == "IsPursuing" else m * 2.0
+        allowance = self.movementAllowance(unit, cur, target)
+        maxmove = (21.0 if unit.state == "IsPursuing" else
+                   max(0.0, allowance * 2.0 - unit.moveSpentThisTurn))
         if in_vanguard(self.game):
-            allowance = vanguard_movement(unit)
-            if not flying:
-                allowance = max(1.0, allowance + self.pathTerrainModifier(unit, cur, target))
             maxmove = max(0.0, allowance - unit.moveSpentThisTurn)
 
         d = Vec3(target.x - cur.x, target.y - cur.y, 0)
@@ -1106,7 +1145,7 @@ class MovementSystem:
 
         # Circular move-range indicator centred on the unit.
         marching = (not in_vanguard(self.game) and unit.state != "IsPursuing"
-                    and is_march(clamped, maxmove / 2.0))
+                    and is_march(clamped, allowance, unit.moveSpentThisTurn))
         unit.wouldMarch = marching
         self.game.polygonpoints = self.shootingArc(
             cur, num_points=80, radius=maxmove / (half * 2.0), full_circle=True)
@@ -1221,6 +1260,7 @@ class MovementSystem:
             copiedUnit.setHpr(orotUnit)
         else:
             unit.request("Moved")
+            self.movementAllowance(unit, oposUnit, unit.bodyNP.getPos(), log=True)
             self.alignModelsToHillNormal(unit)
             self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
             self.updateDisrupted(unit)

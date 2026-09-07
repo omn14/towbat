@@ -334,10 +334,19 @@ def _vanguard(model, param, desc):
             "tag": "deployment", "vanguard": True}
 
 
+def _move_through_cover(model, param, desc):
+    """Movement immunity and Dangerous Terrain re-rolls (Rulebook p. 174)."""
+    return {"name": "Move Through Cover", "tag": "movement",
+            "description": desc or ("Ignores difficult/dangerous terrain Movement penalties; "
+                                    "re-rolls Dangerous Terrain tests of 1."),
+            "move_through_cover": True}
+
+
 # Normalised (lowercase) keyword -> builder.
 SPECIAL_RULE_BUILDERS = {
     "scouts": _scouts,
     "vanguard": _vanguard,
+    "move through cover": _move_through_cover,
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
     "magic resistance": _magic_resistance,

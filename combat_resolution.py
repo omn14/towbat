@@ -411,11 +411,7 @@ class CombatResolver:
             wdistance = abs(math.radians(wheel1Angle) * width * 2)
             cdistance = self.game.moveArceDistance - wdistance
 
-        rough = self.chargeThroughDifficult(unit, oposUnit)
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice, rough)
-        for rule in unit.unit.model.special_rules:
-            if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice, rough)
+        chdist = self.chargeDistance(unit, oposUnit, chdice)
         # The bonus die is already among *fldice*; adding `fleeBonus` as well
         # added a literal 1" for taking it. Both flee rolls live in one place
         # now, which is also where The Limits of Endurance is applied.
@@ -578,7 +574,38 @@ class CombatResolver:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return False
-        return tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
+        profiles = [participant.unit.model
+                    for participant in self.game.movement.movementParticipants(unit)]
+        if all(profile.is_flying() for profile in profiles):
+            return False
+        return (tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
+                and not all(profile.is_move_through_cover() for profile in profiles))
+
+    def chargeDistance(self, unit, from_pos, dice):
+        """Terrain-adjusted M plus Charge roll; Move Through Cover keeps the high
+        die (Rulebook pp. 174, 269; Official FAQ v1.5.3). Pursuit is not a charge.
+        """
+        if unit.state == 'IsPursuing':
+            return sum(dice)
+        movement = self.game.movement.movementAllowance(
+            unit, from_pos, self.game.playerNP.getPos(), log=True)
+        rough = self.chargeThroughDifficult(unit, from_pos)
+        result = charge_roll(dice, rough)
+        tm = getattr(self.game, 'terrain_manager', None)
+        profiles = [participant.unit.model
+                    for participant in self.game.movement.movementParticipants(unit)]
+        if (tm is not None and tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
+            and any(profile.is_move_through_cover() for profile in profiles)
+            and not all(profile.is_flying() for profile in profiles)):
+            if rough:
+                rule_skipped('Move Through Cover', unit,
+                             f'not every charging model has the rule; dice {dice} '
+                             f'discard the highest -> {result}; M{movement:g} -> {movement + result:g}"')
+            else:
+                rule_log('Move Through Cover', unit,
+                         f'charge through terrain: dice {dice} keep the highest '
+                         f'of the first two -> {result}; M{movement:g} -> {movement + result:g}"')
+        return movement + result
 
     # ─── Charge Interval ──────────────────────────────────────────────────
 
@@ -588,11 +615,8 @@ class CombatResolver:
         if getattr(unit, 'isSkirmisher', False):
             await self._skirmishChargeInterval(unit, defenderNP, oposUnit, orotUnit, flank, chdice)
             return
-        maxmove = _stat_int(unit.unit.model.characteristics, 'M')
+        maxmove = self.game.movement.movementAllowance(unit, oposUnit, self.game.playerNP.getPos())
         durIntConst = 1.0
-        for rule in unit.unit.model.special_rules:
-            if rule.get('mountUnit'):
-                maxmove = _stat_int(rule['mountUnit'].model.characteristics, 'M')
         wasPursuing = unit.state == "IsPursuing"
         if wasPursuing:
             maxmove = 0
@@ -677,12 +701,7 @@ class CombatResolver:
         if rough:
             print("Charging through difficult terrain \u2014 the Charge roll "
                   "discards the highest die.")
-        chdist = _stat_int(unit.unit.model.characteristics, 'M') + charge_roll(chdice, rough)
-        for rule in unit.unit.model.special_rules:
-            if rule.get('mountUnit'):
-                chdist = _stat_int(rule['mountUnit'].model.characteristics, 'M') + charge_roll(chdice, rough)
-        if unit.state == "IsPursuing":
-            chdist = sum(chdice)
+        chdist = self.chargeDistance(unit, oposUnit, chdice)
         if chdist < wdistance:
             angle = math.degrees(chdist / (width * 2))
             contactRot = Vec3(orotUnit.x + angle, contactRot.y, contactRot.z) * wheel1Angle / abs(wheel1Angle)
@@ -851,8 +870,7 @@ class CombatResolver:
         """Charge move for Skirmishers: straight in, keeping facing, no wheel or
         flank-align pivot.  The charge roll is still made; if it falls short the
         unit advances only the rolled distance and does not reach combat."""
-        model = unit.unit.model
-        maxmove = model.get_fly_movement(0) if model.is_flying() else model.get_movement(0)
+        maxmove = self.game.movement.movementAllowance(unit, oposUnit, self.game.playerNP.getPos())
 
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
@@ -869,9 +887,7 @@ class CombatResolver:
         self.game.autoHold = False
         print("Charge dice results:", chdice)
 
-        chdist = maxmove + charge_roll(chdice, self.chargeThroughDifficult(unit, oposUnit))
-        if unit.state == "IsPursuing":
-            chdist = sum(chdice)
+        chdist = self.chargeDistance(unit, oposUnit, chdice)
 
         target = self.game.playerNP.getPos()
         d = target - oposUnit
