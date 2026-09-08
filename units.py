@@ -6,6 +6,7 @@ from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs
 from rules_log import rule_log
 from characters import JOIN_TAG
+from skirmish import layout_positions
 
 class unit:
     def __init__(self, name: str, model: model, nmodels: int, files: int, ranks: int):
@@ -63,6 +64,8 @@ class unitGraphics(FSM):
         # Skirmishers deploy as a loose blob (~1" apart), not rigid ranks/files.
         self.isSkirmisher = bool(self.unit and self.unit.model
                                  and self.unit.model.is_skirmisher())
+        self.skirmishCombat = False
+        self.skirmishLayout = []
         if self.isSkirmisher:
             side = max(1, math.ceil(math.sqrt(self.unit.nmodels)))
             gap = 0.6                                   # loose spacing (< 1")
@@ -347,6 +350,9 @@ class unitGraphics(FSM):
         around: it stands *in* the front rank, and the model it displaces falls
         through to the back rather than the character forming a rank in front.
         """
+        if getattr(self, 'isSkirmisher', False) and not getattr(self, 'skirmishCombat', False):
+            self.applySkirmishLayout()
+            return
         files = max(1, int(files if files is not None else self.unit.files))
         children = self.model.getChildren() if children is None else children
         reserved = self.characterSlot
@@ -366,6 +372,15 @@ class unitGraphics(FSM):
         """Sit a joined character in the slot the ranks were laid out around."""
         char = getattr(self, 'joinedCharacter', None)
         if char is None or self.characterSlot is None or char.bodyNP.isEmpty():
+            return
+        if self.isSkirmisher and not self.skirmishCombat:
+            position = getattr(self, 'skirmishCharacterPosition', None)
+            if position is None:
+                rightmost = max(self.skirmishLayout, key=lambda record: record['x'])
+                position = [rightmost['x'] + (self.modelWidth + char.modelWidth) / 2 + 0.6,
+                            rightmost['y']]
+                self.skirmishCharacterPosition = position
+            char.bodyNP.setPos(position[0], position[1], 0)
             return
         files = max(1, self.unit.files)
         if getattr(char, 'retiredFromCombat', False):
@@ -405,9 +420,16 @@ class unitGraphics(FSM):
         bounds = self.model.getTightBounds()
         box_size = bounds[1] - bounds[0]
         # Skirmishers occupy a loose blob; size the footprint to cover it.
-        if getattr(self, 'isSkirmisher', False):
-            box_size.setX(self._skirmSX * self._skirmCols)
-            box_size.setY(self._skirmSY * self._skirmRows)
+        if getattr(self, 'isSkirmisher', False) and not self.skirmishCombat:
+            box_size.setX(max((abs(record['x']) + self.modelWidth / 2
+                               for record in self.skirmishLayout), default=self.modelWidth / 2) * 2)
+            box_size.setY(max((abs(record['y']) + self.modelHeight / 2
+                               for record in self.skirmishLayout), default=self.modelHeight / 2) * 2)
+            character = getattr(self, 'joinedCharacter', None)
+            position = getattr(self, 'skirmishCharacterPosition', None)
+            if character is not None and position is not None:
+                box_size.setX(max(box_size.x, 2 * abs(position[0]) + character.modelWidth))
+                box_size.setY(max(box_size.y, 2 * abs(position[1]) + character.modelHeight))
         elif getattr(self, 'baseSize', None):
             files = max(1, self.unit.files)
             slots = self.slotCount()
@@ -424,6 +446,10 @@ class unitGraphics(FSM):
         self.bodyNPback.setPos(0, -box_size.y * 0.45, 0)
         self.unitWidth = box_size.x * self.bodyNP.getScale().x
         self.unitHeight = box_size.y * self.bodyNP.getScale().y
+        if self.isSkirmisher and not self.skirmishCombat:
+            self.model.setPos(0, 0, 0)
+            self.applySkirmishLayout()
+            return
         self.model.setPos(-box_size.x / 2 + self.modelWidth / 2,
                           box_size.y / 2 - self.modelHeight / 2, 0)
 
@@ -536,33 +562,104 @@ class unitGraphics(FSM):
             rule_log('Refusing a Challenge', char,
                      "its unit is no longer engaged, so it returns to the "
                      "fighting rank (p. 210)")
-        self.spreadToSkirmish()
         taskMgr.doMethodLater(0.1, self.updateTextNode, "updateTextNode",extraArgs=[], appendTask=False)
 
     def _arrange_skirmish_blob(self):
-        """Scatter the models into the loose skirmish blob (deterministic)."""
-        children = self.model.getChildren()
-        side = getattr(self, '_skirmCols', 1)
-        rng = random.Random(hash(self.unitName) & 0xffffffff)
-        for i, child in enumerate(children):
-            row = i // side
-            col = i % side
-            jx = rng.uniform(-0.25, 0.25)
-            jy = rng.uniform(-0.25, 0.25)
-            child.setPos(Point3(col * self._skirmSX + jx,
-                                -row * self._skirmSY + jy, 0))
+        """Create a coherent starting layout, without random gaps (p. 184)."""
+        positions = layout_positions(len(self.model.getChildren()),
+                                     self.modelWidth, self.modelHeight)
+        self.skirmishLayout = [dict(id=index, x=position[0], y=position[1])
+                               for index, position in enumerate(positions)]
+        self.applySkirmishLayout()
+
+    def applySkirmishLayout(self):
+        """Project saved base positions onto miniatures; terrain Z is derived."""
+        parent = getattr(self, 'bodyNP', self.model)
+        for child, record in zip(self.model.getChildren(), self.skirmishLayout):
+            height = child.getZ(parent)
+            child.setPos(parent, record['x'], record['y'], height)
+            child.setPythonTag('skirmish_id', record['id'])
+
+    def restoreSkirmishLayout(self, saved=None):
+        """Restore exact model identities/positions, or migrate an older save."""
+        self.isSkirmisher = self.unit.model.is_skirmisher()
+        children = list(self.model.getChildren())
+        while len(children) < self.unit.nmodels:
+            children.append(children[0].copyTo(self.model))
+        for child in children[self.unit.nmodels:]:
+            child.removeNode()
+        self.skirmishCombat = bool(saved.get('combat', False)) if saved else self.isInCombat
+        self.skirmishCharacterPosition = saved.get('character') if saved else None
+        if self.isSkirmisher:
+            if saved is not None:
+                self.skirmishLayout = [dict(record) for record in saved['models']]
+            else:
+                self._arrange_skirmish_blob()
+        if self.isSkirmisher and not self.skirmishCombat:
+            self.applySkirmishLayout()
+        else:
+            self.layOutRanks()
+        self.placeCharacter()
+        self.rebuildFootprint()
+
+    def savedSkirmishLayout(self):
+        if not self.isSkirmisher:
+            return None
+        return dict(models=[dict(record) for record in self.skirmishLayout],
+                    combat=self.skirmishCombat,
+                    character=getattr(self, 'skirmishCharacterPosition', None))
 
     def formUpForCombat(self):
         """Snap a skirmisher's models into a tight fighting rank for combat."""
-        if not getattr(self, 'isSkirmisher', False):
+        if not getattr(self, 'isSkirmisher', False) or self.skirmishCombat:
             return
+        self.skirmishCombat = True
         children = self.model.getChildren()
         self.layOutRanks(min(self.unit.files or 5, len(children)), children)
+        self.rebuildFootprint()
 
     def spreadToSkirmish(self):
-        """Return a skirmisher's models to the loose blob after combat."""
-        if getattr(self, 'isSkirmisher', False):
-            self._arrange_skirmish_blob()
+        """Separate current bases (p. 185); house rule: fleeing units wait for Rally."""
+        from math import hypot
+        from rules_log import rule_skipped
+        from skirmish import separated_positions
+        if (not getattr(self, 'isSkirmisher', False) or not self.skirmishCombat
+                or self.bodyNP.isEmpty() or getattr(self, 'hostUnit', None) is not None):
+            return
+        if self.isInCombat or self.state == 'IsFleeing':
+            reason = ('still engaged (p. 185)' if self.isInCombat else
+                      'still fleeing; waits for a successful Rally (house rule)')
+            rule_skipped('Skirmishers', self, f'{reason}; keeps compact fighting ranks')
+            return
+        children = list(self.model.getChildren())
+        positions = [child.getPos(self.bodyNP) for child in children]
+        boxes = [(position.x, position.y, self.modelWidth / 2, self.modelHeight / 2, 0)
+                 for position in positions]
+        character = getattr(self, 'joinedCharacter', None)
+        if character is not None:
+            position = character.bodyNP.getPos(self.bodyNP)
+            boxes.append((position.x, position.y, character.modelWidth / 2, character.modelHeight / 2, 0))
+        try:
+            separated = separated_positions(boxes)
+        except ValueError as error:
+            rule_skipped('Skirmishers', self, f'cannot separate bases: {error}; keeps compact formation')
+            return
+        for record, position in zip(self.skirmishLayout, separated):
+            record['x'], record['y'] = position
+        if character is not None:
+            self.skirmishCharacterPosition = list(separated[-1])
+        self.skirmishCombat = False
+        self.applySkirmishLayout()
+        self.placeCharacter()
+        self.rebuildFootprint()
+        scale = self.bodyNP.getScale(render)
+        longest = max((hypot((after[0] - before[0]) * scale.x,
+                             (after[1] - before[1]) * scale.y)
+                       for before, after in zip(boxes, separated)), default=0.0)
+        rule_log('Skirmishers', self,
+                 f'unengaged and not fleeing: separates {len(boxes)} bases; '
+                 f'largest adjustment {longest:.5f}"; preserves layout and facing (p. 185)')
+        self.updateTextNode()
 
     def enterIsFleeing(self):
         self.attemptedRallyThisTurn=False

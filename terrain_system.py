@@ -1096,6 +1096,9 @@ class TerrainPiece:
         self.visual.setShaderInput("moveActive", False)
         self.visual.setShaderInput("movePoints", [Vec2(0, 0)])
         self.visual.setShaderInput("moveColor", Vec3(0.65, 0.85, 1.0))
+        self.visual.setShaderInput("skirmishRangeActive", False)
+        self.visual.setShaderInput("skirmishRangeCenter", Vec2(0, 0))
+        self.visual.setShaderInput("skirmishRangeLimits", Vec3(0, 0, 0))
 
     # ── Scattered trees for forests ───────────────────────────────────
 
@@ -1399,6 +1402,7 @@ class TerrainManager:
         piece so the indicator wraps over hills/forests/water, not just the
         flat ground card."""
         for piece in self.terrain_pieces:
+            piece.visual.setShaderInput("skirmishRangeActive", False)
             if points is not None:
                 piece.visual.setShaderInput("movePoints", points)
             piece.visual.setShaderInput("moveActive", active)

@@ -25,6 +25,7 @@ out vec4 p3d_FragColor;
 // ── Shared material vocabulary with the ground card ───────────────────────
 #pragma include "mat_noise.glsl"
 #pragma include "shadow.glsl"
+#pragma include "skirmish_ranges.glsl"
 
 // The river and marsh were tuned against a 4-octave sum that topped out at
 // 0.9375, so they keep that range rather than the normalised one.
@@ -205,7 +206,9 @@ void main() {
 
     // Movement/shooting range overlay wrapped over the terrain surface. The
     // board card spans world -50..50, so map world XY into the same 0..1 space.
-    if (moveActive) {
+    if (skirmishRangeActive) {
+        col = skirmishRangeOverlay(col, worldPos.xy);
+    } else if (moveActive) {
         vec2 ouv = worldPos.xy * 0.01 + 0.5;
         float d = sdPolygon(ouv, movePoints);
         vec3 o = (d > 0.0) ? col : moveColor;

@@ -210,6 +210,7 @@ def test_scout_charge_gate_does_not_block_allowed_contacts(scene, case):
     else:
         scout.request('IsPursuing')
     target = enemy.bodyNP.getPos()
+    scout.bodyNP.setPos(target.x, target.y - 6, 0)
     app.arcPoint = Vec2((target.x / 50 + 1) / 2, (target.y / 50 + 1) / 2)
     app.arcPointRotation = 0
     scout.wouldMarch = False

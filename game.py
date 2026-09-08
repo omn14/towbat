@@ -981,6 +981,7 @@ class MyApp(ShowBase):
                 self.ignore('mouse1')
                 self.accept('mouse1', self.setActiveUnit,[self.taskLoopStrategy, "taskLoopStrategy"])
             unit.request("Idle")
+            unit.spreadToSkirmish()
             unit.cannotChargeThisTurn = True
         else:
             print(f"Unit {unit.unit.name} fails to rally and keeps fleeing.")
@@ -1628,6 +1629,8 @@ class MyApp(ShowBase):
                         
 
     async def setActiveUnit(self,taskfunction,taskname):
+        if getattr(self, 'skirmishEditor', None) is not None:
+            return
         if self.awaitingChoice:
             return
         from vanguard import in_vanguard
@@ -1723,6 +1726,8 @@ class MyApp(ShowBase):
 
     def showSelectedUnit(self, unit):
         """Publish the selected unit's state to the HUD's unit card."""
+        from skirmish_ui import refresh_adjust_button
+        refresh_adjust_button(self, unit)
         model = unit.unit.model
         save = getattr(model, 'armor_save', 7)
         ward = ward_save_value(model)
@@ -2389,16 +2394,32 @@ class MyApp(ShowBase):
         surface.setShaderInput("polygonpoints", self.polygonpoints)
         surface.setShaderInput("isActive", False)
         self.polygonpoints = []
+        surface.setShaderInput("skirmishRangeActive", False)
+        surface.setShaderInput("skirmishRangeCenter", Vec2(0, 0))
+        surface.setShaderInput("skirmishRangeLimits", Vec3(0, 0, 0))
 
     def setGroundOverlay(self, active, points=None, color=OVERLAY_NORMAL):
         """Set the movement/shooting range overlay on the ground card and
         broadcast it to terrain so the indicator wraps over hills/water."""
+        self.ground.setShaderInput("skirmishRangeActive", False)
         if points is not None:
             self.ground.setShaderInput("polygonpoints", points)
         self.ground.setShaderInput("isActive", active)
         self.ground.setShaderInput("overlayColor", Vec3(*color))
         if hasattr(self, 'terrain_manager'):
             self.terrain_manager.set_move_overlay(active, points, color)
+
+    def setSkirmishRangeOverlay(self, unit, allowance, charge):
+        """Move/march reach and the maximum charge boundary (pp. 121, 123, 185)."""
+        self.setGroundOverlay(False)
+        position = unit.bodyNP.getPos(self.render)
+        spent = unit.moveSpentThisTurn
+        limits = Vec3(max(0.0, allowance - spent), max(0.0, 2 * allowance - spent), charge)
+        surfaces = [self.ground] + [piece.visual for piece in self.terrain_manager.terrain_pieces]
+        for surface in surfaces:
+            surface.setShaderInput("skirmishRangeCenter", Vec2(position.x, position.y))
+            surface.setShaderInput("skirmishRangeLimits", limits)
+            surface.setShaderInput("skirmishRangeActive", True)
 
     def _wood_box(self, parent, x0, x1, y0, y1, z0, z1, texture, tint,
                   tile=1.0):
@@ -2660,6 +2681,9 @@ class MyApp(ShowBase):
 
     def onRightClick(self, unit):
         """Right-click backs out of aiming, or commits a plotted move."""
+        if getattr(self, 'skirmishEditor', None) is not None:
+            self.skirmishEditor.cancel()
+            return
         if self.awaitingChoice:
             return          # an open choice menu handles its own right-click
         if self.isAiming():
@@ -2669,6 +2693,11 @@ class MyApp(ShowBase):
         # stale arcPoint would teleport the unit — as it did when
         # right-clicking while aiming or casting.
         if not taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
+            return
+        if (self.fsm.state == 'MovementPhase' and getattr(unit, 'isSkirmisher', False)
+                and unit.state == 'Idle' and not getattr(unit, 'skirmishCombat', False)):
+            from skirmish_ui import confirm_plotted_move
+            confirm_plotted_move(self, unit)
             return
         self.moveUnit(unit)
 

@@ -74,6 +74,9 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if getattr(self.game, 'skirmishEditor', None) is not None:
+            battle_log('Confirm or cancel the formation move first.', 'info')
+            return
         if self.state == 'DeployPhase':
             if getattr(self.game, 'awaitingChoice', False):
                 return
@@ -227,6 +230,13 @@ class GamePhaseFSM(FSM):
         )
 
     def exitMovementPhase(self):
+        from skirmish_ui import clear_plot_preview
+        clear_plot_preview(self.game)
+        editor = getattr(self.game, 'skirmishEditor', None)
+        if editor is not None:
+            editor.close(resume=False)
+        if getattr(self.game, 'skirmishAdjustButton', None) is not None:
+            self.game.skirmishAdjustButton.hide()
         taskMgr.remove("taskLoopPathTowardsMouse")
         self._cleanup_phase()
         self.game.ignore('mouse1')
@@ -311,6 +321,8 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if getattr(self, '_spell_origin', None) == 'CombatPhase':
             return
+        for unit in self.game.units:
+            unit.spreadToSkirmish()
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
         # The charge bonus lasts only the turn of the charge.

@@ -311,6 +311,9 @@ class CombatResolver:
             print("Charge cancelled.")
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            unit.isChargingMove = False
+            unit.wouldMarch = False
             self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, "taskLoopPathTowardsMouse")
             self.game.autoCharge = False
             self.game.autoHold = False
@@ -561,12 +564,13 @@ class CombatResolver:
         """The roll-needed readout. A pursuit adds no Movement and sums 2D6, so
         it reaches further than a charge's discard-lowest roll."""
         swiftstride = unit_has_swiftstride(unit)
-        needed = math.ceil(self.game.moveArceDistance)
+        needed = math.ceil(self.game.moveArceDistance - 0.001)
         if unit.state == "IsPursuing":
             return (f"Roll needed: {needed:.0f}"
                     f"   (max pursuit {max_pursuit_range(swiftstride)}\")")
-        return (f"Roll needed: {needed - int(maxmove):.0f}"
-                f"   (max charge {max_charge_range(int(maxmove), swiftstride)}\")")
+        needed = max(0, math.ceil(self.game.moveArceDistance - maxmove - 0.001))
+        return (f"Roll needed: {needed:.0f}"
+            f"   (max charge {max_charge_range(maxmove, swiftstride):g}\")")
 
     def chargeThroughDifficult(self, unit, from_pos) -> bool:
         """True if the charge path meets terrain that hinders movement, which
@@ -871,9 +875,7 @@ class CombatResolver:
         return
 
     async def _skirmishChargeInterval(self, unit, defenderNP, oposUnit, orotUnit, flank, chdice=None):
-        """Charge move for Skirmishers: straight in, keeping facing, no wheel or
-        flank-align pivot.  The charge roll is still made; if it falls short the
-        unit advances only the rolled distance and does not reach combat."""
+        """Resolve the roll and anchor Skirmisher ranks to contact (pp. 186-187)."""
         maxmove = self.game.movement.movementAllowance(unit, oposUnit, self.game.playerNP.getPos())
 
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
@@ -893,25 +895,58 @@ class CombatResolver:
 
         chdist = self.chargeDistance(unit, oposUnit, chdice)
 
+        defenderUnit = self.game.getSelectedUnit(defenderNP.node())
+        from skirmish_charge import supported_pair, supported_formed_target
+        formation = None
+        formed_target = supported_formed_target(unit, defenderUnit)
+        planned_pair = supported_pair(unit, defenderUnit) or formed_target
+        if not planned_pair:
+            rule_skipped('Skirmishers', unit,
+                         f'individual form-up against {defenderUnit.unit.name} is not supported '
+                         'for this pairing; using legacy alignment (p. 187 LEFTOVER)')
+        if planned_pair:
+            from scouts import model_base_boxes
+            from skirmish_charge import plan_skirmish_charge, plan_formed_charge
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            if formed_target:
+                formation = plan_formed_charge(
+                    model_base_boxes(unit), model_base_boxes(defenderUnit), chdist, oposUnit)
+            else:
+                formation = plan_skirmish_charge(
+                    model_base_boxes(unit), model_base_boxes(defenderUnit), chdist,
+                    self.game.movement.movementAllowance(defenderUnit))
+            if formation is not None:
+                await self._formSkirmishCharge(unit, defenderUnit, formation)
+
         target = self.game.playerNP.getPos()
         d = target - oposUnit
         dist = d.length()
         dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
-        reached = chdist >= self.game.moveArceDistance
-        travel = dist if reached else min(chdist, dist)
+        reached = chdist + 0.001 >= self.game.moveArceDistance
+        if planned_pair:
+            reached = formation is not None
+        failed_distance = (chdist if unit.state == 'IsPursuing' else
+                           charge_roll(chdice, self.chargeThroughDifficult(unit, oposUnit)))
+        travel = dist if reached else min(failed_distance, dist)
         endp = oposUnit + dirn * travel
 
-        unit.bodyNP.setPos(oposUnit)
-        unit.bodyNP.setHpr(orotUnit)
-        await LerpPosHprInterval(unit.bodyNP, duration=0.5,
-                                 pos=endp, hpr=orotUnit, blendType='easeInOut')
+        if formation is None:
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            await LerpPosHprInterval(unit.bodyNP, duration=0.5,
+                                     pos=endp, hpr=orotUnit, blendType='easeInOut')
 
         for terning in terninger:
             terning.remove(self.game.world)
 
         if not reached:
             print("Charge fell short \u2014 skirmishers did not reach the enemy.")
+            rule_log('Failed Charge', unit,
+                     f'range {chdist:g}" cannot reach; dice {chdice} -> '
+                     f'advances {travel:.2f}" without adding M (p. 121)')
             self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
+            unit.isChargingMove = False
             unit.request("Moved")
             return
 
@@ -943,7 +978,7 @@ class CombatResolver:
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True
-        unit.chargeDistance = float(travel)
+        unit.chargeDistance = float(formation.distance if formation is not None else travel)
         defenderUnit.wasChargedThisTurn = True
         self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
         if defenderUnit.state != "InCombat":
@@ -952,9 +987,44 @@ class CombatResolver:
         unit.isInCombatFlank.append("front")
         defenderUnit.isInCombatWith.append(unit)
         defenderUnit.isInCombat = True
-        defenderUnit.isInCombatFlank.append(flank)
+        defenderUnit.isInCombatFlank.append(formation.flank if formation is not None else flank)
         unit.updateTextNode()
         defenderUnit.updateTextNode()
+
+    async def _formSkirmishCharge(self, unit, defender, formation):
+        """Chargers first; only loose defenders subsequently form up (pp. 186-187)."""
+        from direct.interval.IntervalGlobal import Parallel
+        from skirmish_charge import apply_fighting_rank
+
+        def intervals(member, rank, indices):
+            children = list(member.model.getChildren())
+            moves = []
+            for model_index in indices:
+                slot = rank.order.index(model_index)
+                child = children[model_index]
+                world = Point3(*rank.positions[slot], child.getZ(render))
+                local = child.getParent().getRelativePoint(render, world)
+                moves.append(LerpPosHprInterval(
+                    child, duration=0.3, pos=local,
+                    hpr=(rank.heading - child.getParent().getH(render), 0, 0),
+                    blendType='easeInOut'))
+            return moves
+
+        await Parallel(*intervals(unit, formation.attacker, [formation.first_attacker]))
+        remaining = [index for index in formation.attacker.order if index != formation.first_attacker]
+        if remaining:
+            await Parallel(*intervals(unit, formation.attacker, remaining))
+        apply_fighting_rank(self.game, unit, formation.attacker)
+        if formation.defender is not None:
+            await Parallel(*intervals(defender, formation.defender, formation.defender.order))
+            apply_fighting_rank(self.game, defender, formation.defender)
+            result = (f'{formation.attacker.files} chargers face {formation.defender.files} defenders '
+                      'in touching fighting ranks (p. 187)')
+        else:
+            result = (f'{formation.attacker.files} chargers touch {defender.unit.name}\'s '
+                      f'{formation.flank}; formed defender stays fixed (p. 186)')
+        rule_log('Skirmishers', unit,
+                 f'first model {formation.first_attacker + 1} moves {formation.distance:.2f}"; {result}')
 
     # ─── Flank Detection ──────────────────────────────────────────────────
 

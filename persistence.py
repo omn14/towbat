@@ -202,6 +202,8 @@ def save_game_state(game, filename=None):
             'nmodels': unit.unit.nmodels,
             'files': unit.unit.files,
             'ranks': unit.unit.ranks,
+            'skirmish_layout': (unit.savedSkirmishLayout()
+                                if hasattr(unit, 'savedSkirmishLayout') else None),
             'points_cost': unit.unit.model.characteristics.get('Points', 0) * unit.unit.nmodels,
             'characteristics': unit.unit.model.characteristics,
             'armor_save': unit.unit.model.armor_save,
@@ -299,6 +301,10 @@ def load_game_state(game, filename):
         print(f"[persistence] {message}")
         messenger.send('hud-log', [message, 'morale'])
         return
+
+    editor = getattr(game, 'skirmishEditor', None)
+    if editor is not None:
+        editor.close(resume=False)
 
     # Restore FSM state
     game.fsm.currentPhaseIndex = game_state['current_phase_index']
@@ -517,6 +523,12 @@ def load_game_state(game, filename):
     for unit in game.units:
         if getattr(unit, 'joinedCharacter', None) is not None:
             unit.placeCharacter()
+
+    for unit_data in game_state['units']:
+        unit = unit_map.get(unit_data['name'])
+        if (unit is not None and hasattr(unit, 'restoreSkirmishLayout')
+                and (unit.isSkirmisher or unit.unit.model.is_skirmisher())):
+            unit.restoreSkirmishLayout(unit_data.get('skirmish_layout'))
 
     # A challenge outlives the turn it was issued in (To The Death!, p. 211).
     game.challenges = []

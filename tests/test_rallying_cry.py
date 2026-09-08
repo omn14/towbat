@@ -217,7 +217,7 @@ def test_early_rally_only_preserves_normal_attempt_on_failure(
     unit = SimpleNamespace(
         unit=SimpleNamespace(model=SimpleNamespace(is_veteran=lambda: False),
                              nmodels=5, name='Fleeing Troops'),
-        request=Mock(), attemptedRallyThisTurn=False)
+        request=Mock(), spreadToSkirmish=Mock(), attemptedRallyThisTurn=False)
     game = SimpleNamespace(
         psychology=SimpleNamespace(leadership_of=lambda unit: (6, None),
                                    battle_standard_of=lambda unit: None),
@@ -230,3 +230,4 @@ def test_early_rally_only_preserves_normal_attempt_on_failure(
     assert asyncio.run(MyApp.rallyUnit(game, unit, command=command)) is rallied
     assert unit.attemptedRallyThisTurn is attempted
     assert unit.request.called is rallied
+    assert unit.spreadToSkirmish.call_count == int(rallied)

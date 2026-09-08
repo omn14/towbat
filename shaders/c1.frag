@@ -57,6 +57,7 @@ float sdPolygon( in vec2 p, in vec2[maxpoints] v )
 // the mipmap chain fades it exactly as the live grainFade used to.
 uniform sampler2D matTex;
 #pragma include "shadow.glsl"
+#pragma include "skirmish_ranges.glsl"
 
 vec3 battleMat(vec2 uv) {
     vec3 col = texture(matTex, (uv - boardMin) / (boardMax - boardMin)).rgb;
@@ -86,7 +87,9 @@ void main() {
     // Everything standing on the board drops its shadow here.
     ground = shadeSun(ground, sunShadow(eyePos));
 
-    if (isActive) {
+    if (skirmishRangeActive) {
+        p3d_FragColor = vec4(skirmishRangeOverlay(ground, uv * 100.0 - 50.0), 1.0);
+    } else if (isActive) {
         // Movement / shooting range overlay drawn on top of the grass.
         float d = sdPolygon(uv, polygonpoints);
         vec3 o = (d > 0.0) ? ground : overlayColor;

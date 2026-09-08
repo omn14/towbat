@@ -598,14 +598,82 @@ army-agnostic and would benefit every faction.
       LEFTOVER: no Rank Bonus improvement, and no weapon-profile variants
       (Grinding Attacks, whirling blades). Armour Piercing is done for a heavy
       chariot's Scythed Wheels; Crushing Weight still has no effect.
-- [x] Skirmishers — DONE (Phases 0–3 + the Phase 4 panic guard): rule flag, no
-      rank bonus, enemy-fire -1, 360° arc, loose-blob layout, free 360° move with
-      destination ghost, form-up/spread in combat, and fleeing Skirmishers no
-      longer panic formed friendlies they flee through. Leftovers: true per-model
-      coherency (one bodyNP), "see through gaps" LoS, >50%-visible charge gate,
-      terrain nuance — see SKIRMISHERS_PLAN.md. Note: skirmisher status comes
-      from the army list's special_rules (unit-level rule), not the base
-      catalogue model profile.
+- [ ] Skirmishers — PARTIAL (Rulebook pp. 184–187; FAQ v1.5.3): baseline rule
+      flag, no rank bonus, enemy-fire -1, 360° arc and fled-through Panic guard.
+      Added saved per-model IDs/positions, connected edge-to-edge coherency,
+      coherency-safe ordinary casualties, bridge-character replacement, legacy
+      save migration and a ghost-only formation editor. Group/model movement
+      shares validation and spends the longest individual travel once. Actual
+      base ghosts show validity; Confirm/Cancel, width/gap/angle and phase locking
+      make adjustment optional. Terrain tests count crossed models/features;
+      flyers suffer landing terrain only. A lone surviving character stays alive.
+      Corrected: jitter gaps, rank cleanup moving loose survivors, missing saved
+      layouts, pre-reduced casualty counts, joined-character terrain death,
+      exactly-M float precision and clipped editor labels. Movement squares now
+      render unshaded after the 3D scene, so terrain/models cannot hide their edges;
+      pixel checks cover every edge in ordinary movement, charging and the editor.
+      The cursor now names CHARGE targets in cyan, MOVE in green, MARCH in amber,
+      and BLOCKED in red with its reason. Human non-charge clicks open Confirm/Cancel
+      without spending movement; charges retain Yes/No. Both preview and click use
+      the same destination/contact checks. Corrected the sweep/contact rounding
+      gap and charging flags after declining; stale indicators are cleared.
+      Follow-up: 94 tests passed, including 32 Skirmishers scene tests; inspected
+      1280x720 and 800x600 renders. The original milestone passed 349 neighbouring
+      tests plus 75 geometry subtests; offscreen demo in saves/skirmishers.json.
+      Charge follow-up (pp. 121, 187): cursor/direct commits now use M + 6
+      (+3 Swiftstride maximum), not 2M; ordinary moves cannot spend extra charge
+      reach. Status shows distance/maximum and the roll-needed readout handles
+      contact epsilon. Two loose units without joined characters now move the
+      closest charger first, form its reachable rank, then align defenders within
+      M. Facing, frontage and model identities survive combat entry/save/load.
+      Chosen-slot coherency casualties are removed and logged (FAQ v1.5.3).
+      Corrected failure fallback falsely reaching contact, failed charges adding
+      M, direct-call range bypass and exact-range precision. Unsupported pairings
+      explicitly log legacy alignment. Validation: 612 tests and 75 geometry
+      subtests, including 192 uneven-frontage combinations; real animations and
+      1280x720/800x600 alignment renders checked.
+      Formed-target correction (p. 186): a column charging a formed rear no longer
+      snaps into a rank short of the enemy. Closest-model-first planning anchors
+      every fighting base to the charged edge, keeps the formed defender fixed,
+      preserves rear/flank bookkeeping and uses rear slots for other reachable
+      models. Preview/resolution share the distance; tied closest models remain
+      deterministic under rotation. No joined characters or already-engaged target
+      in this path. Verification: 627 tests and 75 subtests, including three real
+      rear-charge rotations and twelve face/frontage fixtures. Real animations
+      and contact renders checked at 1280x720 and 800x600.
+      Compact lifecycle correction (p. 185): leaving combat no longer immediately
+      rebuilds a loose blob. Non-fleeing, unengaged units separate at Combat-phase
+      end; engaged units and temporary spell transitions retain compact ranks.
+      HOUSE RULE requested by the user: fleeing compact units wait for successful
+      Rally (including Rallying Cry), not the printed end-phase timing. Failed
+      Rally, phase changes, save/load and casualties preserve compact survivors.
+      Separation preserves current positions, IDs, facing and attached characters
+      through tiny uniform expansion; applied/refused changes are logged.
+      Verification: 747 tests and 82 subtests passed, including human/AI Rally
+      branches, actual flee animation, compact casualties and phase/save boundaries.
+      Ground indicator follow-up: green normal-move and amber march bands show
+      remaining movement; dashed cyan charge reach is independent and respects
+      charge restrictions. Shared shader code wraps terrain and clears with the
+      preview. Ordinary destination squares clamp through the existing per-model
+      legality check; refused charges hide their squares without becoming marches.
+      Corrected extra-charge-reach ordinary previews and copied-surface shader
+      defaults. Verification: 761 tests and 82 subtests; inspected 1280x720 and
+      800x600 screenshots with band-color and outside-range pixel assertions.
+      LEFTOVER: active formation switching; true per-model LoS/range and gap
+      visibility; all-US1 shooting checks including joined models; >50%-visible
+      and arc-straddling charge declarations; formed chargers against loose
+      defenders, mixed/joined/multi-charge form-up and stepped rear faces;
+      exact contact orientation, alternative ranks before forced losses and
+      individual charge paths/terrain; command/champion
+      and exact troop-subcategory joining; minimum legal separation constrained
+      by terrain, other units and board edges (invalid compact layouts are refused);
+      flank/rear scoring and disruption; forced incoherency choices; reinforcements,
+      templates/low obstacles, individual detours, march Leadership and broader
+      AI integration. Normal cursor destination sweeps remain conservative, and
+      circular shader shading shows range, not obstacle-aware legal routes;
+      unsupported pairings retain visual approximations. See SKIRMISHERS_PLAN.md for the
+      staged remainder and precise limitations. Skirmishers permission can come
+      from army-list special_rules, not only the catalogue model profile.
 - [x] Scouts — DONE for deployment and first-own-turn charges (Rulebook p. 177;
       Official FAQ & Errata v1.5.3). Selecting an eligible unit offers ordinary
       deployment or setting it aside. Reserving Scouts is not a deployment drop:

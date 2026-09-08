@@ -787,8 +787,14 @@ class MovementSystem:
                 self.game.setGroundOverlay(False)
                 return
             # Skirmishers move as a loose group: free 360° translation, no wheel.
-            if getattr(unit, 'isSkirmisher', False) and result.hasHit():
-                self._skirmishMovePreview(unit, result.getHitPos())
+            if getattr(unit, 'isSkirmisher', False):
+                if result.hasHit():
+                    self._skirmishMovePreview(unit, result.getHitPos())
+                else:
+                    from skirmish_ui import clear_plot_preview
+                    clear_plot_preview(self.game)
+                    self.game.arcPoint = None
+                    self.game.setGroundOverlay(False)
                 return
 
 
@@ -1108,7 +1114,16 @@ class MovementSystem:
         """Free-move preview for Skirmishers: straight-line translation up to
         the move allowance in any direction (no wheel), with a circular range
         indicator.  Sets arcPoint (normalised) + arcPointRotation=0 for moveUnit.
+
+        A verified enemy contact may advance 0.0001 inches beyond the sweep's
+        rounded boundary so Bullet's pair test recognizes the same contact.
         """
+        if not in_vanguard(self.game) and unit.state not in ('Idle', 'IsPursuing'):
+            from skirmish_ui import clear_plot_preview
+            clear_plot_preview(self.game)
+            self.game.arcPoint = None
+            self.game.setGroundOverlay(False)
+            return
         half = abs(self.game.ground.getTightBounds()[0][0]) or 50.0
         cur = unit.bodyNP.getPos()
         _model = unit.unit.model
@@ -1119,6 +1134,8 @@ class MovementSystem:
                    max(0.0, allowance * 2.0 - unit.moveSpentThisTurn))
         if in_vanguard(self.game):
             maxmove = max(0.0, allowance - unit.moveSpentThisTurn)
+        elif unit.state == 'Idle':
+            maxmove = max(maxmove, max_charge_range(allowance, unit_has_swiftstride(unit)))
 
         d = Vec3(target.x - cur.x, target.y - cur.y, 0)
         dist = d.length()
@@ -1134,6 +1151,12 @@ class MovementSystem:
                                            dirn, clamped, pass_over=False)
             if frac < 1.0:
                 clamped *= frac
+            if self.game.fsm.state == 'MovementPhase' and unit.state == 'Idle':
+                from skirmish_movement import contact_target_at
+                contact_distance = min(dist, maxmove + 0.0001, clamped + 0.0001)
+                contact_target = contact_target_at(self.game, unit, cur + dirn * contact_distance)
+                if contact_target is not None and not same_player(self.game, unit, contact_target):
+                    clamped = contact_distance
             endp = cur + dirn * clamped
 
         self.game.arcPoint = Vec2((endp.x / half + 1) * 0.5, (endp.y / half + 1) * 0.5)
@@ -1155,13 +1178,48 @@ class MovementSystem:
         # Ghost footprint showing where the unit will end up.
         if getattr(self.game, 'skirmMoveGhost', None):
             self.game.skirmMoveGhost.removeNode()
-        self.game.skirmMoveGhost = self.drawRectangle(
-            center=Point3(endp.x, endp.y, 0.3),
-            width=unit.unitWidth, height=unit.unitHeight,
-            color=(0.4, 1.0, 0.4, 1.0))
+        if self.game.fsm.state == 'MovementPhase' and unit.state == 'Idle':
+            from skirmish_movement import draw_preview, limited_move_preview, preview_action, unavailable_reason
+            from skirmish_ui import show_plot_status
+            preview = preview_action(self.game, unit)
+            if preview.charge_target is None:
+                plotted = self.game.arcPoint
+                self.game.arcPoint = Vec2((target.x / half + 1) * 0.5, (target.y / half + 1) * 0.5)
+                aimed = preview_action(self.game, unit)
+                if aimed.charge_target is not None and aimed.error:
+                    preview = aimed
+                else:
+                    self.game.arcPoint = plotted
+            if preview.charge_target is None and not unavailable_reason(self.game, unit):
+                preview = limited_move_preview(self.game, unit, preview.destination)
+                endp = Point3(*preview.destination)
+                self.game.arcPoint = Vec2((endp.x / half + 1) * 0.5, (endp.y / half + 1) * 0.5)
+                self.game.unitHitPos = endp
+                self.game.playerNP.setPos(endp)
+            unit.wouldMarch = preview.marched
+            self.game.moveArceDistance = preview.distance
+            self.game.skirmMoveGhost = None if preview.error else draw_preview(render, preview)
+            show_plot_status(self.game, preview)
+            from scouts import scout_charge_blocked
+            from vanguard import vanguard_charge_blocked
+            if unavailable_reason(self.game, unit):
+                self.game.setGroundOverlay(False)
+            else:
+                charge = max_charge_range(preview.allowance, unit_has_swiftstride(unit))
+                if (unit.cannotChargeThisTurn or scout_charge_blocked(self.game, unit)
+                        or vanguard_charge_blocked(self.game, unit)):
+                    charge = 0.0
+                self.game.setSkirmishRangeOverlay(unit, preview.allowance, charge)
+        else:
+            self.game.skirmMoveGhost = self.drawRectangle(
+                center=Point3(endp.x, endp.y, 0.3),
+                width=unit.unitWidth, height=unit.unitHeight,
+                color=(0.4, 1.0, 0.4, 1.0))
 
     def moveUnit(self, unit):
         from scouts import scout_charge_blocked
+        from skirmish_ui import clear_plot_preview
+        clear_plot_preview(self.game)
         if in_vanguard(self.game):
             return commit_vanguard_move(self.game, unit)
         if taskMgr.hasTaskNamed("taskLoopPathTowardsMouse"):
@@ -1216,6 +1274,38 @@ class MovementSystem:
                 self.game.autoHold = False
                 self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
                 return
+
+        if (c and getattr(unit, 'isSkirmisher', False) and unit.state == 'Idle'
+                and not same_player(self.game, unit, defenderUnit)):
+            from skirmish_movement import preview_action
+            contact_position = unit.bodyNP.getPos()
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            preview = preview_action(self.game, unit)
+            unit.wouldMarch = False
+            if preview.error:
+                rule_skipped('Skirmishers', unit, f'charge refused: {preview.error}; movement restored')
+                unit.isChargingMove = False
+                self.game.autoCharge = False
+                self.game.autoHold = False
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+                return
+            self.game.moveArceDistance = preview.distance
+            unit.bodyNP.setPos(contact_position)
+            unit.bodyNP.node().setTransformDirty()
+
+        if (getattr(unit, 'isSkirmisher', False) and unit.state == 'Idle'
+                and (not c or same_player(self.game, unit, defenderUnit))):
+            from skirmish_movement import commit_move
+            destination = tuple(unit.bodyNP.getPos())
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            committed = commit_move(self.game, unit, destination=destination)
+            if not committed:
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse,
+                                            'taskLoopPathTowardsMouse')
+            return committed
 
         # Do not mark or announce marching for a refused Scout charge.
         if getattr(unit, 'wouldMarch', False):
@@ -1372,6 +1462,7 @@ class MovementSystem:
             self.removeModelsFromUnit(unit, slain)
 
     def removeModelsFromUnit(self, unit, models_to_remove):
+        """Remove rendered casualties; combat callers may already reduce nmodels."""
         # Unit may have already been fully removed by another simultaneous combat
         if unit not in self.game.units:
             print(f"removeModelsFromUnit: {unit.unitName} is no longer in game, skipping.")
@@ -1395,6 +1486,24 @@ class MovementSystem:
                      unit.bodyNP.getH())
         cildren = unit.model.getChildren()
         models_to_remove = min(len(cildren), models_to_remove)
+        if getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False):
+            from scouts import model_base_boxes
+            from skirmish import casualty_indices
+            unit.unit.nmodels = len(cildren)
+            boxes = model_base_boxes(unit)
+            protected = range(len(cildren), len(boxes))
+            removed = casualty_indices(boxes, models_to_remove, protected=protected)
+            for index in removed:
+                cildren[index].removeNode()
+            unit.skirmishLayout = [record for index, record in enumerate(unit.skirmishLayout)
+                                   if index not in removed]
+            if removed:
+                rule_log('Skirmishers', unit,
+                         f'{len(removed)} casualties removed without breaking coherency; '
+                         f'{len(cildren) - len(removed)} ordinary models remain in place (p. 184)')
+            models_to_remove = 0
+        elif getattr(unit, 'isSkirmisher', False):
+            unit.skirmishLayout = unit.skirmishLayout[:len(cildren) - models_to_remove]
         #unit.model.ls()
         for i in range(models_to_remove):
             #cildren[-1*(i+1)].removeNode()
@@ -1405,6 +1514,23 @@ class MovementSystem:
         # Keep the logical model count in sync with the surviving models.
         unit.unit.nmodels = len(cildren)
         if len(cildren) == 0:
+            if (getattr(unit, 'isSkirmisher', False) and not unit.skirmishCombat
+                    and getattr(unit, 'joinedCharacter', None) is not None):
+                from characters import detach_character, side_of
+                character = unit.joinedCharacter
+                owner = side_of(self.game, unit)
+                character.bodyNP.wrtReparentTo(unit.bodyNP.getParent())
+                detach_character(unit)
+                character._player = owner
+                character.hasMovedThisTurn = unit.hasMovedThisTurn
+                character.marchedThisTurn = unit.marchedThisTurn
+                character.moveSpentThisTurn = unit.moveSpentThisTurn
+                (self.game.player1Units if owner == 1 else self.game.player2Units).append(character)
+                self.game.world.attachRigidBody(character.bodyNP.node())
+                if getattr(self.game, 'roundCounter', None) is not None:
+                    self.game.roundCounter.apply_selection_masks()
+                rule_log('Skirmishers', character,
+                         'the last ordinary model is lost; the surviving character remains in place (p. 184)')
             print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
             try:
                 if self.game.attackSequence.isPlaying():

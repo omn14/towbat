@@ -98,9 +98,10 @@ def join_unit(game, character, host) -> bool:
     # The character stands in the middle of the front rank, and the unit's own
     # models close up around it, so the one it displaces ends up at the back.
     host.characterSlot = max(1, host.unit.files) // 2
+    host.skirmishCharacterPosition = None
     host.layOutRanks()
-    host.rebuildFootprint()
     host.placeCharacter()
+    host.rebuildFootprint()
 
     # Remember the character's side before it leaves the player lists so a save
     # can still record which player it belongs to.
@@ -131,6 +132,7 @@ def detach_character(host):
     character = get_joined_character(host)
     host.joinedCharacter = None
     host.characterSlot = None
+    host.skirmishCharacterPosition = None
     hm = host.unit.model
     hm.special_rules = [r for r in hm.special_rules
                         if not (isinstance(r, dict) and r.get('tag') == JOIN_TAG)]
@@ -149,6 +151,22 @@ def slay_character(game, character):
     leave the host pointing at a destroyed model.
     """
     host = getattr(character, 'hostUnit', None)
+    if (host is not None and getattr(host, 'isSkirmisher', False)
+            and not getattr(host, 'skirmishCombat', False)):
+        from scouts import model_base_boxes
+        from skirmish import targeted_replacement
+        from rules_log import rule_log
+        boxes = model_base_boxes(host)
+        replacement = targeted_replacement(boxes, len(boxes) - 1,
+                                           range(host.unit.nmodels))
+        if replacement is not None:
+            position = character.bodyNP.getPos(host.bodyNP)
+            record = host.skirmishLayout[replacement]
+            record['x'], record['y'] = position.x, position.y
+            host.applySkirmishLayout()
+            rule_log('Skirmishers', host,
+                     f'model {record["id"] + 1} replaces slain {character.unit.name}; '
+                     'remaining models stay coherent (p. 184, FAQ v1.5.3)')
     detach_character(host)
     if not character.model.isEmpty():
         character.model.removeNode()
