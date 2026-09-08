@@ -1,12 +1,14 @@
 """Rulebook p. 187 fighting-rank and individual movement regressions."""
 
 import math
+from types import SimpleNamespace
 
 import pytest
 
 from psychology import obb_distance
 from skirmish import layout_positions
-from skirmish_charge import formed_contact, plan_formed_charge, plan_skirmish_charge
+from skirmish_charge import (formed_contact, plan_formed_charge, plan_skirmish_charge,
+                             plan_skirmish_defence, supported_skirmish_defender)
 
 
 def boxes(positions, heading=0):
@@ -135,3 +137,65 @@ def test_formed_face_frontage_and_rear_ranks(side, heading):
     distance = formed_contact(attackers, defenders)[2]
     assert plan.distance == pytest.approx(distance)
     assert plan_formed_charge(attackers, defenders, distance - 0.01) is None
+
+
+@pytest.mark.parametrize('heading', [0, 37, 90, 180, 270])
+def test_loose_defenders_form_against_stationary_formed_front(heading):
+    angle = math.radians(heading)
+
+    def rotate(position):
+        horizontal, vertical = position
+        return (horizontal * math.cos(angle) - vertical * math.sin(angle),
+                horizontal * math.sin(angle) + vertical * math.cos(angle))
+
+    attackers = boxes([rotate((column, row)) for row in (0, -1) for column in (-1, 0, 1)], heading)
+    defenders = boxes([rotate(position) for position in
+                       [(0, 1), (-1.6, 1), (1.6, 1), (0, 2.6), (-1.6, 2.6), (1.6, 2.6)]], heading)
+    originals = list(attackers), list(defenders)
+    rank = plan_skirmish_defence(attackers, defenders, 3)
+    assert rank is not None and rank.files == 5
+    assert rank.lost == [] and len(rank.positions) == 6
+    assert (rank.heading - heading) % 360 == pytest.approx(180)
+    assert (attackers, defenders) == originals
+    assert all(min(obb_distance((*position, 0.5, 0.5, rank.heading), box) for box in attackers[:3]) < 1e-5
+               for position in rank.positions[:rank.files])
+    assert all(math.dist(defenders[index][:2], position) <= 3 + 1e-5
+               for index, position in zip(rank.order, rank.positions))
+
+
+@pytest.mark.parametrize('movement,files', [(0.2, 1), (0.4, 3), ([4, 0.2, 0.4], 2)])
+def test_formed_charge_defenders_respect_individual_movement(movement, files):
+    attackers = boxes([(0, 0)])
+    defenders = boxes([(0, 1), (-1.2, 1.3), (1.2, 1.3)])
+    rank = plan_skirmish_defence(attackers, defenders, movement)
+    assert rank is not None and rank.files == files
+    limits = movement if isinstance(movement, list) else [movement] * len(defenders)
+    assert all(math.dist(defenders[index][:2], position) <= limits[index] + 1e-5
+               for index, position in zip(rank.order, rank.positions))
+
+
+@pytest.mark.parametrize('defenders', [[], boxes([(0, 1.1)]), boxes([(0, -2)]),
+                                      [(0, 1, 0.5, 0.5, 0), (1.6, 1, 1, 0.5, 0)]])
+def test_formed_charge_defence_refuses_missing_front_contact_or_mixed_bases(defenders):
+    assert plan_skirmish_defence(boxes([(0, 0), (0, -1)]), defenders, 4) is None
+
+
+@pytest.mark.parametrize('position,allowed', [((0, 1), True), ((1, 0), True),
+                                             ((1, -0.25), False), ((0, -1), False)])
+def test_defence_requires_front_edge_contact_not_just_a_front_row_model(position, allowed):
+    rank = plan_skirmish_defence(boxes([(0, 0)]), boxes([position]), 4)
+    assert (rank is not None) is allowed
+
+
+@pytest.mark.parametrize('member,attribute,value', [
+    ('attacker', 'joinedCharacter', object()), ('defender', 'joinedCharacter', object()),
+    ('attacker', 'state', 'IsPursuing'), ('defender', 'state', 'IsFleeing'),
+    ('defender', 'state', 'InCombat'), ('defender', 'skirmishCombat', True),
+    ('attacker', 'isSkirmisher', True), ('defender', 'isSkirmisher', False),
+])
+def test_defender_form_up_keeps_unsupported_pairings_on_legacy_path(member, attribute, value):
+    attacker = SimpleNamespace(isSkirmisher=False, state='Idle', joinedCharacter=None)
+    defender = SimpleNamespace(isSkirmisher=True, state='Idle', joinedCharacter=None, skirmishCombat=False)
+    assert supported_skirmish_defender(attacker, defender)
+    setattr(attacker if member == 'attacker' else defender, attribute, value)
+    assert not supported_skirmish_defender(attacker, defender)

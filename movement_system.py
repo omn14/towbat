@@ -568,14 +568,15 @@ class MovementSystem:
                          f'terrain {modifier:+g}M; {detail}; unit allowance {allowance:g}"')
         return allowance
 
-    def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1') -> int:
+    def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1', *, features=None) -> int:
         """Test every model against each dangerous feature the move met, and
         apply the wounds (Rulebook p. 269)."""
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return 0
-        self.magicalVortexTests(unit, from_pos, to_pos)
-        features = tm.dangerous_between(from_pos, to_pos)
+        self.magicalVortexTests(unit, from_pos, to_pos, features=features)
+        features = (tm.dangerous_between(from_pos, to_pos) if features is None
+                else [piece for piece in features if piece.is_dangerous])
         if not features:
             return 0
         names = ', '.join(sorted({t.terrain_type for t in features}))
@@ -595,7 +596,7 @@ class MovementSystem:
             total += wounds
         return total
 
-    def magicalVortexTests(self, unit, from_pos, to_pos):
+    def magicalVortexTests(self, unit, from_pos, to_pos, *, features=None):
         """Burn *unit* for every enemy Magical Vortex its move passed through.
 
         This rides the same hook as the Dangerous Terrain test because both ask
@@ -604,7 +605,7 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return
-        crossed = set(tm.get_terrain_between(from_pos, to_pos))
+        crossed = set(tm.get_terrain_between(from_pos, to_pos) if features is None else features)
         for spell in list(getattr(self.game, 'remainsInPlay', [])):
             piece = getattr(spell, 'piece', None)
             if piece is None or unit not in spell.enemies(self.game):
@@ -750,6 +751,12 @@ class MovementSystem:
 
     def pathTowardsMouse(self,unit,x=None,y=None):
         if x is None and y is None and (base.mouseWatcherNode is None or not base.mouseWatcherNode.hasMouse()):
+            if getattr(unit, 'formedSkirmishPreview', None) is not None:
+                from skirmish_ui import clear_plot_preview
+                unit.formedSkirmishPreview = None
+                clear_plot_preview(self.game)
+                self.game.arcPoint = None
+                self.game.setGroundOverlay(False)
             return
         if x is None and y is None:
             self.game.unitToMove=unit
@@ -797,6 +804,17 @@ class MovementSystem:
                     self.game.setGroundOverlay(False)
                 return
 
+
+            from formed_skirmish_charge import plot_charge
+            if not result.hasHit():
+                from skirmish_ui import clear_plot_preview
+                unit.formedSkirmishPreview = None
+                clear_plot_preview(self.game)
+                self.game.arcPoint = None
+                self.game.setGroundOverlay(False)
+                return
+            if not in_vanguard(self.game) and plot_charge(self.game, unit, result.getHitPos()):
+                return
 
             #self.game.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
             #self.game.move_node_smoothly(self.game.smiley, result.getHitPos() + Vec3(0,0,0.1), duration=0.5)
@@ -1239,6 +1257,14 @@ class MovementSystem:
         
         if unit.hasMovedThisTurn:
             print("Unit has already moved this turn.")
+            return
+
+        formed_preview = getattr(unit, 'formedSkirmishPreview', None)
+        if formed_preview is not None:
+            from functools import partial
+            taskMgr.add(partial(self.game.combat.chargeAndChargeReaction, defender=formed_preview.target),
+                        extraArgs=[unit, None, unit.bodyNP.getPos(), unit.bodyNP.getHpr()], appendTask=True)
+            unit.isChargingMove = True
             return
 
         pos = self.game.arcPoint

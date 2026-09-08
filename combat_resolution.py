@@ -145,12 +145,23 @@ class CombatResolver:
                          "already engaged in combat when charged")
             return None
         chargerPos = charger.bodyNP.getPos() if fromPos is None else fromPos
-        blocked = self.game.terrain_manager.los_block_point(
-            defender.bodyNP.getPos(), chargerPos)
-        if blocked is not None:
-            rule_skipped('Stand & Shoot', defender,
-                         f"no line of sight to {charger.unit.name}")
-            return None
+        from shooting_geometry import shooting_solution, uses_individual_shooting
+        target_boxes = None
+        if uses_individual_shooting(self.game, defender, charger):
+            from formed_skirmish_charge import starting_boxes
+            target_boxes = starting_boxes(charger, fromPos, fromHpr)
+            shooting = shooting_solution(self.game, defender, charger, weapon=weapon,
+                                         stand_and_shoot=True, target_boxes=target_boxes)
+            if not shooting.eligible:
+                rule_skipped('Stand & Shoot', defender, f'{shooting.detail()} at declaration (pp. 120, 137)')
+                return None
+        else:
+            blocked = self.game.terrain_manager.los_block_point(
+                defender.bodyNP.getPos(), chargerPos)
+            if blocked is not None:
+                rule_skipped('Stand & Shoot', defender,
+                             f"no line of sight to {charger.unit.name}")
+                return None
         psy = self.game.psychology
         chargerBox = psy._unit_box(charger)
         if fromPos is not None:
@@ -158,6 +169,10 @@ class CombatResolver:
             chargerBox = (chargerPos.x, chargerPos.y,
                           chargerBox[2], chargerBox[3], heading)
         distance = obb_distance(psy._unit_box(defender), chargerBox)
+        if target_boxes is not None:
+            from scouts import model_base_boxes
+            distance = min(obb_distance(source, target) for source in model_base_boxes(defender)
+                           for target in target_boxes)
         movement = charger.unit.model.get_movement(4)
         quick = bool(weapon.get('quick_shot')
                      or has_quick_shot(weapon.get('special_rules')))
@@ -173,7 +188,7 @@ class CombatResolver:
                      f"{distance:.1f}\" away, inside its Movement of {movement}\", "
                      f"and may still be Stood & Shot at (p. 175)")
         return SimpleNamespace(weapon=weapon, distance=distance,
-                               movement=movement, quick=quick)
+                               movement=movement, quick=quick, target_boxes=target_boxes)
 
     def fireAndFleeOption(self, defender, charger, opt):
         """Whether *defender* may Fire & Flee (p. 169), given its shooting option.
@@ -185,7 +200,7 @@ class CombatResolver:
         """
         return bool(opt) and defender.unit.model.has_fire_and_flee()
 
-    async def standAndShoot(self, defender, charger, weapon, distance=None):
+    async def standAndShoot(self, defender, charger, weapon, distance=None, *, target_boxes=None):
         """Fire the charged unit's missile weapon at the charging unit (p. 120).
 
         The weapon is equipped for the shot: a unit expecting a fight may have
@@ -200,13 +215,13 @@ class CombatResolver:
                  f"{weapon.get('name', 'its missile weapon')} at -1 To Hit, "
                  f"and no long range modifier (p. 139)")
         await self.game.shootAt(defender, charger, stand_and_shoot=True,
-                                distance=distance)
+                                distance=distance, **({'target_boxes': target_boxes} if target_boxes is not None else {}))
         # equip_weapon also rewrites special_rules, so put the melee weapon
         # back through it rather than by assignment.
         if slot is not None and previous:
             defender.unit.model.equip_weapon(previous)
 
-    async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task):
+    async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task, defender=None):
         pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
                         'Vanguard' if in_vanguard(self.game) or vanguard_charge_blocked(self.game, unit) else None)
         if unit.state != 'IsPursuing' and pregame_rule:
@@ -222,8 +237,30 @@ class CombatResolver:
         chargeYesNo = ["Yes", "No"]
         # Declaring the charge is the charger's call; reacting to it is the
         # defender's, and they need not belong to the same player.
-        defenderNP = render.find(f"**/{c.getNode1().getName()}")
-        defender = self.game.getSelectedUnit(defenderNP.node())
+        if defender is None:
+            defenderNP = render.find(f"**/{c.getNode1().getName()}")
+            defender = self.game.getSelectedUnit(defenderNP.node())
+        else:
+            defenderNP = defender.bodyNP
+        from formed_skirmish_charge import preview_charge
+        from skirmish_charge import supported_skirmish_defender
+        formed_preview = None
+        unit.formedSkirmishCharge = None
+        if supported_skirmish_defender(unit, defender) or c is None:
+            formed_preview = preview_charge(self.game, unit, defender, oposUnit, orotUnit)
+            if formed_preview.error:
+                rule_skipped('Skirmishers', unit,
+                             f'charge refused before reactions or dice: {formed_preview.error}; movement retained (p. 186)')
+                unit.bodyNP.setPos(oposUnit)
+                unit.bodyNP.setHpr(orotUnit)
+                unit.bodyNP.node().setTransformDirty()
+                unit.isChargingMove = unit.wouldMarch = False
+                self.game.autoCharge = self.game.autoHold = False
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+                return task.done
+            self.game.moveArceDistance = formed_preview.route.distance
+            self.game.playerNP.setPos(*formed_preview.route.destination)
+            unit.formedSkirmishCharge = formed_preview
         visibility = None
         if (getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False)
                 and unit.state != 'IsPursuing'):
@@ -251,6 +288,12 @@ class CombatResolver:
                        + (f'\n{visibility.detail(defender.unitName)}' if visibility is not None else '')))
 
         if cynchoice == "Yes":
+            if formed_preview is not None:
+                route = formed_preview.route
+                rule_log('Skirmishers', unit,
+                         f'closest visible model {route.target_index + 1} of {defender.unitName}: '
+                         f'wheel {abs(route.wheel):.1f} degrees costs {route.wheel_distance:.2f}", '
+                         f'approach {route.lead + route.advance:.2f}" -> {route.distance:.2f}" charge declared (p. 186)')
             if visibility is not None:
                 rule_log('Skirmishers', unit,
                          f'{visibility.detail(defender.unitName)} -> charge declared (p. 186)')
@@ -290,7 +333,7 @@ class CombatResolver:
                            f"— how does it react?"))
             if crchoice == "fire & flee":
                 await self.standAndShoot(defender, unit, shootOption.weapon,
-                                         shootOption.distance)
+                                         shootOption.distance, target_boxes=getattr(shootOption, 'target_boxes', None))
                 rule_log('Fire & Flee', defender,
                          f"volley fired at {unit.unit.name}, now turning tail: "
                          f"the Flee roll discards its lowest die rather than "
@@ -299,14 +342,19 @@ class CombatResolver:
                 fireAndFlee = True
             elif crchoice == "stand & shoot":
                 await self.standAndShoot(defender, unit, shootOption.weapon,
-                                         shootOption.distance)
+                                         shootOption.distance, target_boxes=getattr(shootOption, 'target_boxes', None))
                 # "Once this shooting has been resolved, the charged unit will
                 # Hold and await the charging unit" (p. 120).
                 crchoice = "hold"
+            if formed_preview is not None and (unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty()):
+                unit.formedSkirmishCharge = unit.formedSkirmishPreview = None
+                unit.isChargingMove = False
+                rule_skipped('Skirmishers', unit, 'charger destroyed by reaction; no charge roll or form-up (p. 120)')
+                return task.done
             if crchoice == "hold":
                 print("Defender holds position.")
 
-                flank, angleToRotate = self.getFlankFromContact(unit, c)
+                flank, angleToRotate = ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c)
 
                 unit.hasMovedThisTurn = True
                 unit.updateTextNode()
@@ -315,7 +363,14 @@ class CombatResolver:
                             appendTask=False)
 
             elif crchoice == "flee":
-                flank, angleToRotate = self.getFlankFromContact(unit, c)
+                flank, angleToRotate = ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c)
+                if formed_preview is not None:
+                    rule_skipped('Skirmishers', unit,
+                                 'defender flees: legacy chase/redirect movement replaces the planned contact route; '
+                                 'no defender form-up (LEFTOVER, p. 186)')
+                    unit.bodyNP.setPos(*formed_preview.route.destination)
+                    unit.bodyNP.setH(formed_preview.route.heading + formed_preview.route.wheel)
+                    unit.formedSkirmishCharge = None
                 print("Defender flees!")
                 loserUnit = self.game.getSelectedUnit(defenderNP)
                 loserUnit.request("IsFleeing")
@@ -330,6 +385,7 @@ class CombatResolver:
 
         else:
             print("Charge cancelled.")
+            unit.formedSkirmishCharge = None
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
             unit.bodyNP.node().setTransformDirty()
@@ -604,6 +660,11 @@ class CombatResolver:
                     for participant in self.game.movement.movementParticipants(unit)]
         if all(profile.is_flying() for profile in profiles):
             return False
+        planned = getattr(unit, 'formedSkirmishCharge', None)
+        if planned is not None:
+            from formed_skirmish_charge import route_features
+            return (any(piece.movement_modifier < 0 for piece in route_features(self.game, planned.route))
+                    and not all(profile.is_move_through_cover() for profile in profiles))
         return (tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
                 and not all(profile.is_move_through_cover() for profile in profiles))
 
@@ -613,14 +674,25 @@ class CombatResolver:
         """
         if unit.state == 'IsPursuing':
             return sum(dice)
-        movement = self.game.movement.movementAllowance(
-            unit, from_pos, self.game.playerNP.getPos(), log=True)
+        planned = getattr(unit, 'formedSkirmishCharge', None)
+        if planned is not None:
+            from formed_skirmish_charge import route_allowance, route_features
+            movement = route_allowance(self.game, unit, planned.route)
+            difficult = any(piece.movement_modifier < 0 for piece in route_features(self.game, planned.route))
+        else:
+            movement = self.game.movement.movementAllowance(
+                unit, from_pos, self.game.playerNP.getPos(), log=True)
+            tm = getattr(self.game, 'terrain_manager', None)
+            difficult = tm is not None and tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
         rough = self.chargeThroughDifficult(unit, from_pos)
         result = charge_roll(dice, rough)
-        tm = getattr(self.game, 'terrain_manager', None)
+        if planned is not None:
+            rule_log('Charge Move', unit,
+                     f'route M{movement:g}, dice {dice} keep {"lowest" if rough else "highest"} '
+                     f'-> {movement + result:g}" range (pp. 121, 269)')
         profiles = [participant.unit.model
                     for participant in self.game.movement.movementParticipants(unit)]
-        if (tm is not None and tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
+        if (difficult
             and any(profile.is_move_through_cover() for profile in profiles)
             and not all(profile.is_flying() for profile in profiles)):
             if rough:
@@ -636,6 +708,10 @@ class CombatResolver:
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
+        planned = getattr(unit, 'formedSkirmishCharge', None)
+        if planned is not None and planned.target.bodyNP == defenderNP:
+            await self._formedSkirmishChargeInterval(unit, planned, oposUnit, orotUnit, chdice)
+            return
         # Skirmishers charge straight in — no wheel, no flank-align pivot — but
         # the charge roll is still made and must reach the target to connect.
         if getattr(unit, 'isSkirmisher', False):
@@ -815,7 +891,10 @@ class CombatResolver:
                 unit.request("Moved")
                 return
 
-        await self.alignToEnemy(unit, angleToRotate, 0.5 * durIntConst)
+        if await self._formChargedSkirmishers(unit, defenderUnit):
+            flank = 'front'
+        else:
+            await self.alignToEnemy(unit, angleToRotate, 0.5 * durIntConst)
 
         # A pursuer often reaches something other than the unit it set off
         # after, and the two cases read identically on the board.
@@ -894,6 +973,117 @@ class CombatResolver:
                 terning.remove(self.game.world)
             del terninger
         return
+
+    async def _formedSkirmishChargeInterval(self, unit, preview, origin, facing, chdice=None):
+        """Resolve the declared per-base route; defenders align only on success (p. 186)."""
+        from direct.interval.IntervalGlobal import Parallel
+        from direct.interval.LerpInterval import LerpFunc
+        from formed_skirmish_charge import route_to_model, starting_boxes, route_allowance, route_features
+        from scouts import model_base_boxes
+        defender = preview.target
+        route = preview.route
+        self.game.diceInfoText.setText(self.chargeRangeText(
+            unit, route_allowance(self.game, unit, route)))
+        if not self.game.autoRoll:
+            bonus = await self.swiftstrideChargeChoice(unit)
+            dice_models, chdice = await self.rullTerninger(3 if bonus else 2, bonus)
+        else:
+            dice_models = []
+            chdice = [6, 6] if chdice is None else chdice
+        self.game.autoCharge = self.game.autoHold = False
+        original = starting_boxes(unit, origin, facing)
+        if original != route.original_boxes:
+            obstacles = [box for other in self.game.units if other not in (unit, defender)
+                         and other.isDeployed and getattr(other, 'hostUnit', None) is None
+                         for box in model_base_boxes(other)]
+            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                             for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
+            route = route_to_model(original, model_base_boxes(defender), route.target_index, origin, obstacles)
+        if route is not None:
+            preview.route = route
+            self.game.moveArceDistance = route.distance
+            self.game.playerNP.setPos(*route.destination)
+        distance = self.chargeDistance(unit, origin, chdice)
+        reached = route is not None and distance + 1e-5 >= route.distance
+        if route is None:
+            route = preview.route
+        travel = route.distance if reached else min(route.distance, charge_roll(chdice, self.chargeThroughDifficult(unit, origin)))
+        unit.bodyNP.setPos(origin)
+        unit.bodyNP.setHpr(facing)
+
+        def position_at(amount):
+            position, heading = route.pose(amount)
+            unit.bodyNP.setPos(*position)
+            unit.bodyNP.setHpr(heading, facing.y, facing.z)
+            unit.bodyNP.node().setTransformDirty()
+
+        await Parallel(LerpFunc(position_at, fromData=0, toData=travel, duration=0.7, blendType='easeInOut'))
+        for die in dice_models:
+            die.remove(self.game.world)
+        unit.formedSkirmishCharge = unit.formedSkirmishPreview = None
+        unit.isChargingMove = False
+        self.game.diceInfoText.setText('')
+        self.game.debugTextInfo.setText('')
+        self.game.movement.dangerousTerrainTests(unit, origin, unit.bodyNP.getPos(),
+                               features=route_features(self.game, route, travel))
+        if unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty():
+            return
+        if not reached:
+            rule_log('Failed Charge', unit,
+                     f'route {route.distance:.2f}", rolled range {distance:g}"; dice {chdice} '
+                     f'-> moves {travel:.2f}" without adding M (p. 121)')
+            unit.request('Moved')
+            return
+        if not await self._formChargedSkirmishers(unit, defender):
+            rule_skipped('Skirmishers', unit, 'contact reached but defender cannot form; charge not engaged (p. 186)')
+            unit.request('Moved')
+            return
+        for participant, opponent in ((unit, defender), (defender, unit)):
+            participant.request('InCombat')
+            participant.isInCombat = True
+            participant.isInCombatWith.append(opponent)
+            participant.isInCombatFlank.append('front')
+            participant.updateTextNode()
+        unit.chargedThisTurn = True
+        unit.chargeDistance = route.distance
+        defender.wasChargedThisTurn = True
+
+    async def _formChargedSkirmishers(self, attacker, defender):
+        """Loose defenders align to the formed charger, not vice versa (p. 186)."""
+        from direct.interval.IntervalGlobal import Parallel
+        from scouts import model_base_boxes
+        from skirmish_charge import apply_fighting_rank, plan_skirmish_defence, supported_skirmish_defender
+        if not supported_skirmish_defender(attacker, defender):
+            if getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat:
+                rule_skipped('Skirmishers', defender,
+                             f'defender-only form-up unsupported: charger state {attacker.state}, '
+                             f'defender state {defender.state}, joined models '
+                             f'{int(getattr(attacker, "joinedCharacter", None) is not None) + int(getattr(defender, "joinedCharacter", None) is not None)}; '
+                             'using legacy alignment (p. 186 LEFTOVER)')
+            return False
+        movement = self.game.movement.movementAllowance(defender)
+        rank = plan_skirmish_defence(model_base_boxes(attacker), model_base_boxes(defender), movement)
+        if rank is None:
+            rule_skipped('Skirmishers', defender,
+                         f'cannot form a supported rank within M{movement:g} at actual front-base '
+                         'contact; using legacy alignment (p. 186 LEFTOVER)')
+            return False
+        children = list(defender.model.getChildren())
+        moves = []
+        for index, position in zip(rank.order, rank.positions):
+            child = children[index]
+            world = Point3(*position, child.getZ(render))
+            local = child.getParent().getRelativePoint(render, world)
+            moves.append(LerpPosHprInterval(
+                child, duration=0.3, pos=local,
+                hpr=(rank.heading - child.getParent().getH(render), 0, 0), blendType='easeInOut'))
+        await Parallel(*moves)
+        apply_fighting_rank(self.game, defender, rank)
+        rule_log('Skirmishers', defender,
+                 f'{rank.files} models form the fighting rank within M{movement:g}; '
+                 f'{len(rank.positions) - rank.files} form behind; '
+                 f'{attacker.unit.name} stays fixed without an alignment wheel (p. 186)')
+        return True
 
     async def _skirmishChargeInterval(self, unit, defenderNP, oposUnit, orotUnit, flank, chdice=None):
         """Resolve the roll and anchor Skirmisher ranks to contact (pp. 186-187)."""
@@ -1711,28 +1901,8 @@ class CombatResolver:
 
             if defenderUnit in self.game.player1Units:
                 player1_score += total_wounds
-                for faceing in defenderUnit.isInCombatFlank:
-                    if faceing == 'flank':
-                        player2_flank_bonus += 1
-                    elif faceing == 'rear':
-                        player2_flank_bonus += 2
-                    else:
-                        player2_flank_bonus += 0
-                player1_rank_bonus = min(player1_rank_bonus + rank_bonus(
-                    defenderUnit.unit, getattr(defenderUnit, 'isDisrupted', False)),
-                    MAX_RANK_BONUS)
             else:
                 player2_score += total_wounds
-                for faceing in defenderUnit.isInCombatFlank:
-                    if faceing == 'flank':
-                        player1_flank_bonus += 1
-                    elif faceing == 'rear':
-                        player1_flank_bonus += 2
-                    else:
-                        player1_flank_bonus += 0
-                player2_rank_bonus = min(player2_rank_bonus + rank_bonus(
-                    defenderUnit.unit, getattr(defenderUnit, 'isDisrupted', False)),
-                    MAX_RANK_BONUS)
 
             combWounds = 0
             combWounds += total_wounds
@@ -1802,6 +1972,13 @@ class CombatResolver:
         # is a separate bonus and has its own row.
         p1_wounds = player1_score - impact1 - overkill1
         p2_wounds = player2_score - impact2 - overkill2
+        from psychology import combat_flank_bonus, combat_rank_bonus
+        player1_flank_bonus = sum(combat_flank_bonus(unit, log=True) for unit in p2_units if unit.unit.nmodels > 0)
+        player2_flank_bonus = sum(combat_flank_bonus(unit, log=True) for unit in p1_units if unit.unit.nmodels > 0)
+        player1_rank_bonus = min(MAX_RANK_BONUS, sum(combat_rank_bonus(unit, log=True)
+                               for unit in p1_units if unit.unit.nmodels > 0))
+        player2_rank_bonus = min(MAX_RANK_BONUS, sum(combat_rank_bonus(unit, log=True)
+                               for unit in p2_units if unit.unit.nmodels > 0))
         player1_score += player1_flank_bonus + player1_rank_bonus
         player2_score += player2_flank_bonus + player2_rank_bonus
         player1_standard = battle_standard_bonus(p1_units)

@@ -442,6 +442,9 @@ def load_game_state(game, filename):
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.cannotPursueThisTurn = unit_data.get('cannotPursueThisTurn', False)
         unit.moveSpentThisTurn = unit_data.get('moveSpentThisTurn', 0.0)
+        unit.formedSkirmishPreview = None
+        unit.formedSkirmishCharge = None
+        unit.formedSkirmishCache = None
         unit.manoeuvreThisTurn = unit_data.get('manoeuvreThisTurn', None)
         unit.redressDelta = unit_data.get('redressDelta', 0)
         unit.panicTestedThisPhase = unit_data.get('panicTestedThisPhase', False)

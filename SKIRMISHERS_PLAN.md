@@ -3,9 +3,12 @@
 > Status: **in progress**. The loose-movement foundation and optional formation
 > editor are implemented and tested. This is not complete Skirmish Formation:
 > two loose units now form fighting ranks in sequence, and loose chargers form
-> against an unengaged formed target. Compact fleeing units wait for successful
-> Rally before separating (requested house rule). Per-shooter sight, other charge
-> pairings, combat scoring and constrained separation remain outstanding.
+> against an unengaged formed target. Formed ground chargers now share an actual-base,
+> closest-visible-model approach across cursor, declaration and resolution against
+> supported loose defenders. Compact fleeing units wait for successful
+> Rally before separating (requested house rule). Combat scoring and individual
+> shooting are implemented below; other charge pairings, full height/cover rules
+> and constrained separation remain outstanding.
 > The historical phases below describe the earlier baseline.
 > Note: a unit's skirmisher status comes from the army list's `special_rules`
 > (unit-level rule), not the base catalogue model profile (e.g. Cathay
@@ -154,6 +157,96 @@ LEFTOVER: existing compact combats in saved games are not re-formed. Joined or
 mixed bases, unsupported charge pairings, exact contact/path selection and
 obstacle-aware formation remain subject to the limitations below.
 
+### Formed chargers: contact-stage increment
+
+Source: [Formed Units Charging Skirmishers](https://tow.whfb.app/unusual-formations/formed-units-charging-skirmishers)
+(Rulebook p. 186), with corner contact from p. 145.
+
+- Implemented the post-contact stage for formed chargers against unengaged loose
+  Skirmishers with uniform defending bases and no joined characters. At actual
+  front-base contact, the charger retains its position/facing and does not take
+  the normal alignment wheel. Only the defenders animate into fighting ranks.
+  Corrected contact eligibility to test front-edge segments, not the side/rear
+  of a model merely because it occupies the front row.
+- Defenders face the charging front, with front slots constrained to enemy base
+  contact and every model limited to its Movement allowance. Rear slots and
+  coherency losses use the existing rank builder. Combat records the charged
+  Skirmishers as facing the charger, rather than assigning them a loose flank.
+- Applied logs report the fighting-rank count, rear count, M and the stationary
+  charger. Missing real contact, unsupported rank geometry and unsupported loose
+  pairings retain legacy alignment with an explicit LEFTOVER log. Failed charges
+  never trigger defender form-up.
+
+Verification: reproduced the unwanted alignment call before the fix; 844 tests
+and 82 subtests passed after it. Thirty new cases cover rotated fronts,
+corner contact, individual Movement, missing front contact, mixed/unsupported
+pairings and real charge success/failure at 0, 37 and 180 degrees. Offscreen
+1280x720 and 800x600 contact renders were inspected; model-hidden comparisons
+verified model pixels and all ranks were checked inside the viewport.
+
+The initial contact-stage increment is now connected to the shared approach below.
+Unsupported pairings still retain the explicitly logged legacy fallback.
+
+### Formed chargers: shared approach
+
+Sources: [Formed Units Charging Skirmishers](https://tow.whfb.app/unusual-formations/formed-units-charging-skirmishers)
+(p. 186), [Wheel](https://tow.whfb.app/movement-in-detail/wheel) (p. 124),
+[Manoeuvring During A Charge](https://tow.whfb.app/movement-in-detail/manoeuvring-during-a-charge)
+(p. 126), line of sight (p. 103) and charge/terrain rolls (pp. 121, 269).
+
+- `formed_skirmish_charge.py` selects the closest visible defending model using
+  actual base distances and the formed charger's front arc. Other models and
+  sight-blocking terrain screen individual targets; a blocked route does not
+  silently substitute a farther visible model.
+- The same route supplies the cursor's cyan base ghosts, target index, wheel
+  cost, distance/maximum, declaration validation and live animation. The loose
+  footprint is only a mouse hit area: contact is with an actual model base.
+  Declaration revalidates from the original transform before reactions or dice,
+  without trusting the cursor cache or moving live models. Human Yes/No and
+  direct/AI calls share the gate.
+- Routes contain an optional straight lead, one paid front-corner wheel and a
+  straight approach. Wheel cost is frontage times angle in radians (p. 124).
+  Board edges, other models and impassable rectangles constrain ground paths.
+  After contact, only defenders form within M; no charger alignment wheel is added.
+- Crossed terrain is measured along the swept formation, not merely its centre
+  line. Route M and difficult-terrain charge dice share the existing Move Through
+  Cover protection/logs. Hazard tests use the features crossed by actual travel.
+  Failed charges advance only the charge roll along the route and leave defenders
+  loose. Stand & Shoot survivors retain the declared target model; a rebuilt route
+  supplies the revised terrain cost. A destroyed charger never rolls or forms up.
+- Preview caching invalidates on geometry, terrain and charge-permission changes.
+  Leaving the target/board/window clears the preview; save loading clears transient
+  route/cache state. Logs name target, paid wheel, approach, roll and final frontage;
+  cursor queries remain silent. Flee reactions explicitly log the legacy handoff.
+- Corrections during validation: tightened SAT precision to avoid a corner-contact
+  rounding miss; wrapped `LerpFunc` in an awaitable `Parallel`; removed stale legacy
+  distance labels; rejected removed targets before reading their bases; recalculated
+  terrain cost after reaction casualties and retained Move Through Cover outcome logs.
+
+Verification: 48 new route tests cover rotated/offset approaches, closest-visible
+selection, blockers and a delayed wheel, range refusal, human/AI confirmation,
+success/failure, terrain, cache invalidation, save cleanup and Stand & Shoot.
+The final focused run passed 84 tests including Move Through Cover and Quick Shot.
+Live offscreen animation and preview/contact renders at 1280x720 and 800x600 were
+checked for model pixels, framing, labels and defender-only movement after contact.
+The full-suite run before the final four regression cases reported 1599 passes,
+165 subtests and eight failures. All eight were independently reproduced on an
+isolated `7414299` export with the same catalogue data: four bound-spell phase
+cases, one older Move Through Cover movement-log case, two Shieldwall fixtures
+and one Veteran Rally fixture. They were not changed by this work.
+
+LEFTOVER: route search is bounded, not an exhaustive continuous solver: it samples
+wheel angles through +/-90 degrees (an implementation limit, not a claimed rule
+limit), refines the first contact boundary and tries delayed wheels in 0.5-inch
+steps. It prefers shortest clear routes rather than globally maximizing eventual
+contact across all possible routes. Conservative rotational/rectangular sweeps may
+refuse tight legal paths. Flying obstacle overflight/landing, fleeing-target chase
+and redirects still need route integration; flee currently uses legacy movement.
+Joined/mixed defending bases, multiple chargers, already-engaged defenders and
+pursuit remain unsupported by this planner. Sight is planar; defender form-up
+does not yet resolve individual terrain/obstacle detours or alternate assignments
+before coherency losses. These limits must not be read as completed rule coverage.
+
 ### Formed-target rear-charge correction
 
 Source: <https://tow.whfb.app/unusual-formations/skirmishers-and-charging>
@@ -186,9 +279,9 @@ legal contact orientations, alternative rank arrangements or individual detours;
 forced losses are based on its chosen slots, not an exhaustive formation search.
 Path crossing/obstacles and per-model charge terrain tests still need integration.
 Formed-target planning uses a single outer face; stepped/incomplete rear ranks and
-arc-straddling declarations need further adjudication. Formed units charging loose
-defenders, already-engaged targets, fleeing/pursuing units, joined/command models
-and multiple charges retain the older alignment path. These are not complete
+arc-straddling declarations need further adjudication. The formed ground-charge
+approach above supersedes the earlier loose-defender limitation. Already-engaged targets, fleeing/pursuing units,
+joined/command models and multiple charges retain the older alignment path. These are not complete
 implementations of pp. 186-187. Existing saved misaligned combats are not migrated.
 
 ### Compact fleeing units and Rally
@@ -225,7 +318,7 @@ LEFTOVER: separation uses uniform expansion of local axis-aligned bases, not a
 general minimum-displacement search constrained by terrain, board edges or other
 units. Invalid compact layouts remain compact with a refusal log. Previously
 saved units that were already spread while fleeing cannot recover their old ranks.
-Combat scoring/disruption and the other charge-pairing limitations remain below.
+Combat scoring/disruption is implemented below; other charge-pairing limitations remain.
 
 The reproducible offscreen scenario is `python -m tests.test_skirmish_scene`.
 It writes `saves/skirmishers.json` and `screenshots/skirmishers.png`, without
@@ -270,33 +363,98 @@ sculpt or a complete 3D height model. Large Target and hill-height exceptions,
 irregular terrain silhouettes and detailed woodland visibility need integration.
 Terrain uses conservative rectangles and the existing see-onto/not-through
 convention. The angular interval method assumes non-overlapping model bases.
-Shooting/spell sight remains on its older path; this milestone does not change
-shooting eligibility, cover, per-shooter range or the all-US1 modifier. AI target
+This charge milestone did not change shooting; the individual-shooting follow-up
+below now supplies per-shooter range, sight and the all-US1 modifier. Spell sight
+and cover retain their older paths. AI target
 selection is still its existing policy, although it cannot commit an invalid
 Skirmisher declaration. Arc-straddling charges remain a separate task.
+
+## Combat scoring and individual shooting
+
+Sources: Rulebook pp. 101, 137, 139, 152, 184-185 and Official FAQ v1.5.3:
+[Skirmishers & Rank Bonus](https://tow.whfb.app/unusual-formations/skirmishers-and-rank-bonus),
+[Skirmishers & Disruption](https://tow.whfb.app/unusual-formations/skirmishers-and-disruption),
+[Unusual Formations FAQ](https://tow.whfb.app/faq/unusual-formations),
+[Check Line of Sight](https://tow.whfb.app/the-shooting-phase/check-line-of-sight),
+[Check Range](https://tow.whfb.app/the-shooting-phase/check-range),
+[Skirmishers & Shooting](https://tow.whfb.app/unusual-formations/skirmishers-and-shooting),
+[Enemy Fire](https://tow.whfb.app/unusual-formations/enemy-fire-skirmishers),
+and [Shooting FAQ](https://tow.whfb.app/faq/shooting).
+
+- Compact Skirmishers retain their rank-bonus exemption and grant no enemy
+  flank/rear combat-result points. Their physical contact arcs are unchanged.
+  Skirmishers attacking formed flanks/rears can still score those points, but do
+  not disrupt ranks. Formed enemies with surviving US5+ do disrupt; joined
+  character strength and independent terrain disruption are included.
+- Score these effects once after attack casualties, with outcome logs. Corrected
+  stale stored ranks and slain flank opponents contributing points. Explicit
+  active formation overrides the model keyword; retained compact combat state
+  preserves Skirmisher exemptions. Legal formation switching is still pending.
+- `shooting_geometry.py` supplies the shared target-highlighting, aiming,
+  direct-volley and reaction query whenever a shooter, target or live deployed
+  intervening unit is a Skirmisher. Actual rotated bases block sight, including
+  the shooter's own models; gaps remain transparent. Loose shooters have 360-degree
+  sight. Each eligible model measures its own base-to-base range and range band.
+- Volleys group eligible models by profile and short/long range without changing
+  live files/ranks. Multiple Shots is chosen once, with weighted mixed-range
+  advice. Formed firing/Volley Fire ranks inherit front-file sight while using
+  their own ranges; the joined character's reserved slot is respected, including
+  an unarmed character. Joined shooters use their own weapon and range.
+- Existing whole-unit hill visibility exceptions and the extra firing rank are
+  retained. Stand & Shoot uses declaration-time target bases and sight, waives
+  maximum/long range, and now sends its reaction modifier to both dice and shot
+  reports. Ordinary volleys reset that modifier. Completely screened volleys and
+  invalid direct targets are refused before choices/dice without spending shooting.
+- The enemy-fire penalty requires every live model, including a joined character,
+  to be US1. Applied/skipped logs give the qualifying/total count. Eligibility
+  summaries report short, long, blocked and out-of-range counts; group logs report
+  shots, hits and wounds. Per-model queries and dice loops remain silent.
+
+Verification: 42 scoring and 34 shooting regressions; 164 scoring/psychology tests,
+72 shooting/reaction tests and a final 167-test charge/visibility/scoring/shooting
+gate passed. Inspected aiming renders at 1280x720 and 800x600, with text-bound checks.
+The full run had 1678 passes and 165 passing subtests, with the eight previously
+reproduced baseline failures plus one reaction mock missing the new optional
+keyword; that mock was corrected and the affected 167-test gate passed.
+
+LEFTOVER: this is planar base-centre sight, not complete 3D sculpt/height or Large
+Target visibility. Hill exceptions use the existing whole-unit approximation;
+irregular terrain, detailed woodland visibility and partial/full-cover modifiers
+are not newly implemented. Spell targeting and battles without active Skirmishers
+retain their older sight paths. The circular range overlay remains a unit-centre
+guide, not an exact map of individual legal shots; counts and target highlighting
+are authoritative. Mixed-size formed character placement, general command models,
+joined-model rank contributions and multi-combat allocation remain separate work.
+The AI shares execution legality but has no new per-model tactical planner.
+
+Separate charge LEFTOVER discovered while checking FAQ: the existing formed-route
+wheel cost uses frontage times angle (arc length), whereas the Movement FAQ v1.5.3
+measures the outside front corner's straight-line displacement. Its conservative
+sweep also does not allow every FAQ-permitted rear-corner crossing. This was not
+changed as part of combat scoring/shooting and needs a focused charge correction.
 
 ## Remaining implementation order
 
 1. **Authoritative formation state:** separate permission to adopt Skirmish from
    the active formation; implement legal reform switching. Harden malformed-save
   handling.
-2. **Individual sight and shooting:** extend the charge-sight foundation to
-  per-shooter range/LoS and joined-model Unit Strength for the all-US1 shooting
-  penalty. Shooting still uses centre rays/circular blockers.
+2. **Sight and shooting refinements:** full height/Large Target, detailed terrain
+  and cover; exact per-model overlays and broader tactical AI. Individual range,
+  planar sight and joined-model Unit Strength checks are implemented above.
 3. **Charge sight and arcs:** integrate height/Large Target exceptions and
   detailed terrain visibility; adjudicate arc-straddling declarations. The
   strict-majority gate, visible count and declaration timing are implemented above.
 4. **Charge movement/form-up:** extend the loose/formed-target planners to joined
   and mixed bases, exact contact/path selection and alternative rear arrangements.
-  Implement formed chargers contacting loose defenders without a second alignment
-  wheel. Multiple chargers, command placement and per-model terrain still need
-  integration and fixtures.
+  Closest-visible-model targeting, approach and defender-only form-up for supported
+  formed ground chargers are implemented above; correct the FAQ wheel measurement
+  and improve the bounded route search. Multiple chargers, command placement and per-model
+  terrain still need integration and fixtures.
 5. **Compact combat and constrained separation:** account for terrain, board
   edges and other units when finding the smallest legal separation; timing and
-  the fleeing Rally-only house rule are implemented above. No rank bonus from
-  starting Skirmish, no flank/rear combat-result bonuses against compact
-  Skirmishers, and no disruption by Skirmishers; do not generalize that exemption
-  to all geometry.
+  the fleeing Rally-only house rule are implemented above. Rank, flank/rear
+  scoring and Skirmisher disruption exemptions are now implemented without
+  changing physical contact arcs.
 6. **Shared model mechanics:** exact troop-subcategory joining, command/champion
    representation and fighting-rank placement, directed casualties, multi-combat
    attack allocation and coherent resurrection/reinforcements.
@@ -340,12 +498,12 @@ but does not yet solve surrounding-obstacle or boundary constraints.
 - Units are a single rigid `bodyNP` with `unit.ranks/files/nmodels`; models are
   arranged in a grid in `units.py`. Movement is whole-unit (wheel/rotate) in
   `movement_system.py`.
-- Rank/flank bonus is computed in `combat_resolution.py` (`_verySimpleBattleInner`,
-  ~L687–706) from `unit.ranks`.
+- Rank/flank bonus is computed after casualties in `combat_resolution.py`, using
+  `psychology.combat_rank_bonus` and `combat_flank_bonus` with live model counts.
 - Shooting arc is a ~90° front arc: `shootingArc(..., rotationangle=getH()+45)`
   (`movement_system.py` ~L208, driven from `taskShootingArcUpdate` in `game.py`).
-  LoS currently uses centre rays/circular blockers; `losBlockUnit` is not a
-  complete per-model implementation.
+  Individual eligibility comes from `shooting_geometry.py` when Skirmishers are
+  present; the old range overlay and non-Skirmisher-only sight path remain guides.
 - Ranged To-Hit modifiers already flow through `to_hit_ranged` (it has
   `long_range`) in `toHitAndToWound.py` / `battleFunctions.py`.
 

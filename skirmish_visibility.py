@@ -51,7 +51,7 @@ def _ray_entry(origin, direction, box):
     return near
 
 
-def model_can_see(observer, targets, blockers=()):
+def model_can_see(observer, targets, blockers=(), facing=None):
     """Sight from a base centre to any exposed target edge, not a centre ray.
 
     Between successive vertex angles, disjoint opaque rectangles keep their
@@ -68,6 +68,12 @@ def model_can_see(observer, targets, blockers=()):
                 if hypot(box[0] - origin[0], box[1] - origin[1]) - hypot(box[2], box[3]) <= reach]
 
     def clear(direction):
+        if facing is not None:
+            angle = radians(facing)
+            forward = -sin(angle) * direction[0] + cos(angle) * direction[1]
+            lateral = cos(angle) * direction[0] + sin(angle) * direction[1]
+            if forward < abs(lateral) - 1e-12:
+                return False
         hits = [_ray_entry(origin, direction, target) for target in targets]
         distance = min((hit for hit in hits if hit is not None), default=None)
         if distance is None:
@@ -83,6 +89,8 @@ def model_can_see(observer, targets, blockers=()):
             return True
     angles = sorted({atan2(corner[1] - origin[1], corner[0] - origin[0]) % tau
                      for box in [*targets, *blockers] for corner in _box_corners(*box)})
+    if facing is not None:
+        angles = sorted({*angles, radians(facing + 45) % tau, radians(facing + 135) % tau})
     for first, last in zip(angles, angles[1:] + [angles[0] + tau]):
         if last - first <= 1e-10:
             continue

@@ -702,6 +702,66 @@ def test_skirmisher_column_forms_against_formed_rear(scene, heading):
         assert Vec2(box[0] - previous[0], box[1] - previous[1]).length() <= 9 + 1e-5
 
 
+@pytest.mark.parametrize('heading', [0, 37, 180])
+@pytest.mark.parametrize('dice,succeeds', [([6, 6], True), ([1, 1], False)])
+def test_formed_charger_does_not_align_against_loose_defender(scene, heading, dice, succeeds):
+    import math
+    from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel
+    from psychology import _box_corners, obb_distance
+    app, defender = restore(scene)
+    app.fsm.request('MovementPhase')
+    attacker = next(unit for unit in app.units if unit.unitName == 'Warriors')
+    for index, other in enumerate(app.units):
+        other.bodyNP.setPos(25, 10 + index, 0)
+    forward = Vec3(-math.sin(math.radians(heading)), math.cos(math.radians(heading)), 0)
+    attacker.bodyNP.setPos(forward * -8)
+    attacker.bodyNP.setH(heading)
+    defender.bodyNP.setPos(0, 0, 0)
+    defender.bodyNP.setH(heading + 37)
+    origin, facing = attacker.bodyNP.getPos(), attacker.bodyNP.getHpr()
+    targets = model_base_boxes(defender)
+    identities = [record['id'] for record in defender.skirmishLayout]
+    front = max(corner[0] * forward.x + corner[1] * forward.y
+                for box in model_base_boxes(attacker) for corner in _box_corners(*box))
+    contact = min(corner[0] * forward.x + corner[1] * forward.y
+                  for box in targets for corner in _box_corners(*box)) - front
+    expected = origin + forward * contact
+    attacker.bodyNP.setPos(expected)
+    app.playerNP.setPos(expected)
+    app.moveArceDistance = contact
+    app.autoRoll = False
+
+    def finish_interval(interval):
+        interval.start()
+        interval.finish()
+        return iter(())
+
+    with patch.object(LerpPosHprInterval, '__await__', finish_interval), \
+            patch.object(Parallel, '__await__', finish_interval), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], dice))), \
+            patch.object(app.combat, 'alignToEnemy', AsyncMock()) as align, \
+            patch.object(app.movement, 'dangerousTerrainTests'), \
+            patch('combat_resolution.rule_log') as log:
+        asyncio.run(app.combat.chargeInterval(attacker, defender.bodyNP, 37, origin, facing, 'flank'))
+    align.assert_not_awaited()
+    if not succeeds:
+        assert attacker.state == 'Moved' and not defender.skirmishCombat
+        assert model_base_boxes(defender) == targets
+        return
+    assert attacker.state == defender.state == 'InCombat'
+    assert (attacker.bodyNP.getH() - facing.x + 180) % 360 - 180 == pytest.approx(0, abs=1e-5)
+    assert attacker.bodyNP.getP() == facing.y and attacker.bodyNP.getR() == facing.z
+    assert attacker.bodyNP.getPos().almostEqual(expected, 1e-5)
+    assert defender.isInCombatFlank == ['front']
+    assert all(min(obb_distance(box, target) for target in model_base_boxes(attacker)) < 1e-5
+               for box in model_base_boxes(defender)[:defender.unit.files])
+    for record, box in zip(defender.skirmishLayout, model_base_boxes(defender)):
+        previous = targets[identities.index(record['id'])]
+        assert math.dist(previous[:2], box[:2]) <= app.movement.movementAllowance(defender) + 1e-5
+    assert any('without an alignment wheel' in call.args[2] for call in log.call_args_list)
+
+
 def test_enemy_clearance_clamps_preview_without_spending_move(scene):
     from psychology import obb_distance
     app, member = restore(scene)

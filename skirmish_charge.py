@@ -205,6 +205,54 @@ def plan_skirmish_charge(attackers, defenders, charge_distance, defender_movemen
     return SkirmishCharge(attack, defend, first_attacker, first_defender, distance)
 
 
+def plan_skirmish_defence(attackers, defenders, defender_movement):
+    """Form loose defenders against a stationary contacted front (pp. 145, 186).
+
+    The formed charger never wheels to align. Each defender can move only M;
+    models that cannot touch the enemy form behind, or are lost to coherency.
+    """
+    if not attackers or not defenders:
+        return None
+    if any(abs(box[2] - defenders[0][2]) > EPSILON or
+           abs(box[3] - defenders[0][3]) > EPSILON for box in defenders):
+        return None
+    heading = math.radians(attackers[0][4])
+    forward, right = (-math.sin(heading), math.cos(heading)), (math.cos(heading), math.sin(heading))
+
+    def project(point, axis):
+        return point[0] * axis[0] + point[1] * axis[1]
+
+    edge = max(project(corner, forward) for box in attackers for corner in _box_corners(*box))
+    front = [box for box in attackers if
+             abs(max(project(corner, forward) for corner in _box_corners(*box)) - edge) <= EPSILON]
+    front_edges = [(box[0] + forward[0] * box[3], box[1] + forward[1] * box[3],
+                    box[2], 0, box[4]) for box in front]
+    first = min(range(len(defenders)), key=lambda index: min(
+        obb_distance(defenders[index], box) for box in front_edges))
+    if min(obb_distance(defenders[first], box) for box in front_edges) > EPSILON:
+        return None
+    target = defenders[first]
+    lateral = project(target, right)
+    lower = min(project(corner, right) for box in front for corner in _box_corners(*box)) - target[2]
+    upper = max(project(corner, right) for box in front for corner in _box_corners(*box)) + target[2]
+    lateral = max(lower, min(upper, lateral))
+    anchor = (right[0] * lateral + forward[0] * (edge + target[3]),
+              right[1] * lateral + forward[1] * (edge + target[3]))
+    limits = ([defender_movement] * len(defenders) if isinstance(defender_movement, (int, float))
+              else list(defender_movement))
+    if _distance(target, anchor) > limits[first] + EPSILON:
+        return None
+    return _rank(defenders, limits, first, anchor, (-forward[0], -forward[1]), front_targets=front)
+
+
+def supported_skirmish_defender(attacker, defender):
+    return (not getattr(attacker, 'isSkirmisher', False)
+            and getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat
+            and defender.state not in ('IsFleeing', 'InCombat') and attacker.state != 'IsPursuing'
+            and getattr(attacker, 'joinedCharacter', None) is None
+            and getattr(defender, 'joinedCharacter', None) is None)
+
+
 def supported_pair(attacker, defender):
     return (getattr(attacker, 'isSkirmisher', False) and getattr(defender, 'isSkirmisher', False)
             and not attacker.skirmishCombat and not defender.skirmishCombat

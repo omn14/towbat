@@ -676,17 +676,69 @@ army-agnostic and would benefit every faction.
       ten new rotated, Movement-limit and real charge/render regressions, with
       inspected contact and model pixels at 1280x720 and 800x600. Already-saved
       compact combats are not automatically re-formed.
-      LEFTOVER: active formation switching; per-shooter LoS/range and gap
-      visibility; all-US1 shooting checks including joined models; charge-sight
+      Formed-versus-loose contact stage (p. 186): once a supported formed charger
+      reaches an actual front-base contact, only the loose defenders form up
+      within M; the charger stays fixed without a second alignment wheel. Front
+      slots include corner contact, with remaining models behind. Applied logs
+      give rank/rear counts and M; unsupported loose pairings and missing real
+      contact explicitly log legacy fallback. Front-edge checks reject side/rear
+      contact with a front-row model. Verification: 844 tests and
+      82 subtests, including 30 new geometry, pairing and actual charge cases;
+      inspected 1280x720/800x600 renders with all-model pixel/framing checks.
+      Formed ground-charge approach (pp. 103, 124, 126, 186): cursor, declaration
+      and resolution now share the closest visible model, actual-base contact,
+      one paid approach wheel and optional straight lead. Declaration revalidates
+      before reactions/dice; blocked routes do not choose a farther model instead.
+      Swept formation terrain drives M, charge rolls and hazards; Move Through
+      Cover outcome logs remain shared. Failed charges leave defenders loose;
+      Stand & Shoot survivors retain the target and use revised route terrain.
+      Preview/cache cleanup covers missed rays, leaving the window and save loading.
+      Corrected SAT corner precision, awaitable animation, stale distance labels
+      and removed-target checks. Verification: 48 new route cases, 84 tests in
+      the final focused gate, plus inspected live preview/contact renders at both
+      resolutions. Earlier full run: 1599 passes, 165 subtests, eight failures,
+      all reproduced on isolated committed 7414299 with matching catalogue data
+      (bound-spell phase, older movement logging, Shieldwall and Veteran fixtures).
+      Combat scoring (pp. 101, 152, 185; Unusual Formations FAQ v1.5.3): compact
+      Skirmishers grant no flank/rear points and receive no rank bonus, without
+      changing physical arcs. Skirmisher attackers can score against formed arcs
+      but cannot disrupt ranks. Surviving formed US5+ flank/rear enemies do disrupt,
+      including joined-character strength; terrain disruption remains independent.
+      Corrected stale ranks and slain flankers contributing after casualties.
+      Scores and numerical outcome logs are now resolved once after attacks.
+      Individual shooting (pp. 137, 139, 184-185): shared per-model range/sight
+      drives target highlighting, aiming counts, direct volleys and declaration-time
+      Stand & Shoot. Own/friendly/enemy bases block sight, gaps are transparent,
+      and eligible models fire in profile/range-band groups without editing files.
+      Multiple Shots has one unit choice with mixed-range advice. Formed firing
+      ranks inherit front-file sight; joined characters occupy their actual slot
+      and shoot with their own weapon/range. The all-US1 enemy-fire check includes
+      every live joined model and logs qualifying/total counts. Existing hill
+      visibility and extra firing rank are preserved. Corrected reaction modifiers
+      missing from dice/reports, centre-range summaries and unarmed character slots.
+      Refused volleys retain shooting and roll no dice. Verification: 42 scoring
+      and 34 shooting regressions, 164 scoring/psychology and 72 shooting/reaction
+      passes; final charge/visibility/scoring/shooting gate 167 passes. Both aiming
+      resolutions rendered and inspected. Full run: 1678 passes, 165 subtests,
+      eight known baseline failures and one optional-keyword mock failure, since
+      corrected and covered by that passing focused gate.
+      LEFTOVER: active formation switching; shooting height/cover refinements;
+      spell sight and non-Skirmisher-only battles retain legacy sight; charge-sight
       height/Large Target exceptions and detailed terrain (currently base-centre
       XY sight and conservative rectangles); arc-straddling declarations;
-      formed chargers against loose
-      defenders, mixed/joined/multi-charge form-up and stepped rear faces;
+      continuous formed-route search and global contact maximization (currently
+      bounded angles through +/-90 degrees and 0.5-inch delayed-wheel samples,
+      not rule limits); formed-route wheel distance still uses arc length instead
+      of the Movement FAQ's outside-front-corner straight-line displacement, and
+      conservative sweeps still reject some permitted rear-corner crossings;
+      flying obstacle/landing paths and fleeing-target redirects
+      (explicitly logged legacy chase); mixed/joined/multi-charge form-up and stepped
+      rear faces;
       exact contact orientation, alternative ranks before forced losses and
       individual charge paths/terrain; command/champion
       and exact troop-subcategory joining; minimum legal separation constrained
       by terrain, other units and board edges (invalid compact layouts are refused);
-      flank/rear scoring and disruption; forced incoherency choices; reinforcements,
+      joined-model rank contributions; forced incoherency choices; reinforcements,
       templates/low obstacles, individual detours, march Leadership and broader
       AI integration. Normal cursor destination sweeps remain conservative, and
       circular shader shading shows range, not obstacle-aware legal routes;

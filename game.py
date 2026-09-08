@@ -1351,6 +1351,10 @@ class MyApp(ShowBase):
         readout = "LONG RANGE  (-1 To Hit)" if long_range else "Short range"
         if target is not None:
             readout = f"{target.unit.name}  —  {readout}"
+            from shooting_geometry import shooting_solution, uses_individual_shooting
+            if uses_individual_shooting(self, self.unitToMove, target):
+                detail = shooting_solution(self, self.unitToMove, target).detail().replace('; ', '\n')
+                readout = f'{target.unit.name}\n{detail}'
         self.debugTextInfo.setText(readout)
         return task.cont
 
@@ -1483,6 +1487,21 @@ class MyApp(ShowBase):
         side; a spell may be aimed at a friend, so it passes both.
         """
         pick = CM.OPPONENT_UNIT if pick is None else pick
+        from shooting_geometry import shooting_solution, uses_individual_shooting
+        if (self.fsm.state == 'ShootingPhase' and pick == CM.OPPONENT_UNIT
+                and uses_individual_shooting(self, self.unitToMove, self.unitToMove)):
+            from characters import side_of
+            hit = False
+            for target in self.units:
+                if (target is self.unitToMove or getattr(target, 'hostUnit', None) is not None
+                        or not target.isDeployed or target.unit.nmodels <= 0 or target.isInCombat
+                        or side_of(self, target) == side_of(self, self.unitToMove)):
+                    continue
+                if shooting_solution(self, self.unitToMove, target).eligible:
+                    target.model.setColor(1, 0, 1, 1)
+                    target.bodyNP.setCollideMask(mask)
+                    hit = True
+            return hit
         hit = False
         for point in self.shootingArcPoints:
             point = point * 2
@@ -1940,7 +1959,7 @@ class MyApp(ShowBase):
         return True
 
     async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
-                      distance=None):
+                      distance=None, *, target_boxes=None):
         _moved = self.movedThisTurn(attackerUnit)
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():
@@ -1957,6 +1976,27 @@ class MyApp(ShowBase):
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
+        from shooting_geometry import enemy_fire_modifier, shooting_solution, uses_individual_shooting
+        individual = uses_individual_shooting(self, attackerUnit, defenderUnit)
+        geometry = None
+        if individual:
+            from characters import same_player
+            if (same_player(self, attackerUnit, defenderUnit)
+                    or not attackerUnit.isDeployed or not defenderUnit.isDeployed
+                    or attackerUnit.bodyNP.isEmpty() or defenderUnit.bodyNP.isEmpty()
+                    or getattr(defenderUnit, 'hostUnit', None) is not None
+                    or attackerUnit.isInCombat or attackerUnit.state == 'IsFleeing'
+                    or defenderUnit.isInCombat or defenderUnit.unit.nmodels <= 0
+                    or (not stand_and_shoot and (attackerUnit.hasAttackedThisTurn
+                                                or getattr(attackerUnit, 'chargedThisTurn', False)))):
+                rule_skipped('Skirmishers', attackerUnit, 'shooting refused: unit or target is not eligible (p. 137)')
+                return
+            geometry = shooting_solution(self, attackerUnit, defenderUnit,
+                                         stand_and_shoot=stand_and_shoot, target_boxes=target_boxes)
+            if not geometry.eligible:
+                rule_skipped('Skirmishers', attackerUnit, f'{geometry.detail()} -> no volley; shooting retained (p. 185)')
+                return
+            rule_log('Skirmishers', attackerUnit, f'{geometry.detail()} (pp. 137, 185)')
         # Long range (beyond half the weapon's range) imposes -1 To Hit.
         _half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
         # A charge reaction is measured from where the charge was declared: by
@@ -1964,9 +2004,10 @@ class MyApp(ShowBase):
         _dist = (distance if distance is not None else
                  (attackerUnit.bodyNP.getPos() - defenderUnit.bodyNP.getPos()).length())
         attacker.model.at_long_range = bool(_half and _dist > _half)
+        if geometry is not None:
+            attacker.model.at_long_range = geometry.eligible[0].long_range
         # US1 Skirmisher target imposes -1 To Hit on the shooter.
-        attacker.model.target_skirmisher = (defender.model.is_skirmisher()
-                                             and defender.model.unit_strength() == 1)
+        attacker.model.target_skirmisher = enemy_fire_modifier(defenderUnit, log=individual)
         # Moving and Shooting (p. 139): moved for *any* reason this turn, which
         # includes a manoeuvre the move flag deliberately does not record.
         attacker.model.moved_this_turn = _moved
@@ -1975,15 +2016,21 @@ class MyApp(ShowBase):
         _on_hill, _models = self.movement.modelsInTerrain(
             attackerUnit, lambda t: t.terrain_type == 'hill')
         extra_ranks = 1 if _models and _on_hill == _models else 0
+        if getattr(attackerUnit, 'isSkirmisher', False) and not getattr(attackerUnit, 'skirmishCombat', False):
+            extra_ranks = 0
         if extra_ranks:
             rule_log('Vantage Point', attackerUnit,
                      f"entirely on a hill ({_on_hill}/{_models} models) "
                      f"-> fires with 1 extra rank")
         elif _on_hill:
             rule_skipped('Vantage Point', attackerUnit,
-                         f"only {_on_hill}/{_models} models are on the hill")
+                     f"{_on_hill}/{_models} models on the hill; loose models already fire individually"
+                     if getattr(attackerUnit, 'isSkirmisher', False) and not getattr(attackerUnit, 'skirmishCombat', False)
+                     else f"only {_on_hill}/{_models} models are on the hill")
         print(f"\n[Shooting] {attacker.name} -> {defender.name} | "
-              f"{weapon.get('name', 'weapon')} | range {_dist:.0f}\" ({_tag})"
+              f"{weapon.get('name', 'weapon')} | "
+              + (geometry.detail() if geometry is not None else f'range {_dist:.0f}" ({_tag})')
+              +
               f"{'  | on a hill: +1 firing rank' if extra_ranks else ''}")
         # Multiple Shots is the firer's choice, not a property of the weapon
         # (p. 174), and it binds the whole unit: "all models in a unit equipped
@@ -2030,6 +2077,13 @@ class MyApp(ShowBase):
             _mods = dict(moved=attacker.model.moved_this_turn, **_hit_mods)
             p_single = ranged_hit_chance(attacker.model, multiple_shots=False, **_mods)
             p_multi = ranged_hit_chance(attacker.model, multiple_shots=True, **_mods)
+            if geometry is not None:
+                own = [model for model in geometry.eligible if model.unit is attackerUnit]
+                if own:
+                    p_single = sum(ranged_hit_chance(attacker.model, multiple_shots=False,
+                                   **{**_mods, 'long_range': model.long_range}) for model in own) / len(own)
+                    p_multi = sum(ranged_hit_chance(attacker.model, multiple_shots=True,
+                                  **{**_mods, 'long_range': model.long_range}) for model in own) / len(own)
             exp_shots = attacker.model.expected_ranged_shots(True)
             shots_label = weapon.get('ranged_shots_dice') or weapon.get('ranged_shots')
             multi_label = f"Multiple Shots ({shots_label})"
@@ -2085,19 +2139,39 @@ class MyApp(ShowBase):
             cw = cu.model.equipedWeapon
             if cw and cw.get('tag') == 'ranged':
                 charShooter = cu
-        origFiles = attacker.files
-        if charShooter and origFiles > 1:
-            attacker.files -= 1
-        attacks, total_hits, suffered_wounds,  saves_made, total_wounds = simulate_battle(
-            attacker, defender, charge=False, extra_ranks=extra_ranks,
-            multiple_shots=fire_multiple)
-        attacker.files = origFiles
-        self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
-        if charShooter:
+        if geometry is not None:
+            total_wounds = 0
+            groups = {}
+            for shooter in geometry.eligible:
+                key = (shooter.unit, shooter.long_range)
+                groups[key] = groups.get(key, 0) + 1
+            for (member, long_range), count in groups.items():
+                profile = member.unit.model
+                profile.at_long_range = long_range
+                profile.target_skirmisher = attacker.model.target_skirmisher
+                profile.moved_this_turn = _moved
+                result = simulate_battle(member.unit, defender, charge=False,
+                                        multiple_shots=fire_multiple, firing_models=count,
+                                        stand_and_shoot=stand_and_shoot)
+                rule_log('Shooting', member, f'{count} eligible models at {"long" if long_range else "short"} range '
+                         f'-> {result[0]} shots, {result[1]} hits, {result[4]} wounds (pp. 137, 139)')
+                self.printBattleResults(member, defenderUnit, *result)
+                total_wounds += result[4]
+        else:
+            origFiles = attacker.files
+            if charShooter and origFiles > 1:
+                attacker.files -= 1
+            attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
+                attacker, defender, charge=False, extra_ranks=extra_ranks,
+                multiple_shots=fire_multiple, stand_and_shoot=stand_and_shoot)
+            attacker.files = origFiles
+            self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
+        if charShooter and geometry is None:
             # The character follows the unit's call; its own weapon may not
             # have the rule at all, which simulate_battle checks for itself.
             c_attacks, c_hits, c_suffered, c_saves, c_wounds = simulate_battle(
-                charShooter, defender, charge=False, multiple_shots=fire_multiple)
+                charShooter, defender, charge=False, multiple_shots=fire_multiple,
+                stand_and_shoot=stand_and_shoot)
             self.printBattleResults(attackerUnit, defenderUnit, c_attacks, c_hits, c_suffered, c_saves, c_wounds)
             total_wounds += c_wounds
         attackerUnit.bodyNP.setCollideMask(BitMask32.bit(4))

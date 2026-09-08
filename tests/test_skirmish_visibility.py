@@ -199,7 +199,7 @@ def test_valid_declaration_keeps_sight_decision_after_stand_and_shoot(scene):
     contact = SimpleNamespace(getNode1=lambda: enemy.bodyNP.node())
     app.autoCharge, app.autoHold = True, False
 
-    async def volley(*args):
+    async def volley(*args, **kwargs):
         slay_character(app, character)
 
     with patch.object(app, 'aiControls', return_value=True), \

@@ -259,8 +259,8 @@ def is_skirmish_unit(unit) -> bool:
     """True if *unit* fights in a Skirmish formation."""
     if unit is None:
         return False
-    if getattr(unit, 'isSkirmisher', False):
-        return True
+    if hasattr(unit, 'isSkirmisher'):
+        return bool(unit.isSkirmisher or getattr(unit, 'skirmishCombat', False))
     model = getattr(getattr(unit, 'unit', None), 'model', None)
     check = getattr(model, 'is_skirmisher', None)
     return bool(check()) if callable(check) else False
@@ -474,7 +474,54 @@ MAX_RANK_BONUS = 2
 MODELS_PER_RANK = 5
 
 
-def rank_bonus(unit, disrupted: bool = False) -> int:
+def combat_flank_bonus(unit, *, log=False) -> int:
+    """Points against this unit's arcs (p. 152; Unusual Formations FAQ v1.5.3)."""
+    bonus = sum({'flank': 1, 'rear': 2}.get(face, 0)
+                for enemy, face in zip(getattr(unit, 'isInCombatWith', []),
+                                       getattr(unit, 'isInCombatFlank', []))
+                if enemy.unit.nmodels > 0)
+    if is_skirmish_unit(unit):
+        if log and bonus:
+            rule_log('Skirmishers', unit,
+                     f'enemy flank/rear combat result +{bonus} -> +0; compact ranks do not grant scoring arcs '
+                     '(p. 185; FAQ v1.5.3)')
+        return 0
+    return bonus
+
+
+def combat_rank_bonus(unit, *, log=False) -> int:
+    """Rank points after live flank disruption (pp. 101, 185); terrain stays separate."""
+    bonus = rank_bonus(unit.unit, skirmish=False)
+    if is_skirmish_unit(unit):
+        if log and bonus:
+            rule_log('Skirmishers', unit,
+                     f'formed fighting ranks would give +{bonus} rank bonus -> +0; '
+                     'engaged as Skirmishers (p. 185)')
+        return 0
+    disrupted = bool(getattr(unit, 'isDisrupted', False))
+    for enemy, face in zip(getattr(unit, 'isInCombatWith', []), getattr(unit, 'isInCombatFlank', [])):
+        if face not in ('flank', 'rear') or enemy.unit.nmodels <= 0:
+            continue
+        strength = unit_strength_total(enemy)
+        character = getattr(enemy, 'joinedCharacter', None)
+        if character is not None:
+            strength += unit_strength_total(character)
+        if strength < 5:
+            continue
+        if is_skirmish_unit(enemy):
+            if log and bonus:
+                rule_log('Skirmishers', enemy,
+                         f'US{strength} in {unit.unit.name}\'s {face} does not disrupt; '
+                         f'+{bonus} rank bonus remains subject to other disruption (p. 185)')
+        else:
+            disrupted = True
+            if log and bonus:
+                rule_log('Disruption', unit,
+                         f'US{strength} enemy in {face} -> rank bonus +{bonus} becomes +0 (p. 101)')
+    return 0 if disrupted else bonus
+
+
+def rank_bonus(unit, disrupted: bool = False, *, skirmish=None) -> int:
     """Combat result points a formed unit claims for its ranks.
 
     One per rank behind the first. A rank only counts if it holds at least the
@@ -484,7 +531,7 @@ def rank_bonus(unit, disrupted: bool = False) -> int:
     form ranks at all.
     """
     model = unit.model
-    if disrupted or model.is_skirmisher():
+    if disrupted or (model.is_skirmisher() if skirmish is None else skirmish):
         return 0
     cap = model.max_rank_bonus(MAX_RANK_BONUS)
     if cap <= 0:
@@ -492,7 +539,7 @@ def rank_bonus(unit, disrupted: bool = False) -> int:
     per_rank = model.models_per_rank(MODELS_PER_RANK)
     if per_rank <= 0 or unit.files < per_rank:
         return 0
-    bonus = unit.ranks - 1
+    bonus = (unit.nmodels + unit.files - 1) // unit.files - 1
     remainder = unit.nmodels % unit.files if unit.files else 0
     if 0 < remainder < per_rank:
         bonus -= 1
