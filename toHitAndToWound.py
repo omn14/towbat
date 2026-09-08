@@ -40,6 +40,7 @@ def to_hit(model1,model2):
     return 4
 
 def to_wound(model1,model2,strength=None):
+    """D6 target; 7 means impossible, including S <= T-6 (Rulebook p. 140)."""
     str1 = stat_value(model1.characteristics.get('S')) if strength is None else strength
 
     # Mounted defenders always use the rider's Toughness.
@@ -50,6 +51,9 @@ def to_wound(model1,model2,strength=None):
 
     if str1 <= 0 or toughness2 <= 0:
         return 7   # no Strength to wound with, or nothing left to wound
+
+    if toughness2 - str1 >= 6:
+        return 7
 
     if str1 == toughness2:
         return 4

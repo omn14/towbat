@@ -190,7 +190,8 @@ def format_combat_report(r):
     hit = r['to_hit']
     tw = r['to_wound']
     hit_str = f"{hit}+" if isinstance(hit, int) else str(hit)
-    tw_str = f"{tw}+" if isinstance(tw, int) else str(tw)
+    tw_str = ("impossible" if isinstance(tw, int) and tw > 6
+              else f"{tw}+" if isinstance(tw, int) else str(tw))
     mod_str = f"  ({', '.join(r['modifiers'])})" if r['modifiers'] else ""
     save = r['save']
     save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
@@ -282,7 +283,7 @@ def simulate_attack(model1,model2):
     to_wound_roll = to_wound(model1,model2)
 
     
-    if hit and model1.wound_roll >= to_wound_roll:
+    if hit and to_wound_roll <= 6 and model1.wound_roll >= to_wound_roll:
         wound = True
     else:
         wound = False
@@ -408,6 +409,26 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False):
     return False
 
 
+def _report_too_tough_to_wound(unit, hits, strength, target):
+    """Report the p. 140 cutoff once per resolved batch, never per die."""
+    toughness = (unit.model.get_toughness()
+                 if hasattr(unit.model, 'get_toughness')
+                 else stat_value(unit.model.characteristics.get('T'), 4))
+    if hits <= 0 or strength <= 0 or toughness <= strength:
+        return
+    gap = toughness - strength
+    if target > 6:
+        rule_log('Too Tough to Wound', unit,
+                 f"{hits} hit(s) at S{strength} against T{toughness}: "
+                 f"Strength is {gap} points lower (6 or more) -> "
+                 f"cannot wound, 0 wounds (p. 140)")
+    else:
+        rule_skipped('Too Tough to Wound', unit,
+                     f"{hits} hit(s) at S{strength} against T{toughness}: "
+                     f"Strength is only {gap} points lower, fewer than 6 "
+                     f"-> wounds on {target}+ (p. 140)")
+
+
 def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     """*hits* automatic hits of the given Strength and AP against *unit*.
 
@@ -422,6 +443,7 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
     saves = sum(1 for _ in range(wounds)
                 if check_saves(m, m.melee_armour_save(), ap))
+    _report_too_tough_to_wound(unit, hits, strength, target)
     return wounds, saves, wounds - saves
 
 
@@ -522,12 +544,14 @@ def resolve_impact_hits(unit1, unit2):
     contacting = max(0, min(unit1.files, unit1.nmodels))
     hits = sum(roll_dice_expr(expr) for _ in range(contacting))
 
-    target = to_wound(m, unit2.model, strength=unmodified_strength(m))
+    strength = unmodified_strength(m)
+    target = to_wound(m, unit2.model, strength=strength)
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
 
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     saves = sum(1 for _ in range(wounds)
                 if check_saves(unit2.model, unit2.model.melee_armour_save(), ap))
+    _report_too_tough_to_wound(unit2, hits, strength, target)
     return hits, wounds, saves, wounds - saves
 
 
@@ -542,8 +566,9 @@ def impact_hit_report(unit1, unit2):
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     save = unit2.model.melee_armour_save()
     save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
+    wound_str = "impossible" if target > 6 else f"{target}+"
     return [f"   Impact Hits ({expr}) : {m.name}  S{strength} "
-            f"{f'AP-{ap}' if ap else 'AP0'}  [wound {target}+]",
+            f"{f'AP-{ap}' if ap else 'AP0'}  [wound {wound_str}]",
             f"   Target : {unit2.model.name}  "
             f"T{stat_value(unit2.model.characteristics.get('T'), 4)}  "
             f"save {save_str}"]
@@ -736,6 +761,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             #if total_wounds >= unit2.nmodels:
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
+    wound_target = to_wound(unit1.model, unit2.model)
+    _report_too_tough_to_wound(
+        unit2, total_hits, stat_value(unit1.model.characteristics.get('S')),
+        wound_target)
     troop_type = unit2.model.characteristics.get('Troop Type', 'infantry')
     _report_hatred(unit1, unit2, attacks1, first_round, hated,
                    hatred_rerolls, hatred_converted)
@@ -749,8 +778,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                        or unit1.model.has_monster_slayer()):
         applicable = slaying_rule_for(unit1.model, unit2.model)
         if applicable:
-            rule_skipped(applicable, unit1,
-                         f"no natural 6 To Wound in {attacks1} attack(s)")
+            reason = (f"{unit2.name} cannot be wounded, so it cannot be "
+                      f"killed by {applicable}" if wound_target > 6 else
+                      f"no natural 6 To Wound in {attacks1} attack(s)")
+            rule_skipped(applicable, unit1, reason)
         else:
             name = ('Killing Blow' if unit1.model.has_killing_blow()
                     else 'Monster Slayer')

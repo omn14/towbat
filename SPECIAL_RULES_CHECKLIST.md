@@ -329,11 +329,10 @@ identical without the log. See `.github/copilot-instructions.md`.
       chariot, war beast or war machine cannot be felled by it.
       FAQ: "If a model cannot wound an enemy, it cannot kill it" — so a target
       the attacker could not have wounded at all is safe, which
-      `slaying_blow_struck` reads from the To Wound target being above 6. That
-      has no effect
-      yet, because Too Tough to Wound (below) is still unimplemented and the
-      target never exceeds 6; the guard is in place for when it lands. It is
-      also why an attack that wounds *automatically* cannot use the rule: there
+      `slaying_blow_struck` reads from the To Wound target being above 6.
+      Too Tough to Wound now supplies that impossible target when Strength is
+      six or more below Toughness (p. 140). It is also why an attack that wounds
+      *automatically* cannot use the rule: there
       is no roll to be a natural 6.
       `check_saves` grew a `slaying_blow` flag rather than a second copy of the
       save sequence, so the Ward save keeps its place in the middle of the
@@ -2112,9 +2111,23 @@ clamour of battle, friendly units are seldom able to tell the difference"
       Dispel attempt, and a Remains in Play spell cannot be dispelled after the
       turn it was cast. The vortex is not removed when it drifts off the table
       edge, and it is nudged clear of bases but not of impassable terrain.
-- [ ] Too Tough to Wound — `to_wound` returns 6+ for any Strength shortfall,
-      but a difference of -3 or worse cannot wound at all (Rulebook p. 143).
-      Found while testing Battle Magic; affects all combat, not just spells.
+- [x] Too Tough to Wound (Rulebook p. 140; combat chart p. 149) - Strength
+      six or more points below the target's Toughness cannot wound. Checked
+      https://tow.whfb.app/the-shooting-phase/too-tough-to-wound and the combat
+      To Wound chart. CORRECTED: this entry previously claimed a three-point
+      gap and p. 143; gaps of two through five still wound on 6+.
+      `to_wound` returns the existing impossible target of 7. Melee, shooting,
+      spell hits and Impact Hits share it, using the attack's effective
+      Strength (unmodified Strength for Impact Hits) and target's Toughness.
+      A modified wound die cannot bypass an impossible target. Natural sixes
+      cannot trigger Killing Blow or Monster Slayer against it either.
+      Batch logs show hits, Strength, Toughness, gap and zero wounds, or why
+      the rule was skipped; there is no per-die logging. Combat readouts say
+      "impossible", and slaying-blow refusals name the unwoundable target.
+      Tests: `tests/test_too_tough_to_wound.py` covers boundaries, attack paths,
+      modifiers, saves, both slaying rules and logs.
+      LEFTOVER: no additional rule work; automatic-wound exceptions, when
+      implemented by their own rules, must explicitly define their interaction.
 
 ## Deferred war-machine items
 - [ ] Multiple Wounds (D3+1) generic rule
