@@ -45,6 +45,43 @@ def test_skirmishers_do_not_keep_preset_five_file_frontage():
     assert plan.attacker.files == 7
 
 
+@pytest.mark.parametrize('heading', [0, 37, 90, 180, 270])
+def test_defenders_use_corner_contact_against_one_charging_file(heading):
+    angle = math.radians(heading)
+
+    def rotate(position):
+        horizontal, vertical = position
+        return (horizontal * math.cos(angle) - vertical * math.sin(angle),
+                horizontal * math.sin(angle) + vertical * math.cos(angle))
+
+    attackers = boxes([rotate((0, -4))], heading)
+    defenders = boxes([rotate(position) for position in
+                       [(0, 0), (-1.2, 0.3), (1.2, 0.3),
+                        (0, 1.6), (-1.6, 1.9), (1.6, 1.9)]], heading)
+    plan = plan_skirmish_charge(attackers, defenders, 3, 4)
+    assert plan is not None
+    assert plan.attacker.files == 1
+    assert plan.defender.files == 3
+    assert plan.defender.lost == []
+    assert len(plan.defender.positions) == len(defenders)
+    target = (*plan.attacker.positions[0], 0.5, 0.5, plan.attacker.heading)
+    assert all(obb_distance((*position, 0.5, 0.5, plan.defender.heading), target) < 1e-5
+               for position in plan.defender.positions[:3])
+    assert all(math.dist(defenders[index][:2], position) <= 4 + 1e-5
+               for index, position in zip(plan.defender.order, plan.defender.positions))
+
+
+@pytest.mark.parametrize('movement,files', [(0.2, 1), (0.4, 3), ([4, 0.2, 0.4], 2)])
+def test_corner_contact_still_requires_each_defenders_movement(movement, files):
+    attackers = boxes([(0, -4)])
+    defenders = boxes([(0, 0), (-1.2, 0.3), (1.2, 0.3)])
+    plan = plan_skirmish_charge(attackers, defenders, 3, movement)
+    assert plan.defender.files == files
+    limits = movement if isinstance(movement, list) else [movement] * len(defenders)
+    assert all(math.dist(defenders[index][:2], position) <= limits[index] + 1e-5
+               for index, position in zip(plan.defender.order, plan.defender.positions))
+
+
 @pytest.mark.parametrize('attacking_count', range(2, 10))
 @pytest.mark.parametrize('defending_count', range(2, 10))
 @pytest.mark.parametrize('defender_width', [0.8, 1.0, 2.0])

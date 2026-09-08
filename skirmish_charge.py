@@ -178,6 +178,7 @@ def first_contact(attackers, defenders):
 def plan_skirmish_charge(attackers, defenders, charge_distance, defender_movement):
     """First contact, centred charging rank, then defenders within M (p. 187).
 
+    Defenders must touch the charging fighting rank, including corners (p. 145).
     Bases within each unit must share dimensions. Models unable to form any
     contiguous rank are identified as coherency losses (Official FAQ v1.5.3).
     """
@@ -197,9 +198,10 @@ def plan_skirmish_charge(attackers, defenders, charge_distance, defender_movemen
               else list(defender_movement))
     if _distance(target, defender_anchor) > limits[first_defender] + EPSILON:
         raise ValueError('The contacted defender cannot align within its Movement')
-    max_files = max(1, math.ceil(attack.files * source[2] / target[2]))
+    front_targets = [(*position, source[2], source[3], attack.heading)
+                     for position in attack.positions[:attack.files]]
     defend = _rank(defenders, limits, first_defender, defender_anchor,
-                   (-direction[0], -direction[1]), max_files)
+                   (-direction[0], -direction[1]), front_targets=front_targets)
     return SkirmishCharge(attack, defend, first_attacker, first_defender, distance)
 
 

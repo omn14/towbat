@@ -10,6 +10,7 @@ from psychology import _box_corners, obb_distance
 from rules_log import rule_log, rule_skipped
 from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH, model_base_boxes
 from skirmish import EPSILON, coherency_error, swept_base_overlaps
+from skirmish_visibility import ChargeVisibility, charge_visibility
 from terrain_system import dangerous_terrain_wounds
 from toHitAndToWound import stat_value
 
@@ -27,6 +28,7 @@ class MovePreview:
     charge_target: object | None = None
     charge_maximum: float | None = None
     charge_distance: float | None = None
+    visibility: ChargeVisibility | None = None
 
     @property
     def distance(self):
@@ -66,6 +68,9 @@ def preview_action(game, unit):
         preview.charge_target = target
         preview.marched = False
         preview.error = unavailable_reason(game, unit)
+        preview.visibility = charge_visibility(game, unit, target)
+        if not preview.visibility.allowed:
+            preview.error = preview.error or preview.visibility.detail(target.unitName)
         if supported_pair(unit, target):
             preview.charge_distance = first_contact(model_base_boxes(unit), model_base_boxes(target))[2]
         elif supported_formed_target(unit, target):

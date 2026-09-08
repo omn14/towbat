@@ -659,9 +659,28 @@ army-agnostic and would benefit every faction.
       Corrected extra-charge-reach ordinary previews and copied-surface shader
       defaults. Verification: 761 tests and 82 subtests; inspected 1280x720 and
       800x600 screenshots with band-color and outside-range pixel assertions.
-      LEFTOVER: active formation switching; true per-model LoS/range and gap
-      visibility; all-US1 shooting checks including joined models; >50%-visible
-      and arc-straddling charge declarations; formed chargers against loose
+      Charge sight (pp. 103, 184, 186): strict >50% visibility now gates previews,
+      human clicks, direct AI moves and declarations before reactions/dice.
+      Actual rotated model bases block sight, including friendly/own models;
+      angular intervals detect visible target edges and narrow gaps. Attached
+      characters count once. UI and outcome logs carry visible/total and required
+      counts. Corrected contact-position sight by querying original transforms
+      without mutation; Stand & Shoot casualties do not revoke valid declarations,
+      and pursuit is exempt. Verification: 804 tests and 82 subtests, including
+      43 visibility tests and inspected allowed/blocked panels at both resolutions.
+      Defender frontage correction (pp. 145, 187): replaced the charging-width
+      cap with actual front-base contact, including corners. One charging file
+      can now face three equal-base defending files when each model can reach
+      within M; models without enemy contact still form behind. The existing
+      log reports both frontages. Verification: 407 tests and 82 subtests;
+      ten new rotated, Movement-limit and real charge/render regressions, with
+      inspected contact and model pixels at 1280x720 and 800x600. Already-saved
+      compact combats are not automatically re-formed.
+      LEFTOVER: active formation switching; per-shooter LoS/range and gap
+      visibility; all-US1 shooting checks including joined models; charge-sight
+      height/Large Target exceptions and detailed terrain (currently base-centre
+      XY sight and conservative rectangles); arc-straddling declarations;
+      formed chargers against loose
       defenders, mixed/joined/multi-charge form-up and stepped rear faces;
       exact contact orientation, alternative ranks before forced losses and
       individual charge paths/terrain; command/champion

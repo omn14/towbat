@@ -564,6 +564,94 @@ def test_resolved_two_skirmisher_charge_obeys_dice_and_alignment(scene, dice, su
         assert model_base_boxes(enemy) == original_enemy
 
 
+@pytest.mark.parametrize('size', [(1280, 720), (800, 600)])
+def test_charged_skirmishers_form_wider_rank_at_corners(scene, tmp_path, size):
+    from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel
+    from psychology import obb_distance
+    app, member = restore(scene)
+    app.fsm.request('MovementPhase')
+    enemy = next(unit for unit in app.units if unit.unitName == 'P2 Scouts A')
+    for index, other in enumerate(app.units):
+        other.bodyNP.setPos(25, 10 + index, 0)
+    app.movement.removeModelsFromUnit(member, member.model.getNumChildren() - 1)
+    member.restoreSkirmishLayout(dict(
+        models=[dict(id=member.skirmishLayout[0]['id'], x=0, y=0)], combat=False))
+    width, depth = (dimension * 2 for dimension in model_base_boxes(enemy)[0][2:4])
+    positions = [(0, 0), (-width - 0.2, 0.3), (width + 0.2, 0.3),
+                 (-0.8, depth + 0.9), (0.8, depth + 0.9)]
+    enemy.restoreSkirmishLayout(dict(
+        models=[dict(id=record['id'], x=position[0], y=position[1])
+                for record, position in zip(enemy.skirmishLayout, positions)], combat=False))
+    member.bodyNP.setPos(0, -6, 0)
+    member.bodyNP.setH(0)
+    enemy.bodyNP.setPos(0, 0, 0)
+    enemy.bodyNP.setH(0)
+    enemy.isDeployed = True
+    original_enemy = dict(zip((record['id'] for record in enemy.skirmishLayout),
+                             model_base_boxes(enemy)))
+    origin, facing = member.bodyNP.getPos(), member.bodyNP.getHpr()
+    app.world.doPhysics(1 / 60)
+    app.movement._skirmishMovePreview(member, enemy.bodyNP.getPos())
+    app.autoRoll = False
+
+    def finish_interval(interval):
+        interval.start()
+        interval.finish()
+        return iter(())
+
+    with patch.object(LerpPosHprInterval, '__await__', finish_interval), \
+            patch.object(Parallel, '__await__', finish_interval), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))), \
+            patch.object(app.movement, 'dangerousTerrainTests'), \
+            patch('combat_resolution.rule_log') as log:
+        asyncio.run(app.combat.chargeInterval(member, enemy.bodyNP, 0, origin, facing, 'front'))
+    assert member.state == enemy.state == 'InCombat'
+    assert member.unit.files == 1 and enemy.unit.files == 3
+    assert enemy.unit.nmodels == len(original_enemy) == 5
+    target = model_base_boxes(member)[0]
+    defending = model_base_boxes(enemy)
+    assert all(obb_distance(box, target) < 1e-5 for box in defending[:3])
+    allowance = app.movement.movementAllowance(enemy)
+    for record, box in zip(enemy.skirmishLayout, defending):
+        previous = original_enemy[record['id']]
+        assert Vec2(box[0] - previous[0], box[1] - previous[1]).length() <= allowance + 1e-5
+    assert any('1 chargers face 3 defenders' in call.args[2] for call in log.call_args_list)
+
+    camera_transform = app.camera.getTransform()
+    old_size = (app.win.getXSize(), app.win.getYSize())
+    window = app.openWindow(type='offscreen', size=size, makeCamera=False)
+    for order, camera in enumerate((app.cam, app.cam2d, app.cam2dp)):
+        region = window.makeDisplayRegion()
+        region.setCamera(camera)
+        region.setSort(order * 10)
+    try:
+        app.adjustWindowAspectRatio(size[0] / size[1])
+        app.setGroundOverlay(False)
+        app.camera.setPos(0, -12, 20)
+        app.camera.lookAt(0, 0, 0)
+        app.graphicsEngine.renderFrame()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert window.getScreenshot(image)
+        for box in [target, *defending[:3]]:
+            screen = Point2()
+            assert app.camLens.project(app.cam.getRelativePoint(app.render, Point3(box[0], box[1], 0.5)), screen)
+            assert abs(screen.x) < 0.9 and abs(screen.y) < 0.9
+            horizontal = round((screen.x + 1) * size[0] / 2)
+            vertical = round((1 - screen.y) * size[1] / 2)
+            pixels = [image.getXel(column, row)
+                      for column in range(horizontal - 6, horizontal + 7)
+                      for row in range(vertical - 6, vertical + 7)]
+            assert any(max(pixel) - min(pixel) > 0.2 and
+                       (pixel.x > pixel.y * 1.5 or pixel.z > pixel.y * 1.5) for pixel in pixels)
+        assert image.write(Filename.fromOsSpecific(str(tmp_path / f'corner-contact-{size[0]}x{size[1]}.png')))
+    finally:
+        app.camera.setTransform(camera_transform)
+        app.closeWindow(window, keepCamera=True)
+        app.adjustWindowAspectRatio(old_size[0] / old_size[1])
+
+
 @pytest.mark.parametrize('heading', [0, 37, 180])
 def test_skirmisher_column_forms_against_formed_rear(scene, heading):
     from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel

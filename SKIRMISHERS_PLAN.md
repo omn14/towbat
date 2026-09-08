@@ -4,7 +4,7 @@
 > editor are implemented and tested. This is not complete Skirmish Formation:
 > two loose units now form fighting ranks in sequence, and loose chargers form
 > against an unengaged formed target. Compact fleeing units wait for successful
-> Rally before separating (requested house rule). Per-model sight, other charge
+> Rally before separating (requested house rule). Per-shooter sight, other charge
 > pairings, combat scoring and constrained separation remain outstanding.
 > The historical phases below describe the earlier baseline.
 > Note: a unit's skirmisher status comes from the army list's `special_rules`
@@ -127,6 +127,33 @@ renders were checked at 1280x720 and 800x600, with model pixels verified at 800x
 The existing Vanguard screenshot test still uses runner-only Windows path
 normalization. No new diagnostics in the charge implementation or its tests.
 
+### Defending fighting-rank corner-contact correction
+
+Sources: [Skirmishers Charging Skirmishers](https://tow.whfb.app/unusual-formations/skirmishers-charging-skirmishers)
+(Rulebook p. 187) and [Base Contact](https://tow.whfb.app/the-combat-phase/base-contact)
+(p. 145). Defenders form after the chargers, within each defending model's
+Movement characteristic. Corner-to-corner contact counts as enemy base contact.
+
+- Corrected the defender frontage cap, which copied the charging rank's width
+  and could force both units into one-file columns. The existing contact-aware
+  rank builder now checks each front slot against the actual charging front bases,
+  including their corners, and considers which slot holds the contacted defender.
+- With equal bases, a single charging file can face three defending files if
+  those models can reach. Further defenders still form behind: spare Movement
+  does not permit a front slot without enemy contact. Per-model Movement limits,
+  attacker-first formation and the existing frontage-count log remain in force.
+
+Verification: reproduced one defending file where three could contact with only
+0.36 inches of travel by the outer two models. The correction passed 407 tests
+and 82 subtests across Skirmishers, characters and persistence. Ten new regressions
+cover five rotations, insufficient/asymmetric Movement and actual charge resolution
+at 1280x720 and 800x600. Both renders were inspected; checks cover front-base
+contact, surviving model identities, travel limits, logs and model pixels.
+
+LEFTOVER: existing compact combats in saved games are not re-formed. Joined or
+mixed bases, unsupported charge pairings, exact contact/path selection and
+obstacle-aware formation remain subject to the limitations below.
+
 ### Formed-target rear-charge correction
 
 Source: <https://tow.whfb.app/unusual-formations/skirmishers-and-charging>
@@ -205,16 +232,60 @@ It writes `saves/skirmishers.json` and `screenshots/skirmishers.png`, without
 overwriting the player's quicksave. Load that save, select **Normal Rangers** in
 Movement, then use **Adjust formation**. Saving does not persist an unconfirmed ghost.
 
+## Charge-visibility follow-up
+
+Sources: [Facing & Line of Sight](https://tow.whfb.app/unusual-formations/facing-and-line-of-sight-skirmishers)
+(p. 184), [Skirmishers & Charging](https://tow.whfb.app/unusual-formations/skirmishers-and-charging)
+(p. 186), and [Line of Sight](https://tow.whfb.app/model-and-unit-facing/line-of-sight)
+(p. 103). Official FAQ v1.5.3 does not replace the strict-majority requirement.
+
+- Charge previews and declarations now require strictly more than half of the
+  charging models to see at least one target model. Exactly half is refused.
+  Attached characters count once, with their own base; undeployed units do not
+  create blockers. Friendly, enemy and other models in the charging unit block
+  sight individually. Loose formations do not create an opaque bounding rectangle.
+- The read-only planar sight helper uses actual rotated bases and tests the open
+  angular intervals between their corners. A visible part of a target is enough;
+  its centre need not be visible. Narrow gaps work without fixed-angle sampling,
+  while seams between touching bases do not grant sight.
+- The preview and confirmation show visible/total counts. A refused click or
+  direct movement call logs the count and required majority without spending
+  movement. Successful declarations log once; previews and cancelled choices do
+  not log that a charge was declared. Existing AI movement uses the same gate.
+- Corrected declaration timing: the engine temporarily moves chargers into
+  contact before offering reactions. Sight is calculated from the original
+  position/facing without moving live bodies, and an invalid declaration restores
+  that transform before choices or dice. Stand & Shoot casualties do not revoke
+  a valid declaration. Pursuit contact is not checked as a fresh declaration.
+
+Verification: 804 tests and 82 subtests passed, including 43 new visibility tests.
+The original exactly-half preview failure was reproduced before implementation.
+Coverage includes rotated narrow gaps, complete screens on either side, target
+edges, attached models, terrain, human/AI refusal, cancellation, pursuit and
+Stand & Shoot timing. Allowed/blocked panels were rendered and inspected at
+1280x720 and 800x600, with bounds and nonblank-image assertions.
+
+LEFTOVER: sight is from each base centre in XY, not from arbitrary points on a
+sculpt or a complete 3D height model. Large Target and hill-height exceptions,
+irregular terrain silhouettes and detailed woodland visibility need integration.
+Terrain uses conservative rectangles and the existing see-onto/not-through
+convention. The angular interval method assumes non-overlapping model bases.
+Shooting/spell sight remains on its older path; this milestone does not change
+shooting eligibility, cover, per-shooter range or the all-US1 modifier. AI target
+selection is still its existing policy, although it cannot commit an invalid
+Skirmisher declaration. Arc-straddling charges remain a separate task.
+
 ## Remaining implementation order
 
 1. **Authoritative formation state:** separate permission to adopt Skirmish from
    the active formation; implement legal reform switching. Harden malformed-save
   handling.
-2. **Individual sight and shooting:** real base blockers and visible gaps,
-   per-shooter range/LoS, joined-model Unit Strength for the all-US1 shooting
-   penalty. Current centre rays/circular blockers are not per-model LoS.
-3. **Charge declaration:** strict >50% visibility at declaration, with a visible
-   count and deterministic failure reasons; preserve declaration-time reactions.
+2. **Individual sight and shooting:** extend the charge-sight foundation to
+  per-shooter range/LoS and joined-model Unit Strength for the all-US1 shooting
+  penalty. Shooting still uses centre rays/circular blockers.
+3. **Charge sight and arcs:** integrate height/Large Target exceptions and
+  detailed terrain visibility; adjudicate arc-straddling declarations. The
+  strict-majority gate, visible count and declaration timing are implemented above.
 4. **Charge movement/form-up:** extend the loose/formed-target planners to joined
   and mixed bases, exact contact/path selection and alternative rear arrangements.
   Implement formed chargers contacting loose defenders without a second alignment

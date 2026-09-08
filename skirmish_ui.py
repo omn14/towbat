@@ -38,6 +38,8 @@ def show_plot_status(game, preview):
     elif preview.charge_target is not None:
         text = (f'CHARGE: {preview.charge_target.unitName}\n'
             f'{preview.distance:.2f}" to contact / max {preview.charge_maximum:g}"')
+        if preview.visibility is not None:
+            text += f'\n{preview.visibility.visible}/{preview.visibility.total} models can see'
     else:
         action = 'MARCH' if preview.marched else 'MOVE'
         text = f'{action} (not a charge)\n{preview.distance:.2f}" / M{preview.allowance:g}'
@@ -53,6 +55,10 @@ def confirm_plotted_move(game, unit):
     preview = preview_action(game, unit)
     show_plot_status(game, preview)
     if preview.error:
+        if preview.visibility is not None and not preview.visibility.allowed:
+            from rules_log import rule_skipped
+            rule_skipped('Skirmishers', unit,
+                         f'charge refused: {preview.error}; movement retained (p. 186)')
         return
     if preview.charge_target is not None:
         game.moveUnit(unit)

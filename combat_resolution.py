@@ -224,15 +224,36 @@ class CombatResolver:
         # defender's, and they need not belong to the same player.
         defenderNP = render.find(f"**/{c.getNode1().getName()}")
         defender = self.game.getSelectedUnit(defenderNP.node())
+        visibility = None
+        if (getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False)
+                and unit.state != 'IsPursuing'):
+            from skirmish_visibility import charge_visibility
+            visibility = charge_visibility(self.game, unit, defender, oposUnit, orotUnit)
+            if not visibility.allowed:
+                rule_skipped('Skirmishers', unit,
+                             f'charge refused before reactions or dice: {visibility.detail(defender.unitName)} (p. 186)')
+                unit.bodyNP.setPos(oposUnit)
+                unit.bodyNP.setHpr(orotUnit)
+                unit.bodyNP.node().setTransformDirty()
+                unit.isChargingMove = False
+                unit.wouldMarch = False
+                self.game.autoCharge = False
+                self.game.autoHold = False
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+                return task.done
         if self.game.autoCharge or self.game.aiControls(unit):
             cynchoice = "Yes"
         else:
             cynchoice = await taskMgr.add(self.game.makeChoiceNew(
                 chargeYesNo, Vec3(-20, 0, 10), owner=unit,
                 prompt=f"{unit.unit.name}: charge {defender.unit.name}?",
-                detail=self.chargeRangeText(unit, unit.unit.model.get_movement(4))))
+                detail=self.chargeRangeText(unit, unit.unit.model.get_movement(4))
+                       + (f'\n{visibility.detail(defender.unitName)}' if visibility is not None else '')))
 
         if cynchoice == "Yes":
+            if visibility is not None:
+                rule_log('Skirmishers', unit,
+                         f'{visibility.detail(defender.unitName)} -> charge declared (p. 186)')
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
