@@ -331,9 +331,9 @@ class MyApp(ShowBase):
 
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
         #self.p1army="strategy_armies/orc_and_goblin_horde.json"
-        self.p1army="strategy_armies/Bm_army.json"
+        self.p1army="strategy_armies/my_army_he.json"
         self.load_player1_army(self.p1army)
-        self.load_player2_army("strategy_armies/vampire_counts_legion.json")
+        self.load_player2_army("strategy_armies/my_arm_chaosy.json")
 
 
         self.unitToMove=self.player1Units[0]

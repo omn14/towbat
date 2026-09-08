@@ -1,0 +1,257 @@
+{
+    "budget": 500,
+    "units": [
+        {
+            "name": "Aspiring Champion",
+            "faction": "warriors_of_chaos",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 99,
+            "category": "Characters",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Great Weapon",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Requires Two Hands",
+                        "Strike Last"
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2",
+                    "notes": "-",
+                    "strike_first": false,
+                    "strike_last": true,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 2,
+                    "ap_penetration": 2
+                }
+            ],
+            "special_rules": [
+                "Chaos Armour (5+)",
+                "Ensorcelled Weapons",
+                "Gaze of the Gods",
+                "Rallying Cry",
+                "Mark of Chaos Undivided",
+                "General"
+            ],
+            "armour": [
+                "Heavy Armour"
+            ],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Chaos Knight",
+            "faction": "warriors_of_chaos",
+            "nmodels": 4,
+            "files": 4,
+            "ranks": 1,
+            "points_cost": 134,
+            "category": "Core",
+            "mounted": true,
+            "mount": "Chaos Steed",
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Lance",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)"
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2",
+                    "notes": "Models whose troop type is 'cavalry' or 'monster' only. A lance can only be used during a turn in which the wielder charged, and its Strength and Armour Piercing modifiers apply only against enemy models the wielder charged that turn.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 2,
+                    "ap_penetration": 2,
+                    "charge_only": true
+                }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Ensorcelled Weapons",
+                "First Charge",
+                "Swiftstride",
+                "Counter Charge",
+                "Chaos Armour (6+)",
+                "Mark of Chaos Undivided"
+            ],
+            "armour": [
+                "Heavy Armour",
+                "Shield",
+                "Barding"
+            ],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Chaos Warhound",
+            "faction": "warriors_of_chaos",
+            "nmodels": 5,
+            "files": 5,
+            "ranks": 1,
+            "points_cost": 30,
+            "category": "Core",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                }
+            ],
+            "special_rules": [
+                "Loner",
+                "Open Order",
+                "Move Through Cover",
+                "Swiftstride"
+            ],
+            "armour": [],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Chaos Warrior",
+            "faction": "warriors_of_chaos",
+            "nmodels": 10,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 172,
+            "category": "Core",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Halberd",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Requires Two Hands"
+                    ],
+                    "strength": "S+1",
+                    "ap": "-1 (-2)",
+                    "notes": "A halberd has an AP of -2 against enemy models the wielder charged this turn.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 1,
+                    "ap_penetration": 1,
+                    "ap_penetration_charge": 2
+                }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Ensorcelled Weapons",
+                "Furious Charge",
+                "Chaos Armour (6+)",
+                "Mark of Chaos Undivided"
+            ],
+            "armour": [
+                "Heavy Armour",
+                "Shield"
+            ],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Marauder Horsemen",
+            "faction": "warriors_of_chaos",
+            "nmodels": 5,
+            "files": 5,
+            "ranks": 1,
+            "points_cost": 65,
+            "category": "Core",
+            "mounted": true,
+            "mount": "Warhorse",
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Throwing Spear",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Fight in Extra Rank"
+                    ],
+                    "notes": "A throwing spear can only be used during a turn in which the wielder charged. In subsequent turns (or if the wielder did not charge) the model must use its hand weapon instead.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "charge_only": true
+                }
+            ],
+            "special_rules": [
+                "Fast Cavalry",
+                "Fire & Flee",
+                "Mark of Chaos Undivided",
+                "Swiftstride",
+                "Warband",
+                "Chaotic Cults",
+                "Skirmishers"
+            ],
+            "armour": [
+                "Light Armour",
+                "Shield"
+            ],
+            "spells": [],
+            "wizard_level": null
+        }
+    ]
+}

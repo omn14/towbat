@@ -1,0 +1,395 @@
+{
+    "budget": 500,
+    "units": [
+        {
+            "name": "Mage",
+            "faction": "high_elf_realms",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 125,
+            "category": "Characters",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                }
+            ],
+            "special_rules": [
+                "Elven Reflexes",
+                "Ithilmar Weapons",
+                "Lileath's Blessing",
+                "Valour of Ages",
+                "Lore of Saphery",
+                "General"
+            ],
+            "armour": [],
+            "spells": [
+                {
+                    "name": "Vaul's Unmaking",
+                    "type": "Hex",
+                    "phase": "strategy",
+                    "casting_value": 11,
+                    "range": 12,
+                    "effect": "This spell can only target enemy characters. However, it may target an enemy character that is within range and that the caster can draw line of sight to regardless in the usual rules for targeting characters, and may even target enemy characters that has joined a unit or that is engaged in combat.\n\n\nThe casting player chooses a single item carried by the target. This magic item is inmeditately 'unusable' rendering it completely useless. The chosen magic item cannot be used for the reminder of the game.",
+                    "number": 3
+                },
+                {
+                    "name": "Hand of Khaine",
+                    "type": "Assailment",
+                    "phase": "combat",
+                    "casting_value": 7,
+                    "range": "Combat",
+                    "effect": "A single enemy model the caster is engaged in combat with suffers a single Strength 4 hit with no armour save permitted (Ward an Regeneration saves can be attempted as normal).",
+                    "number": 2
+                },
+                {
+                    "name": "Courage of Aenarion",
+                    "type": "Enchantment",
+                    "phase": "strategy",
+                    "casting_value": 10,
+                    "range": 15,
+                    "effect": "Remains in Play. Whilst this spell is in play, the target friendly unit gains the Unbreakable special rule. If this spell is cast, the effect of any other Enchantment previously cast on the target unit immediately expire. This spell may target a friendly unit engaged in combat.",
+                    "number": 1
+                },
+                {
+                    "name": "Walk Between Worlds",
+                    "type": "Conveyance",
+                    "phase": "movement",
+                    "casting_value": 10,
+                    "range": "Self",
+                    "effect": "Until your next Start of Turn sub-phase, the caster and any unit they have joined gain the Ethereal and Reserve Move special rules.",
+                    "number": 1
+                },
+                {
+                    "name": "Fiery Convocation",
+                    "type": "Magic Missile",
+                    "phase": "shooting",
+                    "casting_value": 10,
+                    "range": 18,
+                    "effect": "Place a large (5\") blast template so that its central hole is directly over the center of the target enemy unit. Once placed, the template will scatter D3+1\". Any enemy model whose base lies underneath the template's final position risks being hit and suffering Strength 4 hit with an AP of -2. these hits have the Flaming Attacks special rule.",
+                    "number": 2
+                },
+                {
+                    "name": "Tempest",
+                    "type": "Magical Vortex",
+                    "phase": "shooting",
+                    "casting_value": 9,
+                    "range": 12,
+                    "effect": "Remains in Play. Place a small (3\") blast template so that its central hole is within 12\" of the caster. Whilst in play the template does not move and is treated as dangerous terrain. Whilst within 6\" of the template, enemy units treat open ground as difficult terrain and difficult terrain as dangerous terrain.",
+                    "number": 3
+                },
+                {
+                    "name": "Corporeal Unmaking",
+                    "type": "Assailment",
+                    "phase": "combat",
+                    "casting_value": 8,
+                    "range": "Combat",
+                    "effect": "A single enemy unit the caster is engaged in combat with suffers D3 Strength 5 hits, with no armour or Regeneration saves permitted (Ward saves can be attempted as normal).",
+                    "number": 4
+                },
+                {
+                    "name": "Fury of Khaine",
+                    "type": "Enchantment",
+                    "phase": "strategy",
+                    "casting_value": 9,
+                    "range": 12,
+                    "effect": "Until the end of this turn, the target friendly unit gains the Extra Attacks (+1) special rule. This spell may target a friendly unit engaged in combat.",
+                    "number": 5
+                },
+                {
+                    "name": "Shield of Saphery",
+                    "type": "Enchantment",
+                    "phase": "strategy",
+                    "casting_value": 8,
+                    "range": 18,
+                    "effect": "Until the end of this turn, the target friendly unit gains 5+ Ward save against any wounds suffered. If this spell is cast, the effects of any other Enchantment previously cast on the target unit immediately expire.",
+                    "number": 6
+                },
+                {
+                    "name": "Drain Magic",
+                    "type": "Hex",
+                    "phase": "strategy",
+                    "casting_value": 9,
+                    "range": "Self",
+                    "effect": "Remains in Play. Whilst this spell is in play, enemy Wizards that are within 24\" of the caster's model when attempting to cast a spell must increase that spell's casting value by 2.",
+                    "number": null
+                }
+            ],
+            "wizard_level": 2
+        },
+        {
+            "name": "Elven Archer",
+            "faction": "high_elf_realms",
+            "nmodels": 6,
+            "files": 5,
+            "ranks": 2,
+            "points_cost": 54,
+            "category": "Core",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Longbow",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Armour Bane (1)",
+                        "Volley Fire"
+                    ],
+                    "strength": "3",
+                    "notes": "-",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "ranged_range": 30,
+                    "ranged_strength": 3,
+                    "ranged_AP": 0,
+                    "ranged_shots": 1,
+                    "volley_fire": true,
+                    "move_and_shoot": false,
+                    "move_or_shoot": false,
+                    "quick_shot": false,
+                    "ponderous": false
+                }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Elven Reflexes",
+                "Detachment",
+                "Valour of Ages"
+            ],
+            "armour": [],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Silver Helm",
+            "faction": "high_elf_realms",
+            "nmodels": 5,
+            "files": 5,
+            "ranks": 1,
+            "points_cost": 120,
+            "category": "Core",
+            "mounted": true,
+            "mount": "Barded Elven Steed",
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Lance",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)"
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2",
+                    "notes": "Models whose troop type is 'cavalry' or 'monster' only. A lance can only be used during a turn in which the wielder charged, and its Strength and Armour Piercing modifiers apply only against enemy models the wielder charged that turn.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 2,
+                    "ap_penetration": 2,
+                    "charge_only": true
+                }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Elven Reflexes",
+                "First Charge",
+                "Swiftstride",
+                "Valour of Ages",
+                "Ithilmar Barding"
+            ],
+            "armour": [
+                "Barding",
+                "Heavy Armour",
+                "Shield"
+            ],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Dragon Prince",
+            "faction": "high_elf_realms",
+            "nmodels": 3,
+            "files": 3,
+            "ranks": 1,
+            "points_cost": 111,
+            "category": "Special",
+            "mounted": true,
+            "mount": "Barded Elven Steed",
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Lance",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Armour Bane (1)"
+                    ],
+                    "strength": "S+2",
+                    "ap": "-2",
+                    "notes": "Models whose troop type is 'cavalry' or 'monster' only. A lance can only be used during a turn in which the wielder charged, and its Strength and Armour Piercing modifiers apply only against enemy models the wielder charged that turn.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 2,
+                    "ap_penetration": 2,
+                    "charge_only": true
+                }
+            ],
+            "special_rules": [
+                "Counter Charge",
+                "Elven Reflexes",
+                "First Charge",
+                "Sons of Caledor",
+                "Valour of Ages",
+                "Ithilmar Barding",
+                "Close Order",
+                "Dragon Armour",
+                "Drilled",
+                "Impetuous",
+                "Ithilmar Weapons",
+                "Swiftstride"
+            ],
+            "armour": [
+                "Barding",
+                "Full Plate Armour",
+                "Shield"
+            ],
+            "spells": [],
+            "wizard_level": null
+        },
+        {
+            "name": "Lothern Skycutter",
+            "faction": "high_elf_realms",
+            "nmodels": 1,
+            "files": 1,
+            "ranks": 1,
+            "points_cost": 90,
+            "category": "Rare",
+            "mounted": false,
+            "mount": null,
+            "mount_special_rules": [],
+            "weapons": [
+                {
+                    "name": "Cavalry Spear",
+                    "tag": "combat",
+                    "special_rules": [
+                        "Fight in Extra Rank"
+                    ],
+                    "strength": "S+1",
+                    "ap": "-1",
+                    "notes": "Models whose troop type is \u2018cavalry\u2019, \u2018monster\u2019 or \u2018chariot\u2019 only. A cavalry spear\u2019s Strength and Armour Piercing modifiers apply only during a turn in which the wielder charged. A model wielding a cavalry spear cannot make a supporting attack during a turn in which it charged.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "strength_bonus": 1,
+                    "ap_penetration": 1,
+                    "charge_only": true
+                },
+                {
+                    "name": "Hand Weapon",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "notes": "Unless specified otherwise, all models are assumed to be equipped with a hand weapon.",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false
+                },
+                {
+                    "name": "Shortbow",
+                    "tag": "ranged",
+                    "special_rules": [
+                        "Quick Shot",
+                        "Volley Fire"
+                    ],
+                    "strength": "3",
+                    "notes": "-",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "ranged_range": 18,
+                    "ranged_strength": 3,
+                    "ranged_AP": 0,
+                    "ranged_shots": 1,
+                    "volley_fire": true,
+                    "move_and_shoot": false,
+                    "move_or_shoot": false,
+                    "quick_shot": true,
+                    "ponderous": false
+                },
+                {
+                    "name": "Wicked Claws",
+                    "tag": "combat",
+                    "special_rules": [],
+                    "ap": "-2",
+                    "notes": "-",
+                    "strike_first": false,
+                    "strike_last": false,
+                    "killing_blow": false,
+                    "monster_slayer": false,
+                    "ap_penetration": 2
+                }
+            ],
+            "special_rules": [
+                "Close Order",
+                "Elven Reflexes (Sea Guard Crew only)",
+                "Impact Hits (D3+1)",
+                "Valour of Ages",
+                "Swiftstride",
+                "Fear",
+                "Fly (10)"
+            ],
+            "armour": [
+                "Armour Value : 4+"
+            ],
+            "spells": [],
+            "wizard_level": null
+        }
+    ]
+}
