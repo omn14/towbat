@@ -79,6 +79,33 @@ def test_all_protected_ignore_penalty_without_mutating_profile(troops):
     assert host.unit.model.characteristics['M'] == '4'
 
 
+@pytest.mark.parametrize('crossed,expected', [(False, 4), (True, 3)])
+def test_explicit_swept_features_replace_centre_sampling(troops, crossed, expected, capsys):
+    movement, host, character = troops
+    host.unit.model.characteristics['M'] = '4'
+    character.unit.model.characteristics['M'] = '4'
+    sample_centre = Mock(side_effect=AssertionError('Supplied features must be authoritative'))
+    movement.game.terrain_manager.get_terrain_between = sample_centre
+    features = [SimpleNamespace(movement_modifier=-1)] if crossed else []
+    assert movement.movementAllowance(
+        host, Point3(0), Point3(1), features=features, log=True) == expected
+    sample_centre.assert_not_called()
+    output = capsys.readouterr().out
+    if crossed:
+        assert 'terrain -1M' in output and 'unit allowance 3"' in output
+    else:
+        assert 'Move Through Cover' not in output
+
+
+def test_swept_terrain_logs_cover_skipped_when_flying(troops, capsys):
+    movement, host, _ = troops
+    host.joinedCharacter = None
+    apply_rule_keywords(host.unit.model, ['Fly (9)'])
+    assert movement.movementAllowance(
+        host, features=[SimpleNamespace(movement_modifier=-1)], log=True) == 9
+    assert 'flying over terrain; no Movement penalty' in capsys.readouterr().out
+
+
 @pytest.mark.parametrize('protected,expected', [(True, 9), (False, 5)])
 def test_charge_faq_keeps_high_die_only_for_protected_unit(troops, protected, expected, capsys):
     movement, host, character = troops

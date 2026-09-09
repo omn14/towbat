@@ -30,11 +30,13 @@ def carrier(spells=None, level=0):
         marchedThisTurn=False, spellsCastThisTurn=[], boundSpellPhases=[],
         cannotCastThisTurn=False, color=(1, 1, 1, 1), model=Mock(),
         updateTextNode=Mock(), bodyNP=Mock(), roundsFought=0,
+        spreadToSkirmish=Mock(),
         countsAsChargedNextTurn=False, isInCombatWith=[], hostUnit=None)
 
 
 def app_stub(unit, phase='shooting'):
     game = Mock()
+    game.skirmishEditor = None
     game.unitToMove = unit
     game.units = [unit]
     game.player1Units = [unit]
@@ -225,9 +227,11 @@ def test_real_fsm_casting_detour_does_not_reset_phase_or_advance_turn(phase):
         assert unit.roundsFought == before_rounds
         assert unit.panicTestedThisPhase and unit.hasAttackedThisTurn
         game.roundCounter.next_turn.assert_not_called()
+        unit.spreadToSkirmish.assert_not_called()
         if fsm.state != 'CombatPhase':
             fsm.request('CombatPhase')
         fsm.nextPhase()
         assert fsm.state == 'StrategyPhase'
         game.roundCounter.next_turn.assert_called_once()
+        unit.spreadToSkirmish.assert_called_once_with()
         assert unit.boundSpellPhases == [] and unit.spellsCastThisTurn == []

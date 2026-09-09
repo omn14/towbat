@@ -231,6 +231,8 @@ def commit_move(game, unit, positions=None, destination=None):
     rule_log('Skirmishers', unit,
              f'{len(preview.boxes)} models remain coherent; longest move {preview.distance:.2f}" '
              f'of M{preview.allowance:g}{" (march)" if preview.marched else ""} (pp. 123, 184-185)')
+    game.movement.movementAllowance(
+        unit, features=[piece for crossed in preview.terrain for piece in crossed], log=True)
     if preview.marched:
         rule_log('Marching', unit, 'per-model movement exceeded M; shooting restrictions apply (p. 123)')
     for participant, features in ((unit, preview.terrain[:unit.unit.nmodels]),

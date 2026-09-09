@@ -31,7 +31,7 @@ def defender():
         unit=SimpleNamespace(model=profile, name='Shieldwall defenders', nmodels=10),
         bodyNP=SimpleNamespace(isEmpty=lambda: False),
         wasChargedThisTurn=True, usedShieldwall=False, usedStubborn=False,
-        isSkirmisher=False, isInCombatWith=[])
+        isSkirmisher=False, isInCombatWith=[], spreadToSkirmish=Mock())
 
 
 @pytest.fixture
@@ -70,9 +70,11 @@ def test_turn_end_updates_charge_target_but_not_spent_rule(defender, deferred):
     assert defender.wasChargedThisTurn is deferred
     assert not defender.countsAsChargeTargetNextTurn
     assert defender.usedShieldwall
+    defender.spreadToSkirmish.assert_called_once_with()
     GamePhaseFSM.exitCombatPhase(phase)
     assert not defender.wasChargedThisTurn
     assert defender.usedShieldwall
+    assert defender.spreadToSkirmish.call_count == 2
 
 
 @pytest.mark.parametrize('change, reason', [

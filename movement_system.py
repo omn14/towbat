@@ -536,15 +536,17 @@ class MovementSystem:
                 participants.append(character)
         return participants
 
-    def movementAllowance(self, unit, from_pos=None, to_pos=None, *, log=False):
+    def movementAllowance(self, unit, from_pos=None, to_pos=None, *, log=False, features=None):
         """Slowest participating model after its own terrain penalty (pp. 123, 174,
         269; Official FAQ v1.5.3). An unprotected character need not slow the host.
+        Explicit features let callers supply terrain swept by individual bases.
         """
         tm = getattr(self.game, 'terrain_manager', None)
-        modifier = 0
-        if tm is not None and from_pos is not None and to_pos is not None:
-            modifier = min([0] + [piece.movement_modifier
-                                 for piece in tm.get_terrain_between(from_pos, to_pos)])
+        if features is None:
+            features = (tm.get_terrain_between(from_pos, to_pos)
+                        if tm is not None and from_pos is not None and to_pos is not None
+                        else [])
+        modifier = min([0] + [piece.movement_modifier for piece in features])
         participants = self.movementParticipants(unit)
         profiles = [participant.unit.model for participant in participants]
         flying = all(profile.is_flying() for profile in profiles)

@@ -176,6 +176,7 @@ def test_panic_veteran_and_venerable_do_not_add_third_roll():
 def test_real_rally_path(veteran, answer, rallied, roll_count, monkeypatch):
     unit = make_unit(veteran=veteran)
     unit.request = Mock()
+    unit.spreadToSkirmish = Mock()
     game = SimpleNamespace(
         psychology=SimpleNamespace(leadership_of=lambda unit: (7, None),
                                    battle_standard_of=lambda unit: None),
@@ -191,8 +192,10 @@ def test_real_rally_path(veteran, answer, rallied, roll_count, monkeypatch):
     assert unit.attemptedRallyThisTurn
     if rallied:
         unit.request.assert_called_once_with('Idle')
+        unit.spreadToSkirmish.assert_called_once_with()
     else:
         unit.request.assert_not_called()
+        unit.spreadToSkirmish.assert_not_called()
 
 
 def test_real_restraint_path_rerolls_then_holds(monkeypatch):

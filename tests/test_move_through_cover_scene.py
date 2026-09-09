@@ -171,16 +171,21 @@ def test_skirmisher_preview_and_committed_move(scene, protected, maximum, capsys
     unit.isDeployed = True
     unit.request('Idle')
     app.unitToMove = unit
+    capsys.readouterr()
     app.pathTowardsMouse(unit, origin.x, origin.y + 20)
     assert app.moveArceDistance == pytest.approx(maximum)
     app.pathTowardsMouse(unit, origin.x, origin.y + 3.5)
+    assert 'Move Through Cover' not in capsys.readouterr().out
     app.movement.moveUnit(unit)
     assert (unit.bodyNP.getPos() - origin).length() == pytest.approx(3.5)
     assert unit.hasMovedThisTurn
     assert unit.marchedThisTurn is (not protected)
     output = capsys.readouterr().out
     if protected:
-        assert 'Move Through Cover' in output and 'unit allowance 4"' in output
+        assert 'Move Through Cover' in output and 'terrain -1M' in output
+        assert output.count('unit allowance 4"') == 1
+    else:
+        assert 'Move Through Cover' not in output
 
 
 def test_old_save_preserves_existing_battlefield(scene, tmp_path):

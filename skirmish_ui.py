@@ -14,7 +14,8 @@ from skirmish_movement import (commit_move, current_positions, draw_preview,
 
 
 def clear_plot_preview(game):
-    if game.ground.getShaderInput('skirmishRangeActive').getVector().x:
+    range_input = game.ground.getShaderInput('skirmishRangeActive')
+    if range_input.getVector().x:
         game.setGroundOverlay(False)
     if getattr(game, 'skirmishMoveStatus', None) is not None:
         game.skirmishMoveStatus.hide()

@@ -4,17 +4,35 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from panda3d.core import Filename, PNMImage, Point2, Point3, Vec2, Vec3
+from panda3d.core import Filename, NodePath, PNMImage, Point2, Point3, Vec2, Vec3, Vec4
 
 from characters import join_unit, slay_character
 from persistence import load_game_state, save_game_state
 from scouts import model_base_boxes
 from skirmish import coherency_error
 from skirmish_movement import commit_move, current_positions, preview_action, preview_move
+from skirmish_ui import clear_plot_preview
 from tests.test_scouts_scene import build_scenario
+
+
+def shader_vector(surface, name):
+    """Copy the borrowed vector while its ShaderInput owner is still alive."""
+    shader_input = surface.getShaderInput(name)
+    return Vec4(shader_input.getVector())
+
+
+@pytest.mark.parametrize('active', [False, True])
+def test_clear_plot_preview_only_disables_active_overlay(active):
+    game = SimpleNamespace(ground=NodePath('range-test'), setGroundOverlay=Mock())
+    game.ground.setShaderInput('skirmishRangeActive', active)
+    clear_plot_preview(game)
+    if active:
+        game.setGroundOverlay.assert_called_once_with(False)
+    else:
+        game.setGroundOverlay.assert_not_called()
 
 
 @pytest.fixture(scope='module')
@@ -379,12 +397,12 @@ def test_ground_ranges_use_remaining_march_and_independent_charge(scene, movemen
     with patch.object(member.unit.model, 'get_movement', return_value=movement), \
             patch.object(member.unit.model, 'is_swiftstride', return_value=swiftstride):
         app.movement._skirmishMovePreview(member, member.bodyNP.getPos() + Vec3(0, 1, 0))
-    limits = app.ground.getShaderInput('skirmishRangeLimits').getVector()
+    limits = shader_vector(app.ground, 'skirmishRangeLimits')
     assert tuple(limits)[:3] == pytest.approx((movement - 1, movement * 2 - 1,
                                               movement + 6 + (3 if swiftstride else 0)))
-    assert app.ground.getShaderInput('skirmishRangeActive').getVector().x
+    assert shader_vector(app.ground, 'skirmishRangeActive').x
     app.setGroundOverlay(False)
-    assert not app.ground.getShaderInput('skirmishRangeActive').getVector().x
+    assert not shader_vector(app.ground, 'skirmishRangeActive').x
 
 
 @pytest.mark.parametrize('restriction', ['rallied', 'scouts', 'vanguard', 'moved', 'state'])
@@ -400,10 +418,10 @@ def test_ground_charge_range_respects_restrictions(scene, restriction):
     with patch('vanguard.vanguard_charge_blocked', return_value=restriction == 'vanguard'):
         app.movement._skirmishMovePreview(member, member.bodyNP.getPos() + Vec3(0, 1, 0))
     if restriction in ('moved', 'state'):
-        assert not app.ground.getShaderInput('skirmishRangeActive').getVector().x
+        assert not shader_vector(app.ground, 'skirmishRangeActive').x
         assert app.skirmMoveGhost is None
     else:
-        assert app.ground.getShaderInput('skirmishRangeLimits').getVector().z == 0
+        assert shader_vector(app.ground, 'skirmishRangeLimits').z == 0
 
 
 def test_skirmish_ground_ranges_wrap_terrain_and_clear_together(scene):
@@ -413,14 +431,14 @@ def test_skirmish_ground_ranges_wrap_terrain_and_clear_together(scene):
     hill = app.terrain_manager.add_terrain('hill', Point3(0, 4, 0), 3, 3)
     try:
         app.movement._skirmishMovePreview(member, Point3(1, 0, 0))
-        assert hill.visual.getShaderInput('skirmishRangeActive').getVector().x
-        assert hill.visual.getShaderInput('skirmishRangeLimits').getVector() == (
-            app.ground.getShaderInput('skirmishRangeLimits').getVector())
+        assert shader_vector(hill.visual, 'skirmishRangeActive').x
+        assert shader_vector(hill.visual, 'skirmishRangeLimits') == (
+            shader_vector(app.ground, 'skirmishRangeLimits'))
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
         app.setGroundOverlay(False)
-        assert not hill.visual.getShaderInput('skirmishRangeActive').getVector().x
-        assert not app.ground.getShaderInput('skirmishRangeActive').getVector().x
+        assert not shader_vector(hill.visual, 'skirmishRangeActive').x
+        assert not shader_vector(app.ground, 'skirmishRangeActive').x
     finally:
         app.terrain_manager.remove_terrain(hill)
 
@@ -802,7 +820,7 @@ def test_plot_status_clears_when_no_longer_applicable(scene, action):
         assert app.arcPoint is None
     assert app.skirmishMoveStatus.isHidden()
     assert app.skirmMoveGhost is None
-    assert not app.ground.getShaderInput('skirmishRangeActive').getVector().x
+    assert not shader_vector(app.ground, 'skirmishRangeActive').x
 
 
 def test_editor_cancel_keeps_live_state_and_phase_locked(scene):

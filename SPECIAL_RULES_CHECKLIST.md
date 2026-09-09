@@ -905,6 +905,11 @@ army-agnostic and would benefit every faction.
       rerolled dice, avoided mishaps and remaining wounds. No-1s and mixed
       charge refusals explain why the benefit did not apply, without logging
       per-preview or per-test-roll spam.
+      Follow-up: the shared Skirmisher move commit had lost this Movement log.
+      It now passes the actual swept-base terrain features to the allowance
+      logger once per committed move; previews remain silent. Explicit empty
+      features do not fall back to centre sampling, and flying reports why
+      Move Through Cover does not apply. Movement and march limits are unchanged.
       Corrected on the way: ordinary Skirmishers skipped terrain penalties,
       charges used raw M instead of the adjusted allowance, joined characters
       were omitted from Dangerous Terrain tests, and saves omitted terrain.
@@ -923,7 +928,7 @@ army-agnostic and would benefit every faction.
       unprotected M5 captain -> 3). Two enemy units face the woods units for
       charge comparisons. Marsh is dangerous, woods difficult. These are
       test-only rule/stat grants, not a legal army list.
-      LEFTOVER: inherited terrain detection samples the regiment's straight
+      LEFTOVER: ranked-unit terrain detection samples the regiment's straight
       centre-to-centre path, not every base's swept area during a wheel;
       Dangerous Terrain tests consequently use that shared feature list for
       rank-and-file and joined characters. Narrow features and edge-only
@@ -1989,6 +1994,15 @@ clamour of battle, friendly units are seldom able to tell the difference"
       LEFTOVER: `mount_special_rules` are not saved with them, so a mount's
       rules still depend on the army file being the one that was played.
 - [ ] Test/CI hardening; broaden `tests/` to a couple of full factions
+      Fixed eleven regressions after Skirmisher integration: bound-spell test
+      games now explicitly have no formation editor, and lifecycle test doubles
+      support spreading after combat or a successful rally. Detours still skip
+      turn-end cleanup; failed rallies do not spread. Panda3D ShaderInput vectors
+      borrow their owner's storage: overlay assertions now copy with the owner
+      alive, and live preview cleanup retains the input while testing its flag.
+      Added active/inactive cleanup coverage without scene startup. Restored
+      the missing committed Skirmisher Move Through Cover log as detailed above.
+      LEFTOVER: broader full-faction coverage and CI setup remain outstanding.
 - [ ] Empire units render with the generic model (no `.bam`) — add mappings
 - [x] One hand weapon per model, and it is the catalogue's — every model was
       given an invented `'hand weapon'` carrying a made-up description, while
