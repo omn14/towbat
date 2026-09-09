@@ -11,9 +11,12 @@ import os
 import shutil
 from datetime import datetime
 
+from battlescribe import get_catalogue, STAT_KEYS
 from challenges import Challenge
 from characters import detach_character, join_unit
 from models import model as Model
+from rules_log import battle_log
+from special_rules import apply_rule_keywords
 from spell_system import load_spells, save_spells, restore_spellbook
 
 
@@ -95,6 +98,47 @@ def _clean_weapon(weapon):
             continue
         safe[key] = value
     return safe
+
+
+def _save_profile_state(profile):
+    """Keep effective stats separate from the roster baseline, including split profiles."""
+    parts = {}
+    for tag in ('mount', 'crew', 'beasts'):
+        part = getattr(profile, f'get_{tag}', lambda: None)()
+        parts[tag] = None if part is None else {
+            'name': part.name,
+            'count': profile.part_count(tag) if tag != 'mount' else 1,
+            **_save_profile_state(part),
+        }
+    return {
+        'characteristics': copy.deepcopy(profile.characteristics),
+        'base_characteristics': copy.deepcopy(
+            getattr(profile, '_base_characteristics', None) or profile.characteristics),
+        'profile_parts': parts,
+    }
+
+
+def _restore_profile_state(profile, data):
+    """Legacy saves have one authoritative profile; new saves retain both copies."""
+    apply_rule_keywords(profile, data['characteristics'].get('Special Rules', []), replace=True)
+    profile.characteristics = copy.deepcopy(data['characteristics'])
+    profile._base_characteristics = copy.deepcopy(
+        data.get('base_characteristics') or data['characteristics'])
+    for tag, record in data.get('profile_parts', {}).items():
+        if tag not in ('mount', 'crew', 'beasts'):
+            continue
+        if record is None:
+            profile.special_rules = [rule for rule in profile.special_rules
+                                     if not (isinstance(rule, dict) and rule.get('tag') == tag)]
+            continue
+        part = getattr(profile, f'get_{tag}')()
+        if part is None or part.name != record['name']:
+            part = Model(record['name'], '')
+        _restore_profile_state(part, record)
+        if tag == 'mount':
+            profile.attach_mount(part)
+        else:
+            getattr(profile, f'attach_{tag}')(part, record.get('count', 1))
 
 
 def save_game_state(game, filename=None):
@@ -205,7 +249,7 @@ def save_game_state(game, filename=None):
             'skirmish_layout': (unit.savedSkirmishLayout()
                                 if hasattr(unit, 'savedSkirmishLayout') else None),
             'points_cost': unit.unit.model.characteristics.get('Points', 0) * unit.unit.nmodels,
-            'characteristics': unit.unit.model.characteristics,
+            **_save_profile_state(unit.unit.model),
             'armor_save': unit.unit.model.armor_save,
             'armour': list(getattr(unit.unit.model, 'armour', []) or []),
             'charging': unit.unit.model.charging,
@@ -277,6 +321,27 @@ def _read_save_file(path):
     return data
 
 
+def _repair_missing_profiles(unit_records):
+    """Recover failed catalogue lookups, never replace saved characteristic values."""
+    for record in unit_records:
+        saved = record.get('characteristics', {})
+        if any(key in saved for key in STAT_KEYS):
+            continue
+        name = record.get('model_name') or saved.get('Model') or saved.get('Unit')
+        if not name:
+            continue
+        profile = get_catalogue().characteristics(name)
+        if profile is None:
+            continue
+        profile.update(saved)
+        record['characteristics'] = profile
+        message = (f"Restored missing profile for {record['name']} ({name}) from catalogue: "
+               f"S{profile.get('S')} T{profile.get('T')} W{profile.get('W')}; "
+               f"{profile.get('Troop Type')}. Saved rules and battle state retained.")
+        print(f"[persistence] {message}")
+        battle_log(message, 'info')
+
+
 def load_game_state(game, filename):
     """
     Restore game state from a JSON save file.
@@ -301,6 +366,8 @@ def load_game_state(game, filename):
         print(f"[persistence] {message}")
         messenger.send('hud-log', [message, 'morale'])
         return
+
+    _repair_missing_profiles(game_state['units'])
 
     editor = getattr(game, 'skirmishEditor', None)
     if editor is not None:
@@ -477,12 +544,7 @@ def load_game_state(game, filename):
         unit.unit.files = unit_data['files']
         unit.unit.ranks = unit_data['ranks']
 
-        unit.unit.model.characteristics = unit_data['characteristics']
-        # A save is the source of truth for the profile it stores. Without this
-        # the first reset_characteristics() after a combat reverts to the bare
-        # catalogue entry and quietly drops whatever the roster gave the model.
-        unit.unit.model._base_characteristics = copy.deepcopy(
-            unit_data['characteristics'])
+        _restore_profile_state(unit.unit.model, unit_data)
         unit.unit.model.armor_save = unit_data['armor_save']
         unit.unit.model.armour = list(unit_data.get('armour', []) or [])
         unit.unit.model.charging = unit_data['charging']

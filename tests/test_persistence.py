@@ -180,6 +180,62 @@ class TheReloadedProfileTests(unittest.TestCase):
         m.reset_characteristics()
         self.assertEqual(m.characteristics['A'], '4')
 
+    def test_roster_keywords_update_baseline_without_promoting_live_stats(self):
+        profile = model('Grave Guard', '')
+        strength = profile._base_characteristics['S']
+        profile.characteristics['S'] = '9'
+        apply_rule_keywords(profile, ['Veteran'], replace=True)
+        profile.reset_characteristics()
+        self.assertEqual(profile.characteristics['S'], strength)
+        self.assertEqual(profile.characteristics['Special Rules'], ['Veteran'])
+        self.assertIsNot(profile.characteristics['Special Rules'],
+                         profile._base_characteristics['Special Rules'])
+
+    def test_save_records_live_and_baseline_separately(self):
+        unit = _unit()
+        profile = model('Grave Guard', '')
+        unit.unit.model = profile
+        profile._base_characteristics['S'] = '7'
+        profile.characteristics['S'] = '9'
+        with tempfile.TemporaryDirectory() as directory:
+            path = save_game_state(_game([unit]), os.path.join(directory, 'save.json'))
+            with open(path) as saved_file:
+                record = json.load(saved_file)['units'][0]
+        self.assertEqual(record['characteristics']['S'], '9')
+        self.assertEqual(record['base_characteristics']['S'], '7')
+        self.assertEqual(profile.characteristics['S'], '9')
+        self.assertEqual(profile._base_characteristics['S'], '7')
+
+    def test_statless_skycutter_recovers_without_losing_saved_rules(self):
+        saved = {'Special Rules': ['Impact Hits (D3+1)', 'Veteran'], 'custom': 'kept'}
+        record = {'name': 'My Skycutter', 'model_name': 'Lothern Skycutter',
+                  'characteristics': saved, 'woundsOnModel': 2, 'chargedThisTurn': True}
+        with mock.patch.object(persistence, 'battle_log') as log:
+            persistence._repair_missing_profiles([record])
+        self.assertEqual(record['characteristics']['S'], '5')
+        self.assertEqual(record['characteristics']['Troop Type'], 'Heavy Chariot')
+        self.assertEqual(record['characteristics']['Special Rules'], saved['Special Rules'])
+        self.assertEqual(record['characteristics']['custom'], 'kept')
+        self.assertEqual(record['woundsOnModel'], 2)
+        self.assertTrue(record['chargedThisTurn'])
+        self.assertNotIn('S', saved)
+        log.assert_called_once()
+
+    def test_existing_saved_stats_are_authoritative(self):
+        for saved in ({'S': '0'}, {'S': '8', 'T': '6'}, {'S': '-'}, {'M': '4'}):
+            with self.subTest(saved=saved):
+                record = {'name': 'My Skycutter', 'model_name': 'Lothern Skycutter',
+                          'characteristics': saved}
+                persistence._repair_missing_profiles([record])
+                self.assertIs(record['characteristics'], saved)
+
+    def test_unresolvable_profile_is_not_invented(self):
+        saved = {'Special Rules': ['Veteran']}
+        record = {'name': 'Unknown', 'model_name': 'Unknown profile for test',
+                  'characteristics': saved}
+        persistence._repair_missing_profiles([record])
+        self.assertIs(record['characteristics'], saved)
+
     def test_the_catalogue_profile_is_what_it_reverts_to_otherwise(self):
         m = model('Grave Guard', '')
         catalogue_attacks = m.characteristics['A']
@@ -188,17 +244,13 @@ class TheReloadedProfileTests(unittest.TestCase):
         self.assertEqual(m.characteristics['A'], catalogue_attacks)
 
     def test_the_load_rebases_the_profile_it_restores(self):
-        """Source-level, because the assignment sits inside `load_game_state`,
-        which needs a running app. Reverting the one line would otherwise pass
-        every test in this file."""
-        src = open(persistence.__file__, encoding='utf-8').read()
-        block = re.search(
-            r"model\.characteristics = unit_data\['characteristics'\](.{0,400})",
-            src, re.S)
-        self.assertIsNotNone(block, "the load no longer restores characteristics")
-        self.assertIn('_base_characteristics', block.group(1),
-                      "a loaded profile is not rebased, so it reverts to the "
-                      "catalogue at the end of the first combat")
+        profile = model('Grave Guard', '')
+        saved = dict(profile.characteristics, S='7')
+        persistence._restore_profile_state(profile, {'characteristics': saved})
+        profile.characteristics['S'] = '9'
+        profile.reset_characteristics()
+        self.assertEqual(profile.characteristics['S'], '7')
+        self.assertEqual(saved['S'], '7')
 
 
 class TheSavesFolderTests(unittest.TestCase):

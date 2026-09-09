@@ -17,7 +17,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from battlescribe import get_catalogue  # noqa: E402
-from battleFunctions import simulate_battle  # noqa: E402
+from battleFunctions import impact_hit_report, simulate_battle, unmodified_strength  # noqa: E402
 from combat_resolution import CombatResolver  # noqa: E402
 from models import model  # noqa: E402
 from movement_system import MovementSystem  # noqa: E402
@@ -27,12 +27,33 @@ from toHitAndToWound import to_hit, to_hit_ranged, to_wound, stat_value  # noqa:
 class TestChariotCatalogue(unittest.TestCase):
     """The parts have to come out of the catalogue before anything can use them."""
 
+    def test_skycutter_display_name_and_model_level_context(self):
+        """Hull S5 (Forces of Fantasy p. 172), Scythed Wheels AP-2 (p. 195)."""
+        profile = model("Lothern Skycutter", "")
+        self.assertEqual(profile.characteristics, get_catalogue().characteristics("Skycutter"))
+        self.assertEqual(unmodified_strength(profile), 5)
+        self.assertEqual(profile.characteristics["T"], "4")
+        self.assertEqual(profile.characteristics["W"], "4")
+        self.assertEqual(profile.characteristics["Troop Type"], "Heavy Chariot")
+        self.assertTrue(profile.is_chariot())
+        self.assertEqual(profile.impact_hit_ap(), 2)
+        self.assertEqual(profile.get_base_size(), (60, 100))
+        self.assertEqual(profile.part_count('crew'), 3)
+        self.assertEqual(profile.get_crew().name, "Sea Guard Crew")
+        self.assertEqual(profile.part_count('beasts'), 1)
+        self.assertEqual(profile.get_beasts().name, "Swiftfeather Roc")
+        attacker = SimpleNamespace(model=profile)
+        defender = SimpleNamespace(model=model("Chaos Knight", ""))
+        self.assertIn("Impact Hits (D3+1) : Lothern Skycutter  S5 AP-2  [wound 3+]",
+                      impact_hit_report(attacker, defender)[0])
+
     def test_unit_context_reaches_a_linked_model(self):
         # 'Empire War Wagons' holds the troop type and links out to a sibling
         # 'War Wagon' model entry, rather than nesting it.
         ch = get_catalogue().characteristics("War Wagon")
         self.assertEqual(ch["Unit"], "Empire War Wagons")
         self.assertEqual(ch["Troop Type"], "Heavy chariot")
+        self.assertEqual(ch["Special Rules"], [])
 
     def test_crew_and_beasts_are_listed(self):
         ch = get_catalogue().characteristics("War Wagon")

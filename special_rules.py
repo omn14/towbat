@@ -562,6 +562,9 @@ def apply_rule_keywords(model, names, replace=False) -> None:
             if name and name not in current:
                 current.append(name)
         model.characteristics["Special Rules"] = current
+    baseline = getattr(model, '_base_characteristics', None)
+    if baseline is not None:
+        baseline["Special Rules"] = list(model.characteristics["Special Rules"])
     have = {r.get("name") for r in model.special_rules if isinstance(r, dict)}
     for entry in build_special_rules(model):
         if isinstance(entry, dict) and entry.get("name") not in have:

@@ -107,6 +107,7 @@ NAME_ALIASES = {
     "orc_boyz": "orc_boy",
     "goblin_wolf_rider": "wolf_rider",
     "orc_boar_boy": "boar_boy",
+    "lothern_skycutter": "skycutter",
 }
 
 # Army-organisation category ids, defined once in the .gst and shared by all
@@ -649,9 +650,11 @@ def parse_catalogue_full(cat_path: str):
             base = _model_base_size(model_entry) or base_by_profile.get(profile_id)
             _apply_base_size(record, base)
             record["Unit"] = unit_name
-            record["Troop Type"] = context["Troop Type"]
-            record["Unit Size"] = context["Unit Size"]
-            record["Special Rules"] = list(context["Special Rules"])
+            model_context = (_unit_context(model_entry)
+                             if context["Troop Type"] is None else context)
+            record["Troop Type"] = context["Troop Type"] or model_context["Troop Type"]
+            record["Unit Size"] = context["Unit Size"] or model_context["Unit Size"]
+            record["Special Rules"] = list(context["Special Rules"] or model_context["Special Rules"])
             record["Category"] = category
             record["Faction"] = faction_name
             record.update(_model_parts(model_entry, entries_by_name))

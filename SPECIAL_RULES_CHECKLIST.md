@@ -2093,6 +2093,48 @@ clamour of battle, friendly units are seldom able to tell the difference"
       (`firing_bs` / `shooting_strength`) — a chariot's own BS is '-', which
       reads as 0, and `to_hit_ranged` rejects BS 0 outright, so a War Wagon
       fired its blunderbuss every turn and could never hit with it.
+      Skycutter correction (Forces of Fantasy p. 172; Rulebook pp. 194-195):
+      the roster calls it "Lothern Skycutter", while the Model profile is
+      "Skycutter". An alias now resolves both names. Its outer unit entry has
+      no Unit profile; the linked model carries Heavy Chariot, size and rules.
+      When the outer troop type is absent, parsing falls back to that model
+      context. Existing outer profiles remain authoritative; this is not a
+      blanket merge of every model-level rule list into its parent unit.
+      Verified S5/T4/W4, three Sea Guard crew, one Swiftfeather Roc, Fly (10),
+      60x100mm base and Impact Hits (D3+1) at S5 AP-2 (Scythed Wheels), wounding
+      a T4 Chaos Knight on 3+. Sources checked:
+      https://tow.whfb.app/unit/lothern-skycutter and
+      https://tow.whfb.app/troop-types-in-detail/scythed-wheels.
+      Old failed lookups saved only rule keywords and no stat keys. Loading
+      such a record now fills its profile from the catalogue before unit
+      recreation/restoration, preserving saved rules, wounds and battle state.
+      A console/HUD notice names the repair. The restored base profile survives
+      combat resets and re-saving; the original save is not rewritten by Load.
+      Tests in `tests/test_chariots.py`, `tests/test_persistence.py` and
+      `tests/test_skycutter_scene.py` cover fresh creation, existing/missing
+      units on load, actual S5/AP-2 wounds, split parts, footprint, reset and
+      round-trip stability, plus preserving explicitly saved custom stats.
+      Follow-up save-state correction: `characteristics` is now the live
+      snapshot and `base_characteristics` separately records the roster
+      baseline. A live S9 over a custom S7 baseline reloads as S9, then resets
+      to S7, never to the catalogue S5 or a permanently boosted S9. Mounts,
+      crew and beasts use the same split in `profile_parts`, preserving
+      component identity, counts, custom stats and rule selections. Permanent
+      roster keyword updates also update the baseline without promoting live
+      numeric bonuses. Supported ongoing spell effects remain separate in
+      `spells_in_play`; repeated loads restore one Oaken Shield with its saved
+      duration, combat reset preserves it, and expiry removes it. Tests share
+      the existing offscreen scene instead of creating an app for each case.
+      LEFTOVER: old saves without a baseline keep the saved profile as their
+      baseline; temporary bonuses embedded in those values cannot be reliably
+      distinguished from custom roster stats. Live numeric snapshots are not
+      a general modifier engine. Non-catalogue demonstration spells, including
+      Devil's Visit, are intentionally outside this work. No new spell effects
+      or mid-combat coroutine resumption are implemented.
+      LEFTOVER: recovery deliberately skips profiles containing any stat key,
+      including explicit zero or '-' values; partial or unknown profiles are
+      not guessed. This does not change chariot crew weapon allocation or
+      introduce new aliases for other mismatched roster/model names.
       LEFTOVER: one weapon per unit, so the crew cannot each carry their own —
       a War Wagon's 6 crew take exactly 6 different weapon upgrades in the
       catalogue, 3 of them missile weapons; and "special rules that apply to
