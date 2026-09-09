@@ -214,6 +214,10 @@ def commit_move(game, unit, positions=None, destination=None):
     if preview.error or preview.distance <= EPSILON:
         rule_skipped('Skirmishers', unit, preview.error or 'no model changed position; movement retained')
         return False
+    if preview.marched:
+        from marching import request_march
+        if not request_march(game, unit, lambda: commit_move(game, unit, preview.positions, preview.destination)):
+            return False
     origin = unit.bodyNP.getPos()
     unit.bodyNP.setPos(*preview.destination)
     for record, position in zip(unit.skirmishLayout, preview.positions):
@@ -225,7 +229,7 @@ def commit_move(game, unit, positions=None, destination=None):
     unit.rebuildFootprint()
     unit.bodyNP.node().setTransformDirty()
     unit.moveSpentThisTurn += preview.distance
-    unit.marchedThisTurn = preview.marched
+    unit.marchedThisTurn = unit.marchedThisTurn or preview.marched
     unit.hasMovedThisTurn = True
     game.movement.alignModelsToHillNormal(unit)
     rule_log('Skirmishers', unit,

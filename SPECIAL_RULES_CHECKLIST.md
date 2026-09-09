@@ -47,13 +47,14 @@ itself add gameplay effects.
       (Chaos Warriors' standard bearer). `magic_items` now retains definition
       and selection identity, category, quantity, points and structural owner.
       Magic Armour remains distinct from ordinary Armour. Unknown items are
-      retained with unsupported status. LEFTOVER: item effects and battle-save
-      inventory are not implemented.
+      retained with unsupported status. Runtime roster metadata now survives
+      battle saves. LEFTOVER: item effects and usable/spent item inventory.
 - [x] Preserve command selections and their model associations. Four Chaos
       Knights remain four bodies; `command` retains champion/standard/musician
       roles, model references and the champion's A2 profile. Original incoming
       and outgoing associations are retained in `roster_selections`.
-      LEFTOVER: command combat bonuses, casualties and challenges remain uncoded.
+      Runtime promotions, combat bonuses, casualties and challenges are now
+      connected; see Step 2 below for verification and remaining limits.
 - [x] Separate the Mage's available spell pool from known spells. The ten
       High Magic/Lore of Saphery options now occupy `spell_pool`; `spells` is
       empty, Level 2 is retained and `spell_generation_pending` is true.
@@ -66,8 +67,75 @@ itself add gameplay effects.
       cover both armies' counts/totals, all three items, command promotions,
       source reconstruction, repeat imports and JSON serialization. Actual
       local exports also verified at 500 points each without modifying them.
-      LEFTOVER: structural ownership cannot resolve a bearer not specified
-      by the export; flat combat consumers still need the runtime integration.
+      Runtime owners now select separate weapons for rider, mount, crew and
+      beasts. Chariot hull-level personal weapons are explicitly crew-operated
+      under p. 194. LEFTOVER: ambiguous owners outside these supported profiles.
+
+### Step 2: Command and Profile Gameplay
+
+- [x] Command promotions occupy existing bodies (pp. 198-201): four Chaos
+      Knights attack as three ordinary riders plus one A2 champion, with four
+      steeds when all four bases can fight. Champion characteristics and
+      personal wounds/retirement are separate from the ordinary profile.
+- [x] Ordinary standards add one combat-result point per side, independently
+      of the BSB (pp. 153, 200). Musicians break only the final tie, after all
+      other contributions including Stand & Shoot; opposing front-rank
+      musicians cancel (p. 201). Both have visible combat-result rows and logs.
+- [x] Musicians add +1 Leadership, capped at 10, to Rally and Enemy Sighted
+      tests only. Committed formed and Skirmisher marches within 8" of a
+      non-fleeing enemy now test before moving (pp. 123, 201). A failed test
+      leaves normal movement available but still counts as marching; it
+      cannot be retried that turn. Drilled and flying movers are exempt
+      (pp. 167, 170). Pending tests block phase advance and cannot change the
+      declared destination. Results survive reload and reset next turn.
+- [x] Command occupy front-rank slots with the standard nearest the centre;
+      characters cannot displace them. Ordinary casualties remove rank-and-file
+      first, then musician, standard and champion. Undirected melee/Impact Hit
+      overflow cannot remove a champion while ordinary models remain (p. 199).
+      Champions issue, accept and refuse challenges; their own mounts join the
+      duel without bringing the regiment's other mounts (pp. 199, 210-211).
+- [x] Standards captured on combat destruction or a fleeing catch are recorded
+      once, permanently, with their 50 VP value and winning player; trophies
+      survive the captured unit disappearing and save/load (pp. 200, 286).
+- [x] Rider, champion, mount, crew, beast and joined-character profiles use
+      their own weapons and Initiative. Each Initiative step shares a casualty
+      snapshot; later mounts/crew lose attacks with their base. Cavalry mounts
+      cannot support (pp. 146, 192, 194). The Skycutter uses three Sea Guard
+      with spears/bows and one Roc with Wicked Claws, including three BS4 bow
+      shots rather than one hull shot. Each part's weapons and armour persist.
+- [x] CORRECTED on the way: multi-Wound casualties now accumulate across
+      profile steps rather than subtracting one chariot per unsaved wound;
+      delayed casualty animation uses rendered counts. Reloading a regiment
+      restores rendered bodies as well as logical counts, rebuilding its
+      footprint only when the formation changes so existing contacts survive.
+      Per-profile attack counts run after charge hooks, preserving existing
+      Furious Charge bonuses without duplicate attack-count logs. Duel overkill no
+      longer counts excess wounds twice, and equal-Initiative duellists may
+      slay each other before either side's casualties are removed.
+- [x] Verified the actual two local rosters' runtime owners and counts, pure
+      command/profile tests, and an offscreen command scene covering physical
+      slots, casualties/reload, later mount attacks, champion challenge
+      persistence, Rally, three-crew shooting, final-score tie-breaking and
+      failed-march persistence. Local roster files are not test dependencies.
+      Full-suite verification uses `run_tests_isolated.py`, never a monolithic
+      pytest process inside Code. Final verification: 55 modules, 1,916 JUnit
+      cases including subtests, zero failures/errors after focused rechecks.
+      Full-run peak RSS 1,207.7 MiB under the 1,536 MiB service cap. The first
+      full report retains two reload-contact failures; the corrected
+      Shieldwall, command-scene and persistence rechecks supersede those results.
+- LEFTOVER: arbitrary attacks directed at a champion outside a challenge,
+  champion-specific template/Look Out Sir allocation, and champion-specific
+  missile attacks still need per-model attack allocation. Exact contact-based
+  full-versus-single attack limits remain the combat engine's existing
+  formation approximation. No bespoke command miniature assets are added.
+- LEFTOVER: when a unit has both a joined character and champion, the current
+  challenge picker prefers the character; explicit participant/refusal
+  nomination is not yet offered. AI still never issues and always accepts.
+  The duel remains a separate pass from the surrounding combat.
+- LEFTOVER: captured-standard VP are persisted, but the tactical assessment
+  is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
+  Drilled's free redress and the remaining magic-item/faction effects belong
+  to later steps. This does not mark either army fully rules-complete.
 
 ### Existing Support to Reuse
 
@@ -103,15 +171,15 @@ itself add gameplay effects.
       declarations, pivot and D3+1" movement, once-per-turn tracking, and both
       units counting as charging. The FAQ says D3+1 is NOT a Charge roll:
       do not add Swiftstride to it. Test Drilled and multiple charging enemies.
-- [ ] **Cavalry split profiles and Cavalry Support** - all four cavalry units.
-      Verify separate rider/mount WS/S/I/A, weapons, fighting-rank attacks,
-      supporting riders without supporting mounts, and casualty accounting.
-      Rider-only bonuses must never leak onto the mount or its weapon.
-- [ ] **Command groups** - champion A2 on one of the four Chaos Knights,
+- [x] **Cavalry split profiles and Cavalry Support** - separate rider/mount
+      WS/S/I/A, weapons, Initiative snapshots and casualty accounting; no
+      supporting mounts. Remaining contact-allocation limits are noted above.
+- [x] **Command groups** - champion A2 on one of the four Chaos Knights,
       standard bearers' combat-result bonus on Knights and Warriors, and
-      musicians on Knights, Warriors and Horsemen. Implement tie-breaking,
-      Rally/march modifiers, front-rank placement, casualties, champion
-      challenges, captured standards and persistence. A normal standard is
+      musicians on Knights, Warriors and Horsemen. Tie-breaking, Rally/march
+      modifiers, front-rank placement, casualties, champion challenges,
+      captured standards and persistence are wired; see Step 2 limits above.
+      A normal standard is
       not a Battle Standard Bearer and does not grant Hold Your Ground.
 - [ ] **Formation-specific effects** - verify Close Order combat-result
       eligibility at current Unit Strength, Open Order Quick Turn for
@@ -119,6 +187,7 @@ itself add gameplay effects.
       formation solely from a list of available formation keywords.
 - [ ] **Enemy Sighted / march tests**, and the Drilled/Fly exemptions; connect
       musician and Warband modifiers to the actual Leadership-test context.
+      Core test, musician and exemptions are done. LEFTOVER: Warband modifier.
 - [ ] **Heavy-infantry Steady in the Ranks** - Chaos Warriors and the Aspiring
       Champion's troop type; apply its disruption protection where relevant.
 - [ ] **Weapon choices and charge conditions** - preserve hand-weapon choices
@@ -153,7 +222,8 @@ itself add gameplay effects.
       Leadership test for compulsory charges, not the old 4+ mechanism.
       A legal target, charge declaration sequencing and Drilled all matter.
 - [ ] **Drilled** - Dragon Princes. Free redress before applicable movement
-      and exemption from Enemy Sighted tests. Include the FAQ cases for
+      and exemption from Enemy Sighted tests (the exemption is now coded).
+      Include the FAQ cases for
       Counter Charge, Giving Ground and compulsory charges from Marching Column.
 - [ ] **Sons of Caledor** - restrict who may join Dragon Princes. The Mage
       is this army's General, so that exception must allow them to join;
@@ -168,10 +238,10 @@ itself add gameplay effects.
       immunity and once-per-turn state; show why equal/higher-strength enemies
       do not test. Extend Mark of Chaos Undivided to this test once implemented.
 - [ ] **Skycutter split equipment and remaining chariot rules** - keep crew
-      cavalry spears/shortbows separate from the Roc's Wicked Claws. The flat
-      combat weapon list is still shared; new equipment records preserve the
-      Roc owner and hull-level selections, but the export does not explicitly
-      allocate those shared weapons to crew. Audit Lumbering,
+      cavalry spears/shortbows separate from the Roc's Wicked Claws: now
+      implemented, with separate Initiative and three-crew shooting. The
+      export's hull-level personal weapons are assigned to crew under p. 194.
+      LEFTOVER: audit Lumbering,
       Iron Shod Wheels, flying versus ground movement, landing terrain and
       ground-only follow-up/pursuit. Do not duplicate the Roc as an extra mount.
 
@@ -1795,13 +1865,12 @@ monstrous infantry and swarms too.
       there, and swarms are ignored when targeting enemy characters. Needs the
       unit-blocking half of line of sight, which `markHillTargets` and the arc
       clipping only half model.
-- [ ] Split Profile (Cavalry) — rider and mount each use their own WS/BS/S/I/A
+- [x] Split Profile (Cavalry) — rider and mount each use their own WS/BS/S/I/A
       and weapons; enemies roll To Hit against the *rider's* WS; Impact Hits
       and Stomp use the mount's Strength; the armour save uses the rider's
-      value; the model dies when the rider does. The chariot split profile
-      already does the equivalent (`defending_ws`, `CombatResolver.chariotParts`),
-      so this is largely reuse — but it changes every mounted unit in the game,
-      so it wants its own pass.
+      value; the model dies when the rider does. `combat_profiles.py` now
+      schedules parts separately and restricts mounts to the fighting rank.
+      LEFTOVER: exact individual-base contact allocation and uncoded Stomp.
 
 ### Phase 4 — war machines
 Their three rules are a self-contained block and would suit being done with the
@@ -1880,9 +1949,11 @@ Planned in `CHALLENGE_PLAN.md`. The rules with no Panda3D in them live in
       `removeModelsFromUnit`: joining takes the character out of the physics
       world and parents its nodes under the host, so the ordinary path would
       remove a rigid body twice and leave the host pointing at a dead model.
-      LEFTOVER: **champions are not modelled at all**, so "character or
-      champion" is read as "joined character". Unit champions are the commoner
-      duellist at the table, and none of this reaches them.
+      Champions are now promoted profiles with personal wounds, refusal state,
+      mount-only duel attacks and stable identities across save/load. Overkill
+      counts actual wounds plus excess once; equal-Initiative duels share a step.
+      LEFTOVER: explicit choice between a joined character and champion, and
+      the issuing player's choice of which eligible model must retire.
       LEFTOVER: "within, or adjacent to, the fighting rank" is never tested. A
       joined character always stands in the front rank at `host.characterSlot`,
       so it is always eligible.
@@ -2475,6 +2546,9 @@ clamour of battle, friendly units are seldom able to tell the difference"
       (`firing_bs` / `shooting_strength`) — a chariot's own BS is '-', which
       reads as 0, and `to_hit_ranged` rejects BS 0 outright, so a War Wagon
       fired its blunderbuss every turn and could never hit with it.
+      Step 2 now uses separate part Initiative, owned weapons, casualties per
+      base and full eligible crew counts for crew-operated missile weapons;
+      the hull is no longer counted as a single bow shooter.
       Skycutter correction (Forces of Fantasy p. 172; Rulebook pp. 194-195):
       the roster calls it "Lothern Skycutter", while the Model profile is
       "Skycutter". An alias now resolves both names. Its outer unit entry has

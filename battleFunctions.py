@@ -614,6 +614,11 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
     A unit no deeper than its own fighting rank has nobody to step forward, so
     its fighting rank simply narrows.
     """
+    attack_count = getattr(unit, '_attack_count', None)
+    if callable(attack_count):
+        return max(0, attack_count())
+    if isinstance(attack_count, int):
+        return max(0, attack_count)
     m = unit.model
     A = stat_value(m.characteristics.get('A'))
     files = max(0, unit.files)

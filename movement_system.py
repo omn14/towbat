@@ -1336,6 +1336,27 @@ class MovementSystem:
             return committed
 
         # Do not mark or announce marching for a refused Scout charge.
+        if not c and getattr(unit, 'wouldMarch', False) and unit.state == 'Idle':
+            from marching import request_march
+            destination = unit.bodyNP.getPos()
+            heading = unit.bodyNP.getHpr()
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            declared_point = Vec2(self.game.arcPoint)
+            declared_rotation = self.game.arcPointRotation
+            declared_distance = self.game.moveArceDistance
+
+            def complete_march():
+                self.game.arcPoint = declared_point
+                self.game.arcPointRotation = declared_rotation
+                self.game.moveArceDistance = declared_distance
+                unit.wouldMarch = True
+                self.moveUnit(unit)
+
+            if not request_march(self.game, unit, complete_march):
+                return False
+            unit.bodyNP.setPos(destination)
+            unit.bodyNP.setHpr(heading)
         if getattr(unit, 'wouldMarch', False):
             unit.marchedThisTurn = True
             rule_log('Marching', unit,
@@ -1399,6 +1420,8 @@ class MovementSystem:
         result = self.game.world.contactTestPair(fleeUnit.bodyNP.node(), pursuerUnit.bodyNP.node())
         for contact in result.getContacts():
             print("Contact detected between fleeing unit and pursuer!")
+            from command_groups import capture_standard
+            capture_standard(self.game, fleeUnit, pursuerUnit)
             self.game.world.removeRigidBody(fleeUnit.bodyNP.node())
             fleeUnit.model.removeNode()
             fleeUnit.bodyNP.removeNode()
@@ -1541,6 +1564,8 @@ class MovementSystem:
         cildren = unit.model.getChildren()
         # Keep the logical model count in sync with the surviving models.
         unit.unit.nmodels = len(cildren)
+        from command_groups import remove_command_casualties
+        remove_command_casualties(unit)
         if len(cildren) == 0:
             if (getattr(unit, 'isSkirmisher', False) and not unit.skirmishCombat
                     and getattr(unit, 'joinedCharacter', None) is not None):

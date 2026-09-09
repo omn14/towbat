@@ -112,6 +112,10 @@ def _save_profile_state(profile):
         }
     return {
         'characteristics': copy.deepcopy(profile.characteristics),
+        'profile_weapons': [_clean_weapon(weapon) for weapon in profile.weapons.values()],
+        'profile_equipped_weapon': (profile.equipedWeapon or {}).get('name'),
+        'profile_armour': list(getattr(profile, 'armour', [])),
+        'profile_armor_save': profile.armor_save,
         'base_characteristics': copy.deepcopy(
             getattr(profile, '_base_characteristics', None) or profile.characteristics),
         'profile_parts': parts,
@@ -124,6 +128,18 @@ def _restore_profile_state(profile, data):
     profile.characteristics = copy.deepcopy(data['characteristics'])
     profile._base_characteristics = copy.deepcopy(
         data.get('base_characteristics') or data['characteristics'])
+    if 'profile_weapons' in data:
+        profile.special_rules = [rule for rule in profile.special_rules if rule is not profile.equipedWeapon]
+        profile.equipedWeapon = None
+        profile.weapons = {}
+        for weapon in data['profile_weapons']:
+            if not profile.give_weapon(weapon['name']):
+                profile.weapons[weapon['name']] = copy.deepcopy(weapon)
+        equipped = data.get('profile_equipped_weapon')
+        if equipped:
+            profile.equip_weapon(equipped)
+        profile.armour = list(data.get('profile_armour', []))
+        profile.armor_save = data.get('profile_armor_save', profile.armor_save)
     for tag, record in data.get('profile_parts', {}).items():
         if tag not in ('mount', 'crew', 'beasts'):
             continue
@@ -171,6 +187,7 @@ def save_game_state(game, filename=None):
         'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
         'strategy_command_done': getattr(game, 'strategyCommandDone', True),
+        'captured_standards': copy.deepcopy(getattr(game, 'capturedStandards', [])),
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
         'challenges': [
@@ -193,6 +210,10 @@ def save_game_state(game, filename=None):
     for unit in game.units:
         unit_data = {
             'name': unit.unitName,
+            'command': copy.deepcopy(getattr(unit.unit, 'command', [])),
+            'command_profiles': {key: _save_profile_state(profile) for key, profile in
+                                 getattr(unit.unit, 'command_models', {}).items()},
+            'roster_metadata': copy.deepcopy(getattr(unit.unit, 'roster_metadata', {})),
             # The army list's rules, not the catalogue's: Skirmishers, Fire &
             # Flee and the rest live on the roster, so a unit rebuilt from a
             # save has no way to find them again.
@@ -207,6 +228,8 @@ def save_game_state(game, filename=None):
             'isInCombat': unit.isInCombat,
             'hasMovedThisTurn': unit.hasMovedThisTurn,
             'marchedThisTurn': getattr(unit, 'marchedThisTurn', False),
+            'marchTestResult': (getattr(unit, 'marchTestResult', None)
+                                if getattr(unit, 'marchTestResult', None) != 'pending' else None),
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'standAndShootWounds': getattr(unit, 'standAndShootWounds', 0),
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
@@ -499,6 +522,7 @@ def load_game_state(game, filename):
         unit.isInCombat = unit_data['isInCombat']
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
         unit.marchedThisTurn = unit_data.get('marchedThisTurn', False)
+        unit.marchTestResult = unit_data.get('marchTestResult')
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.standAndShootWounds = unit_data.get('standAndShootWounds', 0)
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
@@ -540,11 +564,19 @@ def load_game_state(game, filename):
         unit.vanguardDone = unit_data.get('vanguardDone', False)
         unit.madeVanguardMove = unit_data.get('madeVanguardMove', False)
 
+        formation_changed = (unit.unit.nmodels, unit.unit.files, unit.unit.ranks) != (
+            unit_data['nmodels'], unit_data['files'], unit_data['ranks'])
         unit.unit.nmodels = unit_data['nmodels']
         unit.unit.files = unit_data['files']
         unit.unit.ranks = unit_data['ranks']
 
         _restore_profile_state(unit.unit.model, unit_data)
+        from roster_runtime import apply_roster_ownership
+        apply_roster_ownership(unit.unit, {'command': unit_data.get('command', [])})
+        unit.unit.roster_metadata = copy.deepcopy(unit_data.get('roster_metadata', {}))
+        for key, record in unit_data.get('command_profiles', {}).items():
+            if key in unit.unit.command_models:
+                _restore_profile_state(unit.unit.command_models[key], record)
         unit.unit.model.armor_save = unit_data['armor_save']
         unit.unit.model.armour = list(unit_data.get('armour', []) or [])
         unit.unit.model.charging = unit_data['charging']
@@ -554,6 +586,17 @@ def load_game_state(game, filename):
 
         restore_spellbook(unit.unit.model, unit_data.get('spells', []),
                           unit_data.get('wizard_level', 0))
+
+        if hasattr(unit, 'model') and hasattr(unit, 'layOutRanks'):
+            children = list(unit.model.getChildren())
+            formation_changed = formation_changed or len(children) != unit.unit.nmodels
+            while children and len(children) < unit.unit.nmodels:
+                children.append(children[0].copyTo(unit.model))
+            for child in children[unit.unit.nmodels:]:
+                child.removeNode()
+            unit.layOutRanks()
+            if formation_changed:
+                unit.rebuildFootprint()
 
         unit.isInCombatWith = []
         unit.isInCombatFlank = []
@@ -597,12 +640,17 @@ def load_game_state(game, filename):
 
     # A challenge outlives the turn it was issued in (To The Death!, p. 211).
     game.challenges = []
+    from command_groups import champions
+    challenge_models = dict(unit_map)
+    for member in game.units:
+        challenge_models.update({champion.unitName: champion for champion in
+                                 champions(member, include_retired=True)})
     for saved in game_state.get('challenges') or []:
-        challenger = unit_map.get(saved.get('challenger'))
+        challenger = challenge_models.get(saved.get('challenger'))
         if challenger is None:
             continue
         challenge = Challenge(challenger, unit_map.get(saved.get('host')),
-                              unit_map.get(saved.get('accepter')),
+                              challenge_models.get(saved.get('accepter')),
                               unit_map.get(saved.get('accepter_host')))
         challenge.refused = bool(saved.get('refused'))
         challenge.rounds = int(saved.get('rounds', 0))
@@ -628,6 +676,7 @@ def load_game_state(game, filename):
     game.vanguardFirst = game_state.get('vanguard_first')
     game.vanguardActive = game_state.get('vanguard_active')
     game.strategyCommandDone = game_state.get('strategy_command_done', True)
+    game.capturedStandards = copy.deepcopy(game_state.get('captured_standards', []))
     game.rallyingCryBusy = False
     game.roundCounter.apply_selection_masks()
     if game_state['current_phase'] == 'DeployPhase':

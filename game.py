@@ -650,6 +650,8 @@ class MyApp(ShowBase):
                 restore_spellbook(model_instance, spells, level)
 
             unit_instance = unit(f"{unit_name} Unit", model_instance, nmodels, files, ranks)
+            from roster_runtime import apply_roster_ownership
+            apply_roster_ownership(unit_instance, army_unit_data)
             unit_graphics = unitGraphics(
                 self, graphics_name, model_info['path'], unit_instance,
                 scale=1.0, BulletWorld=self.world, color=player_color)
@@ -964,6 +966,8 @@ class MyApp(ShowBase):
             print(f"{unit.unit.name} rallies on the General's Leadership "
                   f"({general.unit.name}, Ld {leadership}) - Inspiring Presence.")
         leadership = rally_leadership(unit, leadership)
+        from command_groups import musician_leadership
+        leadership = musician_leadership(unit, leadership, 'rally', log=True)
         dice = await self.rollLeadershipDice()
         standard = self.psychology.battle_standard_of(unit)
         dice = await reroll_leadership(
@@ -2150,8 +2154,10 @@ class MyApp(ShowBase):
                 profile.at_long_range = long_range
                 profile.target_skirmisher = attacker.model.target_skirmisher
                 profile.moved_this_turn = _moved
-                result = simulate_battle(member.unit, defender, charge=False,
-                                        multiple_shots=fire_multiple, firing_models=count,
+                from combat_profiles import crew_shooting_unit
+                shooting_unit, firing_count = crew_shooting_unit(member.unit, count)
+                result = simulate_battle(shooting_unit, defender, charge=False,
+                                        multiple_shots=fire_multiple, firing_models=firing_count,
                                         stand_and_shoot=stand_and_shoot)
                 rule_log('Shooting', member, f'{count} eligible models at {"long" if long_range else "short"} range '
                          f'-> {result[0]} shots, {result[1]} hits, {result[4]} wounds (pp. 137, 139)')
@@ -2161,9 +2167,15 @@ class MyApp(ShowBase):
             origFiles = attacker.files
             if charShooter and origFiles > 1:
                 attacker.files -= 1
+            from combat_profiles import crew_shooting_unit
+            shooting_unit, _ = crew_shooting_unit(attacker)
             attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                attacker, defender, charge=False, extra_ranks=extra_ranks,
+                shooting_unit, defender, charge=False, extra_ranks=extra_ranks,
                 multiple_shots=fire_multiple, stand_and_shoot=stand_and_shoot)
+            if shooting_unit is not attacker:
+                rule_log('Split Profile', attackerUnit,
+                         f'{shooting_unit.model.name}: {shooting_unit.nmodels} crew with '
+                         f"{weapon['name']} -> {attacks} shots at BS{shooting_unit.model.firing_bs()} (p. 194)")
             attacker.files = origFiles
             self.printBattleResults(attackerUnit, defenderUnit, attacks, total_hits, suffered_wounds, saves_made, total_wounds)
         if charShooter and geometry is None:

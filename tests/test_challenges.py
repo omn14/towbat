@@ -259,9 +259,15 @@ class DuelResolutionTests(unittest.TestCase):
 
     def test_overkill_is_scored_for_the_excess(self):
         p1, p2, ok1, ok2 = self._fight({'Captain Unit': 5, 'Champion Unit': 0})
-        self.assertEqual(p1, 5)
+        self.assertEqual(p1, 2)
         self.assertEqual(ok1, 3, "5 wounds against 2 remaining is +3")
         self.assertEqual(ok2, 0)
+
+    def test_equal_initiative_duellists_can_slay_each_other(self):
+        self.b.unit.model.characteristics['I'] = '5'
+        result = self._fight({'Captain Unit': 2, 'Champion Unit': 2})
+        self.assertEqual(result, (2, 2, 0, 0))
+        self.assertEqual(len(self.slain), 2)
 
     def test_a_resolved_challenge_leaves_play(self):
         self._fight({'Captain Unit': 2, 'Champion Unit': 0})

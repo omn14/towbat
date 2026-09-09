@@ -334,6 +334,12 @@ class unitGraphics(FSM):
         host = getattr(self, 'hostUnit', None)
         if host is not None:
             row += f"Joined : riding with {host.unitName}\n"
+        from command_groups import living_command
+        command = living_command(self)
+        if command:
+            row += 'Command: ' + ', '.join(entry.get('name', entry['role']) +
+                                         (' (retired)' if entry.get('retired') else '')
+                                         for entry in command) + '\n'
 
         if self.tacticalRole:
             role_str = self.tacticalRole['role']
@@ -355,14 +361,28 @@ class unitGraphics(FSM):
             return
         files = max(1, int(files if files is not None else self.unit.files))
         children = self.model.getChildren() if children is None else children
+        from command_groups import command_positions, living_command
+        command = living_command(self)
+        positions = command_positions(self, files)
+        occupied = set(positions.values())
+        if self.characterSlot is not None:
+            candidates = [slot for slot in range(max(len(children), files) + 1) if slot not in occupied]
+            self.characterSlot = min(candidates, key=lambda slot: (slot // files, abs(slot % files - files // 2)))
         reserved = self.characterSlot
         slot = 0
-        for child in children:
-            if slot == reserved:
+        for index, child in enumerate(children):
+            child.clearPythonTag('command_role')
+            if index < len(command):
+                entry = command[index]
+                place = positions[id(entry)]
+                child.setPythonTag('command_role', entry['role'])
+            else:
+                while slot == reserved or slot in occupied:
+                    slot += 1
+                place = slot
                 slot += 1
-            row, col = divmod(slot, files)
+            row, col = divmod(place, files)
             child.setPos(Point3(col * self.modelWidth, -row * self.modelHeight, 0))
-            slot += 1
 
     def slotCount(self):
         """Grid slots the unit fills: its own models, plus a joined character."""
@@ -555,6 +575,11 @@ class unitGraphics(FSM):
                 base.challenges.remove(challenge)
         # A model that refused a challenge may rejoin the rank once its unit is
         # no longer engaged (p. 210).
+        for entry in getattr(self.unit, 'command', []):
+            if entry.get('retired'):
+                entry['retired'] = False
+                rule_log('Refusing a Challenge', self,
+                         f"{entry.get('name', 'Champion')} returns to the fighting rank; combat ended (p. 210)")
         char = getattr(self, 'joinedCharacter', None)
         if char is not None and getattr(char, 'retiredFromCombat', False):
             char.retiredFromCombat = False

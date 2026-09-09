@@ -74,6 +74,8 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if any(getattr(unit, 'marchTestResult', None) == 'pending' for unit in self.game.units):
+            return
         if getattr(self.game, 'skirmishEditor', None) is not None:
             battle_log('Confirm or cancel the formation move first.', 'info')
             return
@@ -192,6 +194,7 @@ class GamePhaseFSM(FSM):
             unit.hasAttackedThisTurn = False
             unit.standAndShootWounds = 0
             unit.marchedThisTurn = False
+            unit.marchTestResult = None
             unit.panicTestedThisPhase = False
             unit.fledThisPhase = False
             unit.startOfPhaseModels = unit.unit.nmodels

@@ -908,6 +908,8 @@ class CombatResolver:
                      else 'Catching the Curs!', unit,
                      f"caught the fleeing {defenderUnit.unit.name} and hacked "
                      f"it to pieces{escaped}")
+            from command_groups import capture_standard
+            capture_standard(self.game, defenderUnit, unit)
             self.removeUnitFromPlay(defenderUnit)
             unit.request("Moved")
             for terning in terninger:
@@ -1417,17 +1419,120 @@ class CombatResolver:
                 continue
             # Thin the target now so it strikes back with its losses, the way
             # the attack loop does; applyWounds later confirms the count.
-            W = max(1, _stat_int(target.unit.model.characteristics, 'W', 1))
-            slain = (getattr(target, 'woundsOnModel', 0) + unsaved) // W
-            target.unit.nmodels = max(0, target.unit.nmodels - slain)
+            unsaved, _ = self.commandWoundLimit(target, unsaved)
+            self.previewCombatWounds(target, unsaved)
+            if target.unit.nmodels == 0:
+                from command_groups import capture_standard
+                capture_standard(self.game, target, striker)
             if striker in self.game.player1Units:
                 player1_score += unsaved
             else:
                 player2_score += unsaved
-            modRemoveSequence.append(Func(self.game.applyWounds, target, unsaved))
+            modRemoveSequence.append(Func(self.applyCombatWounds, target, unsaved))
         return player1_score, player2_score
 
     # ─── Battle Start & Resolution ────────────────────────────────────────
+
+    def previewCombatWounds(self, target, wounds, slaying=0):
+        """Bank multi-Wound losses until the casualty animation runs (p. 150)."""
+        if not hasattr(self, '_pendingWounds'):
+            self._pendingWounds = {}
+        remaining = self._pendingWounds.get(id(target), getattr(target, 'woundsOnModel', 0))
+        if slaying:
+            remaining = 0
+        total = remaining + max(0, wounds)
+        per_model = max(1, _stat_int(target.unit.model.characteristics, 'W', 1))
+        casualties, remainder = divmod(total, per_model)
+        target.unit.nmodels = max(0, target.unit.nmodels - casualties - slaying)
+        self._pendingWounds[id(target)] = remainder
+
+    def commandWoundLimit(self, target, wounds, slaying=0, challenge=None):
+        """Undirected attacks cannot spill onto a champion (Rulebook p. 199)."""
+        from command_groups import champions
+        protected = champions(target, include_retired=True)
+        if not protected:
+            return wounds, slaying
+        duelling = challenge is not None and any(challenge.involves(champion) for champion in protected)
+        reserve = 1 if target.unit.nmodels > 1 or duelling else 0
+        available = max(0, target.unit.nmodels - reserve)
+        per_model = max(1, _stat_int(target.unit.model.characteristics, 'W', 1))
+        killed = min(slaying, available)
+        partial = 0 if killed else getattr(self, '_pendingWounds', {}).get(id(target), getattr(target, 'woundsOnModel', 0))
+        admitted = min(wounds, max(0, (available - killed) * per_model - partial))
+        if admitted != wounds or killed != slaying:
+            rule_log('Champion', target,
+                     f'{wounds} wounds and {slaying} slaying blows against ordinary models -> '
+                     f'{admitted} wounds and {killed} slaying blows; champion protected (p. 199)')
+        return admitted, killed
+
+    def applyCombatWounds(self, target, wounds, slaying=0):
+        """Replay the banked losses against rendered bodies, once per exchange."""
+        if target not in self.game.units:
+            return
+        target.unit.nmodels = len(target.model.getChildren())
+        self.game.applyWounds(target, wounds, slaying)
+
+    def resolveMeleeProfiles(self, challenge, removals):
+        """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
+        from combat_profiles import profile_strike_order
+        order = profile_strike_order(self.game.attackers, self.game.defenders,
+                                     self._engagedFacing, challenge)
+        engaged = {id(member): member for member in self.game.attackers + self.game.defenders}
+        scores = [0, 0]
+        initiative_step = None
+        snapshots = {}
+        animated = set()
+        for initiative, part in order:
+            host, target = part.host, part.target
+            if initiative != initiative_step:
+                initiative_step = initiative
+                snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
+            models = snapshots[id(host)]
+            if id(host) not in animated:
+                animated.add(id(host))
+                host.hasAttackedThisTurn = True
+                host.updateTextNode()
+                origin = host.bodyNP.getPos()
+                direction = target.bodyNP.getPos() - origin
+                if direction.lengthSquared():
+                    self.game.attackSequence.append(LerpPosHprInterval(
+                        host.bodyNP, duration=0.5, pos=origin - direction.normalized() * 2,
+                        hpr=host.bodyNP.getHpr(), blendType='easeInOut'))
+                    self.game.attackSequence.append(LerpPosHprInterval(
+                        host.bodyNP, duration=0.5, pos=origin,
+                        hpr=host.bodyNP.getHpr(), blendType='easeInOut'))
+            if models <= 0 and part.role != 'character':
+                rule_skipped('Split Profile' if part.role != 'main' else 'Combat', host,
+                             f'{part.profile.name} at I{initiative}: no eligible attacks; '
+                             f'{models} models remain at this Initiative step')
+                continue
+            if target.unit.model.equipedWeapon.get('tag') == 'ranged':
+                target.unit.model.equip_best_melee()
+            def attack_count():
+                return part.attacks(models, self._combatStartModels.get(id(host.unit), models), challenge)
+
+            result = simulate_battle(part.unit(attack_count), target.unit,
+                                     charge=getattr(host, 'chargedThisTurn', False),
+                                     first_round=getattr(host, 'roundsFought', 0) == 1)
+            slaying = take_last_slaying_blows()
+            if not result[0]:
+                rule_skipped('Champion' if part.role == 'champion' else 'Split Profile', host,
+                             f'{part.profile.name} at I{initiative}: no eligible attacks after modifiers')
+                continue
+            wounds, slaying = self.commandWoundLimit(target, result[-1] - slaying, slaying, challenge)
+            total_wounds = wounds + slaying
+            self.printBattleResults(host, target, *result)
+            rule_log('Champion' if part.role == 'champion' else 'Split Profile', host,
+                     f"{part.profile.name} ({part.role}) at I{initiative}, "
+                     f"{(part.profile.equipedWeapon or {}).get('name', 'unarmed')}: "
+                     f'{result[0]} attacks -> {total_wounds} unsaved wounds')
+            self.previewCombatWounds(target, wounds, slaying)
+            if target.unit.nmodels == 0:
+                from command_groups import capture_standard
+                capture_standard(self.game, target, host)
+            scores[0 if host in self.game.player1Units else 1] += total_wounds
+            removals.append(Func(self.applyCombatWounds, target, wounds, slaying))
+        return scores
 
     async def verySimpleBattleStart(self, task):
         self.game.resolvingCombat = True
@@ -1652,6 +1757,7 @@ class CombatResolver:
         model.retiredFromCombat = True
         if host is not None and host is not model:
             host.placeCharacter()
+            host.layOutRanks()
         rule_log('Refusing a Challenge', model,
                  "retires from combat: makes no attacks, has none directed at it, "
                  "and confers no Leadership or special rules on its unit while its "
@@ -1666,7 +1772,8 @@ class CombatResolver:
         out = [(model.unit, '')]
         for rule in model.unit.model.special_rules:
             if isinstance(rule, dict) and rule.get('mountUnit'):
-                out.append((rule['mountUnit'], ' (mount)'))
+                mount = getattr(rule['mountUnit'], 'model', rule['mountUnit'])
+                out.append((SimpleNamespace(name=mount.name, model=mount, nmodels=1, files=1, ranks=1), ' (mount)'))
         for part in self.chariotParts(model):
             out.append((part, ' (crew)'))
         return out
@@ -1679,7 +1786,10 @@ class CombatResolver:
         model.woundsOnModel = getattr(model, 'woundsOnModel', 0) + wounds
         if wounds < left:
             return False
-        if getattr(model, 'hostUnit', None) is not None:
+        if getattr(model, 'command_host', None) is not None:
+            model.command_entry['active'] = False
+            self.game.movement.removeModelsFromUnit(model.command_host, 1)
+        elif getattr(model, 'hostUnit', None) is not None:
             slay_character(self.game, model)
         else:
             self.game.movement.removeModelsFromUnit(model, 1)
@@ -1710,37 +1820,44 @@ class CombatResolver:
         scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         fallen = set()
-        for initiative, model, unit, label, charged, first in order:
-            rival = challenge.opponent_of(model)
-            if id(model) in fallen:
-                rule_log('Challenges & Mounts', model,
-                         f"was slain before its{label or ' own'} attacks could be "
-                         f"made, and they are lost (p. 211)")
-                continue
-            if id(rival) in fallen:
-                continue
-            weapon = unit.model.equipedWeapon
-            if weapon is None or weapon.get('tag') == 'ranged':
-                unit.model.equip_best_melee()
-            attacks, hits, suffered, saved, wounds = simulate_battle(
-                unit, rival.unit, charge=charged, first_round=first)
-            rule_log('Fighting a Challenge', model,
-                     f"strikes{label} at I{initiative}: {attacks} attack(s) -> "
-                     f"{hits} hit -> {wounds} unsaved wound(s) on "
-                     f"{self._duelName(rival)} (p. 211)")
-            scores[id(model)] += wounds
-            left = wounds_remaining(rival)
-            if self.woundDuellist(rival, wounds):
-                fallen.add(id(rival))
-                bonus = overkill_bonus(wounds, left)
-                overkill[id(model)] += bonus
-                rule_log('Challenges', model,
-                         f"slays {self._duelName(rival)} in the challenge")
-                if bonus:
-                    rule_log('Overkill', model,
-                             f"{wounds} unsaved wound(s) against {left} Wound(s) "
-                             f"remaining -> +{bonus} combat result (max "
-                             f"{MAX_OVERKILL}) (p. 211)")
+        from itertools import groupby
+        for initiative, step in groupby(order, key=lambda entry: entry[0]):
+            inflicted = {id(participant): 0 for participant in challenge.participants()}
+            for _, model, unit, label, charged, first in step:
+                rival = challenge.opponent_of(model)
+                if id(model) in fallen or id(rival) in fallen:
+                    rule_skipped('Challenges & Mounts', model,
+                                 f'I{initiative}{label}: a participant was slain at a higher Initiative (p. 211)')
+                    continue
+                weapon = unit.model.equipedWeapon
+                if weapon is None or weapon.get('tag') == 'ranged':
+                    unit.model.equip_best_melee()
+                attacks, hits, suffered, saved, wounds = simulate_battle(
+                    unit, rival.unit, charge=charged, first_round=first)
+                slaying = take_last_slaying_blows()
+                if slaying:
+                    wounds = max(wounds, wounds_remaining(rival))
+                rule_log('Fighting a Challenge', model,
+                         f'strikes{label} at I{initiative}: {attacks} attack(s) -> '
+                         f'{hits} hit -> {wounds} unsaved wound(s) on {self._duelName(rival)} (p. 211)')
+                inflicted[id(model)] += wounds
+            for model in challenge.participants():
+                rival = challenge.opponent_of(model)
+                wounds = inflicted[id(model)]
+                if not wounds:
+                    continue
+                left = wounds_remaining(rival)
+                scores[id(model)] += min(wounds, left)
+                if self.woundDuellist(rival, wounds):
+                    fallen.add(id(rival))
+                    bonus = overkill_bonus(wounds, left)
+                    overkill[id(model)] += bonus
+                    rule_log('Challenges', model,
+                             f'slays {self._duelName(rival)} in the challenge')
+                    if bonus:
+                        rule_log('Overkill', model,
+                                 f'{wounds} unsaved wounds against {left} Wounds remaining -> '
+                                 f'{left} wounds +{bonus} overkill (max {MAX_OVERKILL}) (p. 211)')
         if fallen:
             end_challenge(self.game, challenge)
         p1 = challenge.host in self.game.player1Units
@@ -1807,6 +1924,7 @@ class CombatResolver:
         player2_flank_bonus = 0
         player2_rank_bonus = 0
         modRemoveSequence = Sequence()
+        self._pendingWounds = {}
         impact1, impact2 = self.impactHits(modRemoveSequence)
         player1_score += impact1
         player2_score += impact2
@@ -1816,148 +1934,9 @@ class CombatResolver:
             self.resolveChallenge(challenge) if challenge else (0, 0, 0, 0))
         player1_score += duel1 + overkill1
         player2_score += duel2 + overkill2
-        stepModels = dict(self._combatStartModels)
-        stepInitiative = None
-        for initiative, i in self.strikeOrder():
-            unit = self.game.attackers[i]
-            if unit.hasAttackedThisTurn:
-                continue
-            # Simultaneous Combat (p. 146): models sharing an Initiative value
-            # strike together, so every striker in the step counts its models
-            # from the same snapshot and nobody is thinned by a blow struck
-            # alongside their own.
-            if initiative != stepInitiative:
-                stepInitiative = initiative
-                stepModels = {id(g.unit): g.unit.nmodels
-                              for g in set(self.game.attackers) | set(self.game.defenders)}
-            attackerUnit = self.game.defenders[i]
-            attacker = attackerUnit.bodyNP
-            defender = unit.bodyNP
-            defenderUnit = self.game.getSelectedUnit(defender.node())
-            defenderUnit.hasAttackedThisTurn = True
-            defenderUnit.updateTextNode()
-            if defenderUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-                defenderUnit.unit.model.equip_weapon('hand weapon')
-            if attackerUnit.unit.model.equipedWeapon.get('tag') == 'ranged':
-                attackerUnit.unit.model.equip_weapon('hand weapon')
-            apos = defender.getPos()
-            back_int = LerpPosHprInterval(
-                defender,
-                duration=0.5,
-                pos=defender.getPos() - (attacker.getPos() - defender.getPos()).normalized() * 2,
-                hpr=defender.getHpr(),
-                blendType='easeInOut'
-            )
-            forward_int = LerpPosHprInterval(
-                defender,
-                duration=0.5,
-                pos=apos,
-                hpr=defender.getHpr(),
-                blendType='easeInOut'
-            )
-            self.game.attackSequence.append(back_int)
-            self.game.attackSequence.append(forward_int)
-
-            # A joined character occupies one front-rank slot: the unit fights
-            # with one fewer model of its own profile, the character adds its own
-            # attacks below.
-            joinedRule = next((r for r in defenderUnit.unit.model.special_rules
-                               if isinstance(r, dict) and r.get('tag') == JOIN_TAG), None)
-            # A character fighting a challenge, or hiding from one, adds nothing
-            # to its unit's fight (p. 210 and p. 211).
-            if joinedRule:
-                charGraphics = joinedRule.get('characterGraphics')
-                if challenge is not None and challenge.involves(charGraphics):
-                    joinedRule = None
-                elif getattr(charGraphics, 'retiredFromCombat', False):
-                    joinedRule = None
-            origFiles = defenderUnit.unit.files
-            if joinedRule and origFiles > 1:
-                defenderUnit.unit.files -= 1
-            # The charging unit fights with its charge bonus (and front rank
-            # only); everyone else fights as normal (front + supporting rank).
-            # Casualties suffered at a *higher* Initiative come off the
-            # fighting rank of a unit that strikes back: the slain and the
-            # models that stepped into their place cannot attack. Blows landed
-            # at this same Initiative do not count, so the unit fights with the
-            # models it had when the step began.
-            liveModels = defenderUnit.unit.nmodels
-            stepStart = stepModels.get(id(defenderUnit.unit), liveModels)
-            casualties = max(0, self._combatStartModels.get(
-                id(defenderUnit.unit), stepStart) - stepStart)
-            defenderUnit.unit.nmodels = stepStart
-            # Hatred and its kin last only the first round of a combat (p. 171).
-            firstRound = getattr(defenderUnit, 'roundsFought', 0) == 1
-            attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                defenderUnit.unit, attackerUnit.unit,
-                charge=getattr(defenderUnit, 'chargedThisTurn', False),
-                casualties=casualties, first_round=firstRound)
-            defenderUnit.unit.files = origFiles
-            defenderUnit.unit.nmodels = liveModels
-            combSlain = take_last_slaying_blows()
-            self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
-                                    suffered_wounds, saves_made, total_wounds)
-            attackerUnit.unit.nmodels -= total_wounds
-
-            if defenderUnit in self.game.player1Units:
-                player1_score += total_wounds
-            else:
-                player2_score += total_wounds
-
-            combWounds = 0
-            combWounds += total_wounds
-            for rule in defenderUnit.unit.model.special_rules:
-                if rule.get('mountUnit'):
-                    attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                        rule['mountUnit'], attackerUnit.unit,
-                        charge=getattr(defenderUnit, 'chargedThisTurn', False),
-                        first_round=firstRound)
-                    combSlain += take_last_slaying_blows()
-                    self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
-                                            suffered_wounds, saves_made, total_wounds)
-                    attackerUnit.unit.nmodels -= total_wounds
-
-                    if defenderUnit in self.game.player1Units:
-                        player1_score += total_wounds
-                    else:
-                        player2_score += total_wounds
-                    combWounds += total_wounds
-            for partUnit in self.chariotParts(defenderUnit):
-                attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                    partUnit, attackerUnit.unit,
-                    charge=getattr(defenderUnit, 'chargedThisTurn', False),
-                    first_round=firstRound)
-                combSlain += take_last_slaying_blows()
-                self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
-                                        suffered_wounds, saves_made, total_wounds)
-                attackerUnit.unit.nmodels -= total_wounds
-                if defenderUnit in self.game.player1Units:
-                    player1_score += total_wounds
-                else:
-                    player2_score += total_wounds
-                combWounds += total_wounds
-            # A joined character fights with its own profile (single model).
-            if joinedRule:
-                charUnit = joinedRule['characterUnit']
-                cw = charUnit.model.equipedWeapon
-                if cw is None or cw.get('tag') == 'ranged':
-                    charUnit.model.equip_weapon('hand weapon')
-                attacks, total_hits, suffered_wounds, saves_made, total_wounds = simulate_battle(
-                    charUnit, attackerUnit.unit,
-                    charge=getattr(defenderUnit, 'chargedThisTurn', False),
-                    first_round=firstRound)
-                combSlain += take_last_slaying_blows()
-                self.printBattleResults(defenderUnit, attackerUnit, attacks, total_hits,
-                                        suffered_wounds, saves_made, total_wounds)
-                attackerUnit.unit.nmodels -= total_wounds
-                if defenderUnit in self.game.player1Units:
-                    player1_score += total_wounds
-                else:
-                    player2_score += total_wounds
-                combWounds += total_wounds
-            modRemoveSequence.append(
-                Func(self.game.applyWounds, attackerUnit,
-                     combWounds - combSlain, combSlain))
+        melee1, melee2 = self.resolveMeleeProfiles(challenge, modRemoveSequence)
+        player1_score += melee1
+        player2_score += melee2
 
         engaged = set(self.game.attackers) | set(self.game.defenders)
         # Who was fighting whom, taken before any casualty is removed: a unit
@@ -1985,6 +1964,11 @@ class CombatResolver:
         player2_standard = battle_standard_bonus(p2_units)
         player1_score += player1_standard
         player2_score += player2_standard
+        from command_groups import standard_bonus, musician_bonus
+        ordinary1 = standard_bonus(p1_units, log=True)
+        ordinary2 = standard_bonus(p2_units, log=True)
+        player1_score += ordinary1
+        player2_score += ordinary2
         p1_us = side_unit_strength(p1_units)
         p2_us = side_unit_strength(p2_units)
         player1_massed = massed_infantry_bonus(p1_units, p1_us, p2_us)
@@ -2009,6 +1993,9 @@ class CombatResolver:
                     rule_log('Stand & Shoot', u,
                              f"{banked} unsaved wound(s) from the charge "
                              f"reaction count towards this combat (p. 151)")
+        music1, music2 = musician_bonus(p1_units, p2_units, player1_score, player2_score, log=True)
+        player1_score += music1
+        player2_score += music2
         self.printCombatResult(
             {'Wounds caused': (p1_wounds, p2_wounds),
              'Impact Hits': (impact1, impact2),
@@ -2017,6 +2004,8 @@ class CombatResolver:
              'Flank / rear': (player1_flank_bonus, player2_flank_bonus),
              'Rank Bonus': (player1_rank_bonus, player2_rank_bonus),
              'Battle Standard': (player1_standard, player2_standard),
+             'Standard Bearer': (ordinary1, ordinary2),
+             'Musician': (music1, music2),
              'Massed Infantry': (player1_massed, player2_massed)},
             (player1_score, player2_score), (p1_us, p2_us))
         await self.game.attackSequence

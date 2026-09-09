@@ -56,17 +56,17 @@ class Challenge:
 def duellist(unit):
     """The model in *unit* that could fight a challenge, or None.
 
-    Only characters, since the engine has no champions. A character fighting
-    on its own is its own duellist; otherwise it is the joined character.
+    Characters and champions may issue or accept (pp. 199, 210).
     """
     if unit is None:
         return None
     if is_character(unit):
         return unit
     joined = get_joined_character(unit)
-    if joined is None or is_retired(joined):
-        return None
-    return joined
+    if joined is not None and not is_retired(joined):
+        return joined
+    from command_groups import champions
+    return next(iter(champions(unit)), None)
 
 
 def is_retired(model) -> bool:
