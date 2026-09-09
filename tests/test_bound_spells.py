@@ -78,6 +78,12 @@ def test_roster_keeps_bound_and_ordinary_fireball_separate(tmp_path):
     assert only_bound['wizard_level'] is None
     assert len(only_bound['spells']) == 1
     selection['profiles'] = [ordinary]
+    with_pool = imported()
+    assert with_pool['wizard_level'] == 1
+    assert [spell['name'] for spell in with_pool['spell_pool']] == ['Fireball']
+    assert {spell_key(spell) for spell in with_pool['spells']} == {spell_key(ring())}
+    selection['selections'][0]['selections'].append(
+        {'name': 'Fireball', 'type': 'upgrade', 'profiles': [ordinary]})
     mixed = imported()
     assert mixed['wizard_level'] == 1
     assert {spell_key(s) for s in mixed['spells']} == {'Fireball', spell_key(ring())}

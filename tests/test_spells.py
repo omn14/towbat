@@ -110,12 +110,14 @@ class TestImportingAWizard(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.army = import_roster(ROSTER)
-        cls.wizard = next((u for u in cls.army["units"] if u.get("spells")), None)
+        cls.wizard = next((u for u in cls.army["units"] if u.get("spell_pool")), None)
 
     def test_the_roster_carries_the_chosen_lore(self):
         self.assertIsNotNone(self.wizard, "no wizard in the sample roster")
-        self.assertEqual(len(self.wizard["spells"]), 7)
-        self.assertIn("Fireball", [s["name"] for s in self.wizard["spells"]])
+        self.assertEqual(len(self.wizard["spell_pool"]), 7)
+        self.assertIn("Fireball", [s["name"] for s in self.wizard["spell_pool"]])
+        self.assertEqual(self.wizard["spells"], [])
+        self.assertTrue(self.wizard["spell_generation_pending"])
 
     def test_the_level_of_wizardry(self):
         self.assertEqual(self.wizard["wizard_level"], 2)
@@ -124,6 +126,8 @@ class TestImportingAWizard(unittest.TestCase):
         for u in self.army["units"]:
             if u is not self.wizard:
                 self.assertEqual(u["spells"], [])
+                self.assertEqual(u["spell_pool"], [])
+                self.assertFalse(u["spell_generation_pending"])
                 self.assertIsNone(u["wizard_level"])
 
     def test_the_level_comes_from_the_upgrade(self):

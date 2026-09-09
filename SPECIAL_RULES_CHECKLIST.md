@@ -22,7 +22,8 @@ files are local inputs and must not be staged with this checklist.
 Here, `[x]` means an existing implementation can be reused, not that the whole
 army has passed an end-to-end readiness test. `[ ]` includes missing effects,
 lost import data, partial support and outstanding roster-specific verification.
-This section is an implementation plan; it does not itself add gameplay effects.
+This section tracks implementation work; completed import metadata does not
+itself add gameplay effects.
 
 ### Selected Units
 
@@ -41,20 +42,32 @@ This section is an implementation plan; it does not itself add gameplay effects.
 
 ### Import Blockers
 
-- [ ] Preserve the three selected magic items and their owners: Silvery Wand
+- [x] Preserve the three selected magic items and their owners: Silvery Wand
       (Mage), Helm Of Courage (Aspiring Champion), The Banner Of The Bold
-      (Chaos Warriors' standard bearer). `import_roster` currently includes
-      their points but emits no item records. Ordinary armour collection does
-      not capture `Magic Armour`; the other selected item profile types are
-      `Arcane Items` and `Magic Standards`.
-- [ ] Preserve command selections and their model associations. The importer
-      correctly counts four Chaos Knights, not seven, but discards the
-      champion/standard/musician roles and the champion's upgraded profile.
-      Buying these upgrades must change outcomes without adding extra bodies.
-- [ ] Separate the Mage's available spell pool from its generated known spells.
-      The export contains ten High Magic/Lore of Saphery spell profiles and
-      `import_roster` currently puts all ten in `spells` for this Level 2 Mage.
-      Do not treat an exported lore catalogue as ten spells actually known.
+      (Chaos Warriors' standard bearer). `magic_items` now retains definition
+      and selection identity, category, quantity, points and structural owner.
+      Magic Armour remains distinct from ordinary Armour. Unknown items are
+      retained with unsupported status. LEFTOVER: item effects and battle-save
+      inventory are not implemented.
+- [x] Preserve command selections and their model associations. Four Chaos
+      Knights remain four bodies; `command` retains champion/standard/musician
+      roles, model references and the champion's A2 profile. Original incoming
+      and outgoing associations are retained in `roster_selections`.
+      LEFTOVER: command combat bonuses, casualties and challenges remain uncoded.
+- [x] Separate the Mage's available spell pool from known spells. The ten
+      High Magic/Lore of Saphery options now occupy `spell_pool`; `spells` is
+      empty, Level 2 is retained and `spell_generation_pending` is true.
+      Explicit spell upgrades and the existing Ruby Ring bound spell remain
+      distinguishable. Unsupported item spells do not create Wizards.
+      LEFTOVER: actual generation, substitution and the Wand's extra spell.
+- [x] Retain selected source records, equipment owners and spell provenance.
+      Exclude unselected/zero-count subtrees; retain nested mount and Roc
+      weapons without deduplicating different owners. Constructed fixtures
+      cover both armies' counts/totals, all three items, command promotions,
+      source reconstruction, repeat imports and JSON serialization. Actual
+      local exports also verified at 500 points each without modifying them.
+      LEFTOVER: structural ownership cannot resolve a bearer not specified
+      by the export; flat combat consumers still need the runtime integration.
 
 ### Existing Support to Reuse
 
@@ -156,7 +169,9 @@ This section is an implementation plan; it does not itself add gameplay effects.
       do not test. Extend Mark of Chaos Undivided to this test once implemented.
 - [ ] **Skycutter split equipment and remaining chariot rules** - keep crew
       cavalry spears/shortbows separate from the Roc's Wicked Claws. The flat
-      imported weapon list currently loses those owners. Audit Lumbering,
+      combat weapon list is still shared; new equipment records preserve the
+      Roc owner and hull-level selections, but the export does not explicitly
+      allocate those shared weapons to crew. Audit Lumbering,
       Iron Shod Wheels, flying versus ground movement, landing terrain and
       ground-only follow-up/pursuit. Do not duplicate the Roc as an extra mount.
 
@@ -230,11 +245,12 @@ names rather than relying on capitalisation.
 
 ### Magic Item System Plan
 
-- [ ] **Import identity and ownership** in `roster_importer.py`: preserve
-      selected item ID, canonical name, category, source/book, points and
-      owner (character, unit standard, rider/crew/mount where applicable).
-      Keep unknown items as visibly unsupported data. Do not scrape prose
-      into guessed executable effects or import unselected catalogue options.
+- [x] **Import identity and structural ownership** in `roster_importer.py`:
+      selected item/definition IDs, names, categories, available source metadata,
+      quantities, points and owners now survive import and army-list JSON.
+      Unknown items remain unsupported metadata, without inferred prose effects.
+      LEFTOVER: canonical handler aliases, rules-book references absent from
+      the export, runtime bearer allocation and battle-save item instances.
 - [ ] **Typed effect registry**, proposed `magic_items.py`: start with these
       three items and small explicit handlers for armour modifiers, sourced
       rule grants, extra known spells and optional rerolls. Reuse
@@ -358,8 +374,8 @@ Before implementing each entry, verify its full current wording, book page
 and applicable errata. Neither roster selects a Terror-causing model, a Chaos
 Wizard, a Bound item, or a specific Chaotic Cult. Do not add those as unrelated
 army-readiness prerequisites. Non-catalogue demonstration spells remain excluded.
-**LEFTOVER:** this checklist documents the missing support; it implements none
-of these new rules/items, does not certify list legality, and does not claim
+**LEFTOVER:** import metadata and spell-pool separation are implemented; the
+new rule/item effects above are not. This does not certify list legality or claim
 the exact two armies have already passed the acceptance scenarios.
 
 ## Done

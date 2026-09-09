@@ -1,6 +1,7 @@
 """Real base positions survive layout, casualties and restoration."""
 
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 from direct.showbase.ShowBase import ShowBase
@@ -29,7 +30,8 @@ class SkirmishStateTests(unittest.TestCase):
         self.app.world = BulletWorld()
         profile = model('State Trooper', '')
         profile.special_rules.append(dict(name='Skirmishers', tag='formation', skirmish=True))
-        self.member = unitGraphics(self.app, 'Skirmish test', 'models/jade_warrior.bam',
+        model_path = Path(__file__).resolve().parents[1] / 'models' / 'jade_warrior.bam'
+        self.member = unitGraphics(self.app, 'Skirmish test', str(model_path),
                                    unit('Test', profile, 5, 3, 2),
                                    BulletWorld=self.app.world)
         self.member.bodyNP.setPos(3, -5, 0)

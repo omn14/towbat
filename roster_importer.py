@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import math
 import os
@@ -23,6 +24,89 @@ from battlescribe import get_catalogue, slugify, spell_from_profile, spell_key, 
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FILES = 5  # default frontage when the roster has no formation info
+MAGIC_ITEM_TYPES = {
+    "Magic Weapons", "Magic Armour", "Talismans", "Enchanted Items",
+    "Arcane Items", "Magic Standards",
+}
+
+
+def _selected_copy(selection: dict) -> dict:
+    """Retain selected data, excluding available choices and zero-count subtrees."""
+    result = {key: deepcopy(value) for key, value in selection.items()
+              if key not in {"selections", "selectionEntries", "selectionEntryGroups"}}
+    result["selections"] = [_selected_copy(child)
+                            for child in selection.get("selections", [])
+                            if child.get("number", 1) > 0]
+    return result
+
+
+def _selection_metadata(unit: dict, prefix: str) -> dict:
+    """Keep source data and structural owners; no item or command effects are applied."""
+    selections = []
+
+    def walk(selection, parent_ref, owner_ref, index):
+        identity = selection.get("id") or f"selection-{index}"
+        reference = f"{parent_ref}/{identity}"
+        profiles = selection.get("profiles", [])
+        if (selection.get("type") in {"unit", "model", "crew", "mount"}
+                or any(profile.get("typeName") in {"Model", "Command"}
+                       for profile in profiles)):
+            owner_ref = reference
+        record = {key: deepcopy(value) for key, value in selection.items()
+                  if key != "selections"}
+        record.update(ref=reference, parent_ref=parent_ref, owner_ref=owner_ref)
+        selections.append(record)
+        for child_index, child in enumerate(selection.get("selections", [])):
+            walk(child, reference, owner_ref, child_index)
+
+    walk(unit, prefix, prefix, 0)
+    references = {selection["id"]: selection["ref"]
+                  for selection in selections if selection.get("id")}
+    items = []
+    command = []
+    equipment = []
+    spell_sources = []
+    item_owners = {}
+    for selection in selections:
+        profiles = selection.get("profiles", [])
+        common = {
+            "selection_ref": selection["ref"],
+            "owner_ref": selection["owner_ref"],
+            "name": selection.get("name", "Unknown"),
+            "number": selection.get("number", 1),
+            "points_cost": _pts(selection),
+        }
+        item_profiles = [profile for profile in profiles
+                         if profile.get("typeName") in MAGIC_ITEM_TYPES]
+        item_ref = selection["ref"] if item_profiles else item_owners.get(selection["parent_ref"])
+        item_owners[selection["ref"]] = item_ref
+        if item_profiles:
+            primary = item_profiles[0]
+            items.append(dict(common, name=primary.get("name", common["name"]),
+                              definition_id=primary.get("id") or selection.get("entryId"),
+                              category=primary["typeName"], profiles=deepcopy(item_profiles),
+                              effect_status="unsupported"))
+        for profile in profiles:
+            profile_type = profile.get("typeName")
+            if profile_type == "Command":
+                targets = [references[association["to"]]
+                           for association in selection.get("associations", [])
+                           if association.get("type") == "outgoing"
+                           and association.get("to") in references]
+                command.append(dict(common, role=slugify(profile.get("name", "")),
+                                    model_refs=targets, profiles=deepcopy(profiles)))
+            elif profile_type in {"Weapon", "Armour"}:
+                equipment.append(dict(common, name=profile.get("name", common["name"]),
+                                      category=profile_type, profile=deepcopy(profile)))
+            elif profile_type == "Spell":
+                explicit = (selection.get("type") == "upgrade" and profile.get("name")
+                            and slugify(common["name"]) == slugify(profile["name"]))
+                spell_sources.append(dict(common, name=profile.get("name"),
+                                          kind="item" if item_ref else "selected" if explicit else "pool",
+                                          item_ref=item_ref,
+                                          profile=deepcopy(profile)))
+    return {"roster_selections": selections, "magic_items": items,
+            "command": command, "equipment": equipment, "spell_sources": spell_sources}
 
 
 def _pts(selection: dict) -> int:
@@ -135,8 +219,7 @@ def _collect_mount_rules(selection: dict, out: list) -> None:
 
 
 def _collect_spells(selection: dict, out: list) -> None:
-    """Gather the spells a Wizard knows. The roster resolves the chosen Lore of
-    Magic into Spell profiles, so the whole lore comes across with its rules."""
+    """Gather exported spell definitions, including pools and selected bound spells."""
     # Only a selected item grants its spell; available upgrades grant nothing (p. 342).
     if (selection.get('name') == 'Ruby Ring of Ruin'
             or any(p.get('name') == 'Ruby Ring of Ruin'
@@ -146,12 +229,31 @@ def _collect_spells(selection: dict, out: list) -> None:
             out.append(dict(spell, bound=True, power_level=1, source='Ruby Ring of Ruin'))
         if selection.get('name') == 'Ruby Ring of Ruin':
             return
+    if any(profile.get("typeName") in MAGIC_ITEM_TYPES
+           for profile in selection.get("profiles", [])):
+        return
     for p in selection.get("profiles", []):
         if p.get("typeName") == "Spell" and p.get("name"):
             chars = {c["name"]: c.get("$text", "") for c in p.get("characteristics", [])}
             out.append(spell_from_profile(p["name"], chars))
     for sub in selection.get("selections", []):
         _collect_spells(sub, out)
+
+
+def _selected_spell_names(selection: dict) -> set:
+    """Only a matching spell upgrade explicitly selects an ordinary spell."""
+    names = set()
+    if any(profile.get("typeName") in MAGIC_ITEM_TYPES
+           for profile in selection.get("profiles", [])):
+        return names
+    if selection.get("type") == "upgrade":
+        for profile in selection.get("profiles", []):
+            if (profile.get("typeName") == "Spell" and profile.get("name")
+                    and slugify(selection.get("name", "")) == slugify(profile["name"])):
+                names.add(profile["name"])
+    for child in selection.get("selections", []):
+        names.update(_selected_spell_names(child))
+    return names
 
 
 def _wizard_level(selection: dict):
@@ -192,10 +294,15 @@ def import_roster(path: str) -> dict:
     total = next((c["value"] for c in roster.get("costs", []) if c["name"] == "pts"), 0)
 
     units = []
-    for force in forces:
-        for unit in force.get("selections", []):
-            if unit.get("type") != "unit":
+    for force_index, force in enumerate(forces):
+        for unit_index, raw_unit in enumerate(force.get("selections", [])):
+            if raw_unit.get("type") != "unit" or raw_unit.get("number", 1) <= 0:
                 continue
+            unit = _selected_copy(raw_unit)
+            force_ref = force.get("id") or f"force-{force_index}"
+            unit_ref = unit.get("id") or f"unit-{unit_index}"
+            prefix = f"{roster.get('id', 'roster')}/{force_ref}/{unit_ref}"
+            metadata = _selection_metadata(unit, prefix)
             nmodels = max(1, _count_models(unit))
             files = min(DEFAULT_FILES, nmodels)
             ranks = math.ceil(nmodels / files)
@@ -220,12 +327,20 @@ def import_roster(path: str) -> dict:
             seen = set()
             spells = [s for s in spells
                       if not (spell_key(s) in seen or seen.add(spell_key(s)))]
+            selected_spells = _selected_spell_names(unit)
+            spell_pool = [spell for spell in spells
+                          if not spell.get("bound") and spell["name"] not in selected_spells]
+            spells = [spell for spell in spells
+                      if spell.get("bound") or spell["name"] in selected_spells]
             level = _wizard_level(unit)
-            if any(not s.get('bound') for s in spells) and not level:
+            if (spell_pool or any(not s.get('bound') for s in spells)) and not level:
                 level = 1
             units.append({
+                **metadata,
+                "roster_source": {key: deepcopy(value) for key, value in force.items()
+                                  if key not in {"selections", "forces"}},
                 "name": _primary_model_name(unit),
-                "faction": faction_slug,
+                "faction": slugify(force.get("catalogueName", faction_name)),
                 "nmodels": nmodels,
                 "files": files,
                 "ranks": ranks,
@@ -238,10 +353,14 @@ def import_roster(path: str) -> dict:
                 "special_rules": special_rules,
                 "armour": armour,
                 "spells": spells,
+                "spell_pool": spell_pool,
+                "spell_generation_pending": bool(spell_pool),
                 "wizard_level": level,
             })
 
-    return {"budget": limit or total, "faction": faction_slug, "units": units}
+    return {"budget": limit or total, "faction": faction_slug, "units": units,
+            "roster_source": {key: deepcopy(value) for key, value in roster.items()
+                              if key != "forces"}}
 
 
 def main() -> None:
