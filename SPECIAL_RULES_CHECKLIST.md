@@ -10,6 +10,358 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Army Readiness: High Elves vs Warriors of Chaos
+
+Roster-specific audit, 2026-09-09. Sources:
+[High Elves: Grow league 500](strategy_armies/nr/he500.json) and
+[Warriors of Chaos: Bm500](strategy_armies/nr/chaos500.json).
+Both exports total 500 points. These are the actual selected armies, not a
+request to implement every option in either faction's catalogue. The roster
+files are local inputs and must not be staged with this checklist.
+
+Here, `[x]` means an existing implementation can be reused, not that the whole
+army has passed an end-to-end readiness test. `[ ]` includes missing effects,
+lost import data, partial support and outstanding roster-specific verification.
+This section is an implementation plan; it does not itself add gameplay effects.
+
+### Selected Units
+
+| Army | Unit | Models | Points | Selected equipment or upgrades |
+| --- | --- | ---: | ---: | --- |
+| High Elves | Mage, General | 1 | 125 | Level 2, High Magic, Silvery Wand, hand weapon |
+| High Elves | Elven Archers | 6 | 54 | Hand weapons, longbows; no command group selected |
+| High Elves | Silver Helms | 5 | 120 | Barded Elven Steeds, heavy armour, shields, lances; no command group |
+| High Elves | Dragon Princes | 3 | 111 | Barded Elven Steeds, full plate, shields, lances; no command group |
+| High Elves | Lothern Skycutter | 1 | 90 | Sea Guard crew, Swiftfeather Roc, cavalry spears, shortbows, Wicked Claws, armour 4+ |
+| Chaos | Aspiring Champion, General | 1 | 99 | Great weapon, heavy armour, Helm Of Courage, Mark of Chaos Undivided |
+| Chaos | Chaos Knights | 4 | 134 | Chaos Steeds, heavy armour, shields, barding, lances; champion, standard, musician |
+| Chaos | Chaos Warhounds | 5 | 30 | Hand weapons; no optional upgrades selected |
+| Chaos | Chaos Warriors | 10 | 172 | Halberds, heavy armour, shields; standard, musician, The Banner Of The Bold; no champion |
+| Chaos | Marauder Horsemen | 5 | 65 | Warhorses, light armour, shields, throwing spears, musician, Skirmishers |
+
+### Import Blockers
+
+- [ ] Preserve the three selected magic items and their owners: Silvery Wand
+      (Mage), Helm Of Courage (Aspiring Champion), The Banner Of The Bold
+      (Chaos Warriors' standard bearer). `import_roster` currently includes
+      their points but emits no item records. Ordinary armour collection does
+      not capture `Magic Armour`; the other selected item profile types are
+      `Arcane Items` and `Magic Standards`.
+- [ ] Preserve command selections and their model associations. The importer
+      correctly counts four Chaos Knights, not seven, but discards the
+      champion/standard/musician roles and the champion's upgraded profile.
+      Buying these upgrades must change outcomes without adding extra bodies.
+- [ ] Separate the Mage's available spell pool from its generated known spells.
+      The export contains ten High Magic/Lore of Saphery spell profiles and
+      `import_roster` currently puts all ten in `spells` for this Level 2 Mage.
+      Do not treat an exported lore catalogue as ten spells actually known.
+
+### Existing Support to Reuse
+
+- [x] All ten selected primary model names resolve through the catalogue.
+      The Skycutter correction supplies S5/T4/W4, Heavy Chariot, three Sea Guard
+      crew and one Roc; Impact Hits (D3+1) use S5 AP-2 from Scythed Wheels.
+- [x] Ordinary equipment infrastructure: armour/shield/barding, lances,
+      halberds, great weapons, Armour Bane, Requires Two Hands, Strike Last,
+      ranged weapon profiles, Volley Fire, Quick Shot and supporting attacks.
+      These are reusable primitives, not proof of correct rider/crew ownership.
+- [x] General/Inspiring Presence for both Generals; Rallying Cry for the
+      Aspiring Champion; Veteran resolution for a future Banner of the Bold
+      grant. Veteran exists, but this roster's banner currently grants nothing.
+- [x] Swiftstride; Warhounds' Move Through Cover; Fly and Firing Platform
+      infrastructure for the Skycutter; core Skirmishers for Marauder Horsemen.
+      Retain the partial-implementation limits in the detailed sections below.
+- [x] Generic Ward saves, Panic/Break tests, reroll limits, Furious Charge,
+      Press of Battle, Massed Infantry and Parry have existing resolution paths.
+      A generic Ward save does not implement Dragon Armour or Chaos Armour.
+- [x] Separate live/base profiles and split-part snapshots in persistence;
+      spell-in-play records and a Ruby Ring of Ruin bound-spell import precedent.
+      The Ruby Ring is NOT selected here, and is not a general item system.
+
+### Shared Battle Dependencies
+
+- [ ] **First Charge** - Silver Helms, Dragon Princes, Chaos Knights (p. 169).
+      Track first-charge eligibility, actual contact, expiry and save/load;
+      apply the resulting Disruption without losing it to terrain refreshes.
+      Cover failed first charges as well as successful ones. It is not a
+      permanent rank-bonus penalty or an effect on every charge.
+- [ ] **Counter Charge** - Dragon Princes and Chaos Knights (p. 167).
+      Implement front-arc/troop-type/distance eligibility, choice after charge
+      declarations, pivot and D3+1" movement, once-per-turn tracking, and both
+      units counting as charging. The FAQ says D3+1 is NOT a Charge roll:
+      do not add Swiftstride to it. Test Drilled and multiple charging enemies.
+- [ ] **Cavalry split profiles and Cavalry Support** - all four cavalry units.
+      Verify separate rider/mount WS/S/I/A, weapons, fighting-rank attacks,
+      supporting riders without supporting mounts, and casualty accounting.
+      Rider-only bonuses must never leak onto the mount or its weapon.
+- [ ] **Command groups** - champion A2 on one of the four Chaos Knights,
+      standard bearers' combat-result bonus on Knights and Warriors, and
+      musicians on Knights, Warriors and Horsemen. Implement tie-breaking,
+      Rally/march modifiers, front-rank placement, casualties, champion
+      challenges, captured standards and persistence. A normal standard is
+      not a Battle Standard Bearer and does not grant Hold Your Ground.
+- [ ] **Formation-specific effects** - verify Close Order combat-result
+      eligibility at current Unit Strength, Open Order Quick Turn for
+      Warhounds, and Skirmish formation for Horsemen. Do not infer an active
+      formation solely from a list of available formation keywords.
+- [ ] **Enemy Sighted / march tests**, and the Drilled/Fly exemptions; connect
+      musician and Warband modifiers to the actual Leadership-test context.
+- [ ] **Heavy-infantry Steady in the Ranks** - Chaos Warriors and the Aspiring
+      Champion's troop type; apply its disruption protection where relevant.
+- [ ] **Weapon choices and charge conditions** - preserve hand-weapon choices
+      when Ithilmar/Ensorcelled Weapons or Parry can beat the automatic choice;
+      no shield in melee with a great weapon/halberd. Verify the 3" threshold
+      for Furious Charge/Impact Hits separately from lance/spear conditions.
+- [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
+      spell and model sources; High Magic and Ensorcelled Weapons need these
+      against Ethereal and any relevant saves. Warhounds' Fear interaction
+      with Flaming Attacks must follow the troop-type rule and FAQ.
+
+### High Elf Rules
+
+- [ ] **Elven Reflexes** - all five High Elf units, but only Sea Guard crew
+      on the Skycutter. Apply first-combat-round +1 Initiative, capped at 10,
+      to the correct profile; not to steeds, Roc or hull. Coordinate with
+      separate split-profile attack timing, not a whole-unit Initiative bump.
+- [ ] **Valour of Ages** - all five units. Re-roll failed Panic tests only
+      for the specified heavy-casualty/friendly-flee-through causes, not every
+      Leadership or Panic test. Preserve cause information and the one-reroll cap.
+- [ ] **Ithilmar Weapons** - Mage and Dragon Princes. Natural-1 melee To Hit
+      re-rolls with a single non-magical hand weapon only; not lances, mounts,
+      other weapons or spells. Do not grant this to Silver Helms by faction.
+- [ ] **Ithilmar Barding** - Silver Helms and Dragon Princes. Dangerous Terrain
+      natural-1 re-rolls, without also granting Move Through Cover's Movement
+      immunity. Reuse the terrain reroll machinery with a distinct source.
+- [ ] **Dragon Armour** - Dragon Princes' 6+ Ward save, independent of their
+      full plate/shield/barding armour save. Combine Ward sources by taking
+      the best, not adding them; armour-wearing Wizard permission is not needed
+      by these three non-Wizard models.
+- [ ] **Impetuous** - Dragon Princes (p. 172, amended wording). Use the
+      Leadership test for compulsory charges, not the old 4+ mechanism.
+      A legal target, charge declaration sequencing and Drilled all matter.
+- [ ] **Drilled** - Dragon Princes. Free redress before applicable movement
+      and exemption from Enemy Sighted tests. Include the FAQ cases for
+      Counter Charge, Giving Ground and compulsory charges from Marching Column.
+- [ ] **Sons of Caledor** - restrict who may join Dragon Princes. The Mage
+      is this army's General, so that exception must allow them to join;
+      being a Wizard alone is neither permission nor a prohibition.
+- [ ] **Lileath's Blessing** - Mage. Optional failed Casting-roll re-roll once
+      per turn, with human/AI choice and a saved usage flag. FAQ v1.5.3 excludes
+      natural double-1 Miscasts from failed-Casting-roll re-rolls.
+- [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
+      substitution into the lore signature or one of the three faction spells;
+      do not grant all alternatives automatically. See spell generation below.
+- [ ] **Fear** - Skycutter. Charge/combat tests, relative Unit Strength,
+      immunity and once-per-turn state; show why equal/higher-strength enemies
+      do not test. Extend Mark of Chaos Undivided to this test once implemented.
+- [ ] **Skycutter split equipment and remaining chariot rules** - keep crew
+      cavalry spears/shortbows separate from the Roc's Wicked Claws. The flat
+      imported weapon list currently loses those owners. Audit Lumbering,
+      Iron Shod Wheels, flying versus ground movement, landing terrain and
+      ground-only follow-up/pursuit. Do not duplicate the Roc as an extra mount.
+
+**Conditional, not extra purchases:** Archers have **Detachment**, but this
+export does not select a parent regimental unit or detachment relationship.
+Do not invent supporting-fire/charge benefits. Detachment runtime support is
+only a blocker if that relationship is actually chosen later.
+
+### Chaos Rules
+
+- [ ] **Chaos Armour (5+) / (6+)** - 5+ Ward on the Aspiring Champion; 6+ on
+      Knights and Warriors. These are Ward values, not body-armour values.
+      Reuse Ward resolution and retain each source through save/load and
+      spell/item interactions. No Chaos Wizard is selected in this roster.
+- [ ] **Ensorcelled Weapons** - Aspiring Champion, Knights and Warriors.
+      A single non-magical hand weapon gains AP-1 and Magical Attacks; great
+      weapons, halberds, lances and mounts do not receive those benefits.
+- [ ] **Mark of Chaos Undivided** - Aspiring Champion, Knights, Warriors and
+      Horsemen. Failed Fear/Panic/Terror re-rolls, not Break or ordinary Rally
+      re-rolls. Coordinate with Veteran and never re-roll a re-roll.
+- [ ] **Gaze of the Gods** - Aspiring Champion. Optional Command-phase table,
+      roll/result log, persistent changes versus effects expiring at the next
+      Start of Turn, characteristic caps and save/load. Include **Stupidity**
+      from the adverse result and its joined-unit effects; a table that applies
+      only the beneficial outcomes is not implemented.
+- [ ] **Warband** - Horsemen. Charge-roll re-roll and context-limited Rank
+      Bonus to Leadership. Their selected Skirmish formation gives no Rank
+      Bonus, but that does not remove the charge-reroll benefit. Test fleeing,
+      Restraint and non-Warband character Leadership explicitly.
+- [ ] **Loner and Undisciplined** - Warhounds. Enforce character-joining and
+      General restrictions, and do not lend them the General's Inspiring
+      Presence through the generic Leadership helper. Undisciplined comes
+      from the War Beasts troop type even though absent from the roster keywords.
+- [ ] **The Banner Of The Bold and Helm Of Courage** - implement both item
+      records and their effects below; the paid points currently buy no effect.
+
+**Present but inactive in this loadout:** **Fast Cavalry** needs Open Order;
+these Horsemen selected Skirmishers instead. **Fire & Flee** has an existing
+engine hook, but these Horsemen have no missile weapon: their **Throwing Spear**
+has range `Combat`, Fight in Extra Rank, and charge-only use. It is not a thrown
+missile. **Chaotic Cults** is a listed option, but no specific cult is selected;
+do not grant a patron benefit or display a usable blessing without one.
+
+### Selected Magic Items
+
+None of these three effects is currently implemented through the roster path.
+Names below preserve the exports' spelling; match canonical IDs/normalised
+names rather than relying on capitalisation.
+
+- [ ] **Silvery Wand**, Mage, 15 points, `Arcane Items`.
+      Generate **three known spells for this Level 2 Mage**, with the normal
+      generation/substitution rules. The bearer remains Level 2 for casting
+      and dispelling, and does not gain a third spell attempt per turn.
+      Source: [Silvery Wand](https://tow.whfb.app/magic-item/silvery-wand),
+      Forces of Fantasy p. 183; casting limit clarified by FAQ v1.5.3.
+- [ ] **Helm Of Courage**, Aspiring Champion, 25 points, `Magic Armour`.
+      Improve the wearer's armour value by 1 while retaining heavy armour:
+      this loadout should have armour 4+ before AP, plus its separate Chaos
+      Armour 5+ Ward once that rule is coded. Offer the wearer/joined unit a
+      once-per-game 2D6 Break-test re-roll, with one shared item-use record.
+      Spending the re-roll must not switch off the passive armour bonus.
+      Source: [Helm of Courage](https://tow.whfb.app/magic-item/helm-of-courage),
+      Battle March: General's Companion p. 47.
+- [ ] **The Banner Of The Bold**, Chaos Warriors' standard, 10 points,
+      `Magic Standards`. Grant Veteran through the existing rule machinery;
+      do not implement a second reroll algorithm or extend Veteran to Break.
+      Handle the unit and joined-character scope required by magic-standard
+      rules, and revoke only this item's grant if the banner ceases to apply.
+      Source: [The Banner of the Bold](https://tow.whfb.app/magic-item/the-banner-of-the-bold),
+      Battle March: General's Companion p. 47; FAQ Characters on standards.
+
+### Magic Item System Plan
+
+- [ ] **Import identity and ownership** in `roster_importer.py`: preserve
+      selected item ID, canonical name, category, source/book, points and
+      owner (character, unit standard, rider/crew/mount where applicable).
+      Keep unknown items as visibly unsupported data. Do not scrape prose
+      into guessed executable effects or import unselected catalogue options.
+- [ ] **Typed effect registry**, proposed `magic_items.py`: start with these
+      three items and small explicit handlers for armour modifiers, sourced
+      rule grants, extra known spells and optional rerolls. Reuse
+      `special_rules.py`, `psychology.py`, `models.py` and `spell_system.py`.
+      Categories such as Magic Weapons, Magic Armour, Talismans, Enchanted
+      Items, Arcane Items and Magic Standards are metadata, not effect handlers.
+- [ ] **Separate definitions, instances and active effects**: one definition
+      describes an item; a purchased instance has stable identity/owner and
+      use state; its effects have source IDs and recipient scope. Distinguish
+      an exhausted activated ability from an unusable/destroyed whole item.
+- [ ] **Source-aware application and removal**: loading or joining twice
+      must not stack the same bonus. Removing a banner must not remove Veteran
+      supplied by another source. Passive and temporary item effects must not
+      be blindly baked into `_base_characteristics`; derive them from the
+      roster baseline and active sources, including after combat resets.
+- [ ] **Lifecycle and choices**: bearer joins/leaves/dies/retires, standard
+      loss, item activation, cancellation, expiry and battle end. Persist
+      per-turn/per-game usage on the owning instance, not whichever host unit
+      it happens to occupy. Human and AI use the same eligibility checks.
+- [ ] **Item suppression for Vaul's Unmaking**: select a carried item on a
+      legal enemy character, mark it unusable for the rest of the battle and
+      remove its active effects. This directly matters for the Chaos General's
+      Helm. Do not allow targeting the Warriors' non-character standard bearer
+      with a spell restricted to enemy characters.
+- [ ] **Persistence** in `persistence.py`: save inventory, stable owners,
+      charges/spent flags, disabled state, effect sources and generated spell
+      choices. Rebuild idempotently; reload must not refund the Helm or reroll
+      the Mage's spells. Old saves have no item inventory, so do not silently
+      infer selected items from points or catalogue availability.
+- [ ] **Equipment and validation boundaries**: distinguish additive helmets
+      from replacement body armour; use best Ward rather than adding saves;
+      enforce rider-only/weapon-only scope. Preserve item categories and
+      allowances for future list validation. Agree the league/Battle March
+      rules pack before claiming roster legality; this audit is not a legality check.
+- [ ] **Player-visible state and diagnostics**: show equipped items, bearer,
+      supported/unsupported status and usable/spent/disabled abilities. Log
+      decisive numbers when an effect applies and why an eligible effect was
+      declined, exhausted, suppressed or inapplicable, without query-loop spam.
+
+### High Magic and Lore of Saphery
+
+Runtime audit: `spell_class(name)` returns `None` for **all ten** exported
+spells below. `CatalogueSpell` rolls to cast and prints wording, but does not
+apply the effect. They form the Mage's available pool, not ten known spells.
+Implement the pool if arbitrary legal spell generation is to work; a smaller
+first playable milestone must explicitly restrict the selected known spells.
+
+- [ ] **Spell generation and Lore of Saphery substitution**: Level 2 plus
+      Silvery Wand gives three known spells, with normal duplicate handling
+      and permitted signature replacement. Persist the final choices; casting
+      allowance remains Level 2. Do not use `spells` for both pool and choices.
+- [ ] **Drain Magic** - Remains in Play casting-value aura. This Chaos list
+      contains no Wizard or Bound item, so it normally has no enemy caster to
+      affect here; retain correct eligibility rather than inventing a target.
+- [ ] **Walk Between Worlds** - caster/host Ethereal and Reserve Move until
+      the specified next Start of Turn. Requires those rules, magical versus
+      mundane damage, movement timing and removal without permanent stat drift.
+- [ ] **Fiery Convocation** - scattered large template, per-base hits,
+      Flaming Attacks and correct S/AP, including Skirmisher targets.
+- [ ] **Tempest** - stationary Remains in Play vortex and terrain-changing
+      aura; interact with Fly, Move Through Cover and Ithilmar Barding.
+- [ ] **Corporeal Unmaking** - Assailment hits with armour and Regeneration
+      prohibited, but Ward saves allowed; respect combat/challenge targeting.
+- [ ] **Fury of Khaine** - timed Extra Attacks (+1), including correct model
+      scope and expiry without losing the buff at an unrelated combat reset.
+- [ ] **Shield of Saphery** - timed 5+ Ward and replacement of existing
+      Enchantments as specified, not an extra cumulative Ward save.
+- [ ] **Hand of Khaine** - single-model Assailment hit; no armour save,
+      but Ward and Regeneration remain available; validate model targeting.
+- [ ] **Courage of Aenarion** - Remains in Play Unbreakable grant, legal
+      engaged target, specified Enchantment replacement and reversible removal.
+- [ ] **Vaul's Unmaking** - character-targeted item disabling; requires the
+      item system above, including targeting a joined or engaged character.
+- [ ] **Shared magic lifecycle** - casting/dispelling and Lileath choices,
+      Remains in Play dispels/recasts, caster loss, conflicting Enchantments,
+      aura refresh, correct duration boundaries and save/load. Verify the
+      Chaos player's dispel options despite having no Wizard. Current saved
+      live/base snapshots are not a general temporary-effect engine.
+
+### Implementation Order and Acceptance
+
+1. Preserve item, command and spell-pool data; add visible unsupported-state
+   reporting so loading these armies no longer implies complete support.
+2. Add the small item registry, Banner/Helm passive effects, Chaos/Dragon Ward
+   grants and contextual rerolls; implement the Helm activation and command roles.
+3. Complete split-profile ownership/timing, Elven Reflexes, First Charge,
+   Fear, Impetuous/Drilled, Counter Charge and relevant formation dependencies.
+4. Add spell generation/Silvery Wand/Lileath, source-aware effect lifetimes,
+   the selected lore spells and Gaze of the Gods including Stupidity.
+5. Run both exact roster imports through offscreen integration scenarios;
+   finish the remaining troop-type and conditional behavior before claiming
+   fully rules-correct battles. Each completed entry needs a rule citation,
+   positive/negative tests, useful logs and an explicit `LEFTOVER:` if partial.
+
+- [ ] Import/reload keeps both totals at 500, all ten units, exact model counts,
+      command roles, three item identities and correct crew/mount equipment.
+- [ ] Mage remains Level 2 with three generated known spells; no duplicate
+      grants, extra casting slot or new random generation after loading.
+- [ ] General's Helm changes armour 5+ to 4+, grants one optional Break
+      re-roll, stays spent across host changes/reloads, and loses both benefits
+      when made unusable; spending only the re-roll preserves its armour effect.
+- [ ] Warriors gain Veteran from their banner and use only one allowed
+      reroll alongside Mark of Chaos Undivided; failed Break tests do not get
+      Veteran. Banner loss and joined-character scope are tested separately.
+- [ ] Silver Helms/Dragon Princes versus Chaos Knights test first charge,
+      counter charge, riders versus mounts, armour/Ward, and first-round timing.
+- [ ] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
+      crew shooting/melee, Roc attacks, terrain and flight; Horsemen cannot
+      shoot or Fire & Flee with their melee-only Throwing Spears.
+- [ ] Test expiry/disable/reload at least once for every timed or limited-use
+      source, plus a rendered playable two-army save with no silent unsupported
+      effects. Use focused checks per feature and one full suite at completion.
+
+**Sources and boundaries:** faction-rule and spell summaries above are based
+on the selected exports, not inferred from names. The three linked item pages,
+[First Charge](https://tow.whfb.app/special-rules/first-charge),
+[Counter Charge](https://tow.whfb.app/special-rules/counter-charge),
+[Impetuous](https://tow.whfb.app/special-rules/impetuous) and
+[Official FAQ index v1.5.3](https://tow.whfb.app/faq) were checked for this audit.
+Before implementing each entry, verify its full current wording, book page
+and applicable errata. Neither roster selects a Terror-causing model, a Chaos
+Wizard, a Bound item, or a specific Chaotic Cult. Do not add those as unrelated
+army-readiness prerequisites. Non-catalogue demonstration spells remain excluded.
+**LEFTOVER:** this checklist documents the missing support; it implements none
+of these new rules/items, does not certify list legality, and does not claim
+the exact two armies have already passed the acceptance scenarios.
+
 ## Done
 - [x] Armour Bane (X) — natural 6 to wound improves that attack's AP by X
 - [x] Lance / charge-only melee (strength & AP bonus only while charging)
