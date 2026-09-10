@@ -1318,6 +1318,13 @@ army-agnostic and would benefit every faction.
       resolutions. Earlier full run: 1599 passes, 165 subtests, eight failures,
       all reproduced on isolated committed 7414299 with matching catalogue data
       (bound-spell phase, older movement logging, Shieldwall and Veteran fixtures).
+      Charge-click crash follow-up: a Skycutter charging loose Marauder Horsemen
+      reached an unnamed `functools.partial` task, triggering Panda3D's
+      `task.hasName()` assertion before declaration. Added an explicit task
+      name without changing charge rules or arguments. A real isolated Panda
+      task-manager regression reproduces the old failure and now passes,
+      including deferred target/original-transform forwarding and completion;
+      all 48 existing offscreen formed-charge tests also pass.
       Combat scoring (pp. 101, 152, 185; Unusual Formations FAQ v1.5.3): compact
       Skirmishers grant no flank/rear points and receive no rank bonus, without
       changing physical arcs. Skirmisher attackers can score against formed arcs

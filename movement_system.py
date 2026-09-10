@@ -1265,6 +1265,7 @@ class MovementSystem:
         if formed_preview is not None:
             from functools import partial
             taskMgr.add(partial(self.game.combat.chargeAndChargeReaction, defender=formed_preview.target),
+                        name='chargeAndChargeReaction',
                         extraArgs=[unit, None, unit.bodyNP.getPos(), unit.bodyNP.getHpr()], appendTask=True)
             unit.isChargingMove = True
             return
