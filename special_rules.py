@@ -151,6 +151,59 @@ def _regeneration(model, param, desc):
     return entry
 
 
+def _dragon_armour(model, param, desc):
+    """Dragon Armour grants a separate 6+ Ward (Forces of Fantasy p. 184)."""
+    return {'name': 'Dragon Armour', 'description': desc or '6+ Ward save.',
+            'tag': 'special', 'ward': 6, 'faction_ward': True}
+
+
+def _elven_reflexes(model, param, desc):
+    """Bearer-only first-round Initiative (Forces of Fantasy pp. 145, 185)."""
+    crew_only = str(param or '').strip().lower() in ('crew only', 'sea guard crew only')
+    name = f'Elven Reflexes ({param})' if crew_only else 'Elven Reflexes'
+    return {'name': name, 'description': desc or 'First combat round: +1 Initiative, maximum 10.',
+            'tag': 'combat', 'elven_reflexes': not crew_only, 'crew_elven_reflexes': crew_only}
+
+
+def _ithilmar_weapons(model, param, desc):
+    """Single mundane hand weapon: re-roll natural 1s (Forces of Fantasy p. 185)."""
+    return {'name': 'Ithilmar Weapons', 'description': desc or 'Hand weapon re-rolls natural 1s To Hit.',
+            'tag': 'combat', 'ithilmar_weapons': True}
+
+
+def _ensorcelled_weapons(model, param, desc):
+    """Single mundane hand weapon: AP-1 and Magical Attacks (Ravening Hordes p. 81)."""
+    return {'name': 'Ensorcelled Weapons', 'description': desc or 'Hand weapon: AP-1 and Magical Attacks.',
+            'tag': 'combat', 'ensorcelled_weapons': True}
+
+
+def _chaos_armour(model, param, desc):
+    """The bracketed value is a Ward, not body armour (Ravening Hordes p. 81)."""
+    save = _param_save(param)
+    return {'name': f'Chaos Armour ({param})' if param else 'Chaos Armour',
+            'description': desc or 'Ward save at the listed value.',
+            'tag': 'special', 'ward': save if save is not None and 2 <= save <= 6 else 0,
+            'faction_ward': True}
+
+
+def _valour_of_ages(model, param, desc):
+    """Only heavy-casualty or friendly-flee-through Panic (Forces of Fantasy p. 185)."""
+    return {'name': 'Valour of Ages', 'description': desc or 'Contextual failed Panic re-roll.',
+            'tag': 'psychology', 'valour_of_ages': True}
+
+
+def _ithilmar_barding(model, param, desc):
+    """Dangerous Terrain natural-1 rerolls only (Forces of Fantasy p. 185)."""
+    return {'name': 'Ithilmar Barding', 'description': desc or 'Re-roll natural 1s on Dangerous Terrain tests.',
+            'tag': 'movement', 'dangerous_terrain_reroll': True}
+
+
+def _chaos_undivided(model, param, desc):
+    """Failed Fear, Panic or Terror only (Ravening Hordes pp. 82, 116)."""
+    return {'name': 'Mark of Chaos Undivided', 'description': desc or 'Re-roll failed Fear, Panic and Terror.',
+            'tag': 'psychology', 'chaos_undivided': True}
+
+
 def _magic_resistance(model, param, desc):
     """Magic Resistance is a casting penalty, never a save (pp. 108, 173)."""
     text = str(param or '').strip().replace('−', '-')
@@ -371,6 +424,14 @@ SPECIAL_RULE_BUILDERS = {
     "move through cover": _move_through_cover,
     "furious charge": _furious_charge,
     "regeneration": _regeneration,
+    "dragon armour": _dragon_armour,
+    "elven reflexes": _elven_reflexes,
+    "ithilmar weapons": _ithilmar_weapons,
+    "ensorcelled weapons": _ensorcelled_weapons,
+    "valour of ages": _valour_of_ages,
+    "ithilmar barding": _ithilmar_barding,
+    "mark of chaos undivided": _chaos_undivided,
+    "chaos armour": _chaos_armour,
     "magic resistance": _magic_resistance,
     "unbreakable": _unbreakable,
     "skirmishers": _skirmishers,
@@ -537,6 +598,18 @@ def _built_names(model, names) -> set:
         model.characteristics["Special Rules"] = keep
 
 
+def sync_crew_reflexes(model):
+    """Scope a hull-listed crew grant without changing crew keywords (FoF pp. 172, 185)."""
+    crew = getattr(model, 'get_crew', lambda: None)()
+    if crew is None:
+        return
+    crew.special_rules = [rule for rule in crew.special_rules
+                          if not (isinstance(rule, dict) and rule.get('parent_crew_reflexes'))]
+    if any(rule.get('crew_elven_reflexes') for rule in model.special_rules if isinstance(rule, dict)):
+        crew.special_rules.append({'name': 'Elven Reflexes', 'tag': 'combat',
+                                   'elven_reflexes': True, 'parent_crew_reflexes': True})
+
+
 def apply_rule_keywords(model, names, replace=False) -> None:
     """Give *model* the rule keywords an army list or a save names.
 
@@ -570,3 +643,4 @@ def apply_rule_keywords(model, names, replace=False) -> None:
         if isinstance(entry, dict) and entry.get("name") not in have:
             model.special_rules.append(entry)
             have.add(entry.get("name"))
+    sync_crew_reflexes(model)

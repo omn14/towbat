@@ -245,7 +245,7 @@ def commit_move(game, unit, positions=None, destination=None):
             continue
         tests = sum(sum(piece.is_dangerous for piece in crossed) for crossed in features)
         wounds = dangerous_terrain_wounds(tests, 1,
-                                         reroll_ones=participant.unit.model.is_move_through_cover(),
+                                         reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                                          subject=participant)
         if tests:
             rule_log('Dangerous Terrain', participant,

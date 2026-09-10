@@ -240,6 +240,7 @@ def _apply_to_hit_modifiers(model, roll):
 
 def simulate_attack(model1,model2):
     model1.attack_roll = random.randint(1, 6)
+    natural_hit = model1.attack_roll
     model1.wound_roll = random.randint(1, 6)
     natural_wound = model1.wound_roll
     for rule in model1.special_rules:
@@ -254,6 +255,8 @@ def simulate_attack(model1,model2):
         weaponIsRanged = True
     #print(f"Weapon is ranged: {weaponIsRanged}")
     model1.hatred_rerolled = False
+    model1.ithilmar_rerolled = False
+    model1.attack_magical = model1.has_magical_attacks()
     if not weaponIsRanged: # for to hit modifications
         to_hit_target_roll = to_hit(model1,model2)
         model1.AP = model1.melee_ap()
@@ -263,11 +266,14 @@ def simulate_attack(model1,model2):
             hit = False
         # Hatred (p. 171): a failed To Hit may be re-rolled in the first round
         # of combat. Once only — a re-roll is never itself re-rolled.
-        if not hit and getattr(model1, 'hatred_rerolls', False):
+        hatred = not hit and getattr(model1, 'hatred_rerolls', False)
+        ithilmar = natural_hit == 1 and model1.faction_hand_weapon('ithilmar_weapons')
+        if hatred or ithilmar:
             model1.attack_roll = _apply_to_hit_modifiers(model1,
                                                          random.randint(1, 6))
             hit = model1.attack_roll >= to_hit_target_roll
-            model1.hatred_rerolled = True
+            model1.hatred_rerolled = bool(hatred)
+            model1.ithilmar_rerolled = bool(ithilmar and not hatred)
     else:
         def shoot():
             return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False),moved=getattr(model1,'moved_this_turn',False),stand_and_shoot=getattr(model1,'stand_and_shoot',False))
@@ -387,7 +393,7 @@ def ward_save_value(model) -> int:
     return best
 
 
-def check_saves(model, armor_save_value, AP, slaying_blow: bool = False):
+def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
@@ -400,14 +406,38 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False):
     if not slaying_blow and check_armor_save(model, armor_save_value, AP):
         return True
     ward = ward_save_value(model)
-    if ward and random.randint(1, 6) >= ward:
-        return True
+    if ward:
+        rolled = random.randint(1, 6)
+        if ward_rolls is not None:
+            ward_rolls.append(rolled)
+        if rolled >= ward:
+            return True
     if slaying_blow:
         return False
     for rule in getattr(model, 'special_rules', []) or []:
         if rule.get('regen') and check_armor_save(model, rule['regen'], 0):
             return True
     return False
+
+
+def report_ward_saves(unit, wounds, rolls):
+    """Report once per wound batch, never in the save loop (Rulebook p. 141)."""
+    best = ward_save_value(unit.model)
+    for rule in unit.model.special_rules:
+        if not rule.get('faction_ward'):
+            continue
+        value = rule.get('ward', 0)
+        if not value:
+            rule_skipped(rule['name'], unit, 'no explicit valid Ward value; no save invented')
+        elif value != best:
+            rule_skipped(rule['name'], unit, f'{value}+ Ward superseded by {best}+; saves do not combine')
+        elif rolls:
+            saved = sum(rolled >= best for rolled in rolls)
+            rule_log(rule['name'], unit, f'{best}+ Ward: rolls {rolls}, saves {saved}/{len(rolls)} '
+                     f'wound(s); {len(rolls) - saved} pass to remaining saves; AP does not modify Ward')
+        else:
+            count = f'{wounds} wound(s), ' if wounds is not None else ''
+            rule_skipped(rule['name'], unit, f'{count}none reached the {best}+ Ward')
 
 
 def _report_too_tough_to_wound(unit, hits, strength, target):
@@ -444,8 +474,10 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     # to_wound reads its first model only for a Strength, which is given here.
     target = to_wound(m, m, strength=strength)
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
+    ward_rolls = []
     saves = sum(1 for _ in range(wounds)
-                if check_saves(m, m.melee_armour_save(), ap))
+                if check_saves(m, m.melee_armour_save(), ap, ward_rolls=ward_rolls))
+    report_ward_saves(unit, wounds, ward_rolls)
     _report_too_tough_to_wound(unit, hits, strength, target)
     return wounds, saves, wounds - saves
 
@@ -483,17 +515,25 @@ def base_initiative(model) -> int:
 
 
 def strike_initiative(model, charged: bool = False, inches: float = 0.0,
-                      flank_or_rear: bool = False) -> int:
+                      flank_or_rear: bool = False, *, first_round=False, log=False) -> int:
     """The Initiative a model strikes at this round.
 
     The charge bonus is capped at +3 into a front arc and +4 into a flank or
     rear, and the total may not exceed 10 (p. 146, as amended by the errata).
     """
     base = base_initiative(model)
-    if not charged:
-        return base
-    return min(MAX_INITIATIVE,
-               base + charge_initiative_bonus(inches, flank_or_rear))
+    reflexes = any(rule.get('elven_reflexes') for rule in model.special_rules)
+    if reflexes:
+        modified = min(MAX_INITIATIVE, base + 1) if first_round else base
+        if log:
+            if modified > base:
+                rule_log('Elven Reflexes', model, f'first combat round: I{base} -> I{modified} '
+                         '(Forces of Fantasy p. 185)')
+            else:
+                reason = 'already at I10' if first_round else 'not the first combat round'
+                rule_skipped('Elven Reflexes', model, f'{reason}; I{base} unchanged')
+        base = modified
+    return min(MAX_INITIATIVE, base + charge_initiative_bonus(inches, flank_or_rear)) if charged else base
 
 
 # ── Impact Hits (Rulebook p. 172) ──────────────────────────────────────────
@@ -554,8 +594,10 @@ def resolve_impact_hits(unit1, unit2):
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     from magic_items import item_armour_save
     item_armour_save(unit2.model, unit2.model.armor_save, log=True)
+    ward_rolls = []
     saves = sum(1 for _ in range(wounds)
-                if check_saves(unit2.model, unit2.model.melee_armour_save(), ap))
+                if check_saves(unit2.model, unit2.model.melee_armour_save(), ap, ward_rolls=ward_rolls))
+    report_ward_saves(unit2, wounds, ward_rolls)
     _report_too_tough_to_wound(unit2, hits, strength, target)
     return hits, wounds, saves, wounds - saves
 
@@ -736,6 +778,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     slaying_rule = None
     hatred_rerolls = 0
     hatred_converted = 0
+    ithilmar_rerolls = ithilmar_converted = 0
+    ward_rolls = []
     hated = first_round and unit1.model.hates(unit2.model)
     unit1.model.hatred_rerolls = hated
     global LAST_SLAYING_BLOWS
@@ -761,6 +805,9 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
         if getattr(unit1.model, 'hatred_rerolled', False):
             hatred_rerolls += 1
             hatred_converted += 1 if hit else 0
+        if unit1.model.ithilmar_rerolled:
+            ithilmar_rerolls += 1
+            ithilmar_converted += int(hit)
         if hit:
             total_hits += 1
         if wound:
@@ -769,7 +816,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
         if wound:
             if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
-                           slaying_blow=bool(struck)):
+                           slaying_blow=bool(struck), ward_rolls=ward_rolls):
                 saves_made += 1
                 total_wounds -= 1
             elif struck:
@@ -779,12 +826,26 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
     wound_target = to_wound(unit1.model, unit2.model)
+    report_ward_saves(unit2, suffered_wounds, ward_rolls)
     _report_too_tough_to_wound(
         unit2, total_hits, stat_value(unit1.model.characteristics.get('S')),
         wound_target)
     troop_type = unit2.model.characteristics.get('Troop Type', 'infantry')
     _report_hatred(unit1, unit2, attacks1, first_round, hated,
                    hatred_rerolls, hatred_converted)
+    for key, name in (('ithilmar_weapons', 'Ithilmar Weapons'), ('ensorcelled_weapons', 'Ensorcelled Weapons')):
+        if not any(rule.get(key) for rule in unit1.model.special_rules if isinstance(rule, dict)):
+            continue
+        if not unit1.model.faction_hand_weapon(key):
+            rule_skipped(name, unit1, 'not attacking with a single non-magical hand weapon')
+        elif key == 'ensorcelled_weapons':
+            rule_log(name, unit1, f'{attacks1} hand-weapon attack(s): AP0 -> AP-1 and Magical Attacks')
+        elif ithilmar_rerolls:
+            rule_log(name, unit1, f'{ithilmar_rerolls} natural 1(s) To Hit re-rolled; '
+                     f'{ithilmar_converted} hit; no further re-roll')
+        else:
+            rule_skipped(name, unit1, f'no eligible unrerolled natural 1s in {attacks1} attacks; '
+                         f'Hatred already re-rolled {hatred_rerolls}')
     if slaying_blows:
         rule_log(slaying_rule, unit1,
                  f"{slaying_blows} natural 6(s) To Wound against "

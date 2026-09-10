@@ -1605,7 +1605,8 @@ class CombatResolver:
             profile = _stat_int(model.characteristics, 'I', 1)
             base = base_initiative(model)
             initiative = strike_initiative(model, charged=charged, inches=inches,
-                                           flank_or_rear=flanking)
+                                           flank_or_rear=flanking,
+                                           first_round=getattr(striker, 'roundsFought', 0) == 1, log=True)
             if base != profile:
                 name = 'Strike First' if base > profile else 'Strike Last'
                 weapon = (model.active_melee_weapon() or {}).get('name')
@@ -1619,15 +1620,16 @@ class CombatResolver:
                              f"cancelled out by Strike Last, so it strikes at its "
                              f"profile I{profile} (p. 178)")
             if charged:
+                before_charge = strike_initiative(model, first_round=getattr(striker, 'roundsFought', 0) == 1)
                 bonus = charge_initiative_bonus(inches, flanking)
                 if not bonus:
                     rule_skipped('Charging Units', striker,
                                  f"charged only {inches:.1f}\", not a full inch, so no "
                                  f"Initiative bonus (stays I{initiative})")
-                elif initiative > base:
+                elif initiative > before_charge:
                     rule_log('Charging Units', striker,
                              f"charged {inches:.1f}\" into {target.unit.name}'s {facing} "
-                             f"-> +{initiative - base} Initiative (I{base} -> I{initiative}, "
+                             f"-> +{initiative - before_charge} Initiative (I{before_charge} -> I{initiative}, "
                              f"max +{4 if flanking else 3}) (p. 146)")
                 else:
                     rule_skipped('Charging Units', striker,
@@ -1812,7 +1814,7 @@ class CombatResolver:
             first = getattr(host or model, 'roundsFought', 0) == 1
             for unit, label in self.duelCombatants(model, host):
                 order.append((strike_initiative(unit.model, charged=charged,
-                                                inches=inches),
+                                                inches=inches, first_round=first, log=True),
                               model, unit, label, charged, first))
         order.sort(key=lambda e: -e[0])
         battle_log("Challenge: " + " vs ".join(

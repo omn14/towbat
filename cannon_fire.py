@@ -14,7 +14,7 @@ import random
 
 from panda3d.core import Vec3, Point3, LineSegs
 
-from battleFunctions import check_armor_save
+from battleFunctions import check_saves, report_ward_saves
 from dice import ArtilleryDice, checkDice
 from rules_log import battle_log
 
@@ -186,7 +186,7 @@ class CannonFire:
         return results
 
     def _apply_wounds(self, unit, hits, strength, ap):
-        """Roll To Wound then armour save for each hit.
+        """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141).
 
         Returns (slain, wounded, saved). Casualties are capped by the number of
         models actually present (not the stored nmodels, which may be stale).
@@ -195,16 +195,18 @@ class CannonFire:
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         target = wound_target(strength, toughness)
         wounded = saved = casualties = 0
+        ward_rolls = []
         from magic_items import item_armour_save
         save = item_armour_save(model, model.armor_save, log=hits > 0)
         for _ in range(hits):
             if random.randint(1, 6) < target:
                 continue  # failed to wound
             wounded += 1
-            if check_armor_save(model, save, ap):
+            if check_saves(model, save, ap, ward_rolls=ward_rolls):
                 saved += 1
             else:
                 casualties += 1
+        report_ward_saves(unit.unit, wounded, ward_rolls)
         present = len(unit.model.getChildren())
         return min(casualties, present), wounded, saved
 

@@ -171,36 +171,38 @@ def sees_over(shooter_pos, blocker_pos, hill_center) -> bool:
 
 
 def dangerous_terrain_wounds(features: int, models: int, damage='1', *,
-                             reroll_ones=False, subject=None) -> int:
+                             reroll_ones=False, subject=None, reroll_sources=()) -> int:
     """Wounds a unit suffers crossing *features* dangerous terrain features.
 
     Every model that begins in, passes through or ends in dangerous terrain
     tests, once per separate feature, and loses a Wound on a roll of 1.
     *damage* is a dice expression so Iron Shod Wheels can cost a chariot D3.
-    Move Through Cover re-rolls initial ones once only (Rulebook p. 174).
+    Move Through Cover (Rulebook p. 174) and Ithilmar Barding (FoF p. 185)
+    share one re-roll of initial ones, never a re-roll of the replacement.
     """
     if features <= 0 or models <= 0:
         return 0
     from models import roll_dice_expr
     wounds = 0
     rerolls = []
+    sources = list(reroll_sources) or (['Move Through Cover'] if reroll_ones else [])
     for _ in range(features * models):
         result = random.randint(1, 6)
-        if result == 1 and reroll_ones:
+        if result == 1 and sources:
             result = random.randint(1, 6)
             rerolls.append(result)
         if result == 1:
             wounds += roll_dice_expr(damage)
-    if reroll_ones and subject is not None:
+    if sources and subject is not None:
         from rules_log import rule_log, rule_skipped
         if rerolls:
-            rule_log('Move Through Cover', subject,
+            rule_log(' / '.join(sources), subject,
                      f'{features * models} Dangerous Terrain tests: '
                      f're-rolled {len(rerolls)} initial 1(s) -> {rerolls}; '
                      f'{sum(result != 1 for result in rerolls)} mishap(s) avoided, '
-                     f'{wounds} wound(s) remain')
+                     f'{wounds} wound(s) remain; no further re-roll')
         else:
-            rule_skipped('Move Through Cover', subject,
+            rule_skipped(' / '.join(sources), subject,
                          f'{features * models} Dangerous Terrain tests: no 1s to re-roll')
     return wounds
 

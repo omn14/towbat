@@ -167,8 +167,27 @@ def veteran_reroll_allowed(unit, kind, roll, ld, *, personal=False):
     return False
 
 
+def faction_reroll_sources(unit, kind, cause='', *, log=False):
+    """Unit-owned contextual rerolls (FoF p. 185; Ravening Hordes pp. 82, 116)."""
+    sources = []
+    for rule in unit.unit.model.special_rules:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get('chaos_undivided'):
+            allowed = kind in ('Fear', 'Panic', 'Terror')
+        elif rule.get('valour_of_ages'):
+            allowed = kind == 'Panic' and (cause == 'fled through' or cause.startswith('heavy casualties ('))
+        else:
+            continue
+        if allowed:
+            sources.append(rule['name'])
+        elif log:
+            rule_skipped(rule['name'], unit, f'{kind} ({cause or "no qualifying cause"}) is not an eligible test')
+    return sources
+
+
 async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
-                           other_rule=None, personal=False):
+                           other_rule=None, personal=False, cause=''):
     """One optional Veteran re-roll, shared with any existing source (p. 180).
 
     The caller supplies the test's dice roller, not a Break-test outcome.
@@ -177,18 +196,22 @@ async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
     """
     original = sum(dice)
     veteran = veteran_reroll_allowed(unit, kind, original, ld, personal=personal)
+    faction = faction_reroll_sources(unit, kind, cause, log=True)
     if kind == 'Break' or leadership_passed(original, ld):
+        for name in faction:
+            rule_skipped(name, unit, f'{kind}: 2D6={original} vs Ld {ld} already passed')
         return dice
-    if not veteran and other_rule is None:
+    if not veteran and not faction and other_rule is None:
         return dice
-    if veteran and other_rule is None and not game.aiControls(unit):
+    sources = (['Veteran'] if veteran else []) + faction
+    if sources and other_rule is None and not game.aiControls(unit):
         selected = await game.makeChoiceNew(
             ['Re-roll', 'Keep'], Vec3(0, 0, 10), owner=unit,
-            prompt=f'{unit.unit.name}: Veteran re-roll failed {kind} test?',
+            prompt=f'{unit.unit.name}: {" / ".join(sources)} re-roll failed {kind} test?',
             detail=f'2D6={original} vs Ld {ld}')
         if selected != 'Re-roll':
-            rule_skipped('Veteran', unit,
-                         f'{kind}: player keeps failed 2D6={original} vs Ld {ld}')
+            for name in sources:
+                rule_skipped(name, unit, f'{kind}: player keeps failed 2D6={original} vs Ld {ld}')
             from magic_items import EffectKind, effects_for
             for entry in effects_for(unit, EffectKind.RULE, value='Veteran'):
                 rule_skipped(entry.item.name, unit,
@@ -196,6 +219,10 @@ async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
             return dice
     result = await roll_dice()
     passed = leadership_passed(sum(result), ld)
+    for name in faction:
+        rule_log(name, unit, f'{kind} ({cause or kind}): failed 2D6={original} vs Ld {ld} '
+                 f'-> re-roll {sum(result)} ({"PASS" if passed else "FAIL"}); no further re-roll'
+                 + (f'; shared with {", ".join(["Veteran"] if veteran else [])}' if veteran else ''))
     if veteran:
         veterans, total = veteran_counts(unit, personal=personal)
         from magic_items import EffectKind, effects_for
@@ -209,7 +236,7 @@ async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
                  f'2D6={original} vs Ld {ld} failed -> re-roll {sum(result)} '
                  f'({"PASS" if passed else "FAIL"}); no further re-roll'
                  + (f'; also eligible for {other_rule}' if other_rule else ''))
-    else:
+    elif other_rule is not None:
         rule_log(other_rule, unit,
                  f'{kind}: failed 2D6={original} vs Ld {ld} -> re-roll {sum(result)} '
                  f'({"PASS" if passed else "FAIL"})')
@@ -751,13 +778,17 @@ class PsychologySystem:
         bsb = self.battle_standard_of(unit)
         reroll_source = venerable or bsb
         passed, roll = leadership_test(ld)
-        if not passed and veteran_available(unit):
+        faction = faction_reroll_sources(unit, 'Panic', cause, log=True)
+        if not passed and (veteran_available(unit) or faction):
             other_rule = (f'Venerable: {venerable.unit.name}' if venerable is not None
                           else f'Hold Your Ground: {bsb.unit.name}' if bsb is not None else None)
             self.game.taskMgr.add(self._veteran_panic(
                 unit, flee_from, cause, on_done, forced, ld, roll, other_rule))
             return
         veteran_reroll_allowed(unit, 'Panic', roll, ld)
+        if passed:
+            for name in faction:
+                rule_skipped(name, unit, f'Panic: 2D6={roll} vs Ld {ld} passed; no re-roll')
         if not passed and reroll_source is not None:
             initial = roll
             passed, roll = leadership_test(ld)
@@ -774,7 +805,7 @@ class PsychologySystem:
             return [random.randint(1, 6), random.randint(1, 6)]
 
         dice = await reroll_leadership(self.game, unit, 'Panic', [roll], ld, roll_dice,
-                                      other_rule=other_rule)
+                                      other_rule=other_rule, cause=cause)
         self._panic_result(unit, flee_from, cause, on_done, forced, ld,
                            leadership_passed(sum(dice), ld), sum(dice))
 

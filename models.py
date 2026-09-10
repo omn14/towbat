@@ -381,6 +381,8 @@ class model:
         self._attach_part('crew', 'Chariot Crew',
                           "Enemy rolls To Hit are made against the crew's Weapon Skill.",
                           crew_model, count)
+        from special_rules import sync_crew_reflexes
+        sync_crew_reflexes(self)
 
     def get_beasts(self):
         """The beasts drawing the chariot, or None."""
@@ -600,6 +602,15 @@ class model:
         self.armor_save = armour_save_from_equipment(self.armour)
         return self.armor_save
 
+    def dangerous_terrain_reroll_sources(self):
+        """Independent reroll sources, never movement immunity (FoF p. 185; BRB p. 174)."""
+        sources = ['Move Through Cover'] if self.is_move_through_cover() else []
+        for profile in (self, self.get_mount(), self.get_crew(), self.get_beasts()):
+            if profile is not None:
+                sources.extend(rule['name'] for rule in profile.special_rules
+                               if isinstance(rule, dict) and rule.get('dangerous_terrain_reroll'))
+        return list(dict.fromkeys(sources))
+
     def melee_weapon_requires_two_hands(self) -> bool:
         """True if the model's active melee weapon has 'Requires Two Hands'.
         Combat equips the best melee weapon first, so the equipped weapon is it."""
@@ -804,9 +815,29 @@ class model:
     def melee_ap(self) -> int:
         """AP penetration of the equipped melee weapon; charge value while charging."""
         w = self.active_melee_weapon()
+        if self.faction_hand_weapon('ensorcelled_weapons'):
+            return 1
         if self.charging and w.get('ap_penetration_charge') is not None:
             return w['ap_penetration_charge']
         return w.get('ap_penetration', 0)
+
+    def faction_hand_weapon(self, key) -> bool:
+        """Only the wielder's single mundane hand weapon (FoF p. 185; RH p. 81)."""
+        weapon = self.active_melee_weapon()
+        return (str(weapon.get('name', '')).strip().lower() == 'hand weapon'
+                and not weapon.get('magical') and not weapon.get('magic_item')
+                and not any(str(rule).lower() in ('magical attacks', 'requires two hands',
+                                                   'extra attacks (+1)')
+                            for rule in weapon.get('special_rules', []))
+                and any(rule.get(key) for rule in self.special_rules if isinstance(rule, dict)))
+
+    def has_magical_attacks(self) -> bool:
+        """Current weapon's attacks, not spells or another profile (RH p. 81)."""
+        weapon = self.equipedWeapon or {}
+        return (self.faction_hand_weapon('ensorcelled_weapons')
+                or bool(weapon.get('magical') or weapon.get('magic_item'))
+                or any(str(rule).lower() == 'magical attacks' for rule in weapon.get('special_rules', []))
+                or any(rule.get('magical_attacks') for rule in self.special_rules if isinstance(rule, dict)))
 
     def armour_bane_for_attack(self) -> int:
         """Armour Bane (X) of the weapon used for the current attack."""

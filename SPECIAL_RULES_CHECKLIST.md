@@ -203,22 +203,37 @@ itself add gameplay effects.
 
 ### High Elf Rules
 
-- [ ] **Elven Reflexes** - all five High Elf units, but only Sea Guard crew
+- [x] **Elven Reflexes** - all five High Elf units, but only Sea Guard crew
       on the Skycutter. Apply first-combat-round +1 Initiative, capped at 10,
       to the correct profile; not to steeds, Roc or hull. Coordinate with
       separate split-profile attack timing, not a whole-unit Initiative bump.
-- [ ] **Valour of Ages** - all five units. Re-roll failed Panic tests only
+      Live scheduler and challenges use the combat-round state; no profile
+      stat mutation. Corrected the catalogue/roster name collision that dropped
+      the crew-only keyword. Derived crew grants withdraw and restore with the
+      source, including save/reload. Charge logs separate the two bonuses.
+- [x] **Valour of Ages** - all five units. Re-roll failed Panic tests only
       for the specified heavy-casualty/friendly-flee-through causes, not every
       Leadership or Panic test. Preserve cause information and the one-reroll cap.
-- [ ] **Ithilmar Weapons** - Mage and Dragon Princes. Natural-1 melee To Hit
+      The live Panic queue retains the cause and waits for an optional human
+      choice; AI re-rolls failures. Positive, ineligible and declined cases log.
+- [x] **Ithilmar Weapons** - Mage and Dragon Princes. Natural-1 melee To Hit
       re-rolls with a single non-magical hand weapon only; not lances, mounts,
       other weapons or spells. Do not grant this to Silver Helms by faction.
-- [ ] **Ithilmar Barding** - Silver Helms and Dragon Princes. Dangerous Terrain
+      Shares one replacement die with Hatred; logs aggregate attempts/results,
+      not every attack. LEFTOVER: tactical weapon selection remains above.
+- [x] **Ithilmar Barding** - Silver Helms and Dragon Princes. Dangerous Terrain
       natural-1 re-rolls, without also granting Move Through Cover's Movement
       immunity. Reuse the terrain reroll machinery with a distinct source.
-- [ ] **Dragon Armour** - Dragon Princes' 6+ Ward save, independent of their
+      Formed and Skirmish terrain callers share the same one-reroll cap. The
+      actual joined Mage tests separately and cannot borrow the host's barding.
+      LEFTOVER: the combined Ithilmar Armour/Barding rule's Wizard armour
+      permission is not implemented; these selected riders are not Wizards.
+- [x] **Dragon Armour** - Dragon Princes' 6+ Ward save, independent of their
       full plate/shield/barding armour save. Combine Ward sources by taking
-      the best, not adding them; armour-wearing Wizard permission is not needed
+      the best, not adding them. Shared saves cover melee, shooting, magic,
+      Impact Hits, cannon and bombardment; Slaying Blows still permit the Ward.
+      AP never modifies the Ward. Report aggregate rolls and superseded sources.
+      LEFTOVER: armour-wearing Wizard permission is not implemented or needed
       by these three non-Wizard models.
 - [ ] **Impetuous** - Dragon Princes (p. 172, amended wording). Use the
       Leadership test for compulsory charges, not the old 4+ mechanism.
@@ -254,16 +269,27 @@ only a blocker if that relationship is actually chosen later.
 
 ### Chaos Rules
 
-- [ ] **Chaos Armour (5+) / (6+)** - 5+ Ward on the Aspiring Champion; 6+ on
+- [x] **Chaos Armour (5+) / (6+)** - 5+ Ward on the Aspiring Champion; 6+ on
       Knights and Warriors. These are Ward values, not body-armour values.
       Reuse Ward resolution and retain each source through save/load and
-      spell/item interactions. No Chaos Wizard is selected in this roster.
+      item suppression: disabling the Helm removes its armour bonus, not the
+      native Chaos Ward. Missing/X values never invent a save.
+      LEFTOVER: Wizard armour permission is not implemented; no Chaos Wizard
+      is selected. Future spell Ward grants must use the existing best-save rule.
 - [ ] **Ensorcelled Weapons** - Aspiring Champion, Knights and Warriors.
       A single non-magical hand weapon gains AP-1 and Magical Attacks; great
       weapons, halberds, lances and mounts do not receive those benefits.
+      AP-1 is live and attacks carry a Magical classification without mutating
+      their stored weapon. Eligible/ineligible weapon batches log once.
+      LEFTOVER: magical-versus-mundane defence consumers (including Ethereal)
+      are not implemented; classification alone is not complete rule support.
 - [ ] **Mark of Chaos Undivided** - Aspiring Champion, Knights, Warriors and
       Horsemen. Failed Fear/Panic/Terror re-rolls, not Break or ordinary Rally
       re-rolls. Coordinate with Veteran and never re-roll a re-roll.
+      Live Panic and the shared optional choice are implemented and tested with
+      the Warriors' actual Banner. Fear/Terror eligibility is tested in the
+      shared helper. LEFTOVER: no live Fear/Terror test handlers yet, so those
+      benefits cannot fire in battle. Do not mark the full rule complete.
 - [ ] **Gaze of the Gods** - Aspiring Champion. Optional Command-phase table,
       roll/result log, persistent changes versus effects expiring at the next
       Start of Turn, characteristic caps and save/load. Include **Stupidity**
@@ -279,7 +305,7 @@ only a blocker if that relationship is actually chosen later.
       from the War Beasts troop type even though absent from the roster keywords.
 - [x] **The Banner Of The Bold and Helm Of Courage** - owned inventory,
       sourced Veteran, passive armour and optional once-per-game Break reroll
-      are implemented below. Chaos Armour's separate Ward remains pending.
+      are implemented below. Chaos Armour's separate Ward is now also live.
 
 **Present but inactive in this loadout:** **Fast Cavalry** needs Open Order;
 these Horsemen selected Skirmishers instead. **Fire & Flee** has an existing
@@ -306,7 +332,7 @@ outcome logs and generation choices. Unknown items still show **unsupported**.
 - [x] **Helm Of Courage**, Aspiring Champion, 25 points, `Magic Armour`.
       Improve the wearer's armour value by 1 while retaining heavy armour:
       this loadout should have armour 4+ before AP, plus its separate Chaos
-      Armour 5+ Ward once that rule is coded. Offer the wearer/joined unit a
+      Armour 5+ Ward. Offer the wearer/joined unit a
       once-per-game 2D6 Break-test re-roll, with one shared item-use record.
       Spending the re-roll must not switch off the passive armour bonus.
       Source: [Helm of Courage](https://tow.whfb.app/magic-item/helm-of-courage),
@@ -536,8 +562,9 @@ first playable milestone must explicitly restrict the selected known spells.
 3. Minimum magic-item system: completed and committed as `9b90bce`.
 4. Selected Banner/Helm/Wand effects and spell generation: completed as above,
       with unsupported spell effects and verification caveats explicitly retained.
-5. Frequent faction effects, including Chaos/Dragon Ward grants, Elven Reflexes
-      and contextual rerolls.
+5. Frequent faction effects: completed core Ward grants, profile-local Elven
+      Reflexes, hand-weapon effects and contextual rerolls. Remaining Fear/Terror,
+      magical-defence and Wizard-armour dependencies are explicit above.
 6. Charges/movement: First Charge, Impetuous/Drilled, Counter Charge and
       relevant formation dependencies.
 7. Magic and remaining dependencies: selected lore effects, Lileath choices,
@@ -553,9 +580,10 @@ first playable milestone must explicitly restrict the selected known spells.
 - [x] General's Helm changes armour 5+ to 4+, grants one optional Break
       re-roll, stays spent across host changes/reloads, and loses both benefits
       when made unusable; spending only the re-roll preserves its armour effect.
-- [ ] Warriors gain Veteran from their banner and use only one allowed
+- [x] Warriors gain Veteran from their banner and use only one allowed
       reroll alongside Mark of Chaos Undivided; failed Break tests do not get
-      Veteran. Banner loss and joined-character scope are tested separately.
+      Veteran. Verified through the live Panic choice; Mark's Fear/Terror callers
+      remain pending. Banner loss and joined-character scope are tested separately.
 - [ ] Silver Helms/Dragon Princes versus Chaos Knights test first charge,
       counter charge, riders versus mounts, armour/Ward, and first-round timing.
 - [ ] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
@@ -564,6 +592,27 @@ first playable milestone must explicitly restrict the selected known spells.
 - [ ] Test expiry/disable/reload at least once for every timed or limited-use
       source, plus a rendered playable two-army save with no silent unsupported
       effects. Use focused checks per feature and one full suite at completion.
+
+**Point 5 verification:** 41 focused faction checks and four actual-roster
+offscreen checks pass. The latter load all ten models from the tracked startup
+lists and exercise crew/rider/mount Initiative, Ward values, joined terrain
+ownership, the Banner/Mark choice, item suppression and repeated save/reload.
+Additional Initiative, terrain, Move Through Cover (including scene), command,
+challenge and persistence checks pass. Cannon/template save functions and one
+aggregate template Ward log are covered. All runs use sequential memory-bounded
+services; no monolithic or full-matchup run. The adjacent item scene passed
+10/11 checks but reproduced the previously recorded horizontal HUD
+`!mat.is_nan()` assertion; this unrelated intermittent failure remains unfixed.
+
+Rule wording verified for point 5:
+[Dragon Armour](https://tow.whfb.app/special-rules/dragon-armour), FoF p. 184;
+[Chaos Armour](https://tow.whfb.app/special-rules/chaos-armour-warriors-of-chaos), RH p. 81;
+[Elven Reflexes](https://tow.whfb.app/special-rules/elven-reflexes), FoF pp. 145, 185;
+[Valour of Ages](https://tow.whfb.app/special-rules/valour-of-ages), FoF p. 185;
+[Ithilmar Weapons](https://tow.whfb.app/special-rules/ithilmar-weapons), FoF p. 185;
+[Ithilmar Barding](https://tow.whfb.app/special-rules/ithilmar-armour-ithilmar-barding), FoF p. 185;
+[Ensorcelled Weapons](https://tow.whfb.app/special-rules/ensorcelled-weapons), RH pp. 81, 115;
+[Mark of Chaos Undivided](https://tow.whfb.app/special-rules/mark-of-chaos-undivided), RH pp. 82, 116.
 
 **Sources and boundaries:** faction-rule and spell summaries above are based
 on the selected exports, not inferred from names. The three linked item pages,
@@ -575,9 +624,10 @@ Before implementing each entry, verify its full current wording, book page
 and applicable errata. Neither roster selects a Terror-causing model, a Chaos
 Wizard, a Bound item, or a specific Chaotic Cult. Do not add those as unrelated
 army-readiness prerequisites. Non-catalogue demonstration spells remain excluded.
-**LEFTOVER:** import metadata and spell-pool separation are implemented; the
-new rule/item effects above are not. This does not certify list legality or claim
-the exact two armies have already passed the acceptance scenarios.
+**LEFTOVER:** import, command/profile ownership, selected items, spell generation
+and the point-5 faction core are implemented as marked above. Unchecked movement,
+psychology, spell effects and listed partial-rule dependencies remain. This does
+not certify list legality or claim the armies passed all acceptance scenarios.
 
 ## Done
 - [x] Armour Bane (X) — natural 6 to wound improves that attack's AP by X

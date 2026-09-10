@@ -590,7 +590,7 @@ class MovementSystem:
         for participant in participants:
             wounds = dangerous_terrain_wounds(
                 len(features), participant.unit.nmodels, damage,
-                reroll_ones=participant.unit.model.is_move_through_cover(),
+                reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                 subject=participant)
             print(f"{participant.unit.name}: Dangerous Terrain test ({names}) "
                   f"-> {wounds} wound(s)")

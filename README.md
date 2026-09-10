@@ -126,6 +126,25 @@ returns selection to the host without detaching the character. Host fleeing,
 marching and combat restrictions still apply, and ranged aiming uses the
 joined model's world position and facing.
 
+### High Elf and Chaos Faction Effects
+
+The loaded rosters now use Dragon/Chaos Armour Ward saves, first-round Elven
+Reflexes on the correct rider or crew profile, Ithilmar hand-weapon rerolls,
+Ensorcelled hand-weapon AP, contextual Valour/Mark Panic rerolls, and Ithilmar
+Barding terrain rerolls. Ward sources use the best value, separate from armour.
+The Skycutter's crew gains Reflexes, not its Roc; joined characters do not borrow
+barding. Rule logs include deciding rolls and relevant reasons for not applying.
+Native rules survive save/reload independently of magic-item suppression.
+
+Mark's live Fear/Terror tests, magical-damage defences needed by Ensorcelled
+Weapons, and Wizard armour exceptions remain unfinished. This does not add the
+missing High Magic spell effects or complete the matchup. Per-rule status and
+verification caveats are in [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_faction_rules.py tests/test_faction_rules_scene.py
+```
+
 Focused inventory checks use the memory-bounded runner:
 
 ```bash

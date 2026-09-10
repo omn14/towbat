@@ -105,7 +105,8 @@ def profile_strike_order(attackers, defenders, facing, challenge=None):
             initiative = strike_initiative(
                 part.profile, charged=bool(getattr(host, 'chargedThisTurn', False)),
                 inches=float(getattr(host, 'chargeDistance', 0) or 0),
-                flank_or_rear=facing(target, host) in ('flank', 'rear'))
+                flank_or_rear=facing(target, host) in ('flank', 'rear'),
+                first_round=getattr(host, 'roundsFought', 0) == 1, log=True)
             order.append((initiative, part))
     return sorted(order, key=lambda entry: -entry[0])
 

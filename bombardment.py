@@ -15,7 +15,7 @@ import random
 
 from panda3d.core import Vec3, Point3, LineSegs
 
-from battleFunctions import check_armor_save
+from battleFunctions import check_saves, report_ward_saves
 from cannon_fire import wound_target
 from models import roll_dice_expr, stat_int
 from dice import ArtilleryDice, ScatterDice, checkDice
@@ -182,16 +182,18 @@ class Bombardment:
             from magic_items import item_armour_save
             item_armour_save(model, model.armor_save, log=True)
             cas = 0
+            ward_rolls = []
             for child in children:
                 total_hit += 1
                 if enemy is central_enemy and child is central_child:
-                    if self._wound_unsaved(model, s_central, ap_central):
+                    if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls):
                         wounds = roll_dice_expr(mw) if mw else 1
                         if wounds >= stat_int(model.characteristics, 'W', 1):
                             cas += 1
                 else:
-                    if self._wound_unsaved(model, strength, ap):
+                    if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls):
                         cas += 1
+            report_ward_saves(enemy.unit, None, ward_rolls)
             cas = min(cas, len(enemy.model.getChildren()))
             total_cas += cas
             if cas:
@@ -205,13 +207,13 @@ class Bombardment:
         self.game.debugText.setText(summary)
         battle_log(summary, 'good' if total_cas else 'combat')
 
-    def _wound_unsaved(self, model, strength, ap):
-        """Roll To Wound then armour save; True if a model is slain."""
+    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None):
+        """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141)."""
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         if random.randint(1, 6) < wound_target(strength, toughness):
             return False
         from magic_items import item_armour_save
-        return not check_armor_save(model, item_armour_save(model, model.armor_save), ap)
+        return not check_saves(model, item_armour_save(model, model.armor_save), ap, ward_rolls=ward_rolls)
 
     # ─── Visuals ────────────────────────────────────────────────────
 
