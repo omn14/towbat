@@ -360,6 +360,8 @@ class HUD(DirectObject):
         self._log_text['wordwrap'] = (log_w - 0.04) / self.LOG_SCALE
         self._fit_phase()
         self._redraw_log()
+        if hasattr(self, '_detail_lines'):
+            self._render_details()
 
     def _fit_phase(self):
         """Shrink the phase track if the five labels are wider than the section.
@@ -456,6 +458,7 @@ class HUD(DirectObject):
             self._label(anchor, 'regiment', 0.02,
                         self.DETAIL_TOP - i * self.DETAIL_STEP, 0.021, T.INK)
             for i in range(self.DETAIL_LINES)]
+        self._build_detail_controls(anchor, self.DETAIL_TOP, self.DETAIL_STEP, 0.021)
         self._card_chips = self._label(anchor, 'regiment', 0.02,
                                        self.CHIPS_Z, 0.021, T.INK)
         self._set_regiment_visible(False)
@@ -603,6 +606,7 @@ class HUD(DirectObject):
             self._label(anchor, 'regiment', 0.04, -0.452 - i * 0.030,
                         0.019, T.INK)
             for i in range(self.DETAIL_LINES)]
+        self._build_detail_controls(anchor, -0.452, 0.030, 0.019)
         self._card_chips = self._label(anchor, 'regiment', 0.04, -0.516,
                                        0.019, T.INK)
         self._set_regiment_visible(False)
@@ -614,6 +618,38 @@ class HUD(DirectObject):
         rule = DirectFrame(parent=parent, frameColor=T.SEPARATOR,
                            frameSize=(0, 1, -0.0015, 0.0015))
         return self._span(rule, section, 0.0, 1.0, -0.058)
+
+    def _build_detail_controls(self, anchor, top, step, scale):
+        self._detail_lines = []
+        self._detail_offset = 0
+        self._detail_identity = None
+        self._details_visible = False
+        self._detail_scale = scale
+        self._detail_buttons = []
+        for index, (symbol, direction) in enumerate((('^', -1), ('v', 1))):
+            button = DirectButton(
+                parent=anchor, text=symbol, text_font=self._font, text_fg=T.INK,
+                text_scale=scale, frameColor=(0, 0, 0, 0), relief=None,
+                frameSize=(-0.022, 0.022, -0.008, step - 0.008),
+                command=self.scroll_details, extraArgs=[direction])
+            self._detail_buttons.append(button)
+            self._place(button, 'regiment', 0.95, top - index * step)
+
+    def scroll_details(self, direction):
+        self._detail_offset = max(0, min(max(0, len(self._detail_lines) - self.DETAIL_LINES),
+                                         self._detail_offset + direction))
+        self._render_details()
+
+    def _render_details(self):
+        width = self._section_width('regiment', 2.0 * base.getAspectRatio()) * 0.84
+        visible = self._detail_lines[self._detail_offset:self._detail_offset + self.DETAIL_LINES]
+        for index, node in enumerate(self._detail_labels):
+            node.setText(visible[index] if index < len(visible) else '')
+            self._fit(node, self._detail_scale, width)
+        limits = (self._detail_offset > 0,
+                  self._detail_offset + self.DETAIL_LINES < len(self._detail_lines))
+        for button, enabled in zip(self._detail_buttons, limits):
+            button.show() if enabled and self._details_visible else button.hide()
 
     def _build_phase_v(self, font):
         anchor = self._section('phase')
@@ -798,7 +834,9 @@ class HUD(DirectObject):
         """
         nodes = [self._card_name, self._card_sub, self._card_models,
                  self._card_chips, self._card_bar, self._bar_back]
+        self._details_visible = visible
         nodes += self._detail_labels
+        nodes += self._detail_buttons
         nodes += self._regiment_static
         nodes += list(self._stat_values.values())
         nodes += [tick for tick, _ in self._bar_ticks]
@@ -839,9 +877,12 @@ class HUD(DirectObject):
             node['fg'] = (_STAT_HI if numeric > average
                           else _STAT_LO if numeric < average else T.INK)
 
-        details = (info.get('details') or [])[:self.DETAIL_LINES]
-        for i, node in enumerate(self._detail_labels):
-            node.setText(details[i] if i < len(details) else '')
+        identity = info.get('unit_id', info.get('name'))
+        if identity != self._detail_identity:
+            self._detail_offset = 0
+        self._detail_identity = identity
+        self._detail_lines = list(info.get('details') or [])
+        self.scroll_details(0)
 
         models = info.get('models', 0)
         start = max(1, info.get('start_models', models) or 1)

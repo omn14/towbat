@@ -6,6 +6,7 @@ so they can be imported and called without subclassing.
 """
 
 import copy
+from magic_items import save_inventory, restore_inventory
 import json
 import os
 import shutil
@@ -214,6 +215,7 @@ def save_game_state(game, filename=None):
             'command_profiles': {key: _save_profile_state(profile) for key, profile in
                                  getattr(unit.unit, 'command_models', {}).items()},
             'roster_metadata': copy.deepcopy(getattr(unit.unit, 'roster_metadata', {})),
+            'magic_item_inventory': save_inventory(unit),
             # The army list's rules, not the catalogue's: Skirmishers, Fire &
             # Flee and the rest live on the roster, so a unit rebuilt from a
             # save has no way to find them again.
@@ -574,6 +576,7 @@ def load_game_state(game, filename):
         from roster_runtime import apply_roster_ownership
         apply_roster_ownership(unit.unit, {'command': unit_data.get('command', [])})
         unit.unit.roster_metadata = copy.deepcopy(unit_data.get('roster_metadata', {}))
+        restore_inventory(unit, unit_data.get('magic_item_inventory', []))
         for key, record in unit_data.get('command_profiles', {}).items():
             if key in unit.unit.command_models:
                 _restore_profile_state(unit.unit.command_models[key], record)

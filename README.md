@@ -27,7 +27,7 @@ are excluded from the selected-node records. Command upgrades do not add bodies.
 Ownership describes what the export actually specifies, not guessed combat
 allocation. In particular, Skycutter bows/spears exported on the containing
 model remain there; Wicked Claws retain their Roc owner. Assigning shared
-chariot equipment to individual crew is still runtime work.
+chariot equipment to individual crew happens in the runtime ownership layer.
 
 An exported lore is no longer a ready-to-cast spellbook. The High Elf roster's
 Level 2 Mage retains ten options but no generated known spells. Silvery Wand
@@ -36,12 +36,45 @@ not implemented here. A selected upgrade whose name matches a Spell profile
 is treated as an explicit spell choice, but import does not certify that the
 number or combination of choices is legal. Unknown item spells remain metadata,
 not Wizard levels or castable spells. The existing Ruby Ring bound-Fireball
-handler remains supported separately from the planned general item system.
+handler remains supported separately from the general item registry.
 
-These records survive army-list JSON serialization. This is **not** battle-save
-inventory support: item activation, command effects, runtime owners and their
-persistence remain separate checklist tasks. Import does not modify its source
-file or apply prose-described magic-item effects.
+These records survive army-list JSON serialization. The live loader applies
+command/profile ownership and installs purchased item instances separately.
+Import does not modify its source file or apply prose-described magic-item effects.
+
+### Magic Item Inventory
+
+[magic_items.py](magic_items.py) separates immutable definitions, purchased
+instances and source-tagged effect contributions. Instances keep stable unit,
+selection and copy identities, structural owners, per-ability use counters and
+whole-item suppression. Repeated installation preserves use state. Spending an
+ability does not disable unrelated passive effects.
+
+`active_effects` is a read-only query boundary for explicit coded definitions.
+It follows living bearers, command losses and character joins/retirement without
+baking item grants into native rules or baseline profiles. `activate_ability`
+is the shared eligibility/commit gate for future player and AI choices;
+`disable_item` suppresses registry contributions for the rest of the battle.
+Consumers still need to apply and log each supported outcome at its owning
+rule implementation. This is not a second combat or reroll engine.
+
+The three selected items are recognized with book references but their effects
+remain **unsupported**: Silvery Wand's spell bonus, Helm of Courage's armour and
+Break reroll, and the Banner of the Bold's Veteran grant are implementation
+point 4. Vaul's Unmaking targeting, general item-choice prompts, equipment
+stacking and adaptation of the existing Ruby Ring handler also remain pending.
+
+Battle saves contain explicit `magic_item_inventory` records. Recreating a
+bearer restores spent/disabled state; old saves without this field load an empty
+inventory even if raw metadata mentions items. The unit card's detail arrows
+expose item names, bearers, support status and ability-use state, including items
+carried by a joined character.
+
+Focused inventory checks use the memory-bounded runner:
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py tests/test_magic_items.py tests/test_magic_item_scene.py tests/test_persistence.py
+```
 
 Focused import checks use constructed fixtures, not the local army exports:
 

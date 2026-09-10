@@ -655,6 +655,9 @@ class MyApp(ShowBase):
             unit_graphics = unitGraphics(
                 self, graphics_name, model_info['path'], unit_instance,
                 scale=1.0, BulletWorld=self.world, color=player_color)
+            from magic_items import install_inventory, report_inventory
+            install_inventory(unit_graphics, army_unit_data.get('magic_items', []))
+            report_inventory(unit_graphics)
 
             self.units.append(unit_graphics)
             if player_num == 1:
@@ -1755,6 +1758,7 @@ class MyApp(ShowBase):
         save = getattr(model, 'armor_save', 7)
         ward = ward_save_value(model)
         messenger.send('hud-unit', [{
+            'unit_id': unit.unitName,
             'name': unit.unit.name,
             'troop_type': model.troop_type(),
             'us': unit_strength_total(unit),
@@ -1814,6 +1818,12 @@ class MyApp(ShowBase):
             level = model.wizard_level(1)
             left = max(0, level - len(getattr(unit, 'spellsCastThisTurn', [])))
             lines.append(f"Wizard Level {level}: {left} casting(s) left")
+
+        from magic_items import current_turn, inventory_lines
+        lines.extend(inventory_lines(unit, width=self.CARD_LINE_CHARS, turn=current_turn(self)))
+        joined = getattr(unit, 'joinedCharacter', None)
+        if joined is not None:
+            lines.extend(inventory_lines(joined, width=self.CARD_LINE_CHARS, turn=current_turn(self)))
 
         if unit.isInCombatWith:
             names = ", ".join(u.unit.name for u in unit.isInCombatWith)

@@ -290,6 +290,9 @@ do not grant a patron benefit or display a usable blessing without one.
 None of these three effects is currently implemented through the roster path.
 Names below preserve the exports' spelling; match canonical IDs/normalised
 names rather than relying on capitalisation.
+Point 3 now retains each purchase as a runtime instance, resolves all three
+bearers in the actual armies, and shows them as **unsupported** in the unit
+details. Recognition is not effect support; the checks below remain open.
 
 - [ ] **Silvery Wand**, Mage, 15 points, `Arcane Items`.
       Generate **three known spells for this Level 2 Mage**, with the normal
@@ -319,46 +322,81 @@ names rather than relying on capitalisation.
       selected item/definition IDs, names, categories, available source metadata,
       quantities, points and owners now survive import and army-list JSON.
       Unknown items remain unsupported metadata, without inferred prose effects.
-      LEFTOVER: canonical handler aliases, rules-book references absent from
-      the export, runtime bearer allocation and battle-save item instances.
-- [ ] **Typed effect registry**, proposed `magic_items.py`: start with these
-      three items and small explicit handlers for armour modifiers, sourced
-      rule grants, extra known spells and optional rerolls. Reuse
-      `special_rules.py`, `psychology.py`, `models.py` and `spell_system.py`.
-      Categories such as Magic Weapons, Magic Armour, Talismans, Enchanted
-      Items, Arcane Items and Magic Standards are metadata, not effect handlers.
-- [ ] **Separate definitions, instances and active effects**: one definition
-      describes an item; a purchased instance has stable identity/owner and
-      use state; its effects have source IDs and recipient scope. Distinguish
-      an exhausted activated ability from an unusable/destroyed whole item.
-- [ ] **Source-aware application and removal**: loading or joining twice
-      must not stack the same bonus. Removing a banner must not remove Veteran
-      supplied by another source. Passive and temporary item effects must not
-      be blindly baked into `_base_characteristics`; derive them from the
-      roster baseline and active sources, including after combat resets.
-- [ ] **Lifecycle and choices**: bearer joins/leaves/dies/retires, standard
-      loss, item activation, cancellation, expiry and battle end. Persist
-      per-turn/per-game usage on the owning instance, not whichever host unit
-      it happens to occupy. Human and AI use the same eligibility checks.
+      Runtime instances now resolve parent, attachment and command owners;
+      ambiguous or missing owners remain inactive with a reason. The three
+      selected definitions have explicit names/aliases and book references.
+      LEFTOVER: register catalogue-ID aliases and definitions for more items.
+- [x] **Typed registry foundation** in `magic_items.py`: immutable definitions,
+      explicit category-checked ID/name matching, typed armour modifiers,
+      rule grants, extra known spells and optional rerolls. Categories and
+      description text never generate effects. The three selected definitions
+      are recognized but deliberately have no enabled effects yet.
+      LEFTOVER: point 4's real handlers and consumers in `special_rules.py`,
+      `psychology.py`, `models.py` and `spell_system.py`; no parallel reroll engine.
+- [x] **Separate definitions, instances and active contributions**: purchased
+      IDs include the runtime unit, selection reference and copy ordinal.
+      Each copy owns its retained metadata, per-ability usage and whole-item
+      disabled/destroyed state. Spending an ability does not disable passive
+      effects. Source IDs derive from the purchased instance and effect key.
+- [x] **Source-aware query boundary**: `active_effects` derives live recipient
+      contributions without editing native rules or `_base_characteristics`.
+      Repeated queries/loads/joins do not multiply a source; suppression
+      withdraws only that source. Synthetic tests preserve another grant and
+      native Veteran, and retain passive effects after ability exhaustion.
+      LEFTOVER: outcome consumers must query these contributions, combine them
+      according to each rule, and log the deciding numbers. No real item bonus
+      is applied to combat, armour, psychology or known spells in point 3.
+- [x] **Core lifecycle and activation gate**: live queries follow character
+      joins/leaves/removal, command casualties and retirement. A retired
+      bearer retains personal passive protection but grants no host benefit
+      (p. 210). `activate_ability` checks the owner, recipient, context and use
+      limit; declined/invalid choices spend nothing and log the reason.
+      Per-turn state uses the saved player/round identity; per-game state stays
+      on the owning item through host changes. A new army starts fresh; a
+      battle reload restores state.
+      LEFTOVER: human/AI item-choice prompts, item-specific timing and transient
+      effect durations beyond per-turn uses/rest-of-battle suppression.
 - [ ] **Item suppression for Vaul's Unmaking**: select a carried item on a
       legal enemy character, mark it unusable for the rest of the battle and
       remove its active effects. This directly matters for the Chaos General's
       Helm. Do not allow targeting the Warriors' non-character standard bearer
       with a spell restricted to enemy characters.
-- [ ] **Persistence** in `persistence.py`: save inventory, stable owners,
-      charges/spent flags, disabled state, effect sources and generated spell
-      choices. Rebuild idempotently; reload must not refund the Helm or reroll
-      the Mage's spells. Old saves have no item inventory, so do not silently
-      infer selected items from points or catalogue availability.
+      Core `disable_item` now records the reason/destroyed state independently
+      of spent abilities and removes all registry contributions.
+      LEFTOVER: the actual spell, character-only target selection and adapter
+      for effects implemented outside this registry (including Ruby Ring).
+- [x] **Inventory persistence** in `persistence.py`: explicit
+      `magic_item_inventory` records save stable IDs/owners, raw source data,
+      per-ability use counters and whole-item disabled/destroyed state.
+      Contributions are derived, not serialized as profile mutations. Existing
+      and recreated bearers reload without duplication or refunded use. Legacy
+      saves without the field have an empty inventory, even if raw roster
+      metadata names purchased items.
+      LEFTOVER: point 4 must persist generated known-spell choices through the
+      existing spellbook save path; generation must not rerun on battle load.
 - [ ] **Equipment and validation boundaries**: distinguish additive helmets
       from replacement body armour; use best Ward rather than adding saves;
       enforce rider-only/weapon-only scope. Preserve item categories and
       allowances for future list validation. Agree the league/Battle March
       rules pack before claiming roster legality; this audit is not a legality check.
-- [ ] **Player-visible state and diagnostics**: show equipped items, bearer,
-      supported/unsupported status and usable/spent/disabled abilities. Log
-      decisive numbers when an effect applies and why an eligible effect was
-      declined, exhausted, suppressed or inapplicable, without query-loop spam.
+      Bearer-only registry scope already separates rider/champion/attachment
+      profiles. LEFTOVER: actual equipment stacking, Ward selection, weapon-only
+      scope and legality checks belong to their effect handlers.
+- [x] **Inventory visibility and state diagnostics**: the unit card includes
+      owned items and joined-character inventories, bearer names, support and
+      use/disabled status. Its existing two-line detail area now has bounded
+      scroll arrows so inventory entries are not silently truncated. Selection
+      changes reset scrolling; refreshes preserve it. Load reports unsupported
+      purchases; activation/suppression log at state changes, never in queries.
+      LEFTOVER: item-effect outcome logs and interactive choices with point 4.
+
+Point 3 verification: 13 synthetic registry/lifecycle tests and eight offscreen
+scene cases cover all three selected owners, independent copies, use-state JSON
+roundtrips, no legacy inventory inference, existing/recreated bearers, joins,
+standard loss, native-source preservation and both HUD layouts. Corrected during
+implementation: hidden detail lines, retired personal-vs-host scope, serialized
+turn-token equality and hidden-card controls reappearing on resize. No claim of
+implemented Silvery Wand, Helm of Courage or Banner of the Bold effects yet.
 
 ### High Magic and Lore of Saphery
 
