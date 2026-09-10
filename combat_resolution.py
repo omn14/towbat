@@ -2104,24 +2104,10 @@ class CombatResolver:
             veteran_reroll_allowed(loserUnit, 'Break', sum(ldDice), ld)
 
             bsb = psy.battle_standard_of(loserUnit) if psy is not None else None
-            if bsb is not None:
-                if self.game.aiControls(loserUnit):
-                    reroll = should_reroll_break(outcome, ld, diff, overwhelm)
-                else:
-                    rerollChoice = [f'Re-roll\n({outcome})', 'Keep']
-                    selected = await taskMgr.add(
-                        self.game.makeChoiceNew(
-                            rerollChoice, Vec3(0, 0, 10), owner=loserUnit,
-                            prompt=f"{loserUnit.unit.name}: re-roll the "
-                                   f"Break test?"))
-                    reroll = selected == rerollChoice[0]
-                if reroll:
-                    ldDice = await self.rollBreakDice()
-                    # The second roll stands, even if it is worse than the first.
-                    outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
-                    print(f"{loserUnit.unit.name} re-rolls its Break test "
-                          f"(Hold Your Ground: {bsb.unit.name}): {ldDice} "
-                          f"sum {sum(ldDice)} -> {outcome}")
+            from magic_items import reroll_break_test
+            ldDice = await reroll_break_test(self.game, loserUnit, ldDice, ld, diff,
+                                             overwhelm, self.rollBreakDice, bsb)
+            outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
 
             outcome = await self.shieldwallOutcome(loserUnit, outcome)
             if outcome in ('break', 'fall_back'):

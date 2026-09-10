@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 import json
 import textwrap
+from types import SimpleNamespace
+import weakref
 
 from battlescribe import slugify
 from rules_log import rule_log, rule_skipped
@@ -97,11 +99,18 @@ class ItemRegistry:
 
 
 REGISTRY = ItemRegistry((
-    ItemDefinition('silvery_wand', 'Silvery Wand', 'Arcane Items', 'Forces of Fantasy p. 183'),
+    ItemDefinition('silvery_wand', 'Silvery Wand', 'Arcane Items', 'Forces of Fantasy p. 183',
+                   effects=(ItemEffect('extra_spell', EffectKind.SPELLS, 1),)),
     ItemDefinition('helm_of_courage', 'Helm of Courage', 'Magic Armour',
-                   "Battle March: General's Companion p. 47"),
+                   "Battle March: General's Companion p. 47",
+                   effects=(ItemEffect('armour', EffectKind.ARMOUR, 1),
+                            ItemEffect('break_reroll', EffectKind.REROLL, 'Break',
+                                       Scope.BEARER_AND_UNIT, 'courage')),
+                   abilities=(ItemAbility('courage', 'Break'),)),
     ItemDefinition('banner_of_the_bold', 'The Banner of the Bold', 'Magic Standards',
-                   "Battle March: General's Companion p. 47", aliases=('Banner of the Bold',)),
+                   "Battle March: General's Companion p. 47; FAQ v1.5.3 Characters",
+                   effects=(ItemEffect('veteran', EffectKind.RULE, 'Veteran', Scope.UNIT_AND_JOINED),),
+                   aliases=('Banner of the Bold',)),
 ))
 
 
@@ -156,6 +165,7 @@ def install_inventory(member, sources):
                 item = ItemInstance(identity, deepcopy(source))
             instances.append(item)
     group.magic_item_inventory = instances
+    bind_inventory(member)
     return instances
 
 
@@ -168,6 +178,89 @@ def restore_inventory(member, records):
     if len({item.instance_id for item in instances}) != len(instances):
         raise ValueError('Duplicate saved magic-item instance')
     getattr(member, 'unit', member).magic_item_inventory = instances
+    bind_inventory(member)
+
+
+def bind_inventory(member):
+    """Profiles keep a non-owning link; item bonuses never enter saved base stats."""
+    group = getattr(member, 'unit', member)
+    model = getattr(group, 'model', None)
+    if model is None or not hasattr(member, 'unit'):
+        return
+    try:
+        reference = weakref.ref(member)
+    except TypeError:
+        reference = lambda: member
+    profiles = [model] + list(getattr(group, 'command_models', {}).values())
+    for tag in ('mount', 'crew', 'beasts'):
+        part = getattr(model, f'get_{tag}')()
+        if part is not None:
+            profiles.append(part)
+    for profile in profiles:
+        profile._magic_item_member = reference
+
+
+def item_armour_save(profile, base_save, *, log=False):
+    """Additive helmets, Battle March p. 47; minimum armour value 2+ (p. 141)."""
+    reference = getattr(profile, '_magic_item_member', None)
+    member = reference() if callable(reference) else None
+    if member is None:
+        return base_save
+    effects = effects_for(member, EffectKind.ARMOUR, profile=profile)
+    result = max(2, base_save - sum(int(entry.effect.value) for entry in effects)) if effects else base_save
+    if log:
+        report_inactive_effects(member, EffectKind.ARMOUR, f'armour remains {base_save}+ before AP', profile=profile)
+        for entry in effects:
+            if result != base_save:
+                rule_log(entry.item.name, member,
+                         f'{profile.name}: armour {base_save}+ -> {result}+ before AP; '
+                         'passive protection independent of the Break re-roll use')
+            else:
+                rule_skipped(entry.item.name, member, f'{profile.name}: armour already at the 2+ limit before AP')
+    return result
+
+
+async def reroll_break_test(game, unit, dice, ld, diff, overwhelm, roll_dice, bsb=None):
+    """One shared optional re-roll: Battle March p. 47; Rulebook pp. 93, 154, 203."""
+    from panda3d.core import Vec3
+    from psychology import break_test_outcome, should_reroll_break
+
+    outcome = break_test_outcome(dice, ld, diff, overwhelm)
+    candidates = effects_for(unit, EffectKind.REROLL, value='Break', context='Break')
+    report_inactive_effects(unit, EffectKind.REROLL,
+                           f'Break: 2D6={sum(dice)}, Ld {ld}, difference {diff}: {outcome}',
+                           value='Break', context='Break')
+    chosen = candidates[0] if candidates and bsb is None else None
+    if bsb is None and chosen is None:
+        return dice
+    name = chosen.item.name if chosen else 'Hold Your Ground'
+    if bsb is not None:
+        for entry in candidates:
+            rule_skipped(entry.item.name, unit, 'Hold Your Ground is available; preserve the once-per-game use')
+    if game.aiControls(unit):
+        use = should_reroll_break(outcome, ld, diff, overwhelm)
+    else:
+        options = [f'Re-roll\n({outcome})', 'Keep']
+        selected = await game.makeChoiceNew(
+            options, Vec3(0, 0, 10), owner=unit,
+            prompt=f'{unit.unit.name}: {name} Break test re-roll?',
+            detail=f'2D6={sum(dice)}, Ld {ld}, combat difference {diff}; {outcome}')
+        use = selected == options[0]
+    if chosen is not None:
+        if not use:
+            rule_skipped(name, unit, f'keeps 2D6={sum(dice)}, Ld {ld}, difference {diff}: {outcome}; no use spent')
+            return dice
+        if not activate_ability(game, chosen.bearer.carrier, chosen.item, 'courage', 'Break',
+                                confirmed=use, recipient=unit):
+            return dice
+    elif not use:
+        rule_skipped(name, unit, f'keeps 2D6={sum(dice)}, Ld {ld}, difference {diff}: {outcome}')
+        return dice
+    result = await roll_dice()
+    replacement = break_test_outcome(result, ld, diff, overwhelm)
+    rule_log(name, unit, f'Break: 2D6={sum(dice)}, Ld {ld}, difference {diff}, '
+             f'overwhelmed={overwhelm}: {outcome} -> {sum(result)} ({replacement}); no further re-roll')
+    return result
 
 
 def use_count(item, ability, turn=None):
@@ -329,6 +422,59 @@ def active_effects(game, recipient, *, profile=None, context=None, turn=None, re
                     identity = json.dumps([item.instance_id, effect.key], separators=(',', ':'))
                     contributions[identity] = EffectContribution(identity, item, effect, bearer)
     return list(contributions.values())
+
+
+def effects_for(member, kind, *, value=None, profile=None, context=None):
+    """Read item contributions through the recipient's live battle ownership."""
+    game = getattr(member, 'game', None)
+    if not isinstance(getattr(game, 'units', None), (list, tuple)):
+        host = getattr(member, 'hostUnit', None)
+        candidates = [member, host, getattr(member, 'joinedCharacter', None)]
+        game = SimpleNamespace(units=[candidate for candidate in candidates if candidate is not None])
+    return [entry for entry in active_effects(game, member, profile=profile, context=context)
+            if entry.effect.kind == kind and (value is None or entry.effect.value == value)]
+
+
+def report_inactive_effects(member, kind, detail, *, value=None, profile=None, context=None):
+    """Explain inactive nearby purchases only at an outcome, never from a query."""
+    active = {entry.item.instance_id for entry in effects_for(member, kind, value=value,
+                                                             profile=profile, context=context)}
+    profile = member.unit.model if profile is None else profile
+    carriers = [member, getattr(member, 'hostUnit', None), getattr(member, 'joinedCharacter', None)]
+    seen = set()
+    for carrier in carriers:
+        if carrier is None:
+            continue
+        for item in inventory(carrier):
+            if item.instance_id in active or item.instance_id in seen:
+                continue
+            seen.add(item.instance_id)
+            definition = REGISTRY.resolve(item.source)
+            effects = [effect for effect in definition.effects
+                       if effect.kind == kind and (value is None or effect.value == value)] if definition else []
+            bearer = resolve_bearer(carrier, item)
+            if not effects or (all(effect.scope == Scope.BEARER for effect in effects)
+                               and bearer is not None and bearer.profile is not profile):
+                continue
+            reason = bearer_unavailable(carrier, item, allow_retired=True)
+            if reason is None:
+                reason = next((reason for effect in effects if effect.ability
+                               if (reason := ability_unavailable(item, effect.ability, context))), None)
+            rule_skipped(item.name, member, f'{detail}; {reason or "bearer cannot confer this benefit on the recipient"}')
+
+
+def known_spell_count(member, *, log=False):
+    """Silvery Wand adds a known spell, not a Wizard level (Forces of Fantasy p. 183)."""
+    level = member.unit.model.wizard_level()
+    effects = effects_for(member, EffectKind.SPELLS) if level > 0 else []
+    count = level + sum(int(entry.effect.value) for entry in effects)
+    if log:
+        report_inactive_effects(member, EffectKind.SPELLS, f'Level {level}: {count} known spells')
+        for entry in effects:
+            rule_log(entry.item.name, member,
+                     f'Level {level}: {level} -> {count} known spells; '
+                     f'Wizard level and per-turn casting allowance remain {level}')
+    return count
 
 
 def activate_ability(game, member, item, ability_key, context, *, confirmed, recipient=None,

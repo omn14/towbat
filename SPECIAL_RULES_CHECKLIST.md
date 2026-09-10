@@ -48,7 +48,8 @@ itself add gameplay effects.
       and selection identity, category, quantity, points and structural owner.
       Magic Armour remains distinct from ordinary Armour. Unknown items are
       retained with unsupported status. Runtime roster metadata now survives
-      battle saves. LEFTOVER: item effects and usable/spent item inventory.
+      battle saves. Runtime inventory and these three selected effects are now
+      implemented in points 3 and 4 below; other items remain unsupported.
 - [x] Preserve command selections and their model associations. Four Chaos
       Knights remain four bodies; `command` retains champion/standard/musician
       roles, model references and the champion's A2 profile. Original incoming
@@ -60,7 +61,8 @@ itself add gameplay effects.
       empty, Level 2 is retained and `spell_generation_pending` is true.
       Explicit spell upgrades and the existing Ruby Ring bound spell remain
       distinguishable. Unsupported item spells do not create Wizards.
-      LEFTOVER: actual generation, substitution and the Wand's extra spell.
+      Runtime generation, the single signature substitution and the Wand's
+      extra known spell are now implemented in point 4 below.
 - [x] Retain selected source records, equipment owners and spell provenance.
       Exclude unselected/zero-count subtrees; retain nested mount and Roc
       weapons without deduplicating different owners. Constructed fixtures
@@ -275,8 +277,9 @@ only a blocker if that relationship is actually chosen later.
       General restrictions, and do not lend them the General's Inspiring
       Presence through the generic Leadership helper. Undisciplined comes
       from the War Beasts troop type even though absent from the roster keywords.
-- [ ] **The Banner Of The Bold and Helm Of Courage** - implement both item
-      records and their effects below; the paid points currently buy no effect.
+- [x] **The Banner Of The Bold and Helm Of Courage** - owned inventory,
+      sourced Veteran, passive armour and optional once-per-game Break reroll
+      are implemented below. Chaos Armour's separate Ward remains pending.
 
 **Present but inactive in this loadout:** **Fast Cavalry** needs Open Order;
 these Horsemen selected Skirmishers instead. **Fire & Flee** has an existing
@@ -287,20 +290,20 @@ do not grant a patron benefit or display a usable blessing without one.
 
 ### Selected Magic Items
 
-None of these three effects is currently implemented through the roster path.
+All three selected items now have coded effects through the roster path.
 Names below preserve the exports' spelling; match canonical IDs/normalised
 names rather than relying on capitalisation.
 Point 3 now retains each purchase as a runtime instance, resolves all three
-bearers in the actual armies, and shows them as **unsupported** in the unit
-details. Recognition is not effect support; the checks below remain open.
+bearers in the actual armies, and persists state. Point 4 adds the consumers,
+outcome logs and generation choices. Unknown items still show **unsupported**.
 
-- [ ] **Silvery Wand**, Mage, 15 points, `Arcane Items`.
+- [x] **Silvery Wand**, Mage, 15 points, `Arcane Items`.
       Generate **three known spells for this Level 2 Mage**, with the normal
       generation/substitution rules. The bearer remains Level 2 for casting
       and dispelling, and does not gain a third spell attempt per turn.
       Source: [Silvery Wand](https://tow.whfb.app/magic-item/silvery-wand),
       Forces of Fantasy p. 183; casting limit clarified by FAQ v1.5.3.
-- [ ] **Helm Of Courage**, Aspiring Champion, 25 points, `Magic Armour`.
+- [x] **Helm Of Courage**, Aspiring Champion, 25 points, `Magic Armour`.
       Improve the wearer's armour value by 1 while retaining heavy armour:
       this loadout should have armour 4+ before AP, plus its separate Chaos
       Armour 5+ Ward once that rule is coded. Offer the wearer/joined unit a
@@ -308,7 +311,7 @@ details. Recognition is not effect support; the checks below remain open.
       Spending the re-roll must not switch off the passive armour bonus.
       Source: [Helm of Courage](https://tow.whfb.app/magic-item/helm-of-courage),
       Battle March: General's Companion p. 47.
-- [ ] **The Banner Of The Bold**, Chaos Warriors' standard, 10 points,
+- [x] **The Banner Of The Bold**, Chaos Warriors' standard, 10 points,
       `Magic Standards`. Grant Veteran through the existing rule machinery;
       do not implement a second reroll algorithm or extend Veteran to Break.
       Handle the unit and joined-character scope required by magic-standard
@@ -330,9 +333,8 @@ details. Recognition is not effect support; the checks below remain open.
       explicit category-checked ID/name matching, typed armour modifiers,
       rule grants, extra known spells and optional rerolls. Categories and
       description text never generate effects. The three selected definitions
-      are recognized but deliberately have no enabled effects yet.
-      LEFTOVER: point 4's real handlers and consumers in `special_rules.py`,
-      `psychology.py`, `models.py` and `spell_system.py`; no parallel reroll engine.
+      now drive armour saves, existing Veteran/Break resolution and spell
+      generation. LEFTOVER: other item definitions and effect types.
 - [x] **Separate definitions, instances and active contributions**: purchased
       IDs include the runtime unit, selection reference and copy ordinal.
       Each copy owns its retained metadata, per-ability usage and whole-item
@@ -343,9 +345,9 @@ details. Recognition is not effect support; the checks below remain open.
       Repeated queries/loads/joins do not multiply a source; suppression
       withdraws only that source. Synthetic tests preserve another grant and
       native Veteran, and retain passive effects after ability exhaustion.
-      LEFTOVER: outcome consumers must query these contributions, combine them
-      according to each rule, and log the deciding numbers. No real item bonus
-      is applied to combat, armour, psychology or known spells in point 3.
+      Point 4 queries these contributions in combat, armour, psychology and
+      spell generation, logging deciding numbers and relevant nonapplication.
+      LEFTOVER: wider stacking policies for future item effects.
 - [x] **Core lifecycle and activation gate**: live queries follow character
       joins/leaves/removal, command casualties and retirement. A retired
       bearer retains personal passive protection but grants no host benefit
@@ -354,8 +356,10 @@ details. Recognition is not effect support; the checks below remain open.
       Per-turn state uses the saved player/round identity; per-game state stays
       on the owning item through host changes. A new army starts fresh; a
       battle reload restores state.
-      LEFTOVER: human/AI item-choice prompts, item-specific timing and transient
-      effect durations beyond per-turn uses/rest-of-battle suppression.
+      Helm now offers a human choice and uses the existing AI Break policy;
+      BSB priority prevents spending both sources on the same roll.
+      LEFTOVER: other item-specific timing and transient effect durations
+      beyond per-turn uses/rest-of-battle suppression.
 - [ ] **Item suppression for Vaul's Unmaking**: select a carried item on a
       legal enemy character, mark it unusable for the rest of the battle and
       remove its active effects. This directly matters for the Chaos General's
@@ -372,31 +376,85 @@ details. Recognition is not effect support; the checks below remain open.
       and recreated bearers reload without duplication or refunded use. Legacy
       saves without the field have an empty inventory, even if raw roster
       metadata names purchased items.
-      LEFTOVER: point 4 must persist generated known-spell choices through the
-      existing spellbook save path; generation must not rerun on battle load.
+      Point 4 also persists intermediate generation rolls/substitution stage
+      in roster metadata and final known choices through the spellbook save
+      path; completed spellbooks are never generated again on battle load.
 - [ ] **Equipment and validation boundaries**: distinguish additive helmets
       from replacement body armour; use best Ward rather than adding saves;
       enforce rider-only/weapon-only scope. Preserve item categories and
       allowances for future list validation. Agree the league/Battle March
       rules pack before claiming roster legality; this audit is not a legality check.
       Bearer-only registry scope already separates rider/champion/attachment
-      profiles. LEFTOVER: actual equipment stacking, Ward selection, weapon-only
-      scope and legality checks belong to their effect handlers.
+      profiles. The additive Helm now improves heavy armour 5+ to 4+ without
+      modifying baseline stats or protecting its host unit. LEFTOVER: broader
+      equipment/Ward/weapon-only stacking, monster/chariot armour-choice
+      restrictions and roster legality checks belong to later handlers.
 - [x] **Inventory visibility and state diagnostics**: the unit card includes
       owned items and joined-character inventories, bearer names, support and
       use/disabled status. Its existing two-line detail area now has bounded
       scroll arrows so inventory entries are not silently truncated. Selection
       changes reset scrolling; refreshes preserve it. Load reports unsupported
       purchases; activation/suppression log at state changes, never in queries.
-      LEFTOVER: item-effect outcome logs and interactive choices with point 4.
+      Point 4 logs actual reroll results, declined/spent/lost/disabled sources
+      and armour changes once per attack batch, not per attack or UI query.
 
 Point 3 verification: 13 synthetic registry/lifecycle tests and eight offscreen
 scene cases cover all three selected owners, independent copies, use-state JSON
 roundtrips, no legacy inventory inference, existing/recreated bearers, joins,
 standard loss, native-source preservation and both HUD layouts. Corrected during
 implementation: hidden detail lines, retired personal-vs-host scope, serialized
-turn-token equality and hidden-card controls reappearing on resize. No claim of
-implemented Silvery Wand, Helm of Courage or Banner of the Bold effects yet.
+turn-token equality and hidden-card controls reappearing on resize. Point 3 was
+committed as `9b90bce`; selected effects were deliberately left for point 4.
+
+### Point 4: Selected Effects and Generation
+
+- [x] Banner Veteran uses the existing strict-majority Leadership reroll,
+      including personal tests for joined characters under the magic-standard
+      FAQ. Break tests remain excluded. Lost/disabled sources withdraw cleanly
+      without removing native Veteran; human decline and actual results log.
+- [x] Helm armour is derived for melee, missile, magic, impact, cannon and
+      bombardment save paths. Once-per-game Break state belongs to the item,
+      survives reload and host changes, and does not disable passive armour.
+      BSB and Helm never reroll the same dice twice; Shieldwall follows the
+      final result through the existing combat resolver.
+- [x] Before deployment, D6 results select unique numbered spells, rerolling
+      duplicates (Rulebook pp. 106, 319). Saphery's numbered export profiles
+      are excluded from the D6 table and offered only as signature alternatives
+      (Forces of Fantasy p. 186). Exactly one generated spell may be replaced.
+      [Generation](https://tow.whfb.app/the-lores-of-magic/spells-and-spell-generation);
+      [Saphery](https://tow.whfb.app/the-lores-of-magic/lore-of-saphery).
+- [x] Silvery Wand adds one known spell without increasing Wizard level,
+      casting allowance or dispelling. Explicit known/Bound spells remain.
+      Saved intermediate choices resume without rerolls, including a pending
+      replacement. Player-selected Wizard order is supported; AI keeps rolls.
+- [x] Pending generation blocks placement and phase advance. Fresh imports
+      start on their first deployment action; saved deployment games schedule
+      only after unit restoration. Loading another battle while a generation
+      choice is open is rejected with a message; saving the choice is allowed.
+- [x] Corrected during implementation: empty known-spell lists had skipped
+      selected Wizard level restoration; Saphery 1-3 collided with High Magic's
+      table; runtime spell classes needed excluding from saved generation data;
+      long choice labels overflowed fixed buttons. Dialog geometry and rendered
+      selection are covered by the existing offscreen choice-layout tests.
+- LEFTOVER: all ten High Magic/Saphery spell effects, Chaos Armour's Ward,
+      Mark of Chaos Undivided and other faction effects remain later points.
+      Unsupported generated spells are explicitly logged as known but inert.
+- LEFTOVER: only a complete, unambiguous six-spell lore plus one normal
+      signature is accepted. Missing/ambiguous export pools stay pending with
+      a diagnostic; other special generation rules and a full legality engine
+      are not implemented. Mid-battle loss of a Wand-granted spell needs the
+      eventual Vaul/item-suppression spell handler's explicit resolution.
+
+Point 4 verification covers pure selected-item/generation rules, actual offscreen
+Break resolution and deployment gating, saved spellbooks, and the real exports'
+six numbered High Magic spells/four signature choices. Final isolated runs pass
+all selected-item, generation, inventory, persistence, armour, weapon, magic,
+choice-layout, command, Veteran and Shieldwall slices, including all 11 item
+scene checks. Earlier runs encountered an intermittent Panda3D `!mat.is_nan()`
+assertion in the existing horizontal HUD text check; it did not recur on the
+final run, but no fix for that intermittent assertion is claimed. All 17 changed
+Python files pass syntax validation. No full-suite, full-matchup or complete-
+lore-effect claim.
 
 ### High Magic and Lore of Saphery
 
@@ -406,7 +464,7 @@ apply the effect. They form the Mage's available pool, not ten known spells.
 Implement the pool if arbitrary legal spell generation is to work; a smaller
 first playable milestone must explicitly restrict the selected known spells.
 
-- [ ] **Spell generation and Lore of Saphery substitution**: Level 2 plus
+- [x] **Spell generation and Lore of Saphery substitution**: Level 2 plus
       Silvery Wand gives three known spells, with normal duplicate handling
       and permitted signature replacement. Persist the final choices; casting
       allowance remains Level 2. Do not use `spells` for both pool and choices.
@@ -440,24 +498,26 @@ first playable milestone must explicitly restrict the selected known spells.
 
 ### Implementation Order and Acceptance
 
-1. Preserve item, command and spell-pool data; add visible unsupported-state
-   reporting so loading these armies no longer implies complete support.
-2. Add the small item registry, Banner/Helm passive effects, Chaos/Dragon Ward
-   grants and contextual rerolls; implement the Helm activation and command roles.
-3. Complete split-profile ownership/timing, Elven Reflexes, First Charge,
-   Fear, Impetuous/Drilled, Counter Charge and relevant formation dependencies.
-4. Add spell generation/Silvery Wand/Lileath, source-aware effect lifetimes,
-   the selected lore spells and Gaze of the Gods including Stupidity.
-5. Run both exact roster imports through offscreen integration scenarios;
-   finish the remaining troop-type and conditional behavior before claiming
-   fully rules-correct battles. Each completed entry needs a rule citation,
-   positive/negative tests, useful logs and an explicit `LEFTOVER:` if partial.
+1. Lossless roster import: completed.
+2. Command groups and split-profile ownership: completed core, leftovers above.
+3. Minimum magic-item system: completed and committed as `9b90bce`.
+4. Selected Banner/Helm/Wand effects and spell generation: completed as above,
+      with unsupported spell effects and verification caveats explicitly retained.
+5. Frequent faction effects, including Chaos/Dragon Ward grants, Elven Reflexes
+      and contextual rerolls.
+6. Charges/movement: First Charge, Impetuous/Drilled, Counter Charge and
+      relevant formation dependencies.
+7. Magic and remaining dependencies: selected lore effects, Lileath choices,
+      effect lifetimes and Gaze of the Gods including Stupidity.
+8. Complete matchup verification using both exact roster imports offscreen.
+      Each completed entry needs a rule citation, positive/negative tests, useful
+      logs and an explicit `LEFTOVER:` if partial.
 
 - [ ] Import/reload keeps both totals at 500, all ten units, exact model counts,
       command roles, three item identities and correct crew/mount equipment.
-- [ ] Mage remains Level 2 with three generated known spells; no duplicate
+- [x] Mage remains Level 2 with three generated known spells; no duplicate
       grants, extra casting slot or new random generation after loading.
-- [ ] General's Helm changes armour 5+ to 4+, grants one optional Break
+- [x] General's Helm changes armour 5+ to 4+, grants one optional Break
       re-roll, stays spent across host changes/reloads, and loses both benefits
       when made unusable; spending only the re-roll preserves its armour effect.
 - [ ] Warriors gain Veteran from their banner and use only one allowed

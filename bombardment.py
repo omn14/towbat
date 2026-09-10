@@ -179,6 +179,8 @@ class Bombardment:
         total_hit = total_cas = 0
         for enemy, children in by_unit.items():
             model = enemy.unit.model
+            from magic_items import item_armour_save
+            item_armour_save(model, model.armor_save, log=True)
             cas = 0
             for child in children:
                 total_hit += 1
@@ -208,7 +210,8 @@ class Bombardment:
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         if random.randint(1, 6) < wound_target(strength, toughness):
             return False
-        return not check_armor_save(model, model.armor_save, ap)
+        from magic_items import item_armour_save
+        return not check_armor_save(model, item_armour_save(model, model.armor_save), ap)
 
     # ─── Visuals ────────────────────────────────────────────────────
 

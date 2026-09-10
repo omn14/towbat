@@ -2,10 +2,11 @@
 
 import asyncio
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Point3, getModelPath, loadPrcFileData
 
 from battlescribe import get_catalogue, spell_key
 from choiceFunctions import Choice
@@ -87,3 +88,25 @@ def test_plain_choice_does_not_reserve_an_empty_description_panel(dialog):
     choice = dialog(['Yes', 'No'])
     assert choice.detail is None
     assert -choice.panel['frameSize'][2] < 0.3
+
+
+def test_high_magic_generation_buttons_fit_and_render(display, dialog, tmp_path):
+    choice = dialog(['Keep spells', 'Drain Magic', "Vaul's Unmaking",
+                     'Courage of Aenarion', 'Hand of Khaine'],
+                    prompt='Mage: signature spell?',
+                    detail='Generated: Walk Between Worlds, Fiery Convocation, Shield of Saphery')
+    for button in choice.buttons:
+        text = button.component('text0')
+        node = text.textNode
+        left, right, lower, upper = button['frameSize']
+        bottom = node.getTransform().xformPoint(Point3(node.getLeft(), 0, node.getBottom()))
+        top = node.getTransform().xformPoint(Point3(node.getRight(), 0, node.getTop()))
+        assert bottom.x >= left and top.x <= right, button['text']
+        assert bottom.z >= lower and top.z <= upper, button['text']
+    display.graphicsEngine.renderFrame()
+    display.graphicsEngine.renderFrame()
+    assert display.screenshot(str(tmp_path / 'spell-generation.png'), defaultFilename=False)
+    with patch.object(display.taskMgr, 'add') as schedule:
+        choice.buttons[2]['command'](*choice.buttons[2]['extraArgs'])
+    asyncio.run(schedule.call_args.args[0])
+    assert choice.choice == "Vaul's Unmaking" and choice.choiceMade

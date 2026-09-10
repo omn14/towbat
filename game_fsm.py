@@ -74,12 +74,18 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if getattr(self.game, 'spellGenerationBusy', False) is True:
+            return
         if any(getattr(unit, 'marchTestResult', None) == 'pending' for unit in self.game.units):
             return
         if getattr(self.game, 'skirmishEditor', None) is not None:
             battle_log('Confirm or cancel the formation move first.', 'info')
             return
         if self.state == 'DeployPhase':
+            from spell_generation import begin_spell_generation, pending_wizards
+            if pending_wizards(self.game):
+                begin_spell_generation(self.game)
+                return
             if getattr(self.game, 'awaitingChoice', False):
                 return
             from vanguard import begin_vanguard, in_vanguard, skip_vanguard
@@ -165,6 +171,8 @@ class GamePhaseFSM(FSM):
         )
         stage_undeployed(self.game)
         refresh_deployment(self.game)
+        from spell_generation import begin_spell_generation
+        begin_spell_generation(self.game)
 
     def exitDeployPhase(self):
         taskMgr.remove('taskLoopDeploy')

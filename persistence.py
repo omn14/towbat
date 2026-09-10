@@ -375,6 +375,9 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    if getattr(game, 'spellGenerationBusy', False) is True:
+        print('[persistence] Finish the spell-generation choice before loading a battle.')
+        return
     path = save_path(filename)
     # A save left behind in the old location still loads.
     if not os.path.exists(path) and os.path.exists(filename):
@@ -400,7 +403,11 @@ def load_game_state(game, filename):
 
     # Restore FSM state
     game.fsm.currentPhaseIndex = game_state['current_phase_index']
-    game.fsm.request(game_state['current_phase'])
+    game.restoringBattle = True
+    try:
+        game.fsm.request(game_state['current_phase'])
+    finally:
+        game.restoringBattle = False
 
     # Restore round counter
     game.roundCounter.currentRoundPlayer = game_state['current_round']
@@ -700,6 +707,10 @@ def load_game_state(game, filename):
     messenger.send('hud-log', [f"Loaded: {filename}", 'info'])
 
     # Print analysis for both players
+    if game_state['current_phase'] == 'DeployPhase':
+        from spell_generation import begin_spell_generation
+        begin_spell_generation(game)
+
     for player_num in (1, 2):
         evaluation = game.analyzer.evaluate_overall_state(player_num=player_num)
         print(f"Player {player_num} Assessment: {evaluation['assessment']}")

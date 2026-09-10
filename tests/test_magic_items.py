@@ -40,12 +40,12 @@ def test_registry_ids_aliases_and_categories_are_explicit(registry):
         registry.register(registry.definitions['test_relic'])
 
 
-def test_real_items_are_recognized_but_effects_remain_point_four():
+def test_real_items_have_explicit_support_status():
     for name, category in [('Silvery Wand', 'Arcane Items'), ('Helm Of Courage', 'Magic Armour'),
                            ('The Banner Of The Bold', 'Magic Standards')]:
         definition = REGISTRY.resolve({'name': name, 'category': category})
         assert definition is not None and definition.reference
-        assert not definition.supported and not definition.effects
+        assert definition.supported
 
 
 def test_copies_and_bearers_have_distinct_stable_instances(registry):

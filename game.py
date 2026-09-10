@@ -643,7 +643,7 @@ class MyApp(ShowBase):
 
             # The roster resolves a Wizard's chosen Lore of Magic into spells.
             spells = army_unit_data.get('spells') or []
-            if spells:
+            if spells or army_unit_data.get('wizard_level'):
                 level = army_unit_data.get('wizard_level')
                 if level is None and any(not s.get('bound') for s in spells):
                     level = 1
@@ -1002,6 +1002,12 @@ class MyApp(ShowBase):
     # ─── Phase Task Loops ─────────────────────────────────────────────────
 
     async def taskLoopDeploy(self, task):
+        from spell_generation import begin_spell_generation, pending_wizards
+        if getattr(self, 'spellGenerationBusy', False) is True:
+            return task.done
+        if pending_wizards(self):
+            begin_spell_generation(self)
+            return task.done
         #base.messenger.toggleVerbose()
         from vanguard import begin_vanguard, in_vanguard, select_vanguard
         if in_vanguard(self):
@@ -1655,6 +1661,8 @@ class MyApp(ShowBase):
                         
 
     async def setActiveUnit(self,taskfunction,taskname):
+        if getattr(self, 'spellGenerationBusy', False) is True:
+            return
         if getattr(self, 'skirmishEditor', None) is not None:
             return
         if self.awaitingChoice:
@@ -1755,7 +1763,7 @@ class MyApp(ShowBase):
         from skirmish_ui import refresh_adjust_button
         refresh_adjust_button(self, unit)
         model = unit.unit.model
-        save = getattr(model, 'armor_save', 7)
+        save = model.effective_armour_save()
         ward = ward_save_value(model)
         messenger.send('hud-unit', [{
             'unit_id': unit.unitName,
@@ -2777,6 +2785,8 @@ class MyApp(ShowBase):
 
     def onRightClick(self, unit):
         """Right-click backs out of aiming, or commits a plotted move."""
+        if getattr(self, 'spellGenerationBusy', False) is True:
+            return
         if getattr(self, 'skirmishEditor', None) is not None:
             self.skirmishEditor.cancel()
             return

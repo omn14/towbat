@@ -121,7 +121,9 @@ def veteran_counts(unit, *, personal=False):
         count = max(0, participant.unit.nmodels)
         total += count
         check = getattr(participant.unit.model, 'is_veteran', lambda: False)
-        if check() and (participant is unit or
+        from magic_items import EffectKind, effects_for
+        granted = bool(effects_for(participant, EffectKind.RULE, value='Veteran'))
+        if (check() or granted) and (participant is unit or
                         not getattr(participant, 'retiredFromCombat', False)):
             veterans += count
     return veterans, total
@@ -140,6 +142,13 @@ def leadership_passed(roll: int, ld: int, modifier: int = 0) -> bool:
 def veteran_reroll_allowed(unit, kind, roll, ld, *, personal=False):
     """Report Veteran's gate only when a test resolves (p. 180, FAQ v1.5.3)."""
     veterans, total = veteran_counts(unit, personal=personal)
+    from magic_items import EffectKind, effects_for, report_inactive_effects
+    report_inactive_effects(unit, EffectKind.RULE, f'{kind}: 2D6={roll} vs Ld {ld}', value='Veteran')
+    for entry in effects_for(unit, EffectKind.RULE, value='Veteran'):
+        if kind == 'Break' or leadership_passed(roll, ld):
+            rule_skipped(entry.item.name, unit,
+                         f'{kind}: Veteran grants no re-roll for '
+                         + ('a Break test' if kind == 'Break' else f'a passed test (2D6={roll}, Ld {ld})'))
     host = getattr(unit, 'hostUnit', None)
     if not veterans:
         if personal and host is not None and veteran_available(host):
@@ -180,11 +189,21 @@ async def reroll_leadership(game, unit, kind, dice, ld, roll_dice, *,
         if selected != 'Re-roll':
             rule_skipped('Veteran', unit,
                          f'{kind}: player keeps failed 2D6={original} vs Ld {ld}')
+            from magic_items import EffectKind, effects_for
+            for entry in effects_for(unit, EffectKind.RULE, value='Veteran'):
+                rule_skipped(entry.item.name, unit,
+                             f'{kind}: player declines granted Veteran; keeps 2D6={original} vs Ld {ld}')
             return dice
     result = await roll_dice()
     passed = leadership_passed(sum(result), ld)
     if veteran:
         veterans, total = veteran_counts(unit, personal=personal)
+        from magic_items import EffectKind, effects_for
+        for entry in effects_for(unit, EffectKind.RULE, value='Veteran'):
+            rule_log(entry.item.name, unit,
+                     f'{kind}: grants Veteran to {veterans}/{total} models; '
+                     f'2D6={original} vs Ld {ld} failed -> re-roll {sum(result)} '
+                     f'({"PASS" if passed else "FAIL"}); no further re-roll')
         rule_log('Veteran', unit,
                  f'{kind}: {veterans}/{total} Veteran models; '
                  f'2D6={original} vs Ld {ld} failed -> re-roll {sum(result)} '

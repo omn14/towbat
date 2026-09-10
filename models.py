@@ -644,13 +644,18 @@ class model:
         """Armour save used in melee; a two-handed weapon disables the shield,
         and Parry improves the value for a hand weapon and shield.
         Based on the stored save so hard-coded units keep their value."""
-        save = self.armor_save
+        save = self.effective_armour_save()
         if self.has_shield() and self.melee_weapon_requires_two_hands():
             return min(7, save + 1)  # lose the shield's improvement
         if self.parry_applies():
             # Improves by 1 but no further than 3+, and a better save stands.
             return min(save, max(PARRY_BEST_SAVE, save - 1))
         return save
+
+    def effective_armour_save(self) -> int:
+        """Live item protection without changing equipment (Battle March p. 47)."""
+        from magic_items import item_armour_save
+        return item_armour_save(self, self.armor_save)
 
     def unit_strength(self) -> int:
         """Unit Strength per model. The troop type decides it where the rulebook

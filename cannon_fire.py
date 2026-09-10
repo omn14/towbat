@@ -195,11 +195,13 @@ class CannonFire:
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         target = wound_target(strength, toughness)
         wounded = saved = casualties = 0
+        from magic_items import item_armour_save
+        save = item_armour_save(model, model.armor_save, log=hits > 0)
         for _ in range(hits):
             if random.randint(1, 6) < target:
                 continue  # failed to wound
             wounded += 1
-            if check_armor_save(model, model.armor_save, ap):
+            if check_armor_save(model, save, ap):
                 saved += 1
             else:
                 casualties += 1

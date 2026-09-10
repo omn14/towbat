@@ -151,6 +151,12 @@ class Choice:
             scale=self.BTN_SCALE, pos=pos, relief=DGG.FLAT,
             frameColor=colour, frameSize=(-half, half, -0.75, 1.15),
             command=self._pick, extraArgs=[name])
+        node = btn.component('text0').textNode
+        text_scale = min(0.88, 1.65 / max(node.getHeight(), 0.01))
+        btn['text_scale'] = text_scale
+        btn['text_wordwrap'] = (2 * half - 0.35) / text_scale
+        node = btn.component('text0').textNode
+        btn['text_pos'] = (0, 0.2 - (node.getTop() + node.getBottom()) * text_scale / 2)
         btn.bind(DGG.ENTER, lambda *_: self._enter(name, btn, hover))
         btn.bind(DGG.EXIT, lambda *_: self._leave(name, btn, colour))
         return btn

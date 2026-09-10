@@ -152,7 +152,7 @@ def build_combat_report(unit1, unit2, charge, attacks):
 
     toughness = (m2.get_toughness() if hasattr(m2, 'get_toughness')
                  else _si(m2.characteristics, 'T', 4))
-    save = m2.armor_save
+    save = m2.effective_armour_save() if hasattr(m2, 'effective_armour_save') else m2.armor_save
     if not ranged and hasattr(m2, 'melee_armour_save'):
         save = m2.melee_armour_save()
     armour = list(getattr(m2, 'armour', []) or [])
@@ -439,6 +439,8 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     if hits <= 0:
         return 0, 0, 0
     m = unit.model
+    from magic_items import item_armour_save
+    item_armour_save(m, m.armor_save, log=True)
     # to_wound reads its first model only for a Strength, which is given here.
     target = to_wound(m, m, strength=strength)
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
@@ -550,6 +552,8 @@ def resolve_impact_hits(unit1, unit2):
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
 
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
+    from magic_items import item_armour_save
+    item_armour_save(unit2.model, unit2.model.armor_save, log=True)
     saves = sum(1 for _ in range(wounds)
                 if check_saves(unit2.model, unit2.model.melee_armour_save(), ap))
     _report_too_tough_to_wound(unit2, hits, strength, target)
@@ -736,6 +740,11 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     unit1.model.hatred_rerolls = hated
     global LAST_SLAYING_BLOWS
     LAST_SLAYING_BLOWS = 0
+    from magic_items import item_armour_save
+    item_armour_save(unit2.model, unit2.model.armor_save, log=attacks1 > 0)
+    defender_save = (unit2.model.effective_armour_save()
+                     if unit1.model.equipedWeapon.get('tag') == 'ranged'
+                     else unit2.model.melee_armour_save())
     # Reported once for the exchange, not once per save roll.
     if unit2.model.parry_applies():
         rule_log('Parry', unit2, f"hand weapon and shield: armour "
@@ -758,7 +767,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             total_wounds += 1
             suffered_wounds += 1
         if wound:
-            if check_saves(unit2.model, unit2.model.melee_armour_save(),
+            if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
                            slaying_blow=bool(struck)):
                 saves_made += 1

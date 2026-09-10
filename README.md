@@ -30,9 +30,9 @@ model remain there; Wicked Claws retain their Roc owner. Assigning shared
 chariot equipment to individual crew happens in the runtime ownership layer.
 
 An exported lore is no longer a ready-to-cast spellbook. The High Elf roster's
-Level 2 Mage retains ten options but no generated known spells. Silvery Wand
-is preserved as item data; its extra spell and generation/substitution UI are
-not implemented here. A selected upgrade whose name matches a Spell profile
+Level 2 Mage retains ten options but no generated known spells during import.
+At runtime, Silvery Wand adds one known spell and the pre-deployment generator
+offers the normal signature substitution. A selected upgrade whose name matches a Spell profile
 is treated as an explicit spell choice, but import does not certify that the
 number or combination of choices is legal. Unknown item spells remain metadata,
 not Wizard levels or castable spells. The existing Ruby Ring bound-Fireball
@@ -53,16 +53,24 @@ ability does not disable unrelated passive effects.
 `active_effects` is a read-only query boundary for explicit coded definitions.
 It follows living bearers, command losses and character joins/retirement without
 baking item grants into native rules or baseline profiles. `activate_ability`
-is the shared eligibility/commit gate for future player and AI choices;
+is the shared eligibility/commit gate for player and AI choices;
 `disable_item` suppresses registry contributions for the rest of the battle.
-Consumers still need to apply and log each supported outcome at its owning
-rule implementation. This is not a second combat or reroll engine.
+Consumers apply and log supported outcomes at their owning rule implementations.
+This is not a second combat or reroll engine.
 
-The three selected items are recognized with book references but their effects
-remain **unsupported**: Silvery Wand's spell bonus, Helm of Courage's armour and
-Break reroll, and the Banner of the Bold's Veteran grant are implementation
-point 4. Vaul's Unmaking targeting, general item-choice prompts, equipment
-stacking and adaptation of the existing Ruby Ring handler also remain pending.
+The three selected items now have coded effects:
+
+- Silvery Wand adds one known spell without changing Wizard level or cast limit.
+- Helm of Courage improves its bearer's armour by one and offers one Break
+	reroll per battle, also usable by a joined unit. Spending it leaves the armour
+	bonus intact; an available BSB reroll takes priority and preserves the item.
+- The Banner of the Bold grants Veteran to its unit and joined characters.
+	Losing or disabling the standard removes only that source, not native Veteran.
+
+Vaul's Unmaking targeting, other item effects, general equipment legality and
+adaptation of the existing Ruby Ring handler remain pending. The selected
+High Magic/Saphery spell effects are still **not implemented**; generation
+records known spells but does not make their catalogue wording executable.
 
 Battle saves contain explicit `magic_item_inventory` records. Recreating a
 bearer restores spent/disabled state; old saves without this field load an empty
@@ -70,10 +78,27 @@ inventory even if raw metadata mentions items. The unit card's detail arrows
 expose item names, bearers, support status and ability-use state, including items
 carried by a joined character.
 
+### Spell Generation
+
+[spell_generation.py](spell_generation.py) runs before deployment (Rulebook
+pp. 106, 319). Each player can order their Wizards; dice generate distinct
+numbered spells, rerolling duplicates. One optional substitution allows the
+normal signature or one Lore of Saphery alternative (Forces of Fantasy p. 186).
+The AI keeps its generated spells. Incomplete or ambiguous numbered pools remain
+pending with a diagnostic instead of silently generating an invalid spellbook.
+
+The Level 2 Mage with Silvery Wand knows three spells, not all ten options and
+not a third casting slot. Explicit known spells and Bound spells are preserved.
+Intermediate rolls and a pending substitution live in saved roster metadata;
+the final spellbook uses the existing save path. Reloading does not roll again.
+Finish an open generation choice before loading another battle; saving during
+the choice is supported. Imported replacement armies generate on their first
+deployment action. Long choice labels fit inside the existing fixed controls.
+
 Focused inventory checks use the memory-bounded runner:
 
 ```bash
-source .venv/bin/activate && python run_tests_isolated.py tests/test_magic_items.py tests/test_magic_item_scene.py tests/test_persistence.py
+source .venv/bin/activate && python run_tests_isolated.py tests/test_selected_items.py tests/test_spell_generation.py tests/test_magic_items.py tests/test_magic_item_scene.py tests/test_persistence.py tests/test_choice_layout.py
 ```
 
 Focused import checks use constructed fixtures, not the local army exports:
