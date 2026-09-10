@@ -145,6 +145,51 @@ verification caveats are in [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_faction_rules.py tests/test_faction_rules_scene.py
 ```
 
+### First Charge
+
+Silver Helms, Dragon Princes and Chaos Knights now track their first charge
+attempt. A failed first attempt spends the benefit; successful contact disrupts
+the target's rank bonus until that turn's Combat phase ends. Disruption is
+separate from terrain and flank effects. Pursuit/overrun contacts that count as
+charging apply it in the turn when that combat is fought, including next-turn
+combat. Rule logs report application, nonapplication and expiry.
+
+New saves retain attempts and active/deferred disruption. Old saves without
+charge history conservatively treat First Charge as spent: start a new battle
+to use it with accurate history. Pending state is saved, but suspended charge
+animations are not resumed by this feature.
+
+This is the First Charge core of the movement work, not completion of the
+matchup. Impetuous, Drilled and formation follow-ups remain open; detailed boundaries are in
+[SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_first_charge.py tests/test_first_charge_scene.py tests/test_shieldwall_scene.py
+```
+
+### Counter Charge
+
+Chaos Knights and Dragon Princes can now Counter Charge eligible frontal charges
+in the formed, single-charge flow. The defender's reaction menu includes the
+option; AI defenders select it automatically when eligible. Distance is measured
+from the charger's original position, not its tentative contact position.
+Too-close, wrong-arc/type, fleeing, engaged and already-used cases are logged.
+
+The defender pivots and advances D3+1", with no Swiftstride bonus to that roll.
+The charger then rolls and moves against the defender's new position. Contact
+gives both units charging benefits, including eligible First Charge effects.
+Once-per-turn use survives save/reload. Charging into an enemy no longer produces
+the erroneous marching log or sets the marching flag.
+
+This remains partial: charges still resolve one at a time, so choosing a target
+after all declarations is not implemented. Drilled, Marching Column and
+loose-formation interactions remain unfinished; see the checklist's explicit
+limitations. Loading a save does not resume an in-flight reaction animation.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_counter_charge.py tests/test_counter_charge_scene.py
+```
+
 Focused inventory checks use the memory-bounded runner:
 
 ```bash

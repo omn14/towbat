@@ -965,12 +965,11 @@ class MovementSystem:
                     modifyer=rule['move']
                     #M = str(int(int(M) * modifyer))
 
-            for rule in self.game.unitToMove.unit.model.special_rules:
-                if rule.get('mountUnit'):
-                    for ruleM in rule['mountUnit'].model.special_rules:
-                        if ruleM.get('move'):
-                            #ruleM['move'](rule['mountUnit'].model)
-                            modifyerM=ruleM['move']
+            mount = self.game.unitToMove.unit.model.get_mount()
+            if mount is not None:
+                for ruleM in mount.special_rules:
+                    if ruleM.get('move'):
+                        modifyerM=ruleM['move']
 
             # Mounted units always move using their mount's Movement.
             # Flyers use their Fly Movement characteristic instead.
@@ -1358,7 +1357,7 @@ class MovementSystem:
                 return False
             unit.bodyNP.setPos(destination)
             unit.bodyNP.setHpr(heading)
-        if getattr(unit, 'wouldMarch', False):
+        if getattr(unit, 'wouldMarch', False) and (not c or same_player(self.game, unit, defenderUnit)):
             unit.marchedThisTurn = True
             rule_log('Marching', unit,
                      f"moved {self.game.moveArceDistance:.1f}\", beyond its "
@@ -1421,6 +1420,8 @@ class MovementSystem:
         result = self.game.world.contactTestPair(fleeUnit.bodyNP.node(), pursuerUnit.bodyNP.node())
         for contact in result.getContacts():
             print("Contact detected between fleeing unit and pursuer!")
+            from first_charge import finish_charge_attempt
+            finish_charge_attempt(pursuerUnit, fleeUnit)
             from command_groups import capture_standard
             capture_standard(self.game, fleeUnit, pursuerUnit)
             self.game.world.removeRigidBody(fleeUnit.bodyNP.node())

@@ -536,13 +536,17 @@ def combat_flank_bonus(unit, *, log=False) -> int:
 
 
 def combat_rank_bonus(unit, *, log=False) -> int:
-    """Rank points after live flank disruption (pp. 101, 185); terrain stays separate."""
+    """Rank points after disruption (pp. 101, 169, 185); keep sources separate."""
     bonus = rank_bonus(unit.unit, skirmish=False)
+    first_charge = getattr(unit, 'firstChargeDisruptedBy', [])
     if is_skirmish_unit(unit):
         if log and bonus:
             rule_log('Skirmishers', unit,
                      f'formed fighting ranks would give +{bonus} rank bonus -> +0; '
                      'engaged as Skirmishers (p. 185)')
+        if log and first_charge:
+            rule_skipped('First Charge', unit,
+                         'Disrupted, but Skirmishers already claim +0 rank bonus (pp. 169, 185)')
         return 0
     disrupted = bool(getattr(unit, 'isDisrupted', False))
     for enemy, face in zip(getattr(unit, 'isInCombatWith', []), getattr(unit, 'isInCombatFlank', [])):
@@ -564,7 +568,15 @@ def combat_rank_bonus(unit, *, log=False) -> int:
             if log and bonus:
                 rule_log('Disruption', unit,
                          f'US{strength} enemy in {face} -> rank bonus +{bonus} becomes +0 (p. 101)')
-    return 0 if disrupted else bonus
+    if log and first_charge:
+        if bonus and not disrupted:
+            rule_log('First Charge', unit,
+                     f'charged by {", ".join(first_charge)}: rank bonus +{bonus} -> +0 (p. 169)')
+        else:
+            reason = 'terrain/flank disruption' if disrupted else 'insufficient ranks'
+            rule_skipped('First Charge', unit,
+                         f'Disrupted, but {reason} already leaves +0 rank bonus (p. 169)')
+    return 0 if disrupted or first_charge else bonus
 
 
 def rank_bonus(unit, disrupted: bool = False, *, skirmish=None) -> int:

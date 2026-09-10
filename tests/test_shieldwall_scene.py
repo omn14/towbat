@@ -251,10 +251,13 @@ def test_charge_contact_records_target_only_when_reached(scene, handler, distanc
     assert not defender.countsAsChargeTargetNextTurn
 
 
-def test_caught_fallback_defers_charge_target_to_next_turn(scene):
+@pytest.mark.parametrize('handler', ['chargeInterval', '_skirmishChargeInterval'])
+def test_caught_fallback_defers_charge_target_to_next_turn(scene, handler):
     app, baseline = scene
     load_game_state(app, baseline)
     defender, pursuer = app.player1Units[0], app.player2Units[0]
+    apply_rule_keywords(pursuer.unit.model, ['First Charge'])
+    pursuer.chargeAttempts = 0
     defender.request('Moved')
     pursuer.request('IsPursuing')
     defender.wasChargedThisTurn = False
@@ -264,25 +267,39 @@ def test_caught_fallback_defers_charge_target_to_next_turn(scene):
     app.autoRoll = True
     app.attackSequence2 = Sequence()
     with combat_tasks(app) as run:
-        run(app.combat.chargeInterval(pursuer, defender.bodyNP, 0, contact + Vec3(0, 4, 0),
-                                     Vec3(180, 0, 0), 'front', chdice=[2, 2]))
+        if handler == 'chargeInterval':
+            run(app.combat.chargeInterval(pursuer, defender.bodyNP, 0, contact + Vec3(0, 4, 0),
+                                         Vec3(180, 0, 0), 'front', chdice=[2, 2]))
+        else:
+            run(app.combat._skirmishChargeInterval(pursuer, defender.bodyNP, contact + Vec3(0, 4, 0),
+                                                  Vec3(180, 0, 0), 'front', chdice=[2, 2]))
     assert defender.countsAsChargeTargetNextTurn
     assert pursuer.countsAsChargedNextTurn
+    assert pursuer.chargeAttempts == 1 and not pursuer.chargeAttemptPending
+    assert not defender.firstChargeDisruptedBy
+    assert defender.firstChargeDisruptedNextTurnBy == [pursuer.unit.name]
 
 
-def test_overrun_records_charge_target_and_deferred_combat(scene):
+@pytest.mark.parametrize('joins', [False, True])
+def test_overrun_records_charge_target_and_deferred_combat(scene, joins):
     app, baseline = scene
     load_game_state(app, baseline)
     defender, overrunning = app.player1Units[0], app.player2Units[0]
+    apply_rule_keywords(overrunning.unit.model, ['First Charge'])
+    overrunning.chargeAttempts = 0
     defender.request('Idle')
     overrunning.request('Moved')
     defender.wasChargedThisTurn = False
     defender.startOfPhaseEngaged = False
-    with combat_tasks(app) as run:
+    with combat_tasks(app) as run, \
+            patch.object(app.combat, 'joinsCombatThisPhase', return_value=(joins, 'test combat timing')):
         run(app.combat.overrunContact(overrunning, 4))
     assert defender.wasChargedThisTurn
-    assert defender.countsAsChargeTargetNextTurn
-    assert overrunning.countsAsChargedNextTurn
+    assert defender.countsAsChargeTargetNextTurn is not joins
+    assert overrunning.countsAsChargedNextTurn is not joins
+    assert overrunning.chargeAttempts == 1
+    assert bool(defender.firstChargeDisruptedBy) is joins
+    assert bool(defender.firstChargeDisruptedNextTurnBy) is not joins
 
 
 if __name__ == '__main__':

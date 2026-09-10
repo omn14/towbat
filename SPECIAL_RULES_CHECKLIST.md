@@ -163,19 +163,68 @@ itself add gameplay effects.
 
 ### Shared Battle Dependencies
 
-- [ ] **First Charge** - Silver Helms, Dragon Princes, Chaos Knights (p. 169).
-      Track first-charge eligibility, actual contact, expiry and save/load;
-      apply the resulting Disruption without losing it to terrain refreshes.
-      Cover failed first charges as well as successful ones. It is not a
-      permanent rank-bonus penalty or an effect on every charge.
-- [ ] **Counter Charge** - Dragon Princes and Chaos Knights (p. 167).
-      Implement front-arc/troop-type/distance eligibility, choice after charge
-      declarations, pivot and D3+1" movement, once-per-turn tracking, and both
-      units counting as charging. The FAQ says D3+1 is NOT a Charge roll:
-      do not add Swiftstride to it. Test Drilled and multiple charging enemies.
+- [x] **First Charge: core** - Silver Helms, Dragon Princes, Chaos Knights
+      (pp. 101, 169; pursuit p. 157 and Official FAQ v1.5.3). An accepted first
+      charge attempt spends eligibility even if it fails; actual contact grants
+      Disruption through that turn's Combat phase. Cancelled/refused declarations
+      do not spend it. Pending attempt tracking is idempotent across repeated
+      entry, and handles charges against fleeing targets and supported contact
+      geometries. Rank scoring consumes a separate source, so terrain refreshes
+      cannot erase it and expiry cannot clear terrain/flank disruption.
+      **Corrected:** pursuit/overrun contact that counts as charging also counts
+      towards First Charge. Unfought-combat contact applies now; deferred combat
+      queues the source for next turn instead of expiring it in the current one.
+      Combat spell detours do not expire sources. Attempts, pending state, active
+      and deferred sources survive save/reload. Outcome logs explain application,
+      failure/spent eligibility, expiry, and rank points already suppressed by
+      another source. Quiet queries do not log.
+      **Legacy saves:** absent charge history is treated as spent, with a log;
+      start a new battle for accurate first-attempt eligibility.
+      Counter Charge's supported formed-unit reaction below also resolves
+      each participant's First Charge attempt on actual contact.
+      **LEFTOVER:** Phalanx immunity/formation is not implemented (neither roster uses it).
+      Independent joined-character charge history, other disrupted-state
+      consumers outside combat rank scoring, and a complete redirected-charge
+      UI remain unaudited. Saving pending state does not restore suspended
+      charge/reaction animation tasks. This is not a general effect scheduler.
+- [ ] **Counter Charge: PARTIAL, formed single-charge flow** - Dragon Princes
+      and Chaos Knights (p. 167; Official FAQ v1.5.3). Eligible defenders now
+      get a Counter Charge choice; AI defenders take it when available, falling
+      back to Stand & Shoot/Hold otherwise. Checks use declaration-time arc and
+      base distance, charging troop type, active ground/Fly Movement, own rider
+      rule and eligible joined character, fleeing/engaged state, and saved
+      once-per-game-turn usage. Declining spends nothing; later charges against
+      a unit that used it force Hold. Refusals include deciding conditions.
+      The reaction pivots about the centre and advances D3+1" with collision
+      checks. The D6-to-D3 conversion has no Swiftstride choice or charge reroll.
+      The incoming charge is rerouted to the moved defender using existing
+      route geometry, with its own charge roll and Swiftstride choice. Both
+      units receive charge flags/distances and First Charge on contact; failed
+      contact spends pending first attempts. Charge-move flags cover both
+      participants during casualty checks and clear afterwards.
+      **Corrected:** the enemy-contact movement preview no longer marks/logs
+      the charger as marching before its charge declaration. Callback route
+      animation uses the existing awaitable Parallel interval pattern.
+      **LEFTOVER:** the engine still declares/resolves one charge at a time;
+      it does NOT yet defer selection until ALL charges are declared, so choosing
+      between multiple chargers and their changed arcs needs a declaration queue.
+      Drilled redress, Marching Column restrictions and loose-formation Counter
+      Charge remain unfinished (loose pairs are refused with a log). Complex
+      obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
+      need broader verification; unsupported routes fail explicitly. Suspended
+      reaction/animation tasks are not resumed from saves. Do not mark the full
+      rule or formation dependencies complete from the single-charge tests.
 - [x] **Cavalry split profiles and Cavalry Support** - separate rider/mount
       WS/S/I/A, weapons, Initiative snapshots and casualty accounting; no
       supporting mounts. Remaining contact-allocation limits are noted above.
+      **Corrected (movement preview):** selecting Silver Helms crashed because
+      the mount-modifier loop assumed `mountUnit.model`, but imported mounts
+      are already model profiles. It now uses the existing `get_mount()`
+      accessor for direct and legacy wrapped mounts. Seven offscreen preview
+      checks cover Silver Helms, Dragon Princes and Chaos Knights in both
+      representations, plus an unmounted Mage; range, finite preview points,
+      unchanged position/facing and mount identity are verified. No movement
+      rule effects or formation support were added by this crash fix.
 - [x] **Command groups** - champion A2 on one of the four Chaos Knights,
       standard bearers' combat-result bonus on Knights and Warriors, and
       musicians on Knights, Warriors and Horsemen. Tie-breaking, Rally/march
@@ -565,8 +614,10 @@ first playable milestone must explicitly restrict the selected known spells.
 5. Frequent faction effects: completed core Ward grants, profile-local Elven
       Reflexes, hand-weapon effects and contextual rerolls. Remaining Fear/Terror,
       magical-defence and Wizard-armour dependencies are explicit above.
-6. Charges/movement: First Charge, Impetuous/Drilled, Counter Charge and
-      relevant formation dependencies.
+6. Charges/movement: in progress. First Charge core, counted-pursuit timing and
+      save/load are implemented, as is Counter Charge's formed single-charge
+      flow. Impetuous/Drilled, Counter Charge's multi-declaration timing and
+      formation dependencies remain open.
 7. Magic and remaining dependencies: selected lore effects, Lileath choices,
       effect lifetimes and Gaze of the Gods including Stupidity.
 8. Complete matchup verification using both exact roster imports offscreen.
@@ -603,6 +654,23 @@ aggregate template Ward log are covered. All runs use sequential memory-bounded
 services; no monolithic or full-matchup run. The adjacent item scene passed
 10/11 checks but reproduced the previously recorded horizontal HUD
 `!mat.is_nan()` assertion; this unrelated intermittent failure remains unfixed.
+
+**Point 6 verification so far:** 14 focused First Charge checks and five
+actual-roster offscreen state checks pass, covering failures, repeated entry,
+rank disruption, spent/pending/active/deferred save state, legacy saves and
+Combat-phase expiry. The 48 formed-versus-Skirmisher route checks include
+First Charge success/failure assertions; the real-task scheduler regression
+still passes. Thirteen Shieldwall scene checks cover live formed/Skirmisher
+pursuit and immediate/deferred overrun contacts. Psychology, post-combat,
+bound-spell and persistence regressions pass under sequential memory caps.
+Counter Charge adds 12 rule checks and 11 actual-roster scene checks: human/AI
+reaction selection, retained shooting fallback, declaration-distance refusal,
+Fly distance boundary, D3+1 and charger-only Swiftstride, straight/angled contact,
+failed contact, mutual First Charge, saved turn usage/next-turn availability,
+charge-move state and the false marching log. Both angled scenes render offscreen
+and were inspected. Stand & Shoot, marching, formed-to-Skirmisher, First Charge,
+persistence, mount-preview and task-scheduling regressions pass after this change.
+These checks do not complete point 6 or the full two-army acceptance gate.
 
 Rule wording verified for point 5:
 [Dragon Armour](https://tow.whfb.app/special-rules/dragon-armour), FoF p. 184;

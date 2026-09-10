@@ -78,7 +78,9 @@ def test_one_wheel_route_keeps_formed_shape_and_reaches_base(heading, offset):
 def test_real_route_resolution_uses_preview_wheel_and_roll(scene, dice, succeeds, offset):
     from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel
     from psychology import obb_distance
+    from special_rules import apply_rule_keywords
     app, attacker, defender = approach_scene(scene)
+    apply_rule_keywords(attacker.unit.model, ['First Charge'])
     defender.bodyNP.setX(offset)
     origin, facing = attacker.bodyNP.getPos(), attacker.bodyNP.getHpr()
     before = model_base_boxes(defender)
@@ -106,6 +108,8 @@ def test_real_route_resolution_uses_preview_wheel_and_roll(scene, dice, succeeds
     position, heading = preview.route.pose(travel)
     assert tuple(attacker.bodyNP.getPos()) == pytest.approx(position, abs=1e-5)
     assert (attacker.bodyNP.getH() - heading + 180) % 360 - 180 == pytest.approx(0, abs=1e-5)
+    assert attacker.chargeAttempts == 1 and not attacker.chargeAttemptPending
+    assert bool(getattr(defender, 'firstChargeDisruptedBy', [])) == succeeds
     if succeeds:
         assert attacker.state == defender.state == 'InCombat'
         assert attacker.isInCombatFlank == defender.isInCombatFlank == ['front']

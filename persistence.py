@@ -237,6 +237,12 @@ def save_game_state(game, filename=None):
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'usedRallyingCry': getattr(unit, 'usedRallyingCry', False),
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
+            'counterChargeTurn': getattr(unit, 'counterChargeTurn', None),
+            'chargeAttempts': getattr(unit, 'chargeAttempts', 0),
+            'chargeAttemptPending': getattr(unit, 'chargeAttemptPending', False),
+            'firstChargePending': getattr(unit, 'firstChargePending', False),
+            'firstChargeDisruptedBy': list(getattr(unit, 'firstChargeDisruptedBy', [])),
+            'firstChargeDisruptedNextTurnBy': list(getattr(unit, 'firstChargeDisruptedNextTurnBy', [])),
             'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
@@ -537,6 +543,17 @@ def load_game_state(game, filename):
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.usedRallyingCry = unit_data.get('usedRallyingCry', False)
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
+        unit.counterChargeTurn = unit_data.get('counterChargeTurn')
+        unit.chargeAttempts = unit_data.get('chargeAttempts', 1)
+        unit.chargeAttemptPending = unit_data.get('chargeAttemptPending', False)
+        unit.firstChargePending = unit_data.get('firstChargePending', False)
+        unit.firstChargeDisruptedBy = list(unit_data.get('firstChargeDisruptedBy', []))
+        unit.firstChargeDisruptedNextTurnBy = list(unit_data.get('firstChargeDisruptedNextTurnBy', []))
+        if 'chargeAttempts' not in unit_data:
+            from first_charge import has_first_charge
+            from rules_log import rule_skipped
+            if has_first_charge(unit):
+                rule_skipped('First Charge', unit, 'legacy save has no charge history; benefit treated as spent')
         unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)

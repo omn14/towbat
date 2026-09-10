@@ -33,6 +33,7 @@ from panda3d.core import LRotationf
 from direct.interval.LerpInterval import LerpPosHprInterval, LerpPosInterval
 from direct.interval.IntervalGlobal import Sequence, Parallel, Wait
 from direct.interval.FunctionInterval import Func
+from direct.interval.LerpInterval import LerpFunc
 from direct.task.Task import Task
 
 from dice import Dice, checkDice
@@ -117,6 +118,176 @@ class CombatResolver:
             self.game.player2Units.remove(unit)
 
     # ─── Charge & Charge Reaction ─────────────────────────────────────────
+
+    def counterChargeOption(self, defender, charger, fromPos, fromHpr):
+        """Measure the declared charge, not its tentative contact (p. 167)."""
+        from counter_charge import has_counter_charge, unavailable_reason
+        from magic_items import current_turn
+        from skirmish_charge import formed_contact
+        if not has_counter_charge(defender):
+            return None
+        target = self.game.psychology._unit_box(defender)
+        source = self.game.psychology._unit_box(charger)
+        source = (fromPos.x, fromPos.y, source[2], source[3], fromHpr.x)
+        flank = formed_contact([source], [target], fromPos)[-1]
+        distance = obb_distance(source, target)
+        profile = charger.unit.model
+        movement = profile.get_fly_movement(4) if profile.is_flying() else profile.get_movement(4)
+        reason = unavailable_reason(
+            defender, charger, distance=distance, movement=movement, flank=flank,
+            turn=current_turn(self.game),
+            declared=not self.game.autoHold and charger.state != 'IsPursuing')
+        if reason is None and (getattr(defender, 'isSkirmisher', False)
+                               or getattr(charger, 'isSkirmisher', False)):
+            reason = 'loose-formation Counter Charge geometry is not implemented (LEFTOVER)'
+        if reason:
+            rule_skipped('Counter Charge', defender, reason)
+            return None
+        return SimpleNamespace(distance=distance, movement=movement)
+
+    async def counterChargeInterval(self, charger, defender, origin, facing):
+        """Resolve a formed single-charge reaction (p. 167; D3+1 is not a Charge roll)."""
+        from counter_charge import counter_charge_distance
+        from first_charge import begin_charge_attempt, finish_charge_attempt
+        from formed_skirmish_charge import route_to_model
+        from magic_items import current_turn
+        from psychology import _box_corners
+        from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH
+
+        defender.counterChargeTurn = current_turn(self.game)
+        begin_charge_attempt(defender)
+        begin_charge_attempt(charger)
+        defender.isChargingMove = charger.isChargingMove = True
+        charger.bodyNP.setPos(origin)
+        charger.bodyNP.setHpr(facing)
+        charger.marchedThisTurn = charger.wouldMarch = False
+        dice_models = []
+        try:
+            dice_models, rolls = await self.rullTerninger(1)
+            distance = counter_charge_distance(rolls[0])
+            for die in dice_models:
+                die.remove(self.game.world)
+            dice_models = []
+            start = Vec3(defender.bodyNP.getPos())
+            direction = origin - start
+            direction.z = 0
+            direction.normalize()
+            heading = math.degrees(math.atan2(-direction.x, direction.y))
+            previous_heading = defender.bodyNP.getH()
+            turn = (heading - previous_heading + 180) % 360 - 180
+            target_box = self.game.psychology._unit_box(defender)
+            pivoted_box = (*target_box[:4], heading)
+            others = [member for member in self.game.units
+                      if member is not defender and not member.bodyNP.isEmpty()
+                      and getattr(member, 'hostUnit', None) is None]
+            blocked = any(obb_distance(pivoted_box, self.game.psychology._unit_box(member)) <= 0
+                          for member in others)
+            blocked = blocked or any(abs(corner[0]) > BOARD_HALF_WIDTH or abs(corner[1]) > BOARD_HALF_DEPTH
+                                     for corner in _box_corners(*pivoted_box))
+            fraction, _, _ = self.game.movement.sweepTestRot(
+                defender, Vec2(start.x, start.y), turn, mask=CM.TERRAIN_IMPASSABLE, pass_over=False)
+            moved = 0.0
+            if not blocked and fraction >= 1:
+                await LerpPosHprInterval(defender.bodyNP, duration=.3, pos=start,
+                                         hpr=Vec3(previous_heading + turn, 0, 0))
+                transform = TransformState.makePosHpr(start, defender.bodyNP.getHpr())
+                fraction, _ = self.game.movement.sweepTestDir(
+                    defender, transform, direction, distance, pass_over=False)
+                moved = max(0, distance * fraction - (CRASH_MARGIN if fraction < 1 else 0))
+                end = start + direction * moved
+                await LerpPosInterval(defender.bodyNP, duration=.4, pos=end)
+                self.game.movement.dangerousTerrainTests(defender, start, end)
+            else:
+                rule_skipped('Counter Charge', defender,
+                             'centre pivot is blocked; reaction spent with no advance')
+            defender.chargedThisTurn = True
+            defender.chargeDistance = moved
+            rule_log('Counter Charge', defender,
+                     f'D6 {rolls[0]} -> D3+1 = {distance}"; advanced {moved:.2f}" '
+                     f'towards {charger.unit.name}; both count as charging, no Swiftstride bonus (p. 167)')
+            if defender.bodyNP.isEmpty() or defender.unit.nmodels <= 0:
+                charger.request('Moved')
+                return
+
+            source = self.game.psychology._unit_box(charger)
+            target = self.game.psychology._unit_box(defender)
+            obstacles = [self.game.psychology._unit_box(member) for member in self.game.units
+                         if member not in (charger, defender) and not member.bodyNP.isEmpty()
+                         and getattr(member, 'hostUnit', None) is None]
+            route = route_to_model([source], [target], 0, origin, obstacles)
+            if route is None:
+                rule_skipped('Counter Charge', charger,
+                             'no supported charge route after the defender moved; charge fails (LEFTOVER)')
+                charger.request('Moved')
+                return
+            self.game.moveArceDistance = route.distance
+            self.game.playerNP.setPos(*route.destination)
+            bonus = await self.swiftstrideChargeChoice(charger)
+            dice_models, rolls = await self.rullTerninger(3 if bonus else 2, bonus)
+            allowance = self.chargeDistance(charger, origin, rolls)
+            travel = min(route.distance, allowance)
+            if allowance < route.distance:
+                travel = min(route.distance, charge_roll(rolls, self.chargeThroughDifficult(charger, origin)))
+            reached_distance = 0.0
+            for stop in (route.lead, route.lead + route.wheel_distance, route.distance):
+                stop = min(stop, travel)
+                if stop <= reached_distance:
+                    continue
+                position, end_heading = route.pose(stop)
+                start_position = Vec3(charger.bodyNP.getPos())
+                angle = end_heading - charger.bodyNP.getH()
+                if abs(angle) > 1e-6:
+                    fraction, _, _ = self.game.movement.sweepTestRot(
+                        charger, Vec2(*route.pivot), angle, pass_over=False)
+                else:
+                    advance = Vec3(*position) - start_position
+                    length = advance.length()
+                    advance.normalize()
+                    fraction, _ = self.game.movement.sweepTestDir(
+                        charger, TransformState.makePosHpr(start_position, charger.bodyNP.getHpr()),
+                        advance, length, pass_over=False)
+                endpoint = reached_distance + (stop - reached_distance) * fraction
+
+                def place(distance):
+                    pose, rotation = route.pose(distance)
+                    charger.bodyNP.setPos(*pose)
+                    charger.bodyNP.setH(rotation)
+
+                await Parallel(LerpFunc(place, fromData=reached_distance, toData=endpoint, duration=.4))
+                reached_distance = endpoint
+                if fraction < 1:
+                    break
+            self.game.movement.dangerousTerrainTests(charger, origin, charger.bodyNP.getPos())
+            if charger.bodyNP.isEmpty() or charger.unit.nmodels <= 0:
+                return
+            if reached_distance + CONTACT_GAP < route.distance:
+                rule_log('Failed Charge', charger,
+                         f'after Counter Charge, required {route.distance:.2f}", '
+                         f'rolled range {allowance:g}"; moved {reached_distance:.2f}" without contact')
+                charger.request('Moved')
+                return
+            angle = (defender.bodyNP.getH() + 180 - charger.bodyNP.getH() + 180) % 360 - 180
+            await self.alignToEnemy(charger, angle, pivot=self.contactPointOn(charger, defender.bodyNP))
+            for member, enemy in ((charger, defender), (defender, charger)):
+                member.request('InCombat')
+                member.isInCombat = True
+                member.chargedThisTurn = member.wasChargedThisTurn = True
+                member.isInCombatWith = [enemy]
+                member.isInCombatFlank = ['front']
+                member.isChargingMove = False
+                finish_charge_attempt(member, enemy)
+                member.updateTextNode()
+            charger.chargeDistance = reached_distance
+            rule_log('Counter Charge', defender,
+                     f'contact with {charger.unit.name}: charge distances '
+                     f'{moved:.2f}" / {reached_distance:.2f}"; both receive charging benefits')
+        finally:
+            for die in dice_models:
+                die.remove(self.game.world)
+            finish_charge_attempt(charger)
+            finish_charge_attempt(defender)
+            defender.isChargingMove = charger.isChargingMove = False
+            self.game.autoCharge = self.game.autoHold = False
 
     def standAndShootOption(self, defender, charger, fromPos=None, fromHpr=None):
         """Whether *defender* may Stand & Shoot at *charger* (p. 120).
@@ -288,6 +459,9 @@ class CombatResolver:
                        + (f'\n{visibility.detail(defender.unitName)}' if visibility is not None else '')))
 
         if cynchoice == "Yes":
+            if unit.state != 'IsPursuing':
+                from first_charge import begin_charge_attempt
+                begin_charge_attempt(unit)
             if formed_preview is not None:
                 route = formed_preview.route
                 rule_log('Skirmishers', unit,
@@ -300,6 +474,9 @@ class CombatResolver:
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
+            counterOption = self.counterChargeOption(defender, unit, oposUnit, orotUnit)
+            if counterOption:
+                chargeReaction.insert(0, 'counter charge')
             shootOption = self.standAndShootOption(defender, unit, oposUnit, orotUnit)
             fireFlee = self.fireAndFleeOption(defender, unit, shootOption)
             if fireFlee:
@@ -307,11 +484,14 @@ class CombatResolver:
             if shootOption:
                 chargeReaction.insert(0, "stand & shoot")
             fireAndFlee = False
-            if self.game.autoHold:
+            from magic_items import current_turn
+            counterTurn = getattr(defender, 'counterChargeTurn', None)
+            counterSpent = counterTurn is not None and counterTurn == current_turn(self.game)
+            if self.game.autoHold or counterSpent:
                 # A pursuit was never declared as a charge, so the unit it
                 # reaches gets no reaction to it (p. 157).
                 crchoice = "hold"
-                if shootOption:
+                if shootOption and self.game.autoHold:
                     rule_skipped('Stand & Shoot', defender,
                                  f"reached by {unit.unit.name}'s pursuit rather "
                                  f"than a declared charge — no reaction")
@@ -321,7 +501,10 @@ class CombatResolver:
                 # the charger tests for Panic in neither case. Fire & Flee is
                 # a real trade — the volley for the fight — and the AI has no
                 # policy to weigh it, so it shoots and stands.
-                crchoice = "stand & shoot" if shootOption else "hold"
+                if counterOption:
+                    crchoice = 'counter charge'
+                else:
+                    crchoice = "stand & shoot" if shootOption else "hold"
                 if fireFlee:
                     rule_skipped('Fire & Flee', defender,
                                  "the AI stands its ground; it has no policy "
@@ -330,7 +513,20 @@ class CombatResolver:
                 crchoice = await taskMgr.add(self.game.makeChoiceNew(
                     chargeReaction, Vec3(20, 0, 10), owner=defender,
                     prompt=f"{defender.unit.name}: charged by {unit.unit.name} "
-                           f"— how does it react?"))
+                           f"— how does it react?",
+                    detail=(f'Counter Charge: {counterOption.distance:.2f}" away, '
+                            f'charger M{counterOption.movement:g}; pivot and move D3+1".'
+                            if counterOption else '')))
+            if crchoice == 'counter charge' and counterOption:
+                rule_log('Counter Charge', defender,
+                         f'accepts frontal charge from {unit.unit.name} at '
+                         f'{counterOption.distance:.2f}" (charger M{counterOption.movement:g})')
+                unit.hasMovedThisTurn = True
+                unit.marchedThisTurn = unit.wouldMarch = False
+                await self.counterChargeInterval(unit, defender, oposUnit, orotUnit)
+                return task.done
+            if counterOption:
+                rule_skipped('Counter Charge', defender, f'chose {crchoice}; reaction remains unused')
             if crchoice == "fire & flee":
                 await self.standAndShoot(defender, unit, shootOption.weapon,
                                          shootOption.distance, target_boxes=getattr(shootOption, 'target_boxes', None))
@@ -347,6 +543,8 @@ class CombatResolver:
                 # Hold and await the charging unit" (p. 120).
                 crchoice = "hold"
             if formed_preview is not None and (unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty()):
+                from first_charge import finish_charge_attempt
+                finish_charge_attempt(unit)
                 unit.formedSkirmishCharge = unit.formedSkirmishPreview = None
                 unit.isChargingMove = False
                 rule_skipped('Skirmishers', unit, 'charger destroyed by reaction; no charge roll or form-up (p. 120)')
@@ -401,6 +599,16 @@ class CombatResolver:
 
     async def fleeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit,
                            fireAndFlee=False):
+        """A fleeing target still consumes the declared charge attempt (p. 169)."""
+        from first_charge import begin_charge_attempt, finish_charge_attempt
+        begin_charge_attempt(unit)
+        try:
+            await self._resolveFleeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, fireAndFlee)
+        finally:
+            finish_charge_attempt(unit)
+
+    async def _resolveFleeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit,
+                                  fireAndFlee=False):
         fleeingUnit = self.game.getSelectedUnit(defenderNP.node())
         fleePos = defenderNP.getPos()
         chargeBonus = await self.swiftstrideChargeChoice(unit)
@@ -708,6 +916,16 @@ class CombatResolver:
     # ─── Charge Interval ──────────────────────────────────────────────────
 
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
+        """Track one attempt across all charge geometries (First Charge, p. 169)."""
+        from first_charge import begin_charge_attempt, finish_charge_attempt
+        if unit.state != 'IsPursuing':
+            begin_charge_attempt(unit)
+        try:
+            await self._resolveChargeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice)
+        finally:
+            finish_charge_attempt(unit)
+
+    async def _resolveChargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
         planned = getattr(unit, 'formedSkirmishCharge', None)
         if planned is not None and planned.target.bodyNP == defenderNP:
             await self._formedSkirmishChargeInterval(unit, planned, oposUnit, orotUnit, chdice)
@@ -908,6 +1126,8 @@ class CombatResolver:
                      else 'Catching the Curs!', unit,
                      f"caught the fleeing {defenderUnit.unit.name} and hacked "
                      f"it to pieces{escaped}")
+            from first_charge import finish_charge_attempt
+            finish_charge_attempt(unit, defenderUnit)
             from command_groups import capture_standard
             capture_standard(self.game, defenderUnit, unit)
             self.removeUnitFromPlay(defenderUnit)
@@ -923,6 +1143,8 @@ class CombatResolver:
         # Impact Hits need to know the charge covered 3" or more (p. 172).
         defenderUnit.wasChargedThisTurn = True
         unit.chargeDistance = float(self.game.moveArceDistance)
+        from first_charge import finish_charge_attempt
+        finish_charge_attempt(unit, defenderUnit)
         if wasPursuing:
             joins, whyNot = (self.joinsCombatThisPhase(defenderUnit) if strayed
                              else (False, ""))
@@ -957,6 +1179,8 @@ class CombatResolver:
                 rule_log('Catching the Curs!', unit,
                          f"caught {defenderUnit.unit.name}, which fell back: "
                          f"locked together, and counts as charging next turn")
+            from first_charge import count_as_charge
+            count_as_charge(unit, defenderUnit, next_turn=not joins)
         self.game.movement.dangerousTerrainTests(unit, oposUnit,
                                                  unit.bodyNP.getPos())
 
@@ -1049,6 +1273,8 @@ class CombatResolver:
         unit.chargedThisTurn = True
         unit.chargeDistance = route.distance
         defender.wasChargedThisTurn = True
+        from first_charge import finish_charge_attempt
+        finish_charge_attempt(unit, defender)
 
     async def _formChargedSkirmishers(self, attacker, defender):
         """Loose defenders align to the formed charger, not vice versa (p. 186)."""
@@ -1177,6 +1403,8 @@ class CombatResolver:
 
         if defenderUnit.state == "IsFleeing":
             print("Contact detected between fleeing unit and pursuer!")
+            from first_charge import finish_charge_attempt
+            finish_charge_attempt(unit, defenderUnit)
             self.game.world.removeRigidBody(defenderUnit.bodyNP.node())
             defenderUnit.model.removeNode()
             defenderUnit.bodyNP.removeNode()
@@ -1188,11 +1416,31 @@ class CombatResolver:
             unit.request("Moved")
             return
 
+        was_pursuing = unit.state == 'IsPursuing'
+        joins, why_not = (self.joinsCombatThisPhase(defenderUnit) if was_pursuing
+                          else (False, ''))
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True
         unit.chargeDistance = float(formation.distance if formation is not None else travel)
         defenderUnit.wasChargedThisTurn = True
+        from first_charge import count_as_charge, finish_charge_attempt
+        if was_pursuing:
+            if joins:
+                unit.hasAttackedThisTurn = False
+                unit.cannotPursueThisTurn = True
+                rule_log('Pursuit into a New Combat', unit,
+                         f'contacted {defenderUnit.unit.name}: fights this phase '
+                         'counting as charged; cannot pursue again (p. 157)')
+            else:
+                unit.countsAsChargedNextTurn = True
+                defenderUnit.countsAsChargeTargetNextTurn = True
+                rule_log('Catching the Curs!', unit,
+                         f'contacted {defenderUnit.unit.name}: counts as charged '
+                         f'next turn, because {why_not} (p. 157)')
+            count_as_charge(unit, defenderUnit, next_turn=not joins)
+        else:
+            finish_charge_attempt(unit, defenderUnit)
         self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
         if defenderUnit.state != "InCombat":
             defenderUnit.request("InCombat")
@@ -2402,6 +2650,8 @@ class CombatResolver:
                      f"overran into {blocker.unit.name}'s {flank}, wheeling to "
                      f"align: locked together and fought next turn, counting "
                      f"as charged, because {whyNot}")
+        from first_charge import count_as_charge
+        count_as_charge(winner, blocker, next_turn=not joins)
 
     # ─── Post-Combat: pass 3, the losers move ─────────────────────────────
 

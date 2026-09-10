@@ -332,7 +332,9 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if getattr(self, '_spell_origin', None) == 'CombatPhase':
             return
+        from first_charge import expire_first_charge
         for unit in self.game.units:
+            expire_first_charge(unit)
             unit.spreadToSkirmish()
         self.game.roundCounter.next_turn()
         self.game.roundCounter.update_round_display()
