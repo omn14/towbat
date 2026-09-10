@@ -95,6 +95,37 @@ Finish an open generation choice before loading another battle; saving during
 the choice is supported. Imported replacement armies generate on their first
 deployment action. Long choice labels fit inside the existing fixed controls.
 
+Both generation choices include a spell reference. Select a spell in its list
+to read the imported type, casting value, range, phase and full effect text
+without choosing or replacing it. The list distinguishes generated spells,
+numbered spells not generated, already-known spells and signature alternatives.
+Hovering a signature or replacement answer also previews its profile; only
+clicking an answer commits the choice. Long effects scroll within the reader,
+and the selected signature remains visible when resuming a saved replacement.
+Missing roster text and unimplemented engine effects are labelled explicitly.
+
+Startup uses the converted lists in
+[strategy_armies/my_army_he.json](strategy_armies/my_army_he.json) and
+[strategy_armies/my_arm_chaosy.json](strategy_armies/my_arm_chaosy.json), not the
+original roster exports. These lists have been refreshed with the current
+importer. Older conversions can incorrectly contain ten known spells and no
+item records, so they need reimporting; updating engine code alone cannot recover
+the missing purchases. Old battle saves likewise retain their saved state.
+Select a unit and use the small up/down arrows beside the HUD's two detail lines
+to see item names, bearers and use status. A joined character's inventory also
+appears on its host unit's card; the Banner is on the Chaos Warriors' card.
+
+### Casting With Joined Wizards
+
+Select the host unit and press `C` in the spell's applicable phase. A sole
+eligible joined Wizard opens its spell menu directly; if both the host and its
+character can cast (including Bound spells), choose the caster first. The
+Strategy-phase selection path also finds joined casters after the Command window.
+Spells and attempts remain on their original bearer. Casting or cancelling
+returns selection to the host without detaching the character. Host fleeing,
+marching and combat restrictions still apply, and ranged aiming uses the
+joined model's world position and facing.
+
 Focused inventory checks use the memory-bounded runner:
 
 ```bash

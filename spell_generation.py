@@ -77,6 +77,40 @@ def start_generation(member):
     return state
 
 
+def generation_reference(member, state):
+    """Read-only profiles from the eligible lore and the saved generation result."""
+    numbered, signatures = spell_tables(member)
+    known_names = {entry['name'] for entry in state['known']}
+    generated_names = {entry['name'] for entry in state['generated']}
+    remaining = [entry for entry in numbered.values()
+                 if entry['name'] not in known_names | generated_names]
+    groups = [('Already known', state['known']), ('Generated', state['generated']),
+              ('Not generated', sorted(remaining, key=lambda entry: entry['number'])),
+              ('Signature option', [entry for entry in signatures
+                                    if entry['name'] not in known_names | generated_names])]
+    reference = []
+    for status, entries in groups:
+        for entry in entries:
+            selected = state.get('signature')
+            display_status = ('Selected signature' if selected and selected['name'] == entry['name']
+                              else status)
+            value = entry.get('casting_value')
+            casting = f'{value}+' if isinstance(value, (int, float)) else str(value or 'Not recorded')
+            reach = entry.get('range', 'Not recorded')
+            if isinstance(reach, (int, float)):
+                reach = f'{reach}"'
+            phase = str(entry.get('phase') or 'Not recorded').title()
+            details = [entry['name'], display_status,
+                       f'Type: {entry.get("type") or "Not recorded"}',
+                       f'Casting value: {casting}    Range: {reach}', f'Phase: {phase}',
+                       '', entry.get('effect') or 'Effect text not recorded in this roster.']
+            if spell_class(entry['name']) is None:
+                details += ['', 'Engine effect: not implemented']
+            reference.append({'name': entry['name'], 'status': display_status,
+                              'detail': '\n'.join(details)})
+    return reference
+
+
 async def generate_spells(game, member):
     """One optional signature swap, including Saphery alternatives (FoF p. 186)."""
     metadata = member.unit.roster_metadata
@@ -98,7 +132,8 @@ async def generate_spells(game, member):
         selected = options[0] if game.aiControls(member) else await game.makeChoiceNew(
             options, Vec3(0, 0, 10), owner=member,
             prompt=f'{member.unit.name}: signature spell?',
-            detail='Generated: ' + ', '.join(entry['name'] for entry in generated))
+            detail='Generated: ' + ', '.join(entry['name'] for entry in generated),
+            reference=generation_reference(member, state))
         if selected not in options:
             return False
         if selected != options[0]:
@@ -111,7 +146,8 @@ async def generate_spells(game, member):
         options = [entry['name'] for entry in generated]
         selected = options[0] if game.aiControls(member) else await game.makeChoiceNew(
             options, Vec3(0, 0, 10), owner=member,
-            prompt=f'{member.unit.name}: replace which spell?', detail=f'New spell: {state["signature"]["name"]}')
+            prompt=f'{member.unit.name}: replace which spell?', detail=f'New spell: {state["signature"]["name"]}',
+            reference=generation_reference(member, state))
         if selected not in options:
             return False
         generated[options.index(selected)] = deepcopy(state['signature'])

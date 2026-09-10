@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from magic_items import install_inventory
-from spell_generation import generate_spells, spell_tables, start_generation
+from spell_generation import generate_spells, generation_reference, spell_tables, start_generation
 from spell_system import restore_spellbook
 from tests.test_magic_items import live_member
 
@@ -49,6 +49,10 @@ def test_duplicate_rerolls_and_one_signature_swap(signature):
     assert mage.unit.roster_metadata['spell_generation']['complete']
     assert not mage.unit.roster_metadata['spell_generation_pending']
     game.makeChoiceNew.assert_awaited()
+    first, replacement = game.makeChoiceNew.call_args_list
+    assert len(first.kwargs['reference']) == len(replacement.kwargs['reference']) == 10
+    assert any(entry['name'] == signature and entry['status'] == 'Selected signature'
+               for entry in replacement.kwargs['reference'])
     with patch('spell_generation.random.randint', side_effect=AssertionError('must not reroll')):
         assert asyncio.run(generate_spells(game, mage))
 
@@ -109,6 +113,8 @@ def test_resume_signature_replacement_never_offers_second_swap_or_rerolls():
         assert asyncio.run(generate_spells(game, mage))
     game.makeChoiceNew.assert_awaited_once()
     assert game.makeChoiceNew.call_args.args[0] == ['Spell 2', 'Spell 4', 'Spell 6']
+    assert any(entry['name'] == 'Drain Magic' and entry['status'] == 'Selected signature'
+               for entry in game.makeChoiceNew.call_args.kwargs['reference'])
     assert set(mage.unit.model.spells) == {'Spell 2', 'Drain Magic', 'Spell 6'}
 
 
@@ -126,3 +132,39 @@ def test_each_player_can_choose_wizard_order_and_share_spells():
     assert game.makeChoiceNew.call_args_list[2].kwargs['owner'] is first
     assert set(first.unit.model.spells) == set(second.unit.model.spells)
     assert not game.spellGenerationBusy
+
+
+def test_generation_reference_covers_unrolled_spells_and_full_profiles_without_mutation():
+    mage = mage_with_pool()
+    mage.unit.roster_metadata['spell_pool'][0]['effect'] = 'First paragraph.\n\nSecond paragraph.'
+    with patch('spell_generation.random.randint', side_effect=[1, 2, 6]):
+        state = start_generation(mage)
+    before = json.dumps(mage.unit.roster_metadata)
+    with patch('spell_generation.random.randint', side_effect=AssertionError('inspection must not roll')):
+        reference = generation_reference(mage, state)
+    assert len(reference) == 10
+    assert [entry['name'] for entry in reference if entry['status'] == 'Generated'] == [
+        'Spell 1', 'Spell 2', 'Spell 6']
+    assert [entry['name'] for entry in reference if entry['status'] == 'Not generated'] == [
+        'Spell 3', 'Spell 4', 'Spell 5']
+    assert len([entry for entry in reference if entry['status'] == 'Signature option']) == 4
+    detail = reference[0]['detail']
+    for text in ('Type: Enchantment', 'Casting value: 8+', 'Range: 12"', 'Phase: Strategy',
+                 'First paragraph.\n\nSecond paragraph.', 'Engine effect: not implemented'):
+        assert text in detail
+    assert json.dumps(mage.unit.roster_metadata) == before
+    assert not mage.unit.model.spells
+
+
+def test_generation_reference_distinguishes_known_and_pending_signature_on_resume():
+    mage = mage_with_pool()
+    restore_spellbook(mage.unit.model, [mage.unit.roster_metadata['spell_pool'][0]], 2)
+    with patch('spell_generation.random.randint', side_effect=[2, 6]):
+        state = start_generation(mage)
+    state.update(stage='replace', signature=state['signatures'][0])
+    mage.unit.roster_metadata = json.loads(json.dumps(mage.unit.roster_metadata))
+    reference = generation_reference(mage, mage.unit.roster_metadata['spell_generation'])
+    assert reference[0]['status'] == 'Already known'
+    selected = next(entry for entry in reference if entry['name'] == state['signature']['name'])
+    assert selected['status'] == 'Selected signature'
+    assert 'Effect text not recorded' in selected['detail']

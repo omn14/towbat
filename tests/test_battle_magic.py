@@ -372,7 +372,8 @@ class TestTheVortexIsPlacedOnTheBoard(unittest.TestCase):
     def _caster_at(self, x, y):
         return SimpleNamespace(unit=_unit(_model('Wizard')),
                                bodyNP=SimpleNamespace(
-                                   getPos=lambda: Point3(x, y, 0)))
+                                   getTop=lambda: None,
+                                   getPos=lambda *_: Point3(x, y, 0)))
 
     def test_it_targets_the_ground(self):
         self.assertTrue(PillarOfFireSpell.targets_ground)

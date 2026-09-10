@@ -1057,8 +1057,7 @@ class MyApp(ShowBase):
                 taskMgr.add(self.rallyUnit(self.unitToMove), "rallyUnitTask")
             #return task.done
 
-        if self.castableSpells(self.unitToMove):
-            self.fsm.request("SpellPhase")
+        self.castSpell()
 
         return task.done
 
@@ -1142,12 +1141,15 @@ class MyApp(ShowBase):
                     self.fsm.PHASES[self.fsm.current_phase_index], 'strategy')
 
     def castableSpells(self, unit):
-        """Names of the spells *unit* may still attempt in the current phase."""
+        """Personal allowance and host restrictions (Rulebook pp. 108, 123, 207, 210)."""
         if (getattr(self.fsm, 'state', None) == 'StrategyPhase'
             and not getattr(self, 'strategyCommandDone', True)):
             return []
         m = unit.unit.model
-        if getattr(unit, 'state', '') == 'IsFleeing':
+        host = getattr(unit, 'hostUnit', None) or unit
+        if (getattr(unit, 'state', '') == 'IsFleeing'
+            or getattr(host, 'state', '') == 'IsFleeing'
+            or unit.unit.nmodels <= 0):
             return []
         phase = self.castingPhase()
         level = m.wizard_level(1)
@@ -1163,11 +1165,13 @@ class MyApp(ShowBase):
             host = getattr(unit, 'hostUnit', None) or unit
             engaged = getattr(host, 'isInCombat', False)
             if spell.get('type') == 'Assailment':
-                return engaged and not getattr(host, 'hasAttackedThisTurn', False)
+                return (engaged and not getattr(host, 'hasAttackedThisTurn', False)
+                        and not getattr(unit, 'retiredFromCombat', False))
             return not engaged or spell.get('range') == 'Self'
         # A unit that marched may still cast, but not the two categories that
         # count as shooting (p. 123).
-        marched = getattr(unit, 'marchedThisTurn', False)
+        marched = (getattr(unit, 'marchedThisTurn', False)
+               or getattr(host, 'marchedThisTurn', False))
         barred = MARCH_BARRED_SPELLS
         names = [name for name, spell in m.spells.items()
                  if spell.get('phase') == phase
@@ -1194,21 +1198,43 @@ class MyApp(ShowBase):
                 self.refreshSelectedUnit()
 
     def castSpell(self):
-        """Enter the Spell phase with the selected Wizard.
+        """Enter the Spell phase with a caster in the selected unit (pp. 108, 207).
 
         Bound to a key rather than the click, because only the Strategy phase's
         click is free — the others are busy moving, shooting and fighting.
         """
         unit = getattr(self, 'unitToMove', None)
-        if unit is None:
+        if (unit is None or getattr(self, 'awaitingChoice', False) is True
+                or getattr(self, 'spellGenerationBusy', False) is True
+                or getattr(self, 'castingSpell', False) is True
+                or getattr(self.fsm, 'state', None) == 'SpellPhase'):
             return
-        if not self.castableSpells(unit):
+        from spell_system import casting_units
+        if not casting_units(self, unit):
             print(f"[Magic] {unit.unit.name} has no {self.castingPhase()}-phase "
                   f"spells it may still cast.")
             return
         self.fsm.request("SpellPhase")
 
     async def taskMagicArcUpdate(self, task):
+        from spell_system import casting_units
+        selected_unit = self.unitToMove
+        candidates = casting_units(self, selected_unit)
+        if not candidates:
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
+            return task.done
+        caster = candidates[0]
+        if len(candidates) > 1:
+            options = {f'{index + 1}: {candidate.unit.name}': candidate
+                       for index, candidate in enumerate(candidates)}
+            chosen = await self.makeChoiceNew(
+                list(options), Vec3(0, 0, 10), cancellable=True,
+                owner=selected_unit, prompt=f'{selected_unit.unit.name}: cast with whom?')
+            if chosen not in options:
+                self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
+                return task.done
+            caster = options[chosen]
+        self.unitToMove = caster
         for unit in self.units:
             unit.model.setColor(unit.color)
         self.roundCounter.apply_selection_masks()
@@ -1285,7 +1311,7 @@ class MyApp(ShowBase):
 
 
         self.shootingArcPoints = self.shootingArc(self.unitToMove.bodyNP.getPos(render), 
-                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH()+45, radius=radius,
+                                                       num_points=80, rotationangle=self.unitToMove.bodyNP.getH(self.render)+45, radius=radius,
                                                        full_circle=self.unitToMove.unit.model.has_all_round_vision())
         self.setGroundOverlay(True, self.shootingArcPoints)
         if not taskMgr.hasTaskNamed("taskShootingTrajectoryDrawLine"):
@@ -1903,7 +1929,7 @@ class MyApp(ShowBase):
         """A Magical Vortex is placed on the board, not cast at a unit, so the
         click has to come off the ground rather than off a targetable body."""
         reach = getattr(spell, 'RANGE', 12.0)
-        self.drawRangeRing(self.unitToMove.bodyNP.getPos(), reach,
+        self.drawRangeRing(self.unitToMove.bodyNP.getPos(self.render), reach,
                            color=(1, 0.4, 0.1, 0.8))
         self.debugTextInfo.setText(
             f"{spell.name}: click a point within {reach:.0f}\"")
@@ -2857,8 +2883,9 @@ class MyApp(ShowBase):
 
     async def makeChoiceNew(self, choices, position, cancellable=False,
                             descriptions=None, owner=None, prompt=None,
-                            detail=None):
-        cyn = Choice(choices, position, cancellable, descriptions, prompt, detail)
+                            detail=None, reference=None):
+        cyn = Choice(choices, position, cancellable, descriptions, prompt, detail,
+                     reference=reference)
         cyn.ma = taskMgr.add(cyn.mouseActivate, "mouseActivateTask")
         self.awaitingChoice = True
         self.ignore('mouse1')

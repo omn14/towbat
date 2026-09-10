@@ -9,7 +9,7 @@ The interface is unchanged for callers: build one, add `mouseActivate` as a
 task, and read `choice` once `choiceMade` goes true.
 """
 
-from direct.gui.DirectGui import DGG, DirectButton, DirectFrame
+from direct.gui.DirectGui import DGG, DirectButton, DirectFrame, DirectScrolledFrame
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode, TransparencyAttrib
 
@@ -32,7 +32,7 @@ class Choice:
     BTN_SCALE = 0.042
 
     def __init__(self, choices, pos, cancellable=False, descriptions=None,
-                 prompt=None, detail=None):
+                 prompt=None, detail=None, reference=None):
         self.num_choices = len(choices)
         self.choices = choices
         self.choiceMade = False
@@ -48,6 +48,12 @@ class Choice:
         self.detail = None
         self.shown = None
         self.panel = None
+        self.reference = reference or []
+        self.reference_buttons = []
+        self.reference_views = []
+        self.reference_text = None
+        if self.reference:
+            self.HALF_W = min(1.25, base.getAspectRatio() - 0.04)
         self._build(list(choices), prompt, detail, cancellable)
         self.helper1 = DirectObject()
         if cancellable:
@@ -99,6 +105,9 @@ class Choice:
                 wordwrap=(inset * 2 - 0.04) / 0.032)
             z -= max(self.LINE_H, summary.textNode.getHeight() * 0.032 + self.PAD)
 
+        if self.reference:
+            z = self._build_reference(z, inset)
+
         if self.descriptions:
             self.detail = gui_theme.styled_text(
                 text="", parent=self.panel, pos=(0, z - 0.024), scale=0.03,
@@ -133,6 +142,69 @@ class Choice:
         self.panel['frameSize'] = (-self.HALF_W, self.HALF_W, -total, 0)
         sheet['frameSize'] = (-inset, inset, -total + self.BORDER, -self.BORDER)
         self.panel.setPos(0, 0, min(0.30 + total / 2.0, 1.0 - self.PAD))
+
+    def _reference_view(self, left, top, width, height):
+        view = DirectScrolledFrame(
+            parent=self.panel, pos=(left, 0, top), relief=DGG.FLAT, borderWidth=(0, 0),
+            frameColor=gui_theme.PARCHMENT,
+            frameSize=(0, width, -height, 0), canvasSize=(0, width - 0.04, -height, 0),
+            scrollBarWidth=0.035, verticalScroll_scrollSize=0.08,
+            verticalScroll_thumb_frameColor=gui_theme.BTN_NEUTRAL,
+            verticalScroll_incButton_frameColor=gui_theme.PARCHMENT_DARK,
+            verticalScroll_decButton_frameColor=gui_theme.PARCHMENT_DARK)
+        self.reference_views.append(view)
+        return view
+
+    def _build_reference(self, top, inset):
+        width = inset * 2
+        if self.HALF_W >= 0.9:
+            list_width = width * 0.40
+            list_height = reader_height = 1.02
+            reader_width = width - list_width - self.PAD
+            reader_left, reader_top = -inset + list_width + self.PAD, top
+            bottom = top - reader_height
+        else:
+            list_width = reader_width = width
+            list_height, reader_height = 0.36, 0.62
+            reader_left, reader_top = -inset, top - list_height - self.PAD
+            bottom = reader_top - reader_height
+        listing = self._reference_view(-inset, top, list_width, list_height)
+        self.reference_reader = self._reference_view(reader_left, reader_top, reader_width, reader_height)
+        self.reference_text = gui_theme.styled_text(
+            parent=self.reference_reader.getCanvas(), text='', pos=(0.015, -0.04),
+            scale=0.034, fg=gui_theme.INK, align=TextNode.ALeft,
+            wordwrap=(reader_width - 0.075) / 0.034)
+        offset = 0
+        for entry in self.reference:
+            button = DirectButton(
+                parent=listing.getCanvas(), pos=(0, 0, -offset), relief=DGG.FLAT,
+                frameColor=gui_theme.BTN_NEUTRAL, frameSize=(0, list_width - 0.045, -0.11, 0),
+                text=entry['name'] + '\n' + entry['status'], text_font=gui_theme.get_font(),
+                text_fg=gui_theme.BTN_TEXT, text_align=TextNode.ALeft,
+                text_scale=0.031, text_pos=(0.012, -0.034),
+                text_wordwrap=(list_width - 0.075) / 0.031,
+                command=self._inspect_reference, extraArgs=[entry['name']])
+            height = max(0.11, button.component('text0').textNode.getHeight() * 0.031 + 0.035)
+            button['frameSize'] = (0, list_width - 0.045, -height, 0)
+            offset += height + 0.008
+            self.reference_buttons.append(button)
+        listing['canvasSize'] = (0, list_width - 0.04, -max(list_height, offset), 0)
+        initial = next((entry for entry in self.reference if entry['status'] == 'Selected signature'),
+                       next((entry for entry in self.reference if entry['status'] == 'Generated'),
+                            self.reference[0]))
+        self._inspect_reference(initial['name'])
+        return bottom - self.PAD
+
+    def _inspect_reference(self, name):
+        entry = next(entry for entry in self.reference if entry['name'] == name)
+        self.reference_text.setText(entry['detail'])
+        left, right, lower, upper = self.reference_reader['frameSize']
+        height = max(-lower, self.reference_text.textNode.getHeight() * 0.034 + 0.075)
+        self.reference_reader['canvasSize'] = (left, right - 0.04, -height, upper)
+        self.reference_reader.verticalScroll['value'] = 0
+        for button in self.reference_buttons:
+            button['frameColor'] = (gui_theme.BTN_GREEN if button['extraArgs'][0] == name
+                                    else gui_theme.BTN_NEUTRAL)
 
     def _button(self, name, pos, width, primary=False):
         """One answer. The first is the affirmative, and is dressed as such."""
@@ -175,6 +247,8 @@ class Choice:
             self._showDetail(None)
 
     def _showDetail(self, name):
+        if any(entry['name'] == name for entry in self.reference):
+            self._inspect_reference(name)
         if self.detail is None or name == self.shown:
             return
         self.shown = name
@@ -206,6 +280,11 @@ class Choice:
         if self.detail is not None:
             self.detail.destroy()
             self.detail = None
+        for view in self.reference_views:
+            view.destroy()
+        self.reference_views = []
+        self.reference_buttons = []
+        self.reference_text = None
         if self.panel is not None:
             self.panel.destroy()
             self.panel = None

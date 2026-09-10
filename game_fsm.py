@@ -371,6 +371,7 @@ class GamePhaseFSM(FSM):
 
     def enterSpellPhase(self):
         print("Entering Spell Phase")
+        self.spellSelectionUnit = self.game.unitToMove
         self.activeSpell = None
         self.spellFunctionToCast = None
         # Casting is a detour from whichever phase asked for it; a spell's type
@@ -385,6 +386,10 @@ class GamePhaseFSM(FSM):
         )
 
     def exitSpellPhase(self):
+        selected = getattr(self, 'spellSelectionUnit', None)
+        if selected is not None and selected in self.game.units:
+            self.game.unitToMove = selected
+        self.spellSelectionUnit = None
         self.activeSpell = None
         self.spellFunctionToCast = None
         self.game.ignore('mouse1')

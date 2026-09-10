@@ -456,7 +456,31 @@ final run, but no fix for that intermittent assertion is claimed. All 17 changed
 Python files pass syntax validation. No full-suite, full-matchup or complete-
 lore-effect claim.
 
+Startup follow-up: the game's two checked-in converted army lists still predated
+the lossless importer, despite the original exports passing the runtime audit.
+The old Mage listed all ten spells as known and neither list retained magic
+items, so no generation prompt or inventory entries could appear. Regenerated
+both startup lists from the local exports without changing those exports or
+battle saves; both remain five units and 500 points. Added an offscreen regression
+using the actual default startup files: one pending Level 2 Mage, generation
+prompt, three final known spells, all three resolved items visible through HUD
+detail scrolling, and Champion armour 5+ to 4+. Old battle saves are not migrated.
+
 ### High Magic and Lore of Saphery
+
+- [x] Joined-Wizard casting selection: select the host and use the cast command;
+      Strategy-phase clicks also discover the joined caster after Command.
+      If both host and character can cast, choose the bearer before its spell.
+      Keep spellbooks, ordinary/Bound allowances and spent flags on that bearer;
+      restore host selection on success, failure or cancel without detaching.
+      Respect host fleeing/marching/combat and retired Assailment restrictions
+      (pp. 108, 123, 207, 210). Corrected joined-world facing and vortex distance
+      (p. 208), and Hammerhand's host-opponent check. Pure and offscreen tests
+      cover actual selection, targeting, successful/failed/cancelled casting,
+      per-bearer accounting and save/reload.
+      LEFTOVER: broader joined-unit spell-effect propagation and challenge-specific
+      spell targeting are separate from caster selection; this adds no missing
+      High Magic effects and does not expand the one-joined-character model.
 
 Runtime audit: `spell_class(name)` returns `None` for **all ten** exported
 spells below. `CatalogueSpell` rolls to cast and prints wording, but does not
@@ -468,6 +492,15 @@ first playable milestone must explicitly restrict the selected known spells.
       Silvery Wand gives three known spells, with normal duplicate handling
       and permitted signature replacement. Persist the final choices; casting
       allowance remains Level 2. Do not use `spells` for both pool and choices.
+- [x] **Generation spell reference**: both signature and replacement prompts
+      show imported type, casting value, range, phase and full effect wording.
+      Read-only browsing separates generated, not-generated, already-known and
+      signature spells; a pending signature is labelled on save/resume. Hover
+      previews do not spend a choice. Long text scrolls in a fixed reader, with
+      wide and narrow offscreen coverage and a real startup-dialog regression.
+      Corrected horizontal overflow from Panda scroll-frame border space.
+      LEFTOVER: this displays roster wording, not an errata-synchronised rules
+      reference; missing text and uncoded effects are labelled, not invented.
 - [ ] **Drain Magic** - Remains in Play casting-value aura. This Chaos list
       contains no Wizard or Bound item, so it normally has no enemy caster to
       affect here; retain correct eligibility rather than inventing a target.

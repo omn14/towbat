@@ -18,6 +18,15 @@ from special_rules import unit_magic_resistance
 from battlescribe import spell_key
 
 
+def casting_units(game, selected):
+    """Expose joined casters without lending their spellbooks to the host (pp. 108, 207)."""
+    candidates = [selected, getattr(selected, 'joinedCharacter', None)]
+    return [candidate for candidate in candidates if candidate is not None
+            and candidate in game.units
+            and side_of(game, candidate, default=None) == game.roundCounter.current_player
+            and game.castableSpells(candidate)]
+
+
 def restore_spellbook(model, spells, wizard_level=0):
     """Saved metadata is authoritative; only coded classes survive from runtime."""
     known = getattr(model, 'spells', {})
@@ -468,10 +477,12 @@ class PillarOfFireSpell(Spell):
     piece = None
 
     def canTarget(self, point):
+        """Measure from the Wizard itself, including while joined (p. 208)."""
         caster = self.caster
         if caster is None:
             return True
-        reach = Vec3(Point3(point) - caster.bodyNP.getPos())
+        origin = caster.bodyNP.getPos(caster.bodyNP.getTop())
+        reach = Vec3(Point3(point) - origin)
         reach.z = 0
         if reach.length() > self.RANGE:
             print(f"   that point is {reach.length():.0f}\" away; the template "
@@ -688,8 +699,10 @@ class HammerhandSpell(Spell):
     Strength 4 hits at AP -2."""
 
     def canTarget(self, unit):
+        """A joined Wizard fights its host's opponents (pp. 108, 207)."""
         caster = self.caster
-        if caster is not None and unit not in getattr(caster, 'isInCombatWith', []):
+        host = getattr(caster, 'hostUnit', None) or caster
+        if caster is not None and unit not in getattr(host, 'isInCombatWith', []):
             print(f"   {caster.unit.name} is not engaged in combat with "
                   f"{unit.unit.name}.")
             return False
