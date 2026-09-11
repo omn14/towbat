@@ -4,7 +4,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from fear import attack_penalty, fears, immune, terror_test, test_fear
+from fear import attack_penalty, feared_strength, fears, immune, terror_test, test_fear
 from models import model
 from special_rules import apply_rule_keywords
 
@@ -31,6 +31,8 @@ def test_flaming_model_causes_fear_in_war_beasts_not_ordinary_infantry():
     target = member()
     assert not fears(target, flames)
     target.unit.model.characteristics['Troop Type'] = 'War Beasts'
+    assert fears(target, flames)
+    apply_rule_keywords(target.unit.model, ['Fear', 'Immune to Psychology'], replace=True)
     assert fears(target, flames)
     flames.unit.model.special_rules = []
     flames.unit.model.equipedWeapon = {'special_rules': ['Flaming Attacks']}
@@ -97,4 +99,18 @@ def test_terror_uses_mark_reroll_but_does_not_test_units_that_cannot_flee():
     target.isInCombat = True
     with patch('fear.random.randint') as roll:
         assert asyncio.run(terror_test(game, target, enemy))
+    roll.assert_not_called()
+
+
+def test_joined_fear_character_does_not_lend_the_hosts_unit_strength():
+    target, enemy = member(count=2), member(count=20)
+    enemy.joinedCharacter = member(count=1, rules=['Fear'])
+    assert feared_strength(target, enemy) == 1
+
+
+def test_fear_models_face_fear_not_terror_from_terror_causers():
+    target, enemy = member(rules=['Fear']), member(rules=['Terror'])
+    assert fears(target, enemy)
+    with patch('fear.random.randint') as roll:
+        assert asyncio.run(terror_test(SimpleNamespace(), target, enemy))
     roll.assert_not_called()

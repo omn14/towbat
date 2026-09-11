@@ -2728,7 +2728,8 @@ class CombatResolver:
                           f"General's Leadership ({general.unit.name}, Ld {ld}) "
                           f"— Inspiring Presence.")
             from fear import causes
-            if any(causes(enemy.unit.model, 'Terror') for enemy in getattr(loserUnit, 'isInCombatWith', [])):
+            if (not any(causes(loserUnit.unit.model, name) for name in ('Fear', 'Terror'))
+                    and any(causes(enemy.unit.model, 'Terror') for enemy in getattr(loserUnit, 'isInCombatWith', []))):
                 rule_log('Terror', loserUnit, f'losing to a Terror-causing enemy: Break Ld {ld} -> {ld - 1} (p. 179)')
                 ld -= 1
             overwhelm = self.isOverwhelmed(loserUnit, loserUnits)

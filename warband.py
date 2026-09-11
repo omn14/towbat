@@ -38,7 +38,8 @@ def leadership_for_test(psychology, unit, kind):
         value = _stat_int(source.unit.model.characteristics, 'Ld', 7)
         host = getattr(source, 'hostUnit', None) or source
         bonus = 0
-        if has_warband(source) and getattr(host, 'state', '') != 'IsFleeing' and kind not in ('Restraint', 'Impetuous'):
+        if (has_warband(source) and has_warband(host) and getattr(host, 'state', '') != 'IsFleeing'
+            and kind not in ('Restraint', 'Impetuous')):
             bonus = combat_rank_bonus(host)
         values.append(min(10, value + bonus))
         if has_warband(source):
@@ -61,8 +62,10 @@ async def roll_charge(game, unit, bonus, roll):
     if choice != 'Re-roll':
         rule_skipped('Warband', unit, f'keeps Charge roll {dice}; no re-roll (p. 180)')
         return models, dice
-    for die in models:
+    for die in models[:2]:
         die.remove(game.world)
-    replacement_models, replacement = await roll(3 if bonus else 2, bonus)
-    rule_log('Warband', unit, f'Charge roll {dice} -> {replacement}; all dice re-rolled once (p. 180)')
-    return replacement_models, replacement
+    replacement_models, replacement = await roll(2, False)
+    result = replacement + dice[2:]
+    rule_log('Warband', unit, f'Charge dice {dice[:2]} -> {replacement}; '
+             f'Swiftstride bonus {dice[2:]} unchanged (p. 180; FAQ v1.5.3)')
+    return replacement_models + models[2:], result

@@ -39,22 +39,32 @@ def immune(unit):
     return protected > count / 2
 
 
-def fears(unit, enemy):
-    """A joined character can cause Fear, but does not grant immunity (p. 168)."""
+def model_fears(unit, source):
+    """FAQ v1.5.3: Flaming fear overrides War Beast/Swarm immunity."""
     model = unit.unit.model
+    vulnerable = str(model.characteristics.get('Troop Type', '')).casefold() in ('war beasts', 'swarms')
+    if vulnerable and causes(source, 'Flaming Attacks'):
+        return True
     if immune(unit) or causes(model, 'Terror'):
         return False
-    sources = [enemy.unit.model]
-    joined = getattr(enemy, 'joinedCharacter', None)
-    if joined is not None:
-        sources.append(joined.unit.model)
-    if any(causes(source, 'Terror') for source in sources):
+    if causes(source, 'Terror'):
         return True
     if causes(model, 'Fear'):
         return False
-    vulnerable = str(model.characteristics.get('Troop Type', '')).casefold() in ('war beasts', 'swarms')
-    return any(causes(source, 'Fear') or vulnerable and causes(source, 'Flaming Attacks')
-               for source in sources)
+    return causes(source, 'Fear')
+
+
+def feared_strength(unit, enemy):
+    """Count only Fear-causing models, not their ordinary companions (FAQ v1.5.3)."""
+    result = unit_strength_total(enemy) if model_fears(unit, enemy.unit.model) else 0
+    joined = getattr(enemy, 'joinedCharacter', None)
+    if joined is not None and model_fears(unit, joined.unit.model):
+        result += unit_strength_total(joined)
+    return result
+
+
+def fears(unit, enemy):
+    return feared_strength(unit, enemy) > 0
 
 
 def cannot_flee(unit):
@@ -67,7 +77,8 @@ async def terror_test(game, unit, charger):
     """A Terror declaration tests immediately, unless Flee is unavailable (p. 179)."""
     if not causes(charger.unit.model, 'Terror'):
         return True
-    if cannot_flee(unit) or causes(unit.unit.model, 'Terror') or unit.state == 'IsFleeing':
+    if (cannot_flee(unit) or any(causes(unit.unit.model, name) for name in ('Fear', 'Terror'))
+            or unit.state == 'IsFleeing'):
         rule_skipped('Terror', unit, 'immune, already fleeing or cannot choose Flee; no test (p. 179)')
         return True
     from warband import leadership_for_test
@@ -84,13 +95,12 @@ async def terror_test(game, unit, charger):
 
 async def test_fear(game, unit, enemies, context):
     own = strength(unit)
-    threats = [enemy for enemy in enemies if fears(unit, enemy)
-               and strength(enemy) > own]
+    threats = [enemy for enemy in enemies if feared_strength(unit, enemy) > own]
     if not threats:
         for enemy in enemies:
             if any(causes(enemy.unit.model, name) for name in ('Fear', 'Terror', 'Flaming Attacks')):
                 rule_skipped('Fear', unit, f'{context}: immune or enemy {enemy.unit.name} '
-                             f'US {strength(enemy)} is not greater than own US {own}')
+                             f'Fear-causing US {feared_strength(unit, enemy)} is not greater than own US {own}')
         return True
     token = current_turn(game)
     if getattr(unit, 'fearTestTurn', None) == token:
@@ -105,7 +115,7 @@ async def test_fear(game, unit, enemies, context):
     unit.fearTestTurn = token
     unit.fearFailed = not leadership_passed(sum(dice), leadership)
     unit.fearTargets = [identity(enemy) for enemy in threats]
-    names = ', '.join(f'{enemy.unit.name} US {strength(enemy)}' for enemy in threats)
+    names = ', '.join(f'{enemy.unit.name} Fear-causing US {feared_strength(unit, enemy)}' for enemy in threats)
     rule_log('Fear', unit, f'{context}: own US {own}, {names}; 2D6={dice} vs Ld {leadership}: '
              + ('failed; no charge / -1 To Hit feared enemies this turn' if unit.fearFailed else 'passed'))
     return not unit.fearFailed

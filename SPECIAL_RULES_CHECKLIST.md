@@ -364,13 +364,15 @@ itself add gameplay effects.
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
 - [x] **Fear** - Skycutter (p. 168). Tests before charge declarations and when
-      combat is chosen use current relative Unit Strength, including joined
-      characters. Equal/lower-strength threats and immunity are logged skips.
+      combat is chosen use current relative Unit Strength, counting only the
+      enemy models that cause Fear (including qualifying joined characters;
+      FAQ v1.5.3). Equal/lower-strength threats and immunity are logged skips.
       Failed charges remain stationary and spend First Charge eligibility;
       failed combat tests apply -1 To Hit only against the qualifying enemies,
       including rerolls, split profiles and challenges. Per-turn results and
       exact targets survive reload. Model Flaming Attacks cause Fear in War
-      Beasts/Swarms; a flaming spell does not grant that model rule (p. 169).
+      Beasts/Swarms even if normally immune (FAQ v1.5.3); a flaming spell does
+      not grant that model rule (p. 169).
       **Corrected:** a Fear-causing joined character does not grant host immunity.
       Actual Skycutter/reduced-Chaos-unit scenes verify failure and reload.
       LEFTOVER: no selected-roster Fear effect; general allocation limits remain.
@@ -411,6 +413,8 @@ only a blocker if that relationship is actually chosen later.
       the Warriors' actual Banner. Live Fear and immediate Terror charge tests
       now call the same helper. Terror cannot force a test when Flee is forbidden;
       losing to Terror also applies its -1 Break Leadership (p. 179).
+      **FAQ correction:** Fear-causing models Fear Terror-causers but do not
+      take Terror tests or suffer Terror's Break Leadership penalty.
       LEFTOVER: neither selected roster causes Terror; broad Terror army acceptance
       is outside this matchup, although its test/reaction hooks are implemented.
 - [x] **Gaze of the Gods and Stupidity** - Aspiring Champion (RH pp. 81, 116;
@@ -431,8 +435,10 @@ only a blocker if that relationship is actually chosen later.
       **LEFTOVER:** no additional selected-roster Gaze effects. Broader
       charge geometry and movement limitations remain tracked separately.
 - [x] **Warband** - Horsemen (amended p. 180). A majority allows one complete
-      Charge-roll reroll, including Swiftstride dice, but not pursuit or the
+      Charge-roll reroll, but not pursuit or the
       Counter Charge reaction roll. Human owners choose; AI rerolls low rolls.
+      **FAQ correction:** reroll the two Charge dice only; retain the separate
+      Swiftstride bonus die unchanged (FAQ v1.5.3, Finest Warhorses clarification).
       Leadership tests use eligible current ranks, capped at 10; fleeing,
       Restraint and Impetuous exclude the modifier. Non-Warband character
       Leadership is never increased. Skirmishers have no rank bonus but retain

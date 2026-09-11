@@ -34,14 +34,15 @@ def test_non_warband_character_leadership_is_not_modified():
     assert leadership_for_test(psychology, unit, 'Fear')[0] == 9
 
 
-def test_skirmishers_get_no_ranks_but_can_reroll_entire_charge_roll_once():
+def test_skirmishers_reroll_charge_dice_but_not_swiftstride_bonus():
     unit = member(rules=('Warband', 'Skirmishers'))
     psychology = SimpleNamespace(leadership_of=lambda unit: (6, None))
     assert leadership_for_test(psychology, unit, 'Fear')[0] == 6
     original = Mock()
-    roll = AsyncMock(side_effect=[([original], [1, 2, 3]), ([], [4, 5, 6])])
+    roll = AsyncMock(side_effect=[([original], [1, 2, 3]), ([], [4, 5])])
     game = SimpleNamespace(aiControls=lambda unit: False, makeChoiceNew=AsyncMock(return_value='Re-roll'), world=object())
-    assert asyncio.run(roll_charge(game, unit, True, roll)) == ([], [4, 5, 6])
+    assert asyncio.run(roll_charge(game, unit, True, roll)) == ([], [4, 5, 3])
+    roll.assert_awaited_with(2, False)
     assert roll.await_count == 2
     original.remove.assert_called_once_with(game.world)
 
