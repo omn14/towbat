@@ -180,3 +180,34 @@ def test_outside_unit_does_not_attack_an_opponent_removed_in_challenge(scene):
     with patch('combat_resolution.simulate_battle') as attacks:
         assert asyncio.run(app.combat.resolveMeleeWithSpells(challenge, Sequence())) == [0, 0]
     attacks.assert_not_called()
+
+
+def test_same_initiative_casualty_cannot_continue_after_own_miscast(scene):
+    from high_magic import HandOfKhaineSpell
+    app, baseline = scene
+    mage, host, enemy = prepare_combat(app, baseline)
+    restore_spellbook(mage.unit.model, [get_catalogue().spell('Corporeal Unmaking'),
+                                      get_catalogue().spell('Hand of Khaine')], 2)
+    removals = Sequence()
+    app.combat.previewMiscastWounds(mage, app.combat.miscastWoundsRemaining(mage), removals)
+    assert mage.unit.nmodels == 0
+
+    async def attempt(target):
+        app.assailmentWindow['miscast_damage'](mage, 1)
+        return False
+
+    with patch.object(app, 'assailmentInitiativeSurvivors', {id(mage)}, create=True), \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(Spell, '_attempt', AsyncMock(side_effect=attempt)) as cast, \
+            patch.object(CorporealUnmakingSpell, 'apply', AsyncMock()) as corporeal, \
+            patch.object(HandOfKhaineSpell, 'apply', AsyncMock()) as hand:
+        asyncio.run(cast_at_initiative(app, mage, [enemy], lambda *args: None,
+                    miscast_damage=lambda victim, wounds, regenerated=0:
+                    app.combat.previewMiscastWounds(victim, wounds, removals)))
+    cast.assert_awaited_once()
+    corporeal.assert_not_awaited()
+    hand.assert_not_awaited()
+    assert mage.spellsCastThisTurn == ['Corporeal Unmaking']
+    assert not app.magicBusy and app.assailmentWindow is None
+    removals.finish()
+    assert host.joinedCharacter is None

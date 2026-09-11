@@ -23,6 +23,12 @@ def single_model_targets(targets, challenge):
     return result
 
 
+def simultaneous_caster(game, caster):
+    """An earned Assailment window survives earlier equal-I damage (pp. 146, 158)."""
+    window = getattr(game, 'assailmentWindow', None)
+    return bool(window and window['caster'] is caster and window.get('simultaneous_casualty'))
+
+
 async def cast_at_initiative(game, caster, targets, damage, *, challenge=None, miscast_damage=None):
     from spell_system import may_attempt, spell_class
     from magic_items import item_spell_available
@@ -37,12 +43,25 @@ async def cast_at_initiative(game, caster, targets, damage, *, challenge=None, m
         return
     previous = getattr(game, 'assailmentWindow', None)
     busy = getattr(game, 'magicBusy', False)
+    simultaneous = caster.unit.nmodels <= 0 and id(caster) in (getattr(game, 'assailmentInitiativeSurvivors', None) or ())
+
+    def own_miscast(victim, wounds, regenerated=0):
+        if victim is caster and wounds > 0:
+            game.assailmentWindow['simultaneous_casualty'] = False
+        return miscast_damage(victim, wounds, regenerated)
+
     game.assailmentWindow = dict(caster=caster, targets=targets, damage=damage, challenge=challenge,
-                                miscast_damage=miscast_damage)
+                                miscast_damage=own_miscast if miscast_damage is not None else None,
+                                simultaneous_casualty=simultaneous)
+    if simultaneous:
+        rule_log('Simultaneous Combat', caster,
+                 'alive at the start of this Initiative, slain by equal-Initiative damage; '
+                 'retains Assailment attempts without restoring Wounds (pp. 146, 158)')
     game.magicBusy = True
     try:
         while targets:
-            if caster.unit.nmodels <= 0 or (hasattr(caster, 'bodyNP') and caster.bodyNP.isEmpty()):
+            if (caster.unit.nmodels <= 0 and not simultaneous_caster(game, caster)
+                    or (hasattr(caster, 'bodyNP') and caster.bodyNP.isEmpty())):
                 rule_skipped('Assailment', caster, 'Wizard slain; no further casting attempts')
                 return
             choices = []

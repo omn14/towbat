@@ -1003,12 +1003,26 @@ limits remain explicitly recorded below.
       **Corrected (2026-09-11):** duel and ordinary attacks now interleave at
       global Initiative boundaries with both groups snapshotted before either
       resolves a shared step (pp. 146, 211).
+      **Equal-Initiative casting corrected (2026-09-11):** a Wizard alive at the
+      start of the shared step retains Assailment attempts after cross-group
+      equal-Initiative damage (pp. 146, 158). Previously attack counts survived,
+      but the casting loop and post-dispel guard both rejected the slain caster.
+      Survival is now snapshotted per step; this does not restore models or
+      Wounds. Higher-Initiative deaths still prevent casting, an own Miscast
+      revokes the exception, and the transient snapshot is restored on errors.
+      Rule logs identify the retained opportunity. Three actual-roster cases
+      use real casting rolls at higher/equal/lower Initiative; own-Miscast and
+      interrupted-scheduler regressions pass. Seven focused modules total
+      109 passing tests, including spell lifecycle, Bound spells and Miscasts.
       **LEFTOVER:** suspended combat choices cannot be saved/resumed. The shared
       lifecycle/geometry limits remain. Devil's Visit is unchanged.
 
       Sources: [Corporeal Unmaking](https://tow.whfb.app/spell/corporeal-unmaking),
       p. 329; [Assailment](https://tow.whfb.app/magic/assailment), p. 107;
       [Casting spells](https://tow.whfb.app/magic/casting-spells), p. 108;
+      [Simultaneous combat](https://tow.whfb.app/the-combat-phase/simultaneous-combat),
+      p. 146; [Assailment timing](https://tow.whfb.app/the-combat-phase/assailment-spells),
+      p. 158;
       [Fighting a challenge](https://tow.whfb.app/characters/fighting-a-challenge),
       p. 211; [Magic FAQ v1.5.3](https://tow.whfb.app/faq/magic).
 - [x] **Fury of Khaine** - 9+, 12", friendly unit including engaged targets;

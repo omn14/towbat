@@ -196,8 +196,10 @@ class Spell:
             return
         if await self._dispelled():
             return
+        from assailment import simultaneous_caster
         for member in (self.caster, target):
-            if hasattr(member, 'unit') and (member.unit.nmodels <= 0
+            if hasattr(member, 'unit') and ((member.unit.nmodels <= 0
+                    and not (member is self.caster and simultaneous_caster(self.game, member)))
                     or (hasattr(member, 'bodyNP') and member.bodyNP.isEmpty())
                     or (hasattr(member, 'command_entry') and not member.command_entry.get('active', True))):
                 rule_skipped(self.name, member, 'caster or target removed during the casting/dispel attempt; no effect')

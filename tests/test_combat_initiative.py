@@ -1,7 +1,10 @@
 """Challenge and ordinary attacks share an Initiative clock (pp. 146, 211)."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from combat_initiative import InitiativeStep, resolve_steps
 
@@ -44,3 +47,18 @@ def test_spell_window_finishes_before_lower_initiative_prepares():
         assert asyncio.run(resolve_steps(None, [caster(), ordinary()], None)) == [(1, 0), (0, 1)]
     cast.assert_awaited_once()
     assert events == ['wizard snapshot', 'cast', 'wizard attacks', 'lower snapshot', 'lower attacks']
+
+
+def test_caster_snapshot_is_restored_when_resolution_is_interrupted():
+    survivor = SimpleNamespace(unit=SimpleNamespace(nmodels=1))
+    previous = {42}
+    game = SimpleNamespace(units=[survivor], assailmentInitiativeSurvivors=previous)
+
+    def interrupted():
+        yield InitiativeStep(5, lambda: None)
+        assert game.assailmentInitiativeSurvivors == {id(survivor)}
+        raise RuntimeError('interrupted combat')
+
+    with pytest.raises(RuntimeError, match='interrupted combat'):
+        asyncio.run(resolve_steps(game, [interrupted()], None))
+    assert game.assailmentInitiativeSurvivors is previous
