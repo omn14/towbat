@@ -892,6 +892,11 @@ limits remain explicitly recorded below.
       supporting-attack limits and ranged shot counts are unchanged. Actual
       Silver Helm, three-model Dragon Prince and Skycutter profiles are tested.
       Combat profile resets do not erase the bonus before expiry.
+      **Startup fix (2026-09-11):** initialize `MyApp.magicBusy` before the first
+      cast; fresh games previously crashed on entering the dispel window. The
+      startup test now casts Fury on Dragon Princes with [6, 4], through the real
+      dispel handler, checking both Pass and a successful Fated Dispel and that
+      the lock returns to idle. Startup and all seven dispel tests pass.
 - [x] **Shield of Saphery** - 8+, 18", friendly unengaged unit; 5+ Ward against
       any wounds until the end of the current turn (Rulebook p. 329). Uses the
       best Ward only, separate from armour and Regeneration. Successful,

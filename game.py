@@ -155,6 +155,7 @@ class MyApp(ShowBase):
         self.signal = False
         # A spell's target is fixed once its dice are rolling; see setActiveUnit.
         self.castingSpell = False
+        self.magicBusy = False
         # Free reforms are placed one at a time; see startFreeReform.
         self._reformQueue = []
         self._reformActive = False

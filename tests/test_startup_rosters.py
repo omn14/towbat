@@ -1,14 +1,19 @@
-"""The default converted armies must reach generation and item display at startup."""
+"""Fresh converted armies must reach generation, item display and their first cast."""
 
+import asyncio
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from panda3d.core import getModelPath, loadPrcFileData
 
+from battleFunctions import attack_characteristic
 from choiceFunctions import Choice
 from game import MyApp
+from high_magic import FuryOfKhaineSpell
 from magic_items import inventory, resolve_bearer
+from spell_effects import end_turn
 from spell_generation import begin_spell_generation, pending_wizards
+from spell_system import Spell
 from tests.test_shieldwall_scene import combat_tasks
 
 
@@ -26,6 +31,7 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path)
     with patch('spell_generation.begin_spell_generation', side_effect=capture_generation):
         app = MyApp()
     try:
+        assert app.magicBusy is False
         assert len(app.units) == 10
         assert [member.unit.nmodels for member in app.player1Units] == [1, 6, 5, 3, 1]
         assert [member.unit.nmodels for member in app.player2Units] == [1, 4, 5, 10, 5]
@@ -76,7 +82,40 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path)
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
         assert app.screenshot(str(tmp_path / 'startup-items.png'), defaultFilename=False)
+        check_first_fury_cast(app, 'Pass', applied=True)
+        check_first_fury_cast(app, 'Fated dispel', applied=False)
     finally:
         for coroutine in scheduled:
             coroutine.close()
         app.destroy()
+
+
+def check_first_fury_cast(app, dispel, *, applied):
+    armies = {member.unit.model.name: member for member in app.units}
+    mage, princes = armies['Mage'], armies['Dragon Prince']
+    for member in app.units:
+        member.isDeployed = True
+    mage.bodyNP.setPos(0, -15, 0)
+    mage.bodyNP.setH(0)
+    princes.bodyNP.setPos(0, -5, 0)
+    original = attack_characteristic(princes.unit.model)
+    spell = FuryOfKhaineSpell('Fury of Khaine', 9, wizard_level=2, game=app, caster=mage)
+
+    async def choose(options, *args, owner, **kwargs):
+        assert app.magicBusy is True
+        assert owner in app.player2Units
+        assert dispel in options
+        return dispel
+
+    with patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=choose)) as choice, \
+            patch.object(Spell, '_roll_casting_dice', AsyncMock(side_effect=[
+                (10, [6, 4]), (12, [6, 6])])) as dice:
+        asyncio.run(spell.spellFunction(princes))
+    choice.assert_awaited_once()
+    assert spell.casting == 11
+    assert dice.await_count == (1 if applied else 2)
+    assert attack_characteristic(princes.unit.model) == original + int(applied)
+    assert (spell in app.fsm.endOfTurnSpells) is applied
+    assert app.magicBusy is False
+    end_turn(app)
