@@ -428,9 +428,13 @@ itself add gameplay effects.
       not the stale collision marker; complete empty declaration queues; use the
       active-character Leadership helper. Existing declaration/rally tests now
       supply Impetuous dice or close declarations before ordinary redress.
+      **Post-combat acceptance (2026-09-11):** actual three-model Dragon Princes
+      choose two files before pursuit/overrun dice and move the full rolled 4";
+      chosen-redress Follow Up moves 2" with the loser and retains base contact.
+      All three preserve the free manoeuvre/movement allowance, alongside the
+      earlier chosen Giving Ground check. All 30 Drilled/Impetuous scenes pass.
+      Reserve Move also offers Drilled before committing.
       **LEFTOVER:** other spell-granted movement outside the selected lores;
-      Reserve Move offers Drilled before committing. Post-combat hooks have
-      regression coverage but still need explicit chosen-redress scene acceptance;
       swept manoeuvre obstruction, 1-inch separation and complex joined footprints.
       Endpoint fit is not a full model-by-model legal-path proof. AI does not
       optimize optional frontage. Suspended movement tasks cannot be saved.

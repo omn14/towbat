@@ -129,6 +129,79 @@ def test_drilled_giving_ground_can_redress_while_engaged(scene):
     assert prince.bodyNP.getY() + prince.unitHeight / 2 == pytest.approx(front - 2, abs=.05)
 
 
+@pytest.mark.parametrize('context', ['pursuit', 'overrun'])
+def test_selected_drilled_redress_precedes_post_combat_distance(scene, context):
+    app, charger, defender, origin, facing, contact = declared_charge(scene)
+    app.fsm.request('CombatPhase')
+    prince = members(app)['Dragon Prince']
+    charger.bodyNP.setPos(25, 20, 0)
+    prince.bodyNP.setPos(0, -12, 0)
+    prince.bodyNP.setH(0)
+    prince.request('Idle')
+    prince.isInCombat = False
+    prince.isInCombatWith = []
+    prince.moveSpentThisTurn = 0
+    prince.manoeuvreThisTurn = None
+    front = prince.bodyNP.getY() + prince.unitHeight / 2
+    events = []
+
+    async def choose(options, *args, **kwargs):
+        assert kwargs['owner'] is prince
+        assert context in kwargs['prompt']
+        assert '2 files' in options
+        events.append('redress')
+        return '2 files'
+
+    async def roll(*args, **kwargs):
+        assert prince.unit.files == 2
+        events.append('dice')
+        return [2, 2] if context == 'overrun' else ([], [2, 2])
+
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', side_effect=choose), \
+            patch.object(app.combat, 'swiftstrideChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', side_effect=roll), \
+            patch.object(app.combat, 'rollMoveDice', side_effect=roll), \
+            patch.object(app.combat, 'freeReform', AsyncMock()):
+        run(app.combat.overrunMove(prince) if context == 'overrun'
+            else app.combat.pursuitMove(prince, defender, 'flee'))
+    assert events == ['redress', 'dice']
+    assert prince.unit.files == 2
+    assert prince.bodyNP.getY() + prince.unitHeight / 2 == pytest.approx(front + 4, abs=.05)
+    assert prince.moveSpentThisTurn == 0 and prince.manoeuvreThisTurn is None
+
+
+def test_selected_drilled_follow_up_redress_preserves_contact(scene):
+    from direct.interval.IntervalGlobal import Sequence
+    app, charger, defender, origin, facing, contact = declared_charge(scene)
+    app.attackSequence = Sequence()
+    prince = members(app)['Dragon Prince']
+    charger.bodyNP.setPos(25, 20, 0)
+    prince.bodyNP.setPos(0, -(prince.unitHeight + defender.unitHeight) / 2, 0)
+    prince.bodyNP.setH(0)
+    for unit, opponent in ((prince, defender), (defender, prince)):
+        unit.isInCombatWith = [opponent]
+        unit.isInCombat = True
+        unit.request('InCombat')
+    front = prince.bodyNP.getY() + prince.unitHeight / 2
+    defender_origin = Vec3(defender.bodyNP.getPos())
+    prince.moveSpentThisTurn = 0
+    prince.manoeuvreThisTurn = None
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='2 files')) as choice:
+        run(app.combat.giveGroundMove(defender, [prince]))
+    assert choice.call_args.kwargs['owner'] is prince
+    assert 'Follow Up' in choice.call_args.kwargs['prompt']
+    assert prince.unit.files == 2
+    assert prince.bodyNP.getY() + prince.unitHeight / 2 == pytest.approx(front + 2, abs=.05)
+    assert defender.bodyNP.getY() == pytest.approx(defender_origin.y + 2, abs=.05)
+    assert prince.bodyNP.getY() + prince.unitHeight / 2 == pytest.approx(
+        defender.bodyNP.getY() - defender.unitHeight / 2, abs=.05)
+    assert prince.moveSpentThisTurn == 0 and prince.manoeuvreThisTurn is None
+
+
 def test_drilled_remaining_move_redresses_before_replotting(scene):
     app, charger, defender, origin, facing, contact = declared_charge(scene)
     prince = members(app)['Dragon Prince']
