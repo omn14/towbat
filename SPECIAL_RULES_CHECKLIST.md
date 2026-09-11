@@ -584,9 +584,21 @@ tests or success. README and Copilot test commands now agree on this workflow.
       checks cover a Skycutter edge clip and only one of ten Warriors crossing.
       Twelve chariot, 11 Move Through Cover, nine High Magic, 11 Walk and 29 Vanguard
       scenes pass, alongside 70 pure terrain/protection tests.
-      LEFTOVER: other post-move Lumbering contexts; organic terrain outlines,
-      curved/wheeled base sweeps, model-specific hazard casualty selection and
-      broader landing-route validation. Ground-only combat reach is implemented
+      **Wheel/landing and post-combat completion:** charge, ordinary and Reserve
+      Move terrain resolution now receive per-model sub-degree wheel sweeps;
+      repeated segments count one test per base/feature, not one per sample.
+      Flight uses the original/final orientations at takeoff/landing. Ordinary
+      flight landing rejects friendly overlap, enemy clearance under 1 inch,
+      impassable terrain and board edges without spending movement. Declared
+      flying charges pass above intervening units but validate the landing
+      against other units/impassable terrain. Lumbering is offered and awaited
+      after unengaged pursuit/overrun, never after marching, charging or fleeing;
+      prior Fly mode is restored after that grounded sequence. Eighteen chariot,
+      23 pivot, 11 Walk and 27 declaration scenes pass. Corrected fixture prompts
+      to complete the new post-pursuit pivot rather than leave an active task.
+      LEFTOVER: organic terrain outlines, model-specific hazard casualty selection,
+      exact swept-volume geometry between the conservative half-degree samples,
+      and complex interrupted-flight/after-alignment landing routes. Ground-only combat reach is implemented
       above. Do not duplicate the Roc as an extra mount.
 
 **Conditional, not extra purchases:** Archers have **Detachment**, but this

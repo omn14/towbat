@@ -30,7 +30,8 @@ def begin(game, unit, context):
     if name is None:
         return False
     if (getattr(unit, 'marchedThisTurn', False) or getattr(unit, 'chargedThisTurn', False)
-            or unit.state == 'IsFleeing' or getattr(unit, 'isInCombat', False)):
+            or unit.state == 'IsFleeing' or getattr(unit, 'fledThisPhase', False)
+            or getattr(unit, 'isInCombat', False)):
         rule_skipped(name, unit, f'{context}: marched, charged, fled or engaged; no free pivot')
         return False
     if game.aiControls(unit):
@@ -52,6 +53,14 @@ def begin(game, unit, context):
 
     game.startFreeReform(unit, on_done=finish)
     return True
+
+
+async def after_move(game, unit, context):
+    """Finish an optional Lumbering pivot before the next combat move (p. 195)."""
+    from direct.task.Task import pause
+    if begin(game, unit, context):
+        while getattr(unit, 'freePivot', None) is not None:
+            await pause(.1)
 
 
 def constrain(game, unit):

@@ -195,22 +195,47 @@ def path_error(route, targets, obstacles):
     return None
 
 
-def route_features(game, route, travel=None):
-    pieces = getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])
+def route_base_paths(route, travel=None):
+    """Conservative sub-degree wheel sweeps, grouped by model (pp. 124, 269)."""
     travel = route.distance if travel is None else travel
     stops = sorted({0, min(travel, route.lead), travel,
-                    *(min(travel, route.lead + route.wheel_distance * index / max(1, math.ceil(abs(route.wheel))))
-                      for index in range(max(1, math.ceil(abs(route.wheel))) + 1))})
+                    *(min(travel, route.lead + route.wheel_distance * index / max(1, math.ceil(abs(route.wheel) * 2)))
+                      for index in range(max(1, math.ceil(abs(route.wheel) * 2)) + 1))})
+    paths = [[] for box in route.original_boxes]
+    for start, end in zip(stops, stops[1:]):
+        for path, before, after in zip(paths, route.boxes_at(start), route.boxes_at(end)):
+            padding = math.hypot(before[2], before[3]) * abs(math.radians(after[4] - before[4]))
+            padded = (*before[:2], before[2] + padding, before[3] + padding, before[4])
+            path.append((padded, (*after[:2], *padded[2:])))
+    return paths
+
+
+def movement_route(unit, origin, facing, destination, heading):
+    """A completed front-corner wheel then advance, for terrain sweeps (pp. 124, 269)."""
+    boxes = starting_boxes(unit, origin, facing)
+    body = footprint(boxes)
+    angle = (heading - facing[0] + 180) % 360 - 180
+    if abs(angle) < 1e-5:
+        return None
+    radians = math.radians(facing[0])
+    forward, right = (-math.sin(radians), math.cos(radians)), (math.cos(radians), math.sin(radians))
+    pivot = (body[0] + forward[0] * body[3] - math.copysign(body[2], angle) * right[0],
+             body[1] + forward[1] * body[3] - math.copysign(body[2], angle) * right[1])
+    turned = rotate(origin, pivot, angle)
+    forward = (-math.sin(math.radians(heading)), math.cos(math.radians(heading)))
+    advance = max(0, (destination[0] - turned[0]) * forward[0] + (destination[1] - turned[1]) * forward[1])
+    return ChargeRoute(tuple(origin), facing[0], pivot, 0, angle,
+                       abs(math.radians(angle)) * body[2] * 2, advance, 0, boxes)
+
+
+def route_features(game, route, travel=None):
+    pieces = getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])
+    paths = route_base_paths(route, travel)
     found = []
     for piece in pieces:
         obstacle = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-        for start, end in zip(stops, stops[1:]):
-            before, after = footprint(route.boxes_at(start)), footprint(route.boxes_at(end))
-            padding = math.hypot(before[2], before[3]) * abs(math.radians(after[4] - before[4]))
-            padded = (*before[:2], before[2] + padding, before[3] + padding, before[4])
-            if swept_base_overlaps(padded, (*after[:2], *padded[2:]), obstacle):
-                found.append(piece)
-                break
+        if any(swept_base_overlaps(before, after, obstacle) for path in paths for before, after in path):
+            found.append(piece)
     return found
 
 

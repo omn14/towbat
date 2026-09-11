@@ -460,13 +460,21 @@ class CombatResolver:
                 unit.isChargingMove = False
                 unit.request('Moved')
                 return
+        from scouts import model_base_boxes
+        from special_rules import unit_is_ethereal
+        from chariot_terrain import linear_impassable
+        flying = unit.unit.model.is_flying()
+        obstacles = [] if flying else [box for member in self.game.units if member not in (unit, defender)
+                     and not member.bodyNP.isEmpty() and member.isDeployed
+                     and getattr(member, 'hostUnit', None) is None for box in model_base_boxes(member)]
+        if not flying and not unit_is_ethereal(unit):
+            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                             for piece in self.game.terrain_manager.terrain_pieces
+                             if piece.is_impassable or linear_impassable(piece, unit))
         if (not (getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False))
             and not (getattr(defender, 'isSkirmisher', False) and not getattr(defender, 'skirmishCombat', False))):
             source = self.game.psychology._unit_box(unit)
             target = self.game.psychology._unit_box(defender)
-            obstacles = [self.game.psychology._unit_box(member) for member in self.game.units
-                         if member not in (unit, defender) and not member.bodyNP.isEmpty()
-                         and getattr(member, 'hostUnit', None) is None]
             route = route_to_model([source], [target], 0, origin, obstacles)
             if route is None:
                 rule_skipped('Charge Move', unit, 'declared target has no supported clear route; charge spent (LEFTOVER)')
@@ -485,13 +493,6 @@ class CombatResolver:
             declaration.flank_angle = (contact[-1], angle)
             declaration.route = route
         elif declaration.target_index is not None:
-            from scouts import model_base_boxes
-            obstacles = [box for member in self.game.units if member not in (unit, defender)
-                         and not member.bodyNP.isEmpty() and member.isDeployed
-                         and getattr(member, 'hostUnit', None) is None
-                         for box in model_base_boxes(member)]
-            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                             for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
             targets = model_base_boxes(defender)
             route = None
             if not defender.skirmishCombat and declaration.target_index < len(targets):
@@ -513,6 +514,21 @@ class CombatResolver:
             self.game.playerNP.setPos(*declaration.destination)
             self.game.moveArceDistance = declaration.distance
             declaration.flank_angle = ('front', 0)
+        if flying:
+            from scouts import placement_error
+            planned = declaration.route or (declaration.preview.route if declaration.preview else None)
+            if planned is not None:
+                unit.bodyNP.setPos(*planned.destination)
+                unit.bodyNP.setH(planned.heading + planned.wheel)
+            error = placement_error(self.game, unit, ignore=defender, deployment_zone=False)
+            if error:
+                unit.bodyNP.setPos(origin)
+                unit.bodyNP.setHpr(facing)
+                finish_charge_attempt(unit)
+                unit.isChargingMove = False
+                unit.request('Moved')
+                rule_skipped('Fly', unit, f'charge landing blocked: {error}; no illegal placement (p. 170)')
+                return
         try:
             unit.declaredCharge = declaration
             await self.chargeAndChargeReaction(unit, None, origin, facing,
@@ -1484,7 +1500,7 @@ class CombatResolver:
         self.game.diceInfoText.setText('')
         self.game.debugTextInfo.setText('')
         self.game.movement.dangerousTerrainTests(unit, origin, unit.bodyNP.getPos(),
-                               features=route_features(self.game, route, travel))
+                               features=route_features(self.game, route, travel), route=route, travel=travel)
         unit.isChargingMove = False
         if unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty():
             return
@@ -3155,6 +3171,8 @@ class CombatResolver:
             return
         if clear < 1.0:
             await self.overrunContact(winner, moved)
+        from free_pivot import after_move
+        await after_move(self.game, winner, 'Overrun')
 
     async def overrunContact(self, winner, moved):
         """Resolve whatever an overrun ran into (p. 157).
@@ -3605,6 +3623,8 @@ class CombatResolver:
         finally:
             winner.pursuitQuarry = None
             self.game.autoCharge = self.game.autoHold = False
+        from free_pivot import after_move
+        await after_move(self.game, winner, 'Pursuit')
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
 

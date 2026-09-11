@@ -600,7 +600,7 @@ class MovementSystem:
                          f'terrain {modifier:+g}M; {detail}; unit allowance {allowance:g}"')
         return allowance
 
-    def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1', *, features=None) -> int:
+    def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1', *, features=None, route=None, travel=None) -> int:
         """Test every model against each dangerous feature the move met, and
         apply wounds; flying lands, Iron Shod Wheels loses D3 (pp. 170, 194, 269)."""
         tm = getattr(self.game, 'terrain_manager', None)
@@ -642,6 +642,10 @@ class MovementSystem:
                            for spell in getattr(self.game, 'remainsInPlay', [])):
                         return True
                     terrain_box = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                    if route is not None and participant is unit:
+                        return any(obb_distance(box, terrain_box) <= 0
+                                   for distance in (0, route.distance if travel is None else travel)
+                                   for box in route.boxes_at(distance))
                     return any(obb_distance(
                         (box[0] + position.x - current.x, box[1] + position.y - current.y, *box[2:]),
                         terrain_box) <= 0 for position in (from_pos, to_pos) for box in boxes)
@@ -657,8 +661,11 @@ class MovementSystem:
             from spell_templates import swept_circle_distance
             current = unit.bodyNP.getPos(unit.bodyNP.getTop())
             boxes = model_base_boxes(participant)[:participant.unit.nmodels]
-            paths = [((box[0] + from_pos.x - current.x, box[1] + from_pos.y - current.y, *box[2:]),
-                      (box[0] + to_pos.x - current.x, box[1] + to_pos.y - current.y, *box[2:])) for box in boxes]
+            paths = [[((box[0] + from_pos.x - current.x, box[1] + from_pos.y - current.y, *box[2:]),
+                       (box[0] + to_pos.x - current.x, box[1] + to_pos.y - current.y, *box[2:]))] for box in boxes]
+            if route is not None and participant is unit:
+                from formed_skirmish_charge import route_base_paths
+                paths = route_base_paths(route, travel)[:participant.unit.nmodels]
             tests = 0
             for piece in tested:
                 if (getattr(piece, '_field', None) is not None or getattr(piece, 'river_centerline', None)
@@ -668,9 +675,14 @@ class MovementSystem:
                 bounds = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                 endpoints = profile.is_flying() and not any(
                     getattr(spell, 'piece', None) is piece for spell in getattr(self.game, 'remainsInPlay', []))
+                if endpoints and route is not None and participant is unit:
+                    ends = zip(route.boxes_at(0), route.boxes_at(route.distance if travel is None else travel))
+                    checks = [[(start, start), (end, end)] for start, end in ends]
+                else:
+                    checks = [[(path[0][0], path[0][0]), (path[-1][1], path[-1][1])]
+                              if endpoints and path else path for path in paths]
                 tests += sum(any(swept_circle_distance(piece.center, before, after, bounds) < float('inf')
-                                 for before, after in (((start, start), (end, end)) if endpoints else ((start, end),)))
-                             for start, end in paths)
+                                 for before, after in path) for path in checks)
             wounds = dangerous_terrain_wounds(
                 tests, 1, 'D3' if iron_shod else damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
@@ -1291,6 +1303,17 @@ class MovementSystem:
         body.node().setTransformDirty()
         return contact is not None
 
+    def flightLandingError(self, unit):
+        """Flight ends on the ground with legal base placement and clearance (p. 170)."""
+        from scouts import nearest_enemy, placement_error
+        if not unit.unit.model.is_flying():
+            return None
+        error = placement_error(self.game, unit, deployment_zone=False)
+        distance, enemy = nearest_enemy(self.game, unit)
+        if distance < 1 - 1e-5:
+            error = f'{distance:.3f}" from {enemy.unit.name}; landing requires 1 inch'
+        return error
+
     def _skirmishMovePreview(self, unit, target):
         """Free-move preview for Skirmishers: straight-line translation up to
         the move allowance in any direction (no wheel), with a circular range
@@ -1475,6 +1498,17 @@ class MovementSystem:
         #self.game.checkUnitContact(unit)
         c = self.game.checkUnitContactSmall(unit)
 
+        landing_target = self.game.getSelectedUnit(c.getNode1()) if c else None
+        if not c or (landing_target is not None and same_player(self.game, unit, landing_target)):
+            error = self.flightLandingError(unit)
+            if error:
+                unit.bodyNP.setPos(oposUnit)
+                unit.bodyNP.setHpr(orotUnit)
+                unit.bodyNP.node().setTransformDirty()
+                rule_skipped('Fly', unit, f'landing refused: {error}; movement retained (p. 170)')
+                self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+                return False
+
         if not c and unit.state != 'IsPursuing' and not ordinary_move_allowed(self.game):
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
@@ -1628,9 +1662,12 @@ class MovementSystem:
             copiedUnit.setHpr(orotUnit)
         else:
             unit.request("Moved")
-            self.movementAllowance(unit, oposUnit, unit.bodyNP.getPos(), log=True)
+            from formed_skirmish_charge import movement_route, route_features
+            route = movement_route(unit, oposUnit, orotUnit, unit.bodyNP.getPos(), unit.bodyNP.getH())
+            features = route_features(self.game, route) if route else None
+            self.movementAllowance(unit, oposUnit, unit.bodyNP.getPos(), log=True, features=features)
             self.alignModelsToHillNormal(unit)
-            self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
+            self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos(), features=features, route=route)
             self.updateDisrupted(unit)
             if self.game.fsm.state == 'MovementPhase':
                 from free_pivot import begin

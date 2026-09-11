@@ -197,9 +197,12 @@ def commit(game, unit, *, drilled_ready=False):
     unit.bodyNP.setPos(destination)
     unit.bodyNP.setH(heading.x + (game.arcPointRotation if formed else 0))
     unit.bodyNP.node().setTransformDirty()
-    game.movement.movementAllowance(unit, origin, destination, log=True)
+    from formed_skirmish_charge import movement_route, route_features
+    route = movement_route(unit, origin, heading, destination, unit.bodyNP.getH())
+    features = route_features(game, route) if route else None
+    game.movement.movementAllowance(unit, origin, destination, log=True, features=features)
     game.movement.alignModelsToHillNormal(unit)
-    game.movement.dangerousTerrainTests(unit, origin, destination)
+    game.movement.dangerousTerrainTests(unit, origin, destination, features=features, route=route)
     game.movement.updateDisrupted(unit)
     rule_log('Reserve Move', unit, f'moved {distance:.3f}" plus {unit.moveSpentThisTurn:g}" manoeuvres '
              f'of M{allowance:g}; no march or charge (p. 177)')

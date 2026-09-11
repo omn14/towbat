@@ -47,6 +47,37 @@ def test_quick_turn_is_remaining_moves_only_and_never_after_marching(scene):
     assert getattr(unit, 'freePivot', None) is None
 
 
+@pytest.mark.parametrize('context', ['Pursuit', 'Overrun', 'Reserve Move'])
+@pytest.mark.parametrize('blocked', [None, 'chargedThisTurn', 'marchedThisTurn', 'fledThisPhase', 'isInCombat'])
+def test_lumbering_post_move_contexts_and_exclusions(scene, context, blocked):
+    app, unit = restore(scene, 'Lothern Skycutter')
+    if blocked:
+        setattr(unit, blocked, True)
+    with patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'startFreeReform') as reform:
+        assert begin(app, unit, context) is (blocked is None)
+    if blocked is None:
+        reform.call_args.kwargs['on_done']()
+
+
+def test_pursuit_waits_for_lumbering_before_returning(scene):
+    from free_pivot import after_move
+    from tests.test_shieldwall_scene import combat_tasks
+    app, unit = restore(scene, 'Lothern Skycutter')
+    finished = []
+
+    def place(member, on_done):
+        member.bodyNP.setH(90)
+        assert constrain(app, member)
+        on_done()
+        finished.append(True)
+
+    with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'startFreeReform', side_effect=place):
+        run(after_move(app, unit, 'Pursuit'))
+    assert finished and not pending(app)
+
+
 def test_pivot_cannot_confirm_overlapping_friendly_or_crossing_board_edge(scene):
     app, unit = restore(scene, 'Lothern Skycutter')
     with patch.object(app, 'aiControls', return_value=False), \

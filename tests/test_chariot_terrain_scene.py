@@ -48,6 +48,31 @@ def test_base_edge_crossing_is_found_without_explicit_features(scene):
     damage.assert_called_once_with(unit, 3)
 
 
+def test_wheeled_chariot_tests_arc_only_terrain_once(scene):
+    from formed_skirmish_charge import ChargeRoute, route_features
+    from scouts import model_base_boxes
+    app, unit = restore(scene)
+    boxes = model_base_boxes(unit)
+    origin = tuple(unit.bodyNP.getPos())
+    route = ChargeRoute(origin, 0, (6, -10), 0, 90, 9.42, 0, 0, boxes)
+    middle = route.boxes_at(route.distance / 2)[0]
+    piece = app.terrain_manager.add_terrain('forest', Point3(middle[0], middle[1], 0), .1, .1)
+    piece._field = None
+    unit.bodyNP.setPos(*route.destination)
+    unit.bodyNP.setH(90)
+    assert piece in route_features(app, route)
+    with grounded(unit), patch('terrain_system.random.randint', side_effect=[1, 3]) as dice, \
+            patch.object(app.movement, 'applyWounds') as damage:
+        assert app.movement.dangerousTerrainTests(unit, origin, route.destination,
+                    features=route_features(app, route), route=route) == 3
+    assert dice.call_count == 2
+    damage.assert_called_once_with(unit, 3)
+    with patch('terrain_system.random.randint') as dice:
+        assert app.movement.dangerousTerrainTests(unit, origin, route.destination,
+                    features=route_features(app, route), route=route) == 0
+    dice.assert_not_called()
+
+
 def test_rectangular_terrain_tests_only_crossing_bases(scene):
     from scouts import model_base_boxes
     app, skycutter = restore(scene)
@@ -119,6 +144,59 @@ def test_selected_flight_mode_controls_movement_and_survives_reload(scene, tmp_p
     assert not set_mode(app, unit, 'fly')
 
 
+@pytest.mark.parametrize('obstruction', ['friend', 'enemy_clearance', 'impassable', 'board'])
+def test_live_flight_landing_refused_without_spending_move(scene, obstruction):
+    from panda3d.core import Vec2
+    app, unit = restore(scene)
+    unit.request('Idle')
+    unit.hasMovedThisTurn = False
+    app.chargeStage = 'remaining'
+    origin, heading = unit.bodyNP.getPos(), unit.bodyNP.getHpr()
+    destination = Vec3(0, -5, 0)
+    if obstruction == 'board':
+        destination.x = 36
+    app.arcPoint = Vec2((destination.x / 50 + 1) / 2,
+                        ((destination.y + unit.unitHeight * .45) / 50 + 1) / 2)
+    app.arcPointRotation = 0
+    app.moveArceDistance = 5
+    if obstruction == 'impassable':
+        app.terrain_manager.add_terrain('house', Point3(destination), 1, 1)
+    elif obstruction in ('friend', 'enemy_clearance'):
+        other = members(app)['Silver Helm' if obstruction == 'friend' else 'Chaos Warrior']
+        other.bodyNP.setH(0)
+        other.bodyNP.setPos(destination)
+        if obstruction == 'enemy_clearance':
+            other.bodyNP.setX((unit.unitWidth + other.unitWidth) / 2 + .5)
+    with patch.object(app, 'checkUnitContactSmall', return_value=None):
+        assert app.movement.moveUnit(unit) is False
+    assert unit.bodyNP.getPos().almostEqual(origin)
+    assert unit.bodyNP.getHpr().almostEqual(heading)
+    assert unit.state == 'Idle' and not unit.hasMovedThisTurn
+
+
+def test_skycutter_charge_flies_over_intervening_unit(scene):
+    from charge_declarations import begin_declarations, queue_charge
+    from first_charge import begin_charge_attempt
+    from tests.test_counter_charge_scene import declared_charge
+    app, unit, target, origin, facing, _ = declared_charge(scene, distance=10, cavalry='Lothern Skycutter')
+    blocker = members(app)['Elven Archer']
+    blocker.bodyNP.setPos(0, -9, 0)
+    blocker.bodyNP.setH(0)
+    unit.bodyNP.setPos(origin)
+    unit.bodyNP.setHpr(facing)
+    begin_declarations(app)
+    begin_charge_attempt(unit)
+    entry = queue_charge(app, unit, target, origin, facing)
+    entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))):
+        run(app.combat.resolveDeclaredCharge(entry))
+    assert unit.state == 'InCombat' and unit.isInCombatWith == [target]
+    assert blocker.state == 'Idle' and not blocker.isInCombat
+
+
 def test_linear_obstacle_blocks_ground_chariot_but_not_flight_and_roundtrips(scene):
     from scouts import placement_error
     app, unit = restore(scene)
@@ -150,6 +228,7 @@ def test_live_pursuit_and_overrun_force_ground_then_restore_flight(scene):
 
     with combat_tasks(app) as run, \
             patch.object(app, 'pathTowardsMouse', side_effect=ground_plot) as plot, \
+            patch.object(app, 'startFreeReform', side_effect=lambda member, on_done: on_done()), \
             patch.object(app, 'moveUnit', return_value=None):
         run(app.combat.pursuitMove(unit, target, 'flee'))
     plot.assert_called_once()
@@ -162,6 +241,7 @@ def test_live_pursuit_and_overrun_force_ground_then_restore_flight(scene):
     with combat_tasks(app) as run, \
             patch.object(app.combat, 'swiftstrideChoice', AsyncMock(return_value=False)), \
             patch.object(app.combat, 'rollMoveDice', AsyncMock(return_value=[1, 2])), \
+            patch.object(app, 'startFreeReform', side_effect=lambda member, on_done: on_done()), \
             patch.object(app, 'sweepTest', side_effect=ground_sweep), \
             patch.object(app.movement, 'dangerousTerrainTests') as terrain:
         run(app.combat.overrunMove(unit))
