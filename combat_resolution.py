@@ -2150,14 +2150,6 @@ class CombatResolver:
 
     async def verySimpleBattleStart(self, task):
         self.game.resolvingCombat = True
-        weps = self.game.unitToMove.unit.model.weapons
-
-        wepchoice = await taskMgr.add(self.game.makeChoiceNew(
-            weps, Vec3(0, 0, 10), owner=self.game.unitToMove,
-            prompt=f"{self.game.unitToMove.unit.name}: fight with which weapon?"))
-
-        self.game.unitToMove.unit.model.equip_weapon(wepchoice)
-
         await taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
 
@@ -2177,6 +2169,7 @@ class CombatResolver:
             self.game.resolvingCombat = False
             messenger.send('unit-move-complete')
         finally:
+            self._combatArmedProfiles = set()
             if psy:
                 psy.release_panic()
         return task.done
@@ -2323,6 +2316,8 @@ class CombatResolver:
         for model, host in ((challenge.challenger, challenge.host),
                             (challenge.accepter, challenge.accepter_host)):
             if model is None:
+                continue
+            if id(model.unit.model) in getattr(self, '_combatArmedProfiles', set()):
                 continue
             weapons = [name for name, w in model.unit.model.weapons.items()
                        if (w or {}).get('tag') != 'ranged']
@@ -2592,10 +2587,12 @@ class CombatResolver:
         for unit in defenderUnit.isInCombatWith:
             self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
             self.game.defenders.append(defenderUnit)
+        from combat_weapons import choose_unit_weapons
+        self._combatArmedProfiles = set()
         for unit in dict.fromkeys(self.game.attackers + self.game.defenders):
             from fear import test_fear
             await test_fear(self.game, unit, unit.isInCombatWith, 'combat chosen')
-            await self.shieldwallWeaponChoice(unit)
+            await choose_unit_weapons(self.game, unit, self._combatArmedProfiles)
         # Snapshot each unit's model count at the start of combat so that
         # casualties inflicted earlier this round (e.g. by a charger striking
         # first) thin the fighting ranks of a unit that strikes back.

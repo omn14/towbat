@@ -283,6 +283,15 @@ itself add gameplay effects.
       lost split-profile bonus. Boundary tests cover 2.99", 3" and 7". All 19
       command-group, 30 rule-builder, eight command-scene and 42 challenge tests
       pass. Weapon selection and target-specific charging modifiers remain open.
+      **Weapon selection completed (2026-09-11):** both sides choose their legal
+      melee weapons at combat selection. Ordinary champions follow their unit;
+      differently equipped champions, joined characters and split profiles choose
+      independently. Duels retain the chosen weapon. Lances are allowed even on
+      a 1" charge but excluded when not charging. Actual Warriors demonstrate
+      hand weapon/shield/Parry 3+ versus two-handed halberd 5+, with Ensorcelled
+      Weapons only on the hand weapon. Four new weapon scenes, 13 Shieldwall,
+      eight command and ten Assailment scenes, plus 41 faction tests pass.
+      LEFTOVER: target-specific charge modifiers and exact per-model allocation.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage
