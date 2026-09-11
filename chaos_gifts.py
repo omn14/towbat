@@ -97,7 +97,8 @@ async def start_and_command(game):
         if member.state == 'IsFleeing' or getattr(member, 'isInCombat', False):
             rule_skipped('Stupidity', member, 'fleeing or engaged: no Start of Turn test (p. 178)')
             continue
-        leadership = game.psychology.leadership_of(member)[0]
+        from warband import leadership_for_test
+        leadership = leadership_for_test(game.psychology, member, 'Stupidity')[0]
         rolled = await reroll_leadership(game, member, 'Stupidity', await dice(), leadership, dice)
         member.stupidityFailed = not leadership_passed(sum(rolled), leadership)
         joined = getattr(member, 'joinedCharacter', None)

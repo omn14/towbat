@@ -69,6 +69,19 @@ def join_unit(game, character, host) -> bool:
     """Attach *character* to the front rank of *host*. Returns True on success."""
     if character is host or has_joined_character(host) or is_character(host):
         return False
+    from rules_log import rule_log, rule_skipped
+    character_rules = {rule.get('name', '').casefold() for rule in character.unit.model.special_rules}
+    host_rules = {rule.get('name', '').casefold() for rule in host.unit.model.special_rules}
+    if ('loner' in character_rules) != ('loner' in host_rules):
+        rule_skipped('Loner', character, f'cannot join {host.unit.name}: both must have Loner (p. 172)')
+        return False
+    if 'sons of caledor' in host_rules:
+        if not getattr(character, 'isGeneral', False) and 'blood of caledor' not in character_rules:
+            rule_skipped('Sons of Caledor', character,
+                         f'cannot join {host.unit.name}: requires the General or Blood of Caledor (FoF p. 170)')
+            return False
+        rule_log('Sons of Caledor', character, f'may join {host.unit.name}: '
+                 + ('army General' if getattr(character, 'isGeneral', False) else 'Blood of Caledor'))
     from special_rules import is_ethereal
     if is_ethereal(character.unit.model) != is_ethereal(host.unit.model):
         from rules_log import rule_skipped

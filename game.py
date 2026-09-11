@@ -970,7 +970,8 @@ class MyApp(ShowBase):
         if not command and not getattr(self, 'strategyCommandDone', True):
             rule_skipped('Rally', unit, 'normal Rally follows the Command sub-phase')
             return False
-        leadership, general = self.psychology.leadership_of(unit)
+        from warband import leadership_for_test
+        leadership, general = leadership_for_test(self.psychology, unit, 'Rally')
         if general is not None:
             print(f"{unit.unit.name} rallies on the General's Leadership "
                   f"({general.unit.name}, Ld {leadership}) - Inspiring Presence.")

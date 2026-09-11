@@ -256,11 +256,13 @@ itself add gameplay effects.
       eligibility at current Unit Strength, Open Order Quick Turn for
       Warhounds, and Skirmish formation for Horsemen. Do not infer an active
       formation solely from a list of available formation keywords.
-- [ ] **Enemy Sighted / march tests**, and the Drilled/Fly exemptions; connect
-      musician and Warband modifiers to the actual Leadership-test context.
-      Core test, musician and exemptions are done. LEFTOVER: Warband modifier.
-- [ ] **Heavy-infantry Steady in the Ranks** - Chaos Warriors and the Aspiring
-      Champion's troop type; apply its disruption protection where relevant.
+- [x] **Enemy Sighted / march tests** - Drilled/Fly exemptions and musician
+      bonuses now combine with context-aware Warband Leadership (pp. 123, 180, 201).
+      LEFTOVER: none specific to these selected units' march tests.
+- [x] **Heavy-infantry Steady in the Ranks** - Chaos Warriors and the Aspiring
+      Champion's troop type use US 10, not US 5, for flank/rear disruption
+      (p. 190). Terrain and First Charge still disrupt independently. Actual
+      roster tests cover US 6, US 10 and First Charge. LEFTOVER: none specific.
 - [ ] **Weapon choices and charge conditions** - preserve hand-weapon choices
       when Ithilmar/Ensorcelled Weapons or Parry can beat the automatic choice;
       no shield in melee with a great weapon/halberd. Verify the 3" threshold
@@ -344,9 +346,10 @@ itself add gameplay effects.
       swept manoeuvre obstruction, 1-inch separation and complex joined footprints.
       Endpoint fit is not a full model-by-model legal-path proof. AI does not
       optimize optional frontage. Suspended movement tasks cannot be saved.
-- [ ] **Sons of Caledor** - restrict who may join Dragon Princes. The Mage
-      is this army's General, so that exception must allow them to join;
-      being a Wizard alone is neither permission nor a prohibition.
+- [x] **Sons of Caledor** - Dragon Princes accept only the General or a
+      Blood of Caledor character (FoF p. 170). Actual Mage-General joining
+      succeeds; the same Mage without General status is refused and logged.
+      LEFTOVER: none specific to the selected army.
 - [x] **Lileath's Blessing** - Mage (Forces of Fantasy p. 185; Magic FAQ v1.5.3).
       Human chooses Re-roll/Keep after a failed Casting roll; AI uses the reroll.
       Once-per-turn use belongs to the caster and survives save/reload. Declining
@@ -360,9 +363,17 @@ itself add gameplay effects.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
-- [ ] **Fear** - Skycutter. Charge/combat tests, relative Unit Strength,
-      immunity and once-per-turn state; show why equal/higher-strength enemies
-      do not test. Extend Mark of Chaos Undivided to this test once implemented.
+- [x] **Fear** - Skycutter (p. 168). Tests before charge declarations and when
+      combat is chosen use current relative Unit Strength, including joined
+      characters. Equal/lower-strength threats and immunity are logged skips.
+      Failed charges remain stationary and spend First Charge eligibility;
+      failed combat tests apply -1 To Hit only against the qualifying enemies,
+      including rerolls, split profiles and challenges. Per-turn results and
+      exact targets survive reload. Model Flaming Attacks cause Fear in War
+      Beasts/Swarms; a flaming spell does not grant that model rule (p. 169).
+      **Corrected:** a Fear-causing joined character does not grant host immunity.
+      Actual Skycutter/reduced-Chaos-unit scenes verify failure and reload.
+      LEFTOVER: no selected-roster Fear effect; general allocation limits remain.
 - [ ] **Skycutter split equipment and remaining chariot rules** - keep crew
       cavalry spears/shortbows separate from the Roc's Wicked Claws: now
       implemented, with separate Initiative and three-crew shooting. The
@@ -393,13 +404,15 @@ only a blocker if that relationship is actually chosen later.
       Ethereal now consumes this magical classification: qualifying hand weapons
       can wound it, mundane lances cannot. LEFTOVER: other magical-defence effects
       and tactical weapon selection; not a general magic-weapon implementation.
-- [ ] **Mark of Chaos Undivided** - Aspiring Champion, Knights, Warriors and
+- [x] **Mark of Chaos Undivided** - Aspiring Champion, Knights, Warriors and
       Horsemen. Failed Fear/Panic/Terror re-rolls, not Break or ordinary Rally
       re-rolls. Coordinate with Veteran and never re-roll a re-roll.
       Live Panic and the shared optional choice are implemented and tested with
-      the Warriors' actual Banner. Fear/Terror eligibility is tested in the
-      shared helper. LEFTOVER: no live Fear/Terror test handlers yet, so those
-      benefits cannot fire in battle. Do not mark the full rule complete.
+      the Warriors' actual Banner. Live Fear and immediate Terror charge tests
+      now call the same helper. Terror cannot force a test when Flee is forbidden;
+      losing to Terror also applies its -1 Break Leadership (p. 179).
+      LEFTOVER: neither selected roster causes Terror; broad Terror army acceptance
+      is outside this matchup, although its test/reaction hooks are implemented.
 - [x] **Gaze of the Gods and Stupidity** - Aspiring Champion (RH pp. 81, 116;
       amended Rulebook p. 178). Own Command offers Roll/Decline; AI rolls.
       All six results log their changes, character-only bonuses cap at 10,
@@ -417,14 +430,19 @@ only a blocker if that relationship is actually chosen later.
       tests and live Champion Command/reload scenes cover these paths.
       **LEFTOVER:** no additional selected-roster Gaze effects. Broader
       charge geometry and movement limitations remain tracked separately.
-- [ ] **Warband** - Horsemen. Charge-roll re-roll and context-limited Rank
-      Bonus to Leadership. Their selected Skirmish formation gives no Rank
-      Bonus, but that does not remove the charge-reroll benefit. Test fleeing,
-      Restraint and non-Warband character Leadership explicitly.
-- [ ] **Loner and Undisciplined** - Warhounds. Enforce character-joining and
-      General restrictions, and do not lend them the General's Inspiring
-      Presence through the generic Leadership helper. Undisciplined comes
-      from the War Beasts troop type even though absent from the roster keywords.
+- [x] **Warband** - Horsemen (amended p. 180). A majority allows one complete
+      Charge-roll reroll, including Swiftstride dice, but not pursuit or the
+      Counter Charge reaction roll. Human owners choose; AI rerolls low rolls.
+      Leadership tests use eligible current ranks, capped at 10; fleeing,
+      Restraint and Impetuous exclude the modifier. Non-Warband character
+      Leadership is never increased. Skirmishers have no rank bonus but retain
+      the charge reroll. LEFTOVER: no selected-roster Warband effect.
+- [x] **Loner and Undisciplined** - Warhounds (pp. 172, 191, 193). Joining
+      requires matching Loner status; Loner characters cannot be General.
+      War Beasts' troop-type Undisciplined excludes both Inspiring Presence
+      and Hold Your Ground. Logs explain exclusions at test time, not during
+      every command-range query. Actual imported unit tests pass.
+      LEFTOVER: none specific to the selected army.
 - [x] **The Banner Of The Bold and Helm Of Courage** - owned inventory,
       sourced Veteran, passive armour and optional once-per-game Break reroll
       are implemented below. Chaos Armour's separate Ward is now also live.

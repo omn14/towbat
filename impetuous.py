@@ -86,7 +86,8 @@ async def complete_declarations(game):
         if declared is None and not targets:
             rule_skipped('Impetuous', unit, 'no legal charge target; no Leadership test or compulsory charge')
             continue
-        leadership, general = game.psychology.leadership_of(unit)
+        from warband import leadership_for_test
+        leadership, general = leadership_for_test(game.psychology, unit, 'Impetuous')
         joined = active_character(unit)
         if joined is not None:
             leadership = max(leadership, int(joined.unit.model.characteristics.get('Ld', leadership)))

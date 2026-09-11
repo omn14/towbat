@@ -263,6 +263,9 @@ def save_game_state(game, filename=None):
             'lileathUsedTurn': getattr(unit, 'lileathUsedTurn', None),
             'gazeState': copy.deepcopy(getattr(unit, 'gazeState', {})),
             'stupidityFailed': getattr(unit, 'stupidityFailed', False),
+            'fearTestTurn': getattr(unit, 'fearTestTurn', None),
+            'fearFailed': getattr(unit, 'fearFailed', False),
+            'fearTargets': list(getattr(unit, 'fearTargets', [])),
             'dispelBlockedTurn': getattr(unit, 'dispelBlockedTurn', None),
             'chargeAttempts': getattr(unit, 'chargeAttempts', 0),
             'chargeAttemptPending': getattr(unit, 'chargeAttemptPending', False),
@@ -593,6 +596,9 @@ def load_game_state(game, filename):
         unit.lileathUsedTurn = unit_data.get('lileathUsedTurn')
         unit.gazeState = copy.deepcopy(unit_data.get('gazeState', {}))
         unit.stupidityFailed = unit_data.get('stupidityFailed', False)
+        unit.fearTestTurn = unit_data.get('fearTestTurn')
+        unit.fearFailed = unit_data.get('fearFailed', False)
+        unit.fearTargets = list(unit_data.get('fearTargets', []))
         unit.dispelBlockedTurn = unit_data.get('dispelBlockedTurn')
         unit.chargeAttempts = unit_data.get('chargeAttempts', 1)
         unit.chargeAttemptPending = unit_data.get('chargeAttemptPending', False)

@@ -21,7 +21,8 @@ def nearby_enemy(game, unit):
 
 
 async def enemy_sighted_test(game, unit, enemy, distance):
-    leadership, _ = game.psychology.leadership_of(unit)
+    from warband import leadership_for_test
+    leadership, _ = leadership_for_test(game.psychology, unit, 'Enemy Sighted')
     leadership = musician_leadership(unit, leadership, 'march', log=True)
     dice = await game.rollLeadershipDice()
     dice = await reroll_leadership(game, unit, 'Enemy Sighted', dice, leadership, game.rollLeadershipDice)

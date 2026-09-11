@@ -216,8 +216,10 @@ def test_musician_changes_enemy_sighted_result_and_failure_counts_as_march():
     import asyncio
     from unittest.mock import AsyncMock, patch
     from marching import enemy_sighted_test
+    from models import model
 
     host = member('musician')
+    host.unit.model = model('Chaos Warrior', '')
     enemy = member()
     game = SimpleNamespace(psychology=SimpleNamespace(leadership_of=lambda _: (7, None)),
                            rollLeadershipDice=AsyncMock(return_value=[4, 4]))
@@ -260,6 +262,7 @@ def test_split_attack_counts_include_existing_charge_hooks():
     apply_rule_keywords(host.unit.model, ['Furious Charge'])
     target = SimpleNamespace(name='Enemy', model=model('Chaos Warrior', ''), nmodels=4, files=4, ranks=1)
     part = combat_profiles(host, None)[0]
+    host.unit.model.ithilmar_rerolled = False
     with patch('battleFunctions.simulate_attack', return_value=(False, False)):
         result = simulate_battle(part.unit(lambda: part.attacks(4, 4)), target, charge=True)
     assert result[0] == 8

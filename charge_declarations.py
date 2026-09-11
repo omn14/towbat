@@ -97,6 +97,9 @@ async def choose_reactions(game, entries):
         if spent is not None and spent == current_turn(game):
             continue
         options = {'hold': None, 'flee': incoming[0]}
+        from fear import cannot_flee
+        if cannot_flee(defender):
+            options.pop('flee')
         for index, entry in enumerate(incoming, 1):
             origin, facing = Vec3(*entry.origin), Vec3(*entry.facing)
             suffix = f'{index}: {entry.charger.unit.name}'
@@ -105,7 +108,7 @@ async def choose_reactions(game, entries):
             shoot = game.combat.standAndShootOption(defender, entry.charger, origin, facing)
             if shoot:
                 options[f'stand & shoot {suffix}'] = entry
-                if game.combat.fireAndFleeOption(defender, entry.charger, shoot):
+                if not cannot_flee(defender) and game.combat.fireAndFleeOption(defender, entry.charger, shoot):
                     options[f'fire & flee {suffix}'] = entry
         if defender.state == 'IsFleeing':
             choice = 'flee'

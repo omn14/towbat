@@ -402,7 +402,14 @@ def select_general(units):
     """
     for u in units:
         setattr(u, 'isGeneral', False)
-    characters = [u for u in units if is_character_unit(u)]
+    characters = []
+    for unit in units:
+        if not is_character_unit(unit):
+            continue
+        if any(rule.get('name', '').casefold() == 'loner' for rule in unit.unit.model.special_rules):
+            rule_skipped('Loner', unit, 'cannot be nominated as General (p. 172)')
+            continue
+        characters.append(unit)
     if not characters:
         return None
     model_flag = [u for u in characters
@@ -560,7 +567,12 @@ def combat_rank_bonus(unit, *, log=False) -> int:
         character = getattr(enemy, 'joinedCharacter', None)
         if character is not None:
             strength += unit_strength_total(character)
-        if strength < 5:
+        steady = unit.unit.model.troop_type_rule('Steady in the Ranks')
+        threshold = 10 if steady else 5
+        if strength < threshold:
+            if log and steady and strength >= 5:
+                rule_log('Steady in the Ranks', unit,
+                         f'US{strength} enemy in {face} is below 10; rank bonus +{bonus} retained (p. 190)')
             continue
         if is_skirmish_unit(enemy):
             if log and bonus:
@@ -788,7 +800,8 @@ class PsychologySystem:
                   f"{cause} compels the test — a failure costs it ground.")
 
         unit.panicTestedThisPhase = True
-        ld, general = self.leadership_of(unit)
+        from warband import leadership_for_test
+        ld, general = leadership_for_test(self, unit, 'Panic')
         if general is not None:
             print(f"[Panic] {unit.unit.name} uses the General's Leadership "
                   f"({general.unit.name}, Ld {ld}) — Inspiring Presence.")
@@ -1067,6 +1080,8 @@ class PsychologySystem:
 
     def general_of(self, unit):
         """The friendly General whose Command range covers *unit*, else None."""
+        if getattr(unit.unit.model, 'troop_type_rule', lambda name: False)('Undisciplined'):
+            return None
         return self._command_source(unit, lambda u: getattr(u, 'isGeneral', False))
 
     def battle_standard_of(self, unit):
@@ -1075,6 +1090,8 @@ class PsychologySystem:
         Hold Your Ground lets those units re-roll failed Panic and Rally tests,
         and re-roll the 2D6 of a Break test (Rulebook p. 203).
         """
+        if getattr(unit.unit.model, 'troop_type_rule', lambda name: False)('Undisciplined'):
+            return None
         return self._command_source(unit, is_battle_standard_unit)
 
     def leadership_of(self, unit):

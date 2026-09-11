@@ -81,6 +81,9 @@ CONTACT_GAP = 0.05
 CRASH_MARGIN = 0.05
 
 
+from warband import leadership_for_test, roll_charge
+
+
 class CombatResolver:
     """Encapsulates all combat resolution logic for the game."""
 
@@ -229,7 +232,7 @@ class CombatResolver:
             self.game.moveArceDistance = route.distance
             self.game.playerNP.setPos(*route.destination)
             bonus = await self.swiftstrideChargeChoice(charger)
-            dice_models, rolls = await self.rullTerninger(3 if bonus else 2, bonus)
+            dice_models, rolls = await roll_charge(self.game, charger, bonus, self.rullTerninger)
             allowance = self.chargeDistance(charger, origin, rolls)
             travel = min(route.distance, allowance)
             if allowance < route.distance:
@@ -423,7 +426,7 @@ class CombatResolver:
                 declaration.charge_dice = [6, 6]
             else:
                 bonus = await self.swiftstrideChargeChoice(unit)
-                dice_models, declaration.charge_dice = await self.rullTerninger(3 if bonus else 2, bonus)
+                dice_models, declaration.charge_dice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
                 for die in dice_models:
                     die.remove(self.game.world)
             self.chargeDistance(unit, origin, declaration.charge_dice)
@@ -590,6 +593,30 @@ class CombatResolver:
             if unit.state != 'IsPursuing':
                 from first_charge import begin_charge_attempt
                 begin_charge_attempt(unit)
+            if declaration is None and unit.state != 'IsPursuing':
+                from fear import test_fear
+                if not await test_fear(self.game, unit, [defender], 'charge declaration'):
+                    from first_charge import finish_charge_attempt
+                    finish_charge_attempt(unit)
+                    unit.bodyNP.setPos(oposUnit)
+                    unit.bodyNP.setHpr(orotUnit)
+                    unit.bodyNP.node().setTransformDirty()
+                    unit.hasMovedThisTurn = True
+                    unit.isChargingMove = unit.wouldMarch = False
+                    self.game.autoCharge = self.game.autoHold = False
+                    unit.updateTextNode()
+                    messenger.send('unit-move-complete')
+                    return task.done
+                from fear import terror_test
+                if not await terror_test(self.game, defender, unit):
+                    from charge_declarations import flee_reaction
+                    from types import SimpleNamespace
+                    contact_position = Vec3(unit.bodyNP.getPos())
+                    unit.bodyNP.setPos(oposUnit)
+                    try:
+                        await flee_reaction(self.game, defender, [SimpleNamespace(charger=unit)])
+                    finally:
+                        unit.bodyNP.setPos(contact_position)
             if formed_preview is not None:
                 route = formed_preview.route
                 rule_log('Skirmishers', unit,
@@ -610,11 +637,14 @@ class CombatResolver:
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
+            from fear import cannot_flee
+            if cannot_flee(defender):
+                chargeReaction.remove('flee')
             counterOption = self.counterChargeOption(defender, unit, oposUnit, orotUnit) if declaration is None else None
             if counterOption:
                 chargeReaction.insert(0, 'counter charge')
             shootOption = self.standAndShootOption(defender, unit, oposUnit, orotUnit) if declaration is None else None
-            fireFlee = self.fireAndFleeOption(defender, unit, shootOption)
+            fireFlee = not cannot_flee(defender) and self.fireAndFleeOption(defender, unit, shootOption)
             if fireFlee:
                 chargeReaction.insert(0, "fire & flee")
             if shootOption:
@@ -1110,7 +1140,7 @@ class CombatResolver:
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
-            terninger, chdice = await self.rullTerninger(3 if bonus else 2, bonus)
+            terninger, chdice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
 
         else:
             while self.game.attackSequence2.isPlaying():
@@ -1389,7 +1419,7 @@ class CombatResolver:
             dice_models = []
         elif not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
-            dice_models, chdice = await self.rullTerninger(3 if bonus else 2, bonus)
+            dice_models, chdice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
         else:
             dice_models = []
             chdice = [6, 6] if chdice is None else chdice
@@ -1519,7 +1549,7 @@ class CombatResolver:
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
         if not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
-            terninger, chdice = await self.rullTerninger(3 if bonus else 2, bonus)
+            terninger, chdice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
         else:
             while self.game.attackSequence2.isPlaying():
                 await Task.pause(0.5)
@@ -2023,9 +2053,11 @@ class CombatResolver:
             def attack_count():
                 return attacks_at_step[id(part)]
 
-            result = simulate_battle(part.unit(attack_count), target.unit,
-                                     charge=getattr(host, 'chargedThisTurn', False),
-                                     first_round=getattr(host, 'roundsFought', 0) == 1)
+            from fear import attack_penalty
+            with attack_penalty(self.game, host, target, part.profile):
+                result = simulate_battle(part.unit(attack_count), target.unit,
+                                         charge=getattr(host, 'chargedThisTurn', False),
+                                         first_round=getattr(host, 'roundsFought', 0) == 1)
             slaying = take_last_slaying_blows()
             if not result[0]:
                 rule_skipped('Champion' if part.role == 'champion' else 'Split Profile', host,
@@ -2434,8 +2466,10 @@ class CombatResolver:
                 weapon = unit.model.equipedWeapon
                 if weapon is None or weapon.get('tag') == 'ranged':
                     unit.model.equip_best_melee()
-                attacks, hits, suffered, saved, wounds = simulate_battle(
-                    unit, rival.unit, charge=charged, first_round=first)
+                from fear import attack_penalty
+                with attack_penalty(self.game, model, rival, unit.model):
+                    attacks, hits, suffered, saved, wounds = simulate_battle(
+                        unit, rival.unit, charge=charged, first_round=first)
                 slaying = take_last_slaying_blows()
                 if slaying:
                     wounds = max(wounds, wounds_remaining(rival))
@@ -2531,6 +2565,8 @@ class CombatResolver:
             self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
             self.game.defenders.append(defenderUnit)
         for unit in dict.fromkeys(self.game.attackers + self.game.defenders):
+            from fear import test_fear
+            await test_fear(self.game, unit, unit.isInCombatWith, 'combat chosen')
             await self.shieldwallWeaponChoice(unit)
         # Snapshot each unit's model count at the start of combat so that
         # casualties inflicted earlier this round (e.g. by a charger striking
@@ -2686,11 +2722,15 @@ class CombatResolver:
             ld = _stat_int(loserUnit.unit.model.characteristics, 'Ld', 7)
             psy = getattr(self.game, 'psychology', None)
             if psy is not None:
-                ld, general = psy.leadership_of(loserUnit)
+                ld, general = leadership_for_test(psy, loserUnit, 'Break')
                 if general is not None:
                     print(f"{loserUnit.unit.name} takes its Break test on the "
                           f"General's Leadership ({general.unit.name}, Ld {ld}) "
                           f"— Inspiring Presence.")
+            from fear import causes
+            if any(causes(enemy.unit.model, 'Terror') for enemy in getattr(loserUnit, 'isInCombatWith', [])):
+                rule_log('Terror', loserUnit, f'losing to a Terror-causing enemy: Break Ld {ld} -> {ld - 1} (p. 179)')
+                ld -= 1
             overwhelm = self.isOverwhelmed(loserUnit, loserUnits)
 
             if stubborn_available(loserUnit):
@@ -2873,7 +2913,7 @@ class CombatResolver:
         ld = _stat_int(winner.unit.model.characteristics, 'Ld', 7)
         psy = getattr(self.game, 'psychology', None)
         if psy is not None:
-            ld, _ = psy.leadership_of(winner)
+            ld, _ = leadership_for_test(psy, winner, 'Restraint')
         dice = await self.rollBreakDice()
         dice = await reroll_leadership(self.game, winner, 'Restraint', dice, ld,
                           self.rollBreakDice)
