@@ -549,6 +549,10 @@ def combat_rank_bonus(unit, *, log=False) -> int:
                          'Disrupted, but Skirmishers already claim +0 rank bonus (pp. 169, 185)')
         return 0
     disrupted = bool(getattr(unit, 'isDisrupted', False))
+    if log and unit.unit.files > 0 and -(-unit.unit.nmodels // unit.unit.files) > unit.unit.files:
+        rule_log('Marching Column', unit,
+                 f'{unit.unit.files} files / {-(-unit.unit.nmodels // unit.unit.files)} ranks: '
+                 'rank bonus +0 despite depth (p. 101)')
     for enemy, face in zip(getattr(unit, 'isInCombatWith', []), getattr(unit, 'isInCombatFlank', [])):
         if face not in ('flank', 'rear') or enemy.unit.nmodels <= 0:
             continue
@@ -585,11 +589,13 @@ def rank_bonus(unit, disrupted: bool = False, *, skirmish=None) -> int:
     One per rank behind the first. A rank only counts if it holds at least the
     troop type's models per rank, which is also why a unit narrower than that
     claims nothing at all. Skirmishers claim none, a Disrupted unit claims
-    none, and each troop type caps what it can claim -- a heavy chariot cannot
-    form ranks at all.
+    none, and Marching Column claims none (p. 101). Each troop type caps what
+    it can claim -- a heavy chariot cannot form ranks at all.
     """
     model = unit.model
     if disrupted or (model.is_skirmisher() if skirmish is None else skirmish):
+        return 0
+    if unit.files > 0 and -(-unit.nmodels // unit.files) > unit.files:
         return 0
     cap = model.max_rank_bonus(MAX_RANK_BONUS)
     if cap <= 0:

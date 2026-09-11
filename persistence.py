@@ -170,6 +170,10 @@ def save_game_state(game, filename=None):
         The filename that was written.
     """
     from charge_declarations import save_declarations
+    from drilled import move_pending
+    if move_pending(game):
+        battle_log('Finish the Drilled movement choice before saving.', 'info')
+        return None
     if getattr(game, 'chargeStage', None) in ('resolving', 'blocked'):
         battle_log('Save unavailable during interrupted or active charge resolution.', 'info')
         return None
@@ -387,6 +391,10 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    from drilled import move_pending
+    if move_pending(game):
+        battle_log('Finish the Drilled movement choice before loading.', 'info')
+        return
     if getattr(game, 'chargeStage', None) == 'resolving':
         battle_log('Finish charge resolution before loading a battle.', 'info')
         return

@@ -113,6 +113,7 @@ def test_countercharge_target_does_not_force_charge_move_order(scene):
 
     with combat_tasks(app) as run, \
             patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[1, 1])), \
             patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=choose)), \
             patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [3]))) as dice, \
             patch.object(app.combat, 'resolveDeclaredCharge', AsyncMock(side_effect=move)):
@@ -137,6 +138,7 @@ def test_multiple_charges_recompute_contact_after_countercharge(scene):
     app.fsm.request('MovementPhase')
     with combat_tasks(app) as run, \
             patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[1, 1])), \
             patch.object(app.combat, 'rullTerninger', AsyncMock(side_effect=[([], [3]), ([], [6, 6]), ([], [6, 6])])), \
             patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)):
         run(app.combat.chargeAndChargeReaction(charger, contact, origin, facing, SimpleNamespace(done=None)))

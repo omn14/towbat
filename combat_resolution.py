@@ -163,6 +163,8 @@ class CombatResolver:
         charger.marchedThisTurn = charger.wouldMarch = False
         dice_models = []
         try:
+            from drilled import before_move
+            await before_move(self.game, defender, 'Counter Charge')
             dice_models, rolls = await self.rullTerninger(1)
             distance = counter_charge_distance(rolls[0])
             for die in dice_models:
@@ -411,6 +413,28 @@ class CombatResolver:
         unit.bodyNP.setPos(origin)
         unit.bodyNP.setHpr(facing)
         unit.isChargingMove = True
+        from drilled import before_move, has_drilled, marching_column
+        if has_drilled(unit) or marching_column(unit):
+            self.game.playerNP.setPos(*declaration.destination)
+            self.game.moveArceDistance = declaration.distance
+            if self.game.autoRoll:
+                declaration.charge_dice = [6, 6]
+            else:
+                bonus = await self.swiftstrideChargeChoice(unit)
+                dice_models, declaration.charge_dice = await self.rullTerninger(3 if bonus else 2, bonus)
+                for die in dice_models:
+                    die.remove(self.game.world)
+            self.chargeDistance(unit, origin, declaration.charge_dice)
+            await before_move(self.game, unit, 'charge move', compulsory=declaration.compulsory)
+            origin = Vec3(unit.bodyNP.getPos())
+            if marching_column(unit):
+                rule_log('Marching Column', unit,
+                         f'{unit.unit.files} files / {unit.unit.ranks} ranks: cannot make a charge move; '
+                         'charge fails without moving (p. 101; FAQ v1.5.3)')
+                finish_charge_attempt(unit)
+                unit.isChargingMove = False
+                unit.request('Moved')
+                return
         if not getattr(unit, 'isSkirmisher', False) and not getattr(defender, 'isSkirmisher', False):
             source = self.game.psychology._unit_box(unit)
             target = self.game.psychology._unit_box(defender)
@@ -661,7 +685,8 @@ class CombatResolver:
                 unit.hasMovedThisTurn = True
                 unit.updateTextNode()
                 if declaration is not None or unit.state == 'IsPursuing':
-                    await self.chargeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank)
+                    await self.chargeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank,
+                                              chdice=declaration.charge_dice if declaration is not None else None)
                 else:
                     taskMgr.add(self.chargeInterval, "chargeIntervalTask",
                                 extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank],
@@ -1336,7 +1361,9 @@ class CombatResolver:
         route = preview.route
         self.game.diceInfoText.setText(self.chargeRangeText(
             unit, route_allowance(self.game, unit, route)))
-        if not self.game.autoRoll:
+        if chdice is not None:
+            dice_models = []
+        elif not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
             dice_models, chdice = await self.rullTerninger(3 if bonus else 2, bonus)
         else:
@@ -2824,6 +2851,8 @@ class CombatResolver:
 
     async def giveGroundMove(self, loserUnit, followers):
         """The loser backs off 2" and anyone following up comes with it."""
+        from drilled import before_move
+        await before_move(self.game, loserUnit, 'Giving Ground')
         winners = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
         direction = self.giveGroundDirection(loserUnit, winners)
         moving = [loserUnit] + [f for f in followers if not f.bodyNP.isEmpty()]

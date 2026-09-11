@@ -18,13 +18,16 @@ class ChargeDeclaration:
     route: object = None
     target_index: int | None = None
     preview: object = None
+    compulsory: bool = False
+    charge_dice: object = None
 
 
 def save_declarations(game):
     return [dict(charger=entry.charger.unitName, defender=entry.defender.unitName,
                  origin=entry.origin, facing=entry.facing,
                  contact_position=entry.contact_position, contact_facing=entry.contact_facing,
-                 destination=entry.destination, distance=entry.distance, target_index=entry.target_index)
+                 destination=entry.destination, distance=entry.distance, target_index=entry.target_index,
+                 compulsory=entry.compulsory)
             for entry in getattr(game, 'chargeDeclarations', [])]
 
 
@@ -37,7 +40,8 @@ def restore_declarations(game, state, unit_map):
                       ('origin', 'facing', 'contact_position', 'contact_facing', 'destination')}
             game.chargeDeclarations.append(ChargeDeclaration(charger, defender, **values,
                                                              distance=record['distance'],
-                                                             target_index=record.get('target_index')))
+                                                             target_index=record.get('target_index'),
+                                                             compulsory=record.get('compulsory', False)))
     stage = state.get('charge_stage')
     if stage is None and state.get('current_phase') == 'MovementPhase':
         stage = 'remaining'
@@ -164,7 +168,10 @@ async def resolve_declarations(game):
     set_stage(game, 'resolving')
     entries = game.chargeDeclarations
     counter_defenders = []
+    completed = False
     try:
+        from impetuous import complete_declarations
+        await complete_declarations(game)
         await choose_reactions(game, entries)
         for entry in entries:
             if entry.reaction == 'counter charge':
@@ -198,10 +205,11 @@ async def resolve_declarations(game):
                 entry = options[selected]
             await game.combat.resolveDeclaredCharge(entry)
             entries.remove(entry)
+        completed = True
     finally:
         for defender in counter_defenders:
             finish_charge_attempt(defender)
-        if not entries:
+        if completed:
             set_stage(game, 'remaining')
             battle_log('Charge moves complete. Remaining Moves.', 'info')
         else:

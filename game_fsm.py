@@ -101,7 +101,9 @@ class GamePhaseFSM(FSM):
             return  # Finish or cancel the cast before advancing the battle phase.
         if self.state == 'MovementPhase':
             from charge_declarations import collecting, resolve_declarations
+            from drilled import move_pending
             if (getattr(self.game, 'awaitingChoice', False)
+                or move_pending(self.game)
                     or getattr(self.game, 'chargeStage', None) in ('resolving', 'blocked')
                           or any(taskMgr.hasTaskNamed(name) for name in
                               ('resolveChargesTask', 'chargeAndChargeReaction'))):

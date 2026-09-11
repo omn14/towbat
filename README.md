@@ -160,7 +160,8 @@ to use it with accurate history. Pending state is saved, but suspended charge
 animations are not resumed by this feature.
 
 This is the First Charge core of the movement work, not completion of the
-matchup. Impetuous, Drilled and formation follow-ups remain open; detailed boundaries are in
+matchup. The selected cavalry now also have Impetuous and Drilled support;
+detailed formation boundaries are in
 [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
 
 ```bash
@@ -181,8 +182,9 @@ gives both units charging benefits, including eligible First Charge effects.
 Once-per-turn use survives save/reload. Charging into an enemy no longer produces
 the erroneous marching log or sets the marching flag.
 
-This remains partial: Drilled, Marching Column and
-loose-formation interactions remain unfinished; see the checklist's explicit
+Drilled defenders can freely redress before their Counter Charge. This remains
+partial: wider Marching Column/reaction and loose-formation interactions need
+further work; see the checklist's explicit
 limitations. Loading a save does not resume an in-flight reaction animation.
 
 ```bash
@@ -216,10 +218,44 @@ without a recorded stage resume in Remaining Moves to avoid inventing declaratio
 Remaining limits include redirection, simultaneous frontage maximisation,
 complex flying/obstructed routes, and multiple form-ups or fleeing loose targets.
 Unsupported reserved loose-target routes are logged and spent rather than silently
-retargeted. Drilled and Impetuous are still the next rule work.
+retargeted.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_charge_declarations.py tests/test_charge_declarations_scene.py
+```
+
+### Drilled and Impetuous
+
+Dragon Princes use the amended Impetuous Leadership test, not the old 4+ roll
+(Rulebook p. 172). Resolve Charges tests eligible units before reactions; failure
+adds a compulsory charge, with a target choice when several legal targets exist.
+An already-declared unit still tests, because failure can require Drilled redress.
+Shared Leadership and Veteran rerolls apply. Both human and AI paths use this
+resolver, and declaration-stage reloads do not duplicate charge attempts.
+
+Drilled offers one free redress of up to five front-rank models before a committed
+Remaining Move, Counter Charge, Giving Ground, or queued charge move (pp. 125,
+167; FAQ v1.5.3). The front rank remains anchored; normal movement and manoeuvre
+allowances are preserved. Charge dice precede the redress, then the route is
+rebuilt. Candidate formations must fit other units, impassable terrain and the
+board, and cannot move a model more than 2M during the manoeuvre.
+
+A Marching Column has no rank bonus and marches at 3M (p. 101). It can declare a
+charge but cannot make the charge move until it leaves column. A compulsory
+Drilled charger must adopt a fitting Combat Order; if it cannot, the charge fails
+without movement. Voluntary chargers may decline redress. Drilled's existing
+Enemy Sighted exemption still applies.
+
+Pending Drilled movement blocks other movement input, phase advance and save/load.
+Ordinary redress cannot be used during declarations to evade Impetuous.
+The 25 focused offscreen scenarios cover the actual three Dragon Princes against
+Chaos Knights, including Counter Charge, First Charge, human/AI choices and reload.
+This is not a complete-matchup verification. Loose Impetuous chargers, advanced
+blocked/flight routes, and free-redress hooks for other movement sources remain
+explicit checklist limitations.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_drilled_impetuous_scene.py
 ```
 
 Focused inventory checks use the memory-bounded runner:

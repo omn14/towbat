@@ -136,7 +136,7 @@ itself add gameplay effects.
   The duel remains a separate pass from the surrounding combat.
 - LEFTOVER: captured-standard VP are persisted, but the tactical assessment
   is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
-  Drilled's free redress and the remaining magic-item/faction effects belong
+      remaining movement extensions and magic-item/faction effects belong
   to later steps. This does not mark either army fully rules-complete.
 
 ### Existing Support to Reuse
@@ -224,8 +224,9 @@ itself add gameplay effects.
       links; already-engaged defenders now keep them. Failed planned charges move
       only the Charge roll. Flee's board-distance helper imports from special_rules.
       A queued loose target is not reselected by sight after reactions or reload.
-      **LEFTOVER:** Drilled redress, Marching Column restrictions and loose-formation Counter
-      Charge remain unfinished (loose pairs are refused with a log). Complex
+      Drilled now offers free redress before the formed Counter Charge advance.
+      **LEFTOVER:** wider Marching Column/Counter Charge restrictions and loose-formation
+      Counter Charge remain unfinished (loose pairs are refused with a log). Complex
       obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
       need broader verification, as do simultaneous frontage maximisation and
       redirected charges. Multiple loose-defender form-ups and fleeing loose
@@ -303,13 +304,43 @@ itself add gameplay effects.
       AP never modifies the Ward. Report aggregate rolls and superseded sources.
       LEFTOVER: armour-wearing Wizard permission is not implemented or needed
       by these three non-Wizard models.
-- [ ] **Impetuous** - Dragon Princes (p. 172, amended wording). Use the
-      Leadership test for compulsory charges, not the old 4+ mechanism.
-      A legal target, charge declaration sequencing and Drilled all matter.
-- [ ] **Drilled** - Dragon Princes. Free redress before applicable movement
-      and exemption from Enemy Sighted tests (the exemption is now coded).
-      Include the FAQ cases for
-      Counter Charge, Giving Ground and compulsory charges from Marching Column.
+- [x] **Impetuous (selected formed cavalry)** - Dragon Princes (p. 172,
+      amended wording; FAQ v1.5.3). Resolve Charges tests once before reactions,
+      using Leadership/Inspiring Presence, active joined-character Leadership and
+      shared Veteran rerolls. Failure adds a compulsory declaration with owner
+      target selection; AI selects the nearest supported legal route. A prior
+      voluntary declaration still tests, so failure cannot evade compulsory
+      Drilled. Ordinary redress is blocked during declarations. Rule presence
+      includes joined and split-profile models; the old 4+ mechanism is not used.
+      **LEFTOVER:** loose Impetuous chargers are explicitly logged as unsupported.
+      Routing still needs broader flight/large-target/height and obstructed-charge
+      support, including the FAQ's friendly Skirmisher screen that may move away.
+      Other compulsory-charge sources (Frenzy, spell restrictions) are not added
+      by this implementation. Legacy saves without a declaration stage still
+      resume in Remaining Moves rather than inventing retroactive tests.
+- [x] **Drilled (selected movement paths)** - Dragon Princes (pp. 125, 167;
+      FAQ v1.5.3). Free redress immediately before committed Remaining Moves,
+      queued charge moves, Counter Charge and Giving Ground. The front is anchored;
+      up to five files change without spending normal movement/manoeuvre allowance.
+      Charge dice precede redress; routes are rebuilt afterwards. Joined characters
+      accompany the host. Candidate shapes roll back cleanly, retain character
+      slots and reject unit/impassable/board overlap or model movement beyond 2M.
+      Human choices and AI keep/required-redress policy use the same helper.
+      Drilled retains its Enemy Sighted exemption. Pending Remaining Move choices
+      block extra movement, phase advance and save/load.
+      **Marching Column (p. 101):** no rank bonus, 3M march, declaration allowed
+      but queued charge fails without movement if still in column. A compulsory
+      Drilled charger must redress into Combat Order when a legal shape fits;
+      a voluntary charger may keep its column. No-room and declined cases log.
+      **Corrected during implementation:** replot from the actual clicked target,
+      not the stale collision marker; complete empty declaration queues; use the
+      active-character Leadership helper. Existing declaration/rally tests now
+      supply Impetuous dice or close declarations before ordinary redress.
+      **LEFTOVER:** free-redress hooks for Vanguard, pursuit/overrun, Follow Up,
+      reserve and spell-granted movement; broader column/Counter Charge restrictions;
+      swept manoeuvre obstruction, 1-inch separation and complex joined footprints.
+      Endpoint fit is not a full model-by-model legal-path proof. AI does not
+      optimize optional frontage. Suspended movement tasks cannot be saved.
 - [ ] **Sons of Caledor** - restrict who may join Dragon Princes. The Mage
       is this army's General, so that exception must allow them to join;
       being a Wizard alone is neither permission nor a prohibition.
@@ -635,8 +666,9 @@ first playable milestone must explicitly restrict the selected known spells.
       magical-defence and Wizard-armour dependencies are explicit above.
 6. Charges/movement: in progress. First Charge core, counted-pursuit timing and
       save/load are implemented, as are the declaration queue, post-declaration
-      reaction selection and formed Counter Charge routing. Impetuous/Drilled,
-      formation dependencies and the explicit geometry leftovers remain open.
+      reaction selection and formed Counter Charge routing. Selected-cavalry
+      Impetuous, Drilled and core Marching Column dependencies are now implemented
+      and tested together. The explicit movement/geometry leftovers remain open.
 7. Magic and remaining dependencies: selected lore effects, Lileath choices,
       effect lifetimes and Gaze of the Gods including Stupidity.
 8. Complete matchup verification using both exact roster imports offscreen.
@@ -656,6 +688,10 @@ first playable milestone must explicitly restrict the selected known spells.
       remain pending. Banner loss and joined-character scope are tested separately.
 - [ ] Silver Helms/Dragon Princes versus Chaos Knights test first charge,
       counter charge, riders versus mounts, armour/Ward, and first-round timing.
+- [x] Combined movement slice: failed Impetuous, required Drilled from column,
+      Counter Charge and First Charge against Chaos Knights, human/AI choices,
+      live EnhancedAI resolver entry, voluntary declarations and reload. This
+      does not complete the broader combat acceptance item above.
 - [ ] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
       crew shooting/melee, Roc attacks, terrain and flight; Horsemen cannot
       shoot or Fire & Flee with their melee-only Throwing Spears.
@@ -674,7 +710,19 @@ services; no monolithic or full-matchup run. The adjacent item scene passed
 10/11 checks but reproduced the previously recorded horizontal HUD
 `!mat.is_nan()` assertion; this unrelated intermittent failure remains unfixed.
 
-**Point 6 verification so far:** 14 focused First Charge checks and five
+**Drilled/Impetuous verification (2026-09-11):** 25 actual-roster offscreen checks
+pass, including free/declined/blocked redress, anchored frontage, engaged Giving
+Ground, Counter Charge timing, actual 3M marching, column rank denial, pass/fail
+and ineligible Impetuous, joined-model scope/Veteran, pending-choice guards and
+combined human/AI/reload charges. All 297 distinct focused/adjacent checks in this
+work pass through sequential bounded services (768/1024 MiB; peak 850.3 MiB).
+Adjacent coverage includes declarations, First Charge, Counter Charge, marching,
+mounted preview, persistence, pursuit ordering, rally movement, Vanguard,
+formed/Skirmisher routes, Shieldwall and post-combat results. No monolithic suite
+or full-matchup acceptance run. Sources: rule pages pp. 101, 125, 167, 172 and
+the online Movement/Universal Special Rules FAQ v1.5.3.
+
+**Earlier point 6 verification:** 14 focused First Charge checks and five
 actual-roster offscreen state checks pass, covering failures, repeated entry,
 rank disruption, spent/pending/active/deferred save state, legacy saves and
 Combat-phase expiry. The 48 formed-versus-Skirmisher route checks include

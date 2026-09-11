@@ -230,6 +230,9 @@ def test_rallied_unit_can_move_but_counts_as_moved_for_shooting(scene, tmp_path)
         assert app.barredByMoveOrShoot(target, {'name': 'test weapon'})
     app.strategyCommandDone = True
     app.fsm.request('MovementPhase')
+    from charge_declarations import resolve_declarations
+    with strategy_tasks(app) as run:
+        run(resolve_declarations(app))
     app.unitToMove = target
     assert app.movement.redressRanks(target, -1)
     origin = target.bodyNP.getPos()

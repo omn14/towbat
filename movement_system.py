@@ -662,14 +662,23 @@ class MovementSystem:
         return next((t for t in tm.get_all_terrain_at(unit.bodyNP.getPos())
                      if t.terrain_type == 'hill'), None)
 
-    def redressRanks(self, unit, delta):
+    def redressRanks(self, unit, delta, *, drilled=False, preview=False):
         """Redress the Ranks (Rulebook p. 125): move up to five models to or
         from the front rank, for half the unit's Movement.
 
         The front rank holds its ground and the frontage grows or shrinks about
         its own centre line, which is what the FAQ's "as equally as possible on
         either side" amounts to once the models are interchangeable.
+        Drilled grants this manoeuvre without movement cost before moving (p. 167).
         """
+        from charge_declarations import ordinary_move_allowed
+        if not drilled and not ordinary_move_allowed(self.game):
+            return False
+        if drilled:
+            from drilled import has_drilled
+            if not has_drilled(unit):
+                rule_skipped('Drilled', unit, 'unit does not have Drilled; no free redress')
+                return False
         if in_vanguard(self.game) and unit.unitName != self.game.vanguardActive:
             rule_skipped('Vanguard', unit, 'choose this unit for Vanguard before manoeuvring')
             return False
@@ -677,20 +686,20 @@ class MovementSystem:
             rule_skipped('Redress the Ranks', unit,
                          "skirmishers fight in a loose blob and have no ranks")
             return False
-        if unit.isInCombat or unit.state in ("IsFleeing", "IsPursuing"):
+        if unit.state == 'IsFleeing' or (not drilled and (unit.isInCombat or unit.state == 'IsPursuing')):
             rule_skipped('Redress the Ranks', unit,
                          f"it is {unit.state} and may not manoeuvre")
             return False
-        if unit.hasMovedThisTurn:
+        if unit.hasMovedThisTurn and not drilled:
             rule_skipped('Redress the Ranks', unit,
                          "its move this turn is already over")
             return False
-        if unit.manoeuvreThisTurn not in (None, 'Redress the Ranks'):
+        if not drilled and unit.manoeuvreThisTurn not in (None, 'Redress the Ranks'):
             rule_skipped('Redress the Ranks', unit,
                          f"it has already performed a {unit.manoeuvreThisTurn} "
                          f"this move, and only one manoeuvre is allowed (p. 124)")
             return False
-        if abs(unit.redressDelta + delta) > REDRESS_MAX:
+        if not drilled and abs(unit.redressDelta + delta) > REDRESS_MAX:
             rule_skipped('Redress the Ranks', unit,
                          f"{abs(unit.redressDelta)} of the five models a redress "
                          f"may shift have already moved")
@@ -709,10 +718,14 @@ class MovementSystem:
         M = m.get_fly_movement(0) if m.is_flying() else m.get_movement(0)
         if in_vanguard(self.game):
             M = vanguard_movement(unit)
-        cost = M / 2.0
+        cost = 0 if drilled else M / 2.0
         first = unit.manoeuvreThisTurn is None
 
         old_pos = unit.bodyNP.getPos()
+        old_slot = unit.characterSlot
+        if drilled:
+            from scouts import model_base_boxes
+            before_boxes = model_base_boxes(unit)
         heading = math.radians(unit.bodyNP.getH())
         forward = Vec3(-math.sin(heading), math.cos(heading), 0)
         front = old_pos + forward * (unit.unitHeight / 2.0)
@@ -728,24 +741,49 @@ class MovementSystem:
 
         reshape(new_files, new_ranks)
         position_error = vanguard_position_error(self.game, unit) if in_vanguard(self.game) else None
-        if self.game.checkUnitContactSmall(unit) is not None or position_error:
+        collision = self.game.checkUnitContactSmall(unit) is not None
+        if drilled:
+            from psychology import _box_corners, obb_distance
+            from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH
+            box = self.game.psychology._unit_box(unit)
+            inset = (*box[:2], max(0, box[2] - .001), max(0, box[3] - .001), box[4])
+            collision = any(obb_distance(inset, self.game.psychology._unit_box(member)) <= 0
+                            for member in self.game.units if member is not unit
+                            and not member.bodyNP.isEmpty()
+                            and getattr(member, 'hostUnit', None) is None)
+            collision = collision or any(abs(corner[0]) > BOARD_HALF_WIDTH
+                                         or abs(corner[1]) > BOARD_HALF_DEPTH
+                                         for corner in _box_corners(*box))
+            collision = collision or any(
+                obb_distance(inset, (piece.center.x, piece.center.y,
+                                    piece.width / 2, piece.height / 2, 0)) <= 0
+                for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
+            if any(math.hypot(after[0] - before[0], after[1] - before[1]) > 2 * M + .001
+                   for before, after in zip(before_boxes, model_base_boxes(unit))):
+                position_error = 'a model would move farther than 2M during the free manoeuvre (FAQ v1.5.3)'
+        if collision or position_error or preview:
             reshape(old_files, old_ranks)
+            unit.characterSlot = old_slot
+            unit.placeCharacter()
             unit.bodyNP.setPos(old_pos)
+            if preview:
+                return not (collision or position_error)
             rule_skipped('Redress the Ranks', unit,
                          position_error or f"a {new_files}-model front rank does not fit here")
             return False
 
-        if first:
+        if first and not drilled:
             unit.moveSpentThisTurn += cost
             unit.manoeuvreThisTurn = 'Redress the Ranks'
-        unit.redressDelta += delta
+        if not drilled:
+            unit.redressDelta += delta
         if in_vanguard(self.game):
             record_vanguard_move(unit)
             if first:
                 rule_log('Vanguard', unit, f'redressing uses {cost:g}" of M{M:g}; first-own-turn charges now barred')
         self.updateDisrupted(unit)
         unit.updateTextNode()
-        rule_log('Redress the Ranks', unit,
+        rule_log('Drilled' if drilled else 'Redress the Ranks', unit,
                  f"front rank {old_files} -> {new_files}, ranks {old_ranks} -> "
                  f"{new_ranks}; costs {cost:g}\" of M{M:g}, leaving "
                  f"{max(0.0, M - unit.moveSpentThisTurn):g}\" to move")
@@ -815,6 +853,7 @@ class MovementSystem:
                 self.game.arcPoint = None
                 self.game.setGroundOverlay(False)
                 return
+            unit._movementAim = Vec3(result.getHitPos())
             if not in_vanguard(self.game) and plot_charge(self.game, unit, result.getHitPos()):
                 return
 
@@ -983,7 +1022,8 @@ class MovementSystem:
             _mod = modifyerM if _model.is_mounted() else modifyer
             # A march doubles Movement (p. 123); the first M is an ordinary move
             # that leaves the unit free to shoot.
-            march = M * (1 if in_vanguard(self.game) else 2) * _mod
+            from drilled import march_multiplier
+            march = M * (1 if in_vanguard(self.game) else march_multiplier(unit)) * _mod
             move = max(0.0, march - unit.moveSpentThisTurn)
             # Move Sideways is itself a manoeuvre (p. 124), and a marching unit
             # may only wheel.
@@ -1235,7 +1275,10 @@ class MovementSystem:
                 width=unit.unitWidth, height=unit.unitHeight,
                 color=(0.4, 1.0, 0.4, 1.0))
 
-    def moveUnit(self, unit):
+    def moveUnit(self, unit, *, drilled_ready=False):
+        from drilled import move_pending
+        if move_pending(self.game) and not drilled_ready:
+            return False
         from scouts import scout_charge_blocked
         from charge_declarations import ordinary_move_allowed
         if (self.game.fsm.state == 'MovementPhase'
@@ -1357,6 +1400,26 @@ class MovementSystem:
             return committed
 
         # Do not mark or announce marching for a refused Scout charge.
+        from drilled import before_move, has_drilled
+        if (not c and unit.state == 'Idle' and has_drilled(unit)
+                and not getattr(unit, '_drilledMoveActive', False)):
+            target = Vec3(getattr(unit, '_movementAim', unit.bodyNP.getPos()))
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit._drilledMoveActive = True
+
+            async def drilled_move():
+                try:
+                    await before_move(self.game, unit, 'Remaining Move')
+                    self.pathTowardsMouse(unit, target.x, target.y)
+                    if self.game.arcPoint is not None:
+                        result = self.moveUnit(unit, drilled_ready=True)
+                        if hasattr(result, '__await__'):
+                            await result
+                finally:
+                    unit._drilledMoveActive = False
+
+            return taskMgr.add(drilled_move(), 'drilledMove')
         if not c and getattr(unit, 'wouldMarch', False) and unit.state == 'Idle':
             from marching import request_march
             destination = unit.bodyNP.getPos()
@@ -1380,6 +1443,10 @@ class MovementSystem:
             unit.bodyNP.setHpr(heading)
         if getattr(unit, 'wouldMarch', False) and (not c or same_player(self.game, unit, defenderUnit)):
             unit.marchedThisTurn = True
+            from drilled import marching_column
+            if marching_column(unit):
+                rule_log('Marching Column', unit,
+                         f'{unit.unit.files} files / {unit.unit.ranks} ranks: march limit is 3M, not 2M (p. 101)')
             rule_log('Marching', unit,
                      f"moved {self.game.moveArceDistance:.1f}\", beyond its "
                      f"Movement -> marched, so it cannot shoot or cast a "
