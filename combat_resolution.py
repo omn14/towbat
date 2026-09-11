@@ -2322,14 +2322,23 @@ class CombatResolver:
             labels, Vec3(0, 0, 12), owner=owner, prompt=prompt))
         return options.get(choice, None if optional else candidates[0])
 
-    async def challengeExchange(self, attackerUnit, defenderUnit):
+    async def challengeExchange(self, attackerUnit, defenderUnit, *, hosts=None):
         """Issue, accept or refuse, at Step 1.1 (p. 210).
 
         The active player is offered first; only if they decline may the
         inactive player issue. One challenge per combat, and none at all while
         an earlier one is still running (To The Death!, p. 211).
         """
-        live = find_challenge(self.game, attackerUnit, defenderUnit)
+        from characters import side_of
+        from challenges import duellists
+        groups = [[attackerUnit], [defenderUnit]]
+        if hosts is not None:
+            hosts = list(dict.fromkeys(hosts))
+            active = self.game.roundCounter.current_player
+            groups = [[host for host in hosts if side_of(self.game, host) == player]
+                      for player in (active, 3 - active)]
+        hosts = [host for group in groups for host in group]
+        live = find_challenge(self.game, *hosts)
         if live is not None:
             live.rounds += 1
             rule_log('To The Death!', live.challenger,
@@ -2339,11 +2348,12 @@ class CombatResolver:
             await self.armDuellists(live)
             return live
 
-        for issuer, target in ((attackerUnit, defenderUnit),
-                               (defenderUnit, attackerUnit)):
-            challenger = duellist(issuer)
-            if challenger is None:
+        for own, opposing in (groups, groups[::-1]):
+            candidates = [candidate for host in own for candidate in duellists(host)]
+            if not candidates or not opposing:
                 continue
+            issuer, target = own[0], opposing[0]
+            challenger = candidates[0]
             # The AI never issues, so it is only ever asked to accept.
             if self.game.aiControls(issuer):
                 rule_skipped('Challenges', issuer,
@@ -2358,13 +2368,13 @@ class CombatResolver:
                 rule_skipped('Challenges', challenger,
                              "its player declined to issue a challenge")
                 continue
-            from challenges import duellists
-            challenger = await self.chooseDuellist(duellists(issuer), issuer,
-                                                   f'{issuer.unit.name}: who issues the challenge?')
-            challenge = Challenge(challenger, issuer)
+            challenger = await self.chooseDuellist(candidates, issuer,
+                                                   'Who issues the challenge in this combat?')
+            challenger_host = next(host for host in own if challenger in duellists(host))
+            challenge = Challenge(challenger, challenger_host)
             rule_log('Challenges', challenger,
-                     f"issues a challenge to {target.unit.name} (p. 210)")
-            await self.answerChallenge(challenge, target)
+                     f"issues from {challenger_host.unit.name} against {len(opposing)} enemy unit(s) in this combat (p. 210)")
+            await self.answerChallenge(challenge, target, hosts=opposing)
             add_challenge(self.game, challenge)
             await self.armDuellists(challenge)
             return challenge
@@ -2395,18 +2405,20 @@ class CombatResolver:
             rule_log('Fighting a Challenge', model,
                      f"duels with its {model.unit.model.equipedWeapon['name']}")
 
-    async def answerChallenge(self, challenge, target):
+    async def answerChallenge(self, challenge, target, *, hosts=None):
         """Accept or refuse, and retire a coward (p. 210-211)."""
         from challenges import duellists
-        candidates = duellists(target)
+        hosts = [target] if hosts is None else hosts
+        owners = [(candidate, host) for host in hosts for candidate in duellists(host)]
+        candidates = [candidate for candidate, _ in owners]
         if not candidates:
             rule_log('Challenges', challenge.challenger,
                      f"{target.unit.name} has no character to answer, so the "
                      f"challenge goes unanswered (p. 210)")
             return
         accepter = candidates[0]
-        barred = next((reason for candidate in candidates
-                   if (reason := refusal_barred(candidate, target if candidate is not target else None))), None)
+        barred = next((reason for candidate, host in owners
+               if (reason := refusal_barred(candidate, host if candidate is not host else None))), None)
         # The AI always accepts.
         if self.game.aiControls(target) or barred is not None:
             answer = "Accept"
@@ -2421,9 +2433,9 @@ class CombatResolver:
                        f"{accepter.unit.name}"))
         if answer != "Refuse":
             accepter = await self.chooseDuellist(candidates, target,
-                                                f'{target.unit.name}: who accepts the challenge?')
+                                                'Who accepts the challenge in this combat?')
             challenge.accepter = accepter
-            challenge.accepter_host = target
+            challenge.accepter_host = next(host for candidate, host in owners if candidate is accepter)
             rule_log('Challenges', accepter,
                      f"accepts the challenge from "
                      f"{self._duelName(challenge.challenger)} (p. 210)")
@@ -2435,7 +2447,7 @@ class CombatResolver:
             rule_skipped('Refusing a Challenge', target, 'challenger declines to nominate a retiring model (p. 210)')
             return
         challenge.retired = nominee
-        self.retireFromCombat(nominee, target)
+        self.retireFromCombat(nominee, next(host for candidate, host in owners if candidate is nominee))
 
     def retireFromCombat(self, model, host):
         """A model that refused a challenge hides in the rear ranks (p. 210)."""
@@ -2667,16 +2679,19 @@ class CombatResolver:
         defenderUnit.unit.model.equip_best_melee()
 
         self.game.attackSequence = Sequence()
+        from combat_contacts import engaged_units
+        engaged = engaged_units(attackerUnit, defenderUnit)
         self.game.attackers = []
-        self.game.attackers.append(attackerUnit)
         self.game.defenders = []
-        self.game.defenders.append(defenderUnit)
-        for unit in self.game.unitToMove.isInCombatWith:
-            self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
-            self.game.defenders.append(self.game.unitToMove)
-        for unit in defenderUnit.isInCombatWith:
-            self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
-            self.game.defenders.append(defenderUnit)
+        for unit in engaged:
+            for enemy in unit.isInCombatWith:
+                if enemy in engaged:
+                    self.game.attackers.append(unit)
+                    self.game.defenders.append(enemy)
+        if len(engaged) > 2:
+            rule_log('Multiple Units In Combat', attackerUnit,
+                     f'{len(engaged)} connected units share combat resolution: '
+                     + ', '.join(unit.unit.name for unit in engaged) + ' (p. 147)')
         from characters import move_through_ranks
         await move_through_ranks(self.game, self.game.attackers + self.game.defenders)
         from combat_weapons import choose_unit_weapons
@@ -2698,7 +2713,6 @@ class CombatResolver:
         player2_rank_bonus = 0
         modRemoveSequence = Sequence()
         self._pendingWounds = {}
-        engaged = set(self.game.attackers) | set(self.game.defenders)
         foesBefore = {id(unit): list(unit.isInCombatWith) for unit in engaged}
         p1_units = [unit for unit in engaged if unit in self.game.player1Units]
         p2_units = [unit for unit in engaged if unit in self.game.player2Units]
@@ -2708,7 +2722,7 @@ class CombatResolver:
         player1_score += impact1
         player2_score += impact2
         # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
-        challenge = await self.challengeExchange(attackerUnit, defenderUnit)
+        challenge = await self.challengeExchange(attackerUnit, defenderUnit, hosts=engaged)
         wounds1, wounds2, overkill1, overkill2 = await self.resolveCombatWithSpells(
             challenge, modRemoveSequence, contacts=contacts)
         player1_score += wounds1 + overkill1

@@ -7,6 +7,20 @@ from psychology import obb_distance
 CONTACT_EPSILON = 0.01
 
 
+def engaged_units(*seeds):
+    """All living units in a connected multiple combat, once each (pp. 144, 147)."""
+    pending = list(seeds)
+    units = []
+    seen = set()
+    for host in pending:
+        if id(host) in seen or host.unit.nmodels <= 0:
+            continue
+        seen.add(id(host))
+        units.append(host)
+        pending.extend(getattr(host, 'isInCombatWith', []))
+    return units
+
+
 @dataclass(frozen=True)
 class FightingPosition:
     index: int

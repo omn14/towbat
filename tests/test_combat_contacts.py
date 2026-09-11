@@ -2,7 +2,7 @@
 
 import pytest
 
-from combat_contacts import fighting_positions
+from combat_contacts import engaged_units, fighting_positions
 
 
 def formation(files=5, ranks=2):
@@ -49,3 +49,14 @@ def test_reserved_character_slot_does_not_shift_ordinary_rank_membership():
     slots = [0, 2, 3, 4, 5]
     positions = fighting_positions([boxes[slot] for slot in slots], [(0, 1, .5, .5, 0)], 3, slots=slots)
     assert [place.fighting for place in positions] == [True, True, False, False, False]
+
+
+def test_multiple_combat_follows_long_chains_and_cycles_without_dead_branches():
+    from types import SimpleNamespace
+    hosts = [SimpleNamespace(unit=SimpleNamespace(nmodels=1), isInCombatWith=[]) for _ in range(7)]
+    for first, second in zip(hosts, hosts[1:]):
+        first.isInCombatWith.append(second)
+        second.isInCombatWith.append(first)
+    hosts[4].isInCombatWith.append(hosts[1])
+    hosts[5].unit.nmodels = 0
+    assert [id(host) for host in engaged_units(hosts[0], hosts[1])] == [id(host) for host in hosts[:5]]

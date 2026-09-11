@@ -194,9 +194,16 @@ remain open.
       characters cannot be nominated. AI still never issues and always accepts.
       Within/adjacent fighting-rank eligibility now uses live base contact; a
       character blocked behind command in a column cannot challenge.
-      LEFTOVER: nominations across every unit in a complex multiple combat; current
-      choices use the two selected hosts. Duel and ordinary attacks share one
-      Initiative clock.
+      Multiple-combat nominations now include every eligible host, active player
+      first, preserving the chosen model's real host for acceptance and retirement.
+      Existing duels anywhere in that combat prevent a second challenge. Eight
+      nomination scenes and 44 challenge cases pass. Combat collection follows the
+      full connected engagement graph, not just the selected pair's neighbors;
+      nine pure contact tests cover longer chains, cycles and dead branches, with
+      contact, Shieldwall and wound-scoring scenes passing. Duel and ordinary
+      attacks share one Initiative clock (pp. 147, 210-211).
+      LEFTOVER: moving a challenged model into an outside-formation adjacent
+      position and the geometry/casualty-placement limits above.
 - [x] End-of-battle Victory Points (2026-09-11): original paid roster values,
       starting strength/Wounds and General/BSB flags persist independently of
       current models and item suppression. Destroyed/offboard units score full

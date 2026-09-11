@@ -82,3 +82,45 @@ def test_challenger_owns_refusal_nomination_and_retirement_survives_reload(scene
     champion, = champions(host, include_retired=True)
     assert character.retiredFromCombat is (nomination == 'character')
     assert champion.retiredFromCombat is (nomination == 'champion')
+
+
+def test_multiple_combat_can_nominate_from_a_different_host(scene):
+    app, baseline = scene
+    host, character, champion, enemy = participants(app, baseline)
+    selected = members(app)['Chaos Warrior']
+    async def choose(options, *args, owner, **kwargs):
+        assert owner is selected
+        return 'Issue a challenge' if 'Issue a challenge' in options else champion.unitName
+    with combat_tasks(app) as run, patch.object(app.roundCounter, 'current_player', 2), \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', side_effect=choose), \
+            patch.object(app.combat, 'armDuellists', AsyncMock()):
+        async def exchange():
+            challenge = await app.combat.challengeExchange(selected, enemy, hosts=[selected, enemy, host])
+            assert challenge.challenger is champion and challenge.host is host
+            assert challenge.accepter is enemy
+            assert await app.combat.challengeExchange(selected, enemy, hosts=[selected, enemy, host]) is challenge
+            assert challenge.rounds == 1
+        run(exchange())
+
+
+@pytest.mark.parametrize('answer', ['Accept', 'Refuse'])
+def test_multiple_combat_answer_uses_nominated_models_own_host(scene, answer):
+    app, baseline = scene
+    host, character, champion, enemy = participants(app, baseline)
+    selected = members(app)['Chaos Warrior']
+    challenge = Challenge(enemy, enemy)
+    async def choose(options, *args, owner, **kwargs):
+        if 'Accept' in options:
+            assert owner is selected
+            return answer
+        assert owner is (enemy if answer == 'Refuse' else selected)
+        return character.unitName
+    with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', side_effect=choose):
+        run(app.combat.answerChallenge(challenge, selected, hosts=[selected, host]))
+    if answer == 'Accept':
+        assert challenge.accepter is character and challenge.accepter_host is host
+    else:
+        assert challenge.retired is character and character.retiredFromCombat
+        assert not champion.retiredFromCombat
