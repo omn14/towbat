@@ -54,3 +54,10 @@ def test_heavy_infantry_resists_us_below_ten_but_not_first_charge(scene):
     warriors.firstChargeDisruptedBy = []
     with patch.object(enemy.unit, 'nmodels', 5):
         assert combat_rank_bonus(warriors) == 0
+
+
+def test_lumbering_skycutter_cannot_be_joined(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    units = members(app)
+    assert not join_unit(app, units['Mage'], units['Lothern Skycutter'])

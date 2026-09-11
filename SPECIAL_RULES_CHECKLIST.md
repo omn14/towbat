@@ -255,8 +255,12 @@ itself add gameplay effects.
       A normal standard is
       not a Battle Standard Bearer and does not grant Hold Your Ground.
 - [ ] **Formation-specific effects** - verify Close Order combat-result
-      eligibility at current Unit Strength, Open Order Quick Turn for
-      Warhounds, and Skirmish formation for Horsemen. Do not infer an active
+      eligibility at current Unit Strength and Skirmish formation for Horsemen.
+      Open Order Quick Turn for Warhounds is implemented: a non-marching
+      Remaining Move offers a centre pivot up to 90 degrees, with final-base
+      collision, enemy clearance, board-edge and 2M manoeuvre limits (p. 183).
+      Mouse-facing confirmation and phase/save locks have offscreen tests.
+      Do not infer an active
       formation solely from a list of available formation keywords.
 - [x] **Enemy Sighted / march tests** - Drilled/Fly exemptions and musician
       bonuses now combine with context-aware Warband Leadership (pp. 123, 180, 201).
@@ -383,7 +387,9 @@ itself add gameplay effects.
       cavalry spears/shortbows separate from the Roc's Wicked Claws: now
       implemented, with separate Initiative and three-crew shooting. The
       export's hull-level personal weapons are assigned to crew under p. 194.
-      LEFTOVER: audit Lumbering,
+      Lumbering's 90-degree pivot after Remaining/Reserve movement and prohibition
+      on joining are implemented (p. 195), with real Skycutter scene checks.
+      LEFTOVER: other post-move Lumbering contexts,
       Iron Shod Wheels, flying versus ground movement, landing terrain and
       ground-only follow-up/pursuit. Do not duplicate the Roc as an extra mount.
 

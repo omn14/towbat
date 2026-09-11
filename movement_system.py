@@ -1326,6 +1326,9 @@ class MovementSystem:
                 color=(0.4, 1.0, 0.4, 1.0))
 
     def moveUnit(self, unit, *, drilled_ready=False):
+        from free_pivot import pending
+        if pending(self.game):
+            return False
         from chaos_gifts import succumbed
         if succumbed(unit):
             rule_skipped('Stupidity', unit, 'cannot move except to flee (p. 178)')
@@ -1555,6 +1558,9 @@ class MovementSystem:
             self.alignModelsToHillNormal(unit)
             self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
             self.updateDisrupted(unit)
+            if self.game.fsm.state == 'MovementPhase':
+                from free_pivot import begin
+                begin(self.game, unit, 'Remaining Moves')
         self.game.bakeTextures(self.game.ground)
         if c:
             return charge_task

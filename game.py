@@ -877,6 +877,10 @@ class MyApp(ShowBase):
                 unit.bodyNP.setR(0)
                 #unit.hasMovedThisTurn=True
                 #unit.updateTextNode()
+        if getattr(unit, 'freePivot', None) is not None:
+            from free_pivot import constrain
+            contact = not constrain(self, unit)
+            unit.model.setColor((.6, .6, .6, 1) if contact else unit.color)
         if self.signal and not contact:
             self.signal = False
             return task.done

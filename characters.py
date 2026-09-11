@@ -70,6 +70,10 @@ def join_unit(game, character, host) -> bool:
     if character is host or has_joined_character(host) or is_character(host):
         return False
     from rules_log import rule_log, rule_skipped
+    if any(member.unit.model.troop_type_rule('Lumbering') for member in (character, host)):
+        rule_skipped('Lumbering', character,
+                     f'cannot join {host.unit.name}: Lumbering models cannot join or be joined (p. 195)')
+        return False
     character_rules = {rule.get('name', '').casefold() for rule in character.unit.model.special_rules}
     host_rules = {rule.get('name', '').casefold() for rule in host.unit.model.special_rules}
     if ('loner' in character_rules) != ('loner' in host_rules):

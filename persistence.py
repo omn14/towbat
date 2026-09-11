@@ -171,6 +171,10 @@ def save_game_state(game, filename=None):
     """
     from charge_declarations import save_declarations
     from drilled import move_pending
+    from free_pivot import pending
+    if pending(game):
+        battle_log('Finish the free pivot before saving a battle.', 'info')
+        return None
     if getattr(game, 'magicBusy', False) is True or getattr(game, 'castingSpell', False) is True:
         battle_log('Finish magic resolution before saving a battle.', 'info')
         return None
@@ -411,6 +415,10 @@ def load_game_state(game, filename):
         filename: Name of a save in saves/, or a path to one.
     """
     from drilled import move_pending
+    from free_pivot import pending
+    if pending(game):
+        battle_log('Finish the free pivot before loading a battle.', 'info')
+        return
     if move_pending(game):
         battle_log('Finish the Drilled movement choice before loading.', 'info')
         return

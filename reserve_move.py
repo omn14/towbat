@@ -206,4 +206,6 @@ def commit(game, unit, *, drilled_ready=False):
     finish_unit(game, unit, moved=distance > 1e-5 or unit.moveSpentThisTurn > 0)
     game.taskMgr.remove('taskLoopPathTowardsMouse')
     game.setGroundOverlay(False)
+    from free_pivot import begin
+    begin(game, unit, 'Reserve Move')
     return True

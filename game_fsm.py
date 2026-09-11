@@ -74,6 +74,9 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        from free_pivot import pending
+        if pending(self.game):
+            return
         if getattr(self.game, 'magicBusy', False) or getattr(self.game, 'castingSpell', False):
             return
         if getattr(self.game, 'spellGenerationBusy', False) is True:
