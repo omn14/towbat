@@ -176,6 +176,145 @@ def test_queued_failed_charge_moves_roll_only(scene):
     assert charger.chargeAttempts == 1 and not charger.chargeAttemptPending
 
 
+def test_second_charge_uses_horsemen_combat_formation(scene):
+    from scouts import model_base_boxes
+    from psychology import obb_distance
+    app, charger, knights, origin, facing, _ = declared_charge(scene)
+    knights.bodyNP.setPos(25, 20, 0)
+    defender = members(app)['Marauder Horsemen']
+    defender.bodyNP.setPos(0, 0, 0)
+    defender.bodyNP.setH(180)
+    second = members(app)['Dragon Prince']
+    second_origin, second_facing = Vec3(12, -3, 0), Vec3(90, 0, 0)
+    second.bodyNP.setPos(second_origin)
+    second.bodyNP.setHpr(second_facing)
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    begin_declarations(app)
+    for member, start, heading in ((charger, origin, facing), (second, second_origin, second_facing)):
+        begin_charge_attempt(member)
+        entry = queue_charge(app, member, defender, start, heading)
+        boxes = model_base_boxes(defender)
+        entry.target_index = min(range(len(boxes)), key=lambda index:
+                                 (boxes[index][0] - start.x) ** 2 + (boxes[index][1] - start.y) ** 2)
+        entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))):
+        for entry in app.chargeDeclarations:
+            run(app.combat.resolveDeclaredCharge(entry))
+    assert defender.skirmishCombat
+    assert set(defender.isInCombatWith) == {charger, second}
+    for member in (charger, second):
+        assert member.isInCombatWith == [defender]
+        assert min(obb_distance(source, target) for source in model_base_boxes(member)
+                   for target in model_base_boxes(defender)) < .06
+        assert member.chargeAttempts == 1 and not member.chargeAttemptPending
+
+
+def test_queued_charge_rebuilds_route_to_fleeing_horsemen(scene):
+    from scouts import model_base_boxes
+    app, charger, knights, origin, facing, _ = declared_charge(scene)
+    knights.bodyNP.setPos(25, 20, 0)
+    defender = members(app)['Marauder Horsemen']
+    defender.bodyNP.setPos(0, -3, 0)
+    defender.bodyNP.setH(0)
+    defender.request('IsFleeing')
+    defender.fledThisPhase = True
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    targets = model_base_boxes(defender)
+    entry.target_index = min(range(len(targets)), key=lambda index:
+                             (targets[index][0] - origin.x) ** 2 + (targets[index][1] - origin.y) ** 2)
+    entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app.combat, 'chargeAndChargeReaction', AsyncMock()) as resolve:
+        run(app.combat.resolveDeclaredCharge(entry))
+    resolve.assert_awaited_once()
+    assert entry.preview is not None and entry.preview.target is defender
+    assert entry.preview.route.distance > 0
+    assert not charger.chargeAttemptPending
+
+
+@pytest.mark.parametrize('dice,caught', [([6, 6], True), ([1, 1], False)])
+@pytest.mark.parametrize('reform_dice', [None, [1, 1], [6, 6]])
+def test_live_horsemen_chase_catches_or_moves_full_range(scene, dice, caught, reform_dice):
+    from scouts import model_base_boxes
+    app, charger, knights, origin, facing, _ = declared_charge(scene)
+    knights.bodyNP.setPos(25, 20, 0)
+    defender = members(app)['Marauder Horsemen']
+    defender.bodyNP.setPos(0, 3, 0)
+    defender.bodyNP.setH(0)
+    defender.request('IsFleeing')
+    defender.fledThisPhase = True
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    targets = model_base_boxes(defender)
+    entry.target_index = min(range(len(targets)), key=lambda index:
+                             (targets[index][0] - origin.x) ** 2 + (targets[index][1] - origin.y) ** 2)
+    entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=reform_dice is None), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Reform')), \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=reform_dice)) as leadership, \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], dice))), \
+            patch.object(app.combat, 'freeReform', AsyncMock()) as reform, \
+            patch.object(app.combat, '_formChargedSkirmishers', AsyncMock()) as form:
+        run(app.combat.resolveDeclaredCharge(entry))
+    assert (defender not in app.units) is caught
+    assert charger.state == 'Moved' and not charger.isInCombat
+    assert not charger.chargeAttemptPending
+    assert reform.await_count == int(caught and reform_dice == [1, 1])
+    assert leadership.await_count == int(caught and reform_dice is not None)
+    form.assert_not_awaited()
+    if not caught:
+        position, heading = entry.preview.route.pose(charger.unit.model.get_movement(4) + 1)
+        assert charger.bodyNP.getPos().almostEqual(Vec3(*position), .01)
+
+
+@pytest.mark.parametrize('dice,redirected', [([1, 1], True), ([6, 6], False)])
+@pytest.mark.parametrize('reaction', ['hold', 'flee'])
+def test_redirect_leadership_and_hold_flee_only(scene, dice, redirected, reaction):
+    from charge_declarations import redirect_charge, redirect_targets
+    app, charger, defender, origin, facing, _ = declared_charge(scene)
+    charger.bodyNP.setPos(origin)
+    defender.request('IsFleeing')
+    alternative = members(app)['Chaos Warrior']
+    alternative.bodyNP.setPos(-7, -3, 0)
+    alternative.bodyNP.setH(180)
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    assert alternative in redirect_targets(app, entry)
+    choices = AsyncMock(side_effect=[f'Redirect: {alternative.unitName}', reaction])
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', choices), \
+            patch('charge_declarations.flee_reaction', AsyncMock()) as flee, \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=dice)):
+        run(redirect_charge(app, entry, [alternative]))
+    assert flee.await_count == int(redirected and reaction == 'flee')
+    assert entry.redirected is redirected
+    assert entry.defender is (alternative if redirected else defender)
+    assert charger.chargeAttempts == 1
+    assert choices.await_count == (2 if redirected else 1)
+    if redirected:
+        assert choices.call_args.args[0] == ['hold', 'flee']
+        assert choices.call_args.kwargs['owner'] is alternative
+        alternative.request('IsFleeing')
+        with combat_tasks(app) as run, patch.object(app, 'makeChoiceNew', choices):
+            run(redirect_charge(app, entry, [defender]))
+        assert choices.await_count == 2
+
+
 def test_flee_reaction_uses_strongest_charger_once_before_charge_moves(scene, capsys):
     from charge_declarations import flee_reaction
     app, charger, defender, origin, facing, contact = declared_charge(scene)
@@ -292,7 +431,8 @@ def test_live_flee_move_finishes_before_charge_roll(scene):
     assert not rolls
     assert defender.state == 'IsFleeing' and defender.fledThisPhase
     assert charger.state == 'Moved'
-    assert (charger.bodyNP.getPos() - origin).length() == pytest.approx(1, abs=.05)
+    assert (charger.bodyNP.getPos() - origin).length() == pytest.approx(
+        charger.unit.model.get_movement(4) + 1, abs=.05)
 
 
 @pytest.mark.parametrize('stage', ['resolving', 'blocked'])

@@ -20,6 +20,107 @@ class ChargeDeclaration:
     preview: object = None
     compulsory: bool = False
     charge_dice: object = None
+    redirected: bool = False
+
+
+def redirect_targets(game, entry):
+    """Eligible targets at the reserved pose, including newly exposed enemies (p. 129)."""
+    from characters import side_of
+    from formed_skirmish_charge import starting_boxes
+    from psychology import obb_distance
+    from scouts import model_base_boxes
+    from skirmish_visibility import model_can_see
+    from special_rules import max_charge_range, unit_has_swiftstride
+    from panda3d.core import Point3
+
+    unit = entry.charger
+    sources = starting_boxes(unit, entry.origin, entry.facing)
+    maximum = max_charge_range(game.movement.movementAllowance(unit), unit_has_swiftstride(unit))
+    result = []
+    for target in game.units:
+        if (target is entry.defender or target is unit or side_of(game, target) == side_of(game, unit)
+                or target.unit.nmodels <= 0 or target.bodyNP.isEmpty() or not target.isDeployed
+                or getattr(target, 'hostUnit', None) is not None):
+            continue
+        destinations = model_base_boxes(target)
+        if not destinations or min(obb_distance(source, dest) for source in sources for dest in destinations) > maximum:
+            continue
+        blockers = [box for other in game.units if other not in (unit, target)
+                    and other.isDeployed and other.unit.nmodels > 0 and not other.bodyNP.isEmpty()
+                    and getattr(other, 'hostUnit', None) is None for box in model_base_boxes(other)]
+        dispersed = unit.isSkirmisher and not unit.skirmishCombat
+        seen = []
+        for index, source in enumerate(sources):
+            visible = []
+            for destination in destinations:
+                terrain = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                           for piece in game.terrain_manager.terrain_pieces if piece.blocks_line_of_sight
+                           and not piece.contains(Point3(*source[:2], 0))
+                           and not piece.contains(Point3(*destination[:2], 0))]
+                visible.append(model_can_see(source, [destination],
+                               [*sources[:index], *sources[index + 1:], *blockers, *terrain],
+                               facing=None if dispersed else source[4]))
+            seen.append(any(visible))
+        if (sum(seen) * 2 > len(seen)) if dispersed else any(seen):
+            result.append(target)
+    return result
+
+
+async def redirect_charge(game, entry, initial_targets):
+    """One optional Leadership-gated redirection; its target may only Hold/Flee (p. 129)."""
+    from panda3d.core import Vec3
+    from rules_log import rule_log, rule_skipped
+    from psychology import leadership_passed, reroll_leadership
+    from fear import cannot_flee
+    from chaos_gifts import succumbed
+
+    if entry.redirected or entry.defender.state != 'IsFleeing':
+        return
+    candidates = list(dict.fromkeys([*initial_targets, *redirect_targets(game, entry)]))
+    candidates = [target for target in candidates if target in game.units and target.unit.nmodels > 0
+                  and not target.bodyNP.isEmpty()]
+    if not candidates:
+        rule_skipped('Redirecting a Charge', entry.charger, 'no eligible alternative target; attempts to run down the foe (p. 129)')
+        return
+    if game.aiControls(entry.charger):
+        rule_skipped('Redirecting a Charge', entry.charger, 'AI retains its declared target; no Leadership test')
+        return
+    options = {f'Redirect: {target.unitName}': target for target in candidates}
+    selected = await game.makeChoiceNew(['Run down', *options], Vec3(-20, 0, 10), owner=entry.charger,
+                                       prompt=f'{entry.charger.unit.name}: fleeing charge target')
+    if selected not in options:
+        rule_skipped('Redirecting a Charge', entry.charger, 'chooses to run down the original target')
+        return
+    leadership, _ = game.psychology.leadership_of(entry.charger)
+    dice = await game.rollLeadershipDice()
+    dice = await reroll_leadership(game, entry.charger, 'Redirect', dice, leadership,
+                                  game.rollLeadershipDice)
+    passed = leadership_passed(sum(dice), leadership)
+    rule_log('Redirecting a Charge', entry.charger,
+             f'dice {dice}, Ld {leadership} -> {"passed" if passed else "failed"}; '
+             f'{"redirects to " + options[selected].unit.name if passed else "must chase original target"} (p. 129)')
+    if not passed:
+        return
+    entry.defender = target = options[selected]
+    entry.redirected = True
+    entry.route = entry.preview = entry.target_index = entry.flank_angle = None
+    if target.isSkirmisher and not target.skirmishCombat:
+        from formed_skirmish_charge import starting_boxes
+        from scouts import model_base_boxes
+        from psychology import obb_distance
+        boxes = model_base_boxes(target)
+        sources = starting_boxes(entry.charger, entry.origin, entry.facing)
+        entry.target_index = min(range(len(boxes)), key=lambda index: min(obb_distance(source, boxes[index]) for source in sources))
+    if target.state == 'IsFleeing':
+        reaction = 'flee'
+    elif target.isInCombat or cannot_flee(target) or succumbed(target) or game.aiControls(target):
+        reaction = 'hold'
+    else:
+        reaction = await game.makeChoiceNew(['hold', 'flee'], Vec3(20, 0, 10), owner=target,
+                                           prompt=f'{target.unit.name}: redirected charge reaction')
+    entry.reaction = 'hold'
+    if reaction == 'flee':
+        await flee_reaction(game, target, [entry])
 
 
 def save_declarations(game):
@@ -196,6 +297,7 @@ async def resolve_declarations(game):
     try:
         from impetuous import complete_declarations
         await complete_declarations(game)
+        alternatives = {id(entry): redirect_targets(game, entry) for entry in entries}
         await choose_reactions(game, entries)
         for entry in entries:
             if entry.reaction == 'counter charge':
@@ -219,6 +321,8 @@ async def resolve_declarations(game):
                 await flee_reaction(game, entry.defender,
                                     [pending for pending in entries if pending.defender is entry.defender])
                 entry.reaction = 'hold'
+        for entry in entries:
+            await redirect_charge(game, entry, alternatives[id(entry)])
         while entries:
             entry = entries[0]
             if len(entries) > 1 and not game.aiControls(entry.charger):

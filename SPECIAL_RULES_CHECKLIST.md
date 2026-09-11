@@ -333,13 +333,25 @@ tests or success. README and Copilot test commands now agree on this workflow.
       Drilled now offers free redress before the formed Counter Charge advance.
       A column without Drilled cannot Counter Charge; a column retained after
       redress Holds, without cancelling the incoming charge (live regression).
+      **Flee/redirect and sequential form-up (p. 129, p. 186):** reserved
+      formed chargers now rebuild routes to fleeing Horsemen. A catch removes
+      them without defender form-up; an escape moves the full charge range,
+      not the failed-charge roll. Catch alignment and an optional Leadership
+      test for reform are resolved before Remaining Moves. Redirects preserve
+      the existing charge attempt, use pre-reaction or newly visible targets
+      from the reserved pose, test Leadership, and allow only Hold/Flee, never
+      another redirect. A second front/flank charge uses the Horsemen's new
+      combat formation and preserves both engagement links. Corrected the
+      Leadership helper's dice return contract and an obsolete failed-chase
+      test expectation. Validation: 27 declaration scenes, 12 Counter Charge
+      scenes and two declaration unit tests pass in isolated processes.
       **LEFTOVER:** loose-formation Counter Charge remains unfinished
       (loose pairs are refused with a log). Complex
       obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
-      need broader verification, as do simultaneous frontage maximisation and
-      redirected charges. Multiple loose-defender form-ups and fleeing loose
-      targets are not supported by the queued per-model route; these fail with
-      explicit spent-charge logs. Suspended reaction/animation tasks are not
+      need broader verification, as does simultaneous frontage maximisation.
+      The legacy Skirmisher-charger chase path still needs the same p. 129
+      movement/reform treatment; the live chase regression above uses formed
+      cavalry charging the Horsemen. Suspended reaction/animation tasks are not
       resumed from saves: reload a declaration-stage snapshot after interruption.
       Do not mark the full rule or formation dependencies complete from these tests.
 - [x] **Cavalry split profiles and Cavalry Support** - separate rider/mount
