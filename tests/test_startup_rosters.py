@@ -100,6 +100,7 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path,
         for cavalry in ('Silver Helm', 'Dragon Prince'):
             check_matchup_cavalry(app, ready, tmp_path, cavalry)
         check_matchup_specialists(app, ready, tmp_path)
+        check_six_round_phase_cycle(app, ready, tmp_path)
         output = capsys.readouterr().out
         for rule in ('Silvery Wand', 'First Charge', 'Counter Charge', 'Iron Shod Wheels', 'Dangerous Terrain', 'Fear'):
             assert rule in output
@@ -138,6 +139,75 @@ def check_first_fury_cast(app, dispel, *, applied):
     assert (spell in app.fsm.endOfTurnSpells) is applied
     assert app.magicBusy is False
     end_turn(app)
+
+
+def check_six_round_phase_cycle(app, ready, tmp_path):
+    """A legal hold/pass battle traverses all phases; combat scenarios run separately (p. 286)."""
+    from magic_items import current_turn
+    load_game_state(app, ready)
+    app.AIplayer2.active = False
+    app.roundCounter.max_rounds = 6
+    app.roundCounter.currentRoundPlayer = [0, 0]
+    app.roundCounter.request('PlayerOne')
+    app.chaosCommandTurn = None
+    mage = next(member for member in app.units if member.unit.model.name == 'Mage')
+    visited = []
+
+    async def choose(options, *args, **kwargs):
+        for option in ('Decline', 'Pass', 'Keep', 'Keep formation', 'Run down', 'hold'):
+            if option in options:
+                return option
+        return options[0]
+
+    async def advance(expected):
+        for _ in range(8):
+            app.fsm.nextPhase()
+            for name in ('chaosCommandTask', 'resolveChargesTask', 'conjurationTask',
+                         'rallyingCryTask', 'endSpellChoiceTask', 'reserveMoveAI'):
+                for task in list(app.taskMgr.getTasksNamed(name)):
+                    await task
+            if app.fsm.state == expected:
+                return
+        raise AssertionError(f'phase stalled at {app.fsm.state}, expected {expected}')
+
+    async def play():
+        app.fsm.request('StrategyPhase')
+        for turn in range(12):
+            assert app.fsm.state == 'StrategyPhase'
+            owner = 1 + turn % 2
+            assert app.roundCounter.current_player == owner
+            token = current_turn(app)
+            visited.append((owner, app.roundCounter.currentRoundPlayer[owner - 1] + 1))
+            mage.spellsCastThisTurn = ['audit already used']
+            mage.lileathUsedTurn = token
+            app.fatedDispelTurns[str(owner)] = token
+            await advance('MovementPhase')
+            assert app.chargeStage == 'declarations'
+            await advance('ShootingPhase')
+            assert app.chargeStage == 'remaining'
+            await advance('CombatPhase')
+            await advance('BattleEnded' if turn == 11 else 'StrategyPhase')
+            assert not mage.spellsCastThisTurn
+            assert not app.magicBusy and not app.chargeDeclarations
+            if turn == 5:
+                saved = save_game_state(app, str(tmp_path / 'he-chaos-round-three.json'))
+                assert saved is not None
+                load_game_state(app, saved)
+                assert app.roundCounter.currentRoundPlayer == [3, 3]
+    with combat_tasks(app) as run, \
+            patch('game_fsm.taskMgr', app.taskMgr, create=True), \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=choose)):
+        run(play())
+    assert visited == [(owner, turn) for turn in range(1, 7) for owner in (1, 2)]
+    assert app.roundCounter.currentRoundPlayer == [6, 6]
+    assert app.battleResult['complete'] and app.battleResult['outcome'] == 'Draw'
+    result = app.battleResult
+    saved = save_game_state(app, str(tmp_path / 'he-chaos-six-round-result.json'))
+    load_game_state(app, saved)
+    app.fsm.nextPhase()
+    assert app.fsm.state == 'BattleEnded' and app.battleResult == result
+    assert app.roundCounter.currentRoundPlayer == [6, 6]
 
 
 def check_matchup_roundtrip(app, tmp_path):

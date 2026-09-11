@@ -2,11 +2,105 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from magic_items import current_turn
 from persistence import load_game_state, save_game_state
 from spell_system import OakenShieldSpell, PillarOfFireSpell, Spell
 from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
+
+
+@pytest.mark.parametrize('name', ['Fury of Khaine', 'Shield of Saphery', 'Walk Between Worlds',
+                                 'Courage of Aenarion', 'Drain Magic', 'Tempest'])
+@pytest.mark.parametrize('ending', ['boundary', 'removed', 'dispelled'])
+def test_selected_effect_lifecycle_matrix(scene, tmp_path, name, ending):
+    from high_magic import HIGH_MAGIC, profiles_for
+    from panda3d.core import Point3
+    from spell_effects import active_spells, caster_removed, end_effect, end_phase, end_turn, start_turn
+    app, baseline = scene
+    load_game_state(app, baseline)
+    mage, host = members(app)['Mage'], members(app)['Silver Helm']
+    target = mage if name in ('Walk Between Worlds', 'Drain Magic') else host
+    spell = HIGH_MAGIC[name](name, 9, game=app, caster=mage)
+    if name == 'Tempest':
+        spell.place(app, Point3(20, 0, 0))
+    else:
+        spell.attach(target, 1)
+    lifecycle = dict(spell.lifecycle)
+    path = save_game_state(app, str(tmp_path / 'active-effect.json'))
+    assert path is not None
+    for _ in range(2):
+        load_game_state(app, path)
+        matching = [effect for effect in active_spells(app) if effect.name == name]
+        assert len(matching) == 1
+        spell = matching[0]
+        assert spell.lifecycle == lifecycle
+        for member in app.units:
+            for profile in profiles_for(member):
+                assert sum(rule.get('name') == name for rule in profile.special_rules) <= 1
+    if ending == 'dispelled':
+        end_effect(spell, 'audit dispel')
+        end_effect(spell, 'repeated audit cleanup')
+    elif ending == 'removed':
+        caster_removed(app, mage)
+        assert spell.ended is (lifecycle['duration'] == 'remains' or name == 'Walk Between Worlds')
+        end_turn(app)
+    else:
+        end_phase(app, 'Movement')
+        assert not spell.ended
+        end_turn(app)
+        assert spell.ended is (lifecycle['duration'] == 'end_turn')
+        owner = lifecycle['owner']
+        app.roundCounter.current_player = 3 - owner
+        start_turn(app)
+        if lifecycle['duration'] == 'next_start':
+            assert not spell.ended
+        app.roundCounter.current_player = owner
+        app.roundCounter.currentRoundPlayer[owner - 1] += 1
+        start_turn(app)
+        assert spell.ended is (lifecycle['duration'] != 'remains')
+        if not spell.ended:
+            end_effect(spell, 'audit voluntary ending')
+    assert spell not in active_spells(app)
+    for member in app.units:
+        for profile in profiles_for(member):
+            assert all(rule.get('name') != name for rule in profile.special_rules)
+    if name == 'Tempest':
+        assert not any(piece.terrain_type == 'pillar_of_fire' for piece in app.terrain_manager.terrain_pieces)
+    ended = save_game_state(app, str(tmp_path / 'ended-effect.json'))
+    load_game_state(app, ended)
+    assert not any(effect.name == name for effect in active_spells(app))
+
+
+@pytest.mark.parametrize('name', ['Silvery Wand', 'Helm Of Courage', 'The Banner Of The Bold'])
+def test_selected_item_disable_and_reload_matrix(scene, tmp_path, name):
+    from magic_items import EffectKind, activate_ability, disable_item, effects_for, inventory, save_inventory
+    app, baseline = scene
+    load_game_state(app, baseline)
+    carrier, item = next((member, item) for member in app.units for item in inventory(member) if item.name == name)
+    profile = carrier.unit.model
+    base = dict(profile.characteristics)
+    before_spells = len(profile.spells)
+    if name == 'Helm Of Courage':
+        assert activate_ability(app, carrier, item, 'courage', 'Break', confirmed=True)
+        assert not activate_ability(app, carrier, item, 'courage', 'Break', confirmed=True)
+        assert effects_for(carrier, EffectKind.ARMOUR)
+    assert disable_item(carrier, item, 'audit item unmade')
+    assert not disable_item(carrier, item, 'audit repeated suppression')
+    expected = save_inventory(carrier)
+    path = save_game_state(app, str(tmp_path / 'disabled-item.json'))
+    for _ in range(2):
+        load_game_state(app, path)
+        assert save_inventory(carrier) == expected
+        assert profile.characteristics == base
+        assert not any(effect.item.name == name for kind in EffectKind for effect in effects_for(carrier, kind))
+        if name == 'Silvery Wand':
+            assert len(profile.spells) == before_spells - 1
+            assert profile.wizard_level() == 2
+        elif name == 'Helm Of Courage':
+            assert profile.effective_armour_save() == profile.armor_save
+            assert inventory(carrier)[0].uses['courage']['count'] == 1
 
 
 def test_lileath_and_effect_expiry_survive_repeated_reload(scene, tmp_path):

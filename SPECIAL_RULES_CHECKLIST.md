@@ -1277,9 +1277,30 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
 - [x] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
       crew shooting/melee, Roc attacks, terrain and flight; Horsemen cannot
       shoot or Fire & Flee with their melee-only Throwing Spears.
-- [ ] Test expiry/disable/reload at least once for every timed or limited-use
-      source, plus a rendered playable two-army save with no silent unsupported
-      effects. Use focused checks per feature and one full suite at completion.
+- [x] Audit selected effect expiry/disable/reload and retain a rendered playable
+      two-army save. The six ongoing spells and three purchased items have a
+      repeated-reload matrix; Lileath, Fated dispel, Gaze/Stupidity, Fear and
+      First/Counter Charge have dedicated lifetime and usage checks.
+- [x] Traverse all six rounds through the phase controls, reload at the midpoint,
+      and restore the final result without granting an extra turn. This is a
+      hold/pass phase-flow test, separate from the seeded combat scenarios.
+- [ ] Run one final full isolated regression after these milestones and record
+      failures honestly; the earlier full run predates the latest changes.
+
+**Selected lifecycle audit (2026-09-11):** 18 new spell cases cover Fury of
+Khaine, Shield of Saphery, Walk Between Worlds, Courage of Aenarion, Drain Magic
+and Tempest across two reloads, their proper turn boundary, caster removal and
+explicit dispel. Cleanup is idempotent, timed non-Self grants survive caster
+loss until expiry, and Tempest leaves no terrain behind. Three new item cases
+disable/reload the Wand, Helm and Banner twice: base characteristics and usage
+records remain intact, the Wand loses only its extra known spell, and spending
+the Helm's reroll alone retains armour. No lifecycle runtime correction was
+needed. The lifecycle module passes 28 cases; the six-module focused audit
+passes 73, including existing gifts, Fear, selected items, First Charge and
+High Elf spell consumers. Full-artwork startup acceptance also passes with
+the new twelve-player-turn flow and midpoint/result reloads (427.1 MiB peak).
+LEFTOVER: this audit does not expand the generic modifier system, internal
+subphase Remains in Play ending windows, or the geometry limits below.
 
 **Combined acceptance (2026-09-11):** the fresh-startup test now continues from
 Wand spell generation and successful/dispelled casting through two full identity
@@ -1292,8 +1313,13 @@ the wounds/Fear state. Numeric rule logs are asserted; the ready-board and resul
 screens were rendered and inspected. Generated ready/after-combat/specialist
 saves are retained in the test artifact directory. A local ready save and render
 are also retained under `.pytest_cache/he-chaos-500-ready.{json,png}` (not staged).
-LEFTOVER: this is a set of seeded acceptance scenarios, not an autonomous
-six-turn match; explicit movement and casualty-position limits above remain open.
+The six-round extension now checks every player's Strategy, charge declarations,
+Remaining Moves, Shooting and Combat transitions, casting-allowance reset,
+midpoint save/reload and final Draw/result reload. No attacks or movement are
+chosen in that extension; the seeded scenarios above exercise those behaviors.
+LEFTOVER: this is not an autonomous tactical six-turn match; explicit movement
+and casualty-position limits above remain open. The paused intermittent HUD
+startup investigation and Devil's Visit are unchanged.
 
 **Point 5 verification:** 41 focused faction checks and four actual-roster
 offscreen checks pass. The latter load all ten models from the tracked startup
