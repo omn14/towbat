@@ -263,6 +263,8 @@ def save_game_state(game, filename=None):
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'usedRallyingCry': getattr(unit, 'usedRallyingCry', False),
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
+            'chargeTargets': getattr(unit, 'chargeTargets', None),
+            'chargeTargetsNextTurn': getattr(unit, 'chargeTargetsNextTurn', []),
             'counterChargeTurn': getattr(unit, 'counterChargeTurn', None),
             'lileathUsedTurn': getattr(unit, 'lileathUsedTurn', None),
             'gazeState': copy.deepcopy(getattr(unit, 'gazeState', {})),
@@ -601,6 +603,8 @@ def load_game_state(game, filename):
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.usedRallyingCry = unit_data.get('usedRallyingCry', False)
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
+        unit.chargeTargets = unit_data.get('chargeTargets')
+        unit.chargeTargetsNextTurn = unit_data.get('chargeTargetsNextTurn', [])
         unit.counterChargeTurn = unit_data.get('counterChargeTurn')
         unit.lileathUsedTurn = unit_data.get('lileathUsedTurn')
         unit.gazeState = copy.deepcopy(unit_data.get('gazeState', {}))

@@ -60,6 +60,21 @@ def test_ordinary_charge_does_not_grant_disruption(capsys):
     assert not capsys.readouterr().out
 
 
+def test_charge_contact_targets_survive_redirects_and_expire_with_pursuit_handoff():
+    charger = fighter(first_charge=False)
+    target, next_target = fighter('Redirected'), fighter('Pursuit')
+    begin_charge_attempt(charger)
+    finish_charge_attempt(charger, target)
+    finish_charge_attempt(charger, target)
+    assert charger.chargeTargets == ['Redirected']
+    count_as_charge(charger, next_target, next_turn=True)
+    assert charger.chargeTargetsNextTurn == ['Pursuit']
+    expire_first_charge(charger)
+    assert charger.chargeTargets == ['Pursuit'] and not charger.chargeTargetsNextTurn
+    expire_first_charge(charger)
+    assert not charger.chargeTargets
+
+
 def test_disruption_removes_rank_points_without_mutating_terrain(capsys):
     from models import model
     from psychology import combat_rank_bonus

@@ -19,6 +19,13 @@ def begin_charge_attempt(unit):
 
 def finish_charge_attempt(unit, target=None, *, next_turn=False):
     """Contact disrupts for the counted charge's turn (pp. 157, 169; FAQ v1.5.3)."""
+    if target is not None:
+        field = 'chargeTargetsNextTurn' if next_turn else 'chargeTargets'
+        targets = list(getattr(unit, field, None) or [])
+        identity = getattr(target, 'unitName', target.unit.name)
+        if identity not in targets:
+            targets.append(identity)
+        setattr(unit, field, targets)
     if not getattr(unit, 'chargeAttemptPending', False):
         return
     first = getattr(unit, 'firstChargePending', False)
@@ -51,6 +58,8 @@ def count_as_charge(unit, target, *, next_turn=False):
 
 def expire_first_charge(unit):
     """Do not clear terrain or flank disruption with this source (pp. 101, 169)."""
+    unit.chargeTargets = list(getattr(unit, 'chargeTargetsNextTurn', None) or [])
+    unit.chargeTargetsNextTurn = []
     sources = getattr(unit, 'firstChargeDisruptedBy', [])
     if sources:
         rule_log('First Charge', unit,

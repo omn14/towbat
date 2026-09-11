@@ -813,7 +813,10 @@ class model:
         """Strength bonus of the equipped melee weapon. Charge-only weapons
         (Lance) count only while charging; others (Halberd, Great Weapon) are
         always on."""
-        return self.active_melee_weapon().get('strength_bonus', 0)
+        weapon = self.active_melee_weapon()
+        if weapon.get('charge_only') and not getattr(self, '_charged_target', self.charging):
+            return 0
+        return weapon.get('strength_bonus', 0)
 
     def apply_melee_strength(self):
         """Add the active melee weapon's Strength bonus once per combat.
@@ -824,11 +827,14 @@ class model:
         return bonus
 
     def melee_ap(self) -> int:
-        """AP penetration of the equipped melee weapon; charge value while charging."""
+        """Charge AP applies only to the enemy charged (amended pp. 214-215)."""
         w = self.active_melee_weapon()
         if self.faction_hand_weapon('ensorcelled_weapons'):
             return 1
-        if self.charging and w.get('ap_penetration_charge') is not None:
+        charged_target = self.charging and getattr(self, '_charged_target', True)
+        if w.get('charge_only') and not charged_target:
+            return 0
+        if charged_target and w.get('ap_penetration_charge') is not None:
             return w['ap_penetration_charge']
         return w.get('ap_penetration', 0)
 

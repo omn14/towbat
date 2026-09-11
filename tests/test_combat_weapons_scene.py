@@ -67,3 +67,42 @@ def test_joined_character_chooses_independently_and_duel_keeps_that_choice(scene
     assert champion.unit.model.equipedWeapon['name'] == 'Great Weapon'
     assert warriors.unit.model.equipedWeapon['name'] == 'Hand Weapon'
     app.combat._combatArmedProfiles = set()
+
+
+def test_target_specific_lances_survive_reload_and_resolve_champion_host(scene, tmp_path, capsys):
+    from battleFunctions import simulate_battle
+    from combat_weapons import weapon_target
+    from first_charge import finish_charge_attempt
+    from persistence import save_game_state
+
+    app, baseline = scene
+    load_game_state(app, baseline)
+    units = members(app)
+    helms, knights = units['Silver Helm'], units['Chaos Knight']
+    helms.chargedThisTurn = True
+    helms.chargeDistance = 1
+    finish_charge_attempt(helms, knights)
+    save_path = tmp_path / 'charge-targets.json'
+    assert save_game_state(app, str(save_path)) is not None
+    load_game_state(app, str(save_path))
+    units = members(app)
+    helms, knights, warriors = units['Silver Helm'], units['Chaos Knight'], units['Chaos Warrior']
+    profile = helms.unit.model
+    profile.equip_weapon('Lance')
+    base_strength = int(profile.characteristics['S'])
+    observed = []
+    def attack(striker, defender):
+        observed.append((int(striker.characteristics['S']), striker.melee_ap()))
+        striker.ithilmar_rerolled = False
+        return False, False
+    for target, expected in [(knights, (base_strength + 2, 2)),
+                             (warriors, (base_strength, 0)),
+                             (champions(knights)[0], (base_strength + 2, 2))]:
+        observed.clear()
+        with weapon_target(profile, helms, target), patch('battleFunctions.simulate_attack', side_effect=attack):
+            simulate_battle(helms.unit, target.unit, True, charge_distance=1)
+        assert observed and set(observed) == {expected}
+        assert not hasattr(profile, '_charged_target')
+    output = capsys.readouterr().out
+    assert 'was not charged; weapon S+0, AP-0' in output
+    assert 'was charged; weapon S+2, AP-2' in output

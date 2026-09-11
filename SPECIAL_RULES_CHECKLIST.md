@@ -282,7 +282,7 @@ itself add gameplay effects.
       and affects the attack snapshot before dice; no transient A mutation or
       lost split-profile bonus. Boundary tests cover 2.99", 3" and 7". All 19
       command-group, 30 rule-builder, eight command-scene and 42 challenge tests
-      pass. Weapon selection and target-specific charging modifiers remain open.
+      pass. Weapon selection and target-specific modifiers were completed below.
       **Weapon selection completed (2026-09-11):** both sides choose their legal
       melee weapons at combat selection. Ordinary champions follow their unit;
       differently equipped champions, joined characters and split profiles choose
@@ -291,7 +291,16 @@ itself add gameplay effects.
       hand weapon/shield/Parry 3+ versus two-handed halberd 5+, with Ensorcelled
       Weapons only on the hand weapon. Four new weapon scenes, 13 Shieldwall,
       eight command and ten Assailment scenes, plus 41 faction tests pass.
-      LEFTOVER: target-specific charge modifiers and exact per-model allocation.
+      **Target-specific modifiers completed (2026-09-11):** successful charge
+      contacts are recorded, saved and expired with pursuit's next-turn handoff.
+      Ordinary attacks and duels resolve characters/champions through their host.
+      Against an enemy not charged, a lance retains Armour Bane but loses S+2/AP-2;
+      a halberd retains S+1 but uses AP-1 (amended pp. 214-215). The unit's Furious
+      Charge bonus and selected weapon are not removed. Tests: 56 weapon, 15
+      charge-state, five weapon scenes, 42 challenge, 34 persistence, 15 declaration,
+      12 Counter Charge and ten Assailment scenes pass.
+      LEFTOVER: exact per-model allocation; older saves without contacted-target
+      records retain unit-wide charge modifiers until that turn expires.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage

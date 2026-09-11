@@ -1,9 +1,43 @@
 """Choose weapons before attacks and challenges (amended Rulebook pp. 213-215)."""
 
+from contextlib import contextmanager
+
 from panda3d.core import Vec3
 
 from command_groups import champions
 from rules_log import rule_log, rule_skipped
+
+
+def combat_host(fighter):
+    return getattr(fighter, 'command_host', None) or getattr(fighter, 'hostUnit', None) or fighter
+
+
+@contextmanager
+def weapon_target(profile, fighter, target):
+    """Keep charge-only weapons but scope their S/AP to the charged enemy (pp. 214-215)."""
+    host, enemy = combat_host(fighter), combat_host(target)
+    targets = getattr(host, 'chargeTargets', None)
+    charged = bool(getattr(host, 'chargedThisTurn', False))
+    qualifies = charged and (targets is None or getattr(enemy, 'unitName', enemy.unit.name) in targets)
+    missing = object()
+    previous = getattr(profile, '_charged_target', missing)
+    profile._charged_target = qualifies
+    weapon = profile.equipedWeapon or {}
+    try:
+        if charged and (weapon.get('charge_only') or weapon.get('ap_penetration_charge') is not None):
+            profile.charging = charged
+            logger = rule_log if qualifies else rule_skipped
+            logger('Charging Weapon', host,
+                   f'{profile.name}, {weapon.get("name")}: {enemy.unit.name} '
+                   f'{"was charged" if qualifies else "was not charged"}; '
+                   f'weapon S+{profile.melee_strength_bonus()}, AP-{profile.melee_ap()} '
+                   '(pp. 214-215)')
+        yield
+    finally:
+        if previous is missing:
+            del profile._charged_target
+        else:
+            profile._charged_target = previous
 
 
 def available_weapons(profile, charged):

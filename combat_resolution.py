@@ -2080,7 +2080,8 @@ class CombatResolver:
                 return attacks_at_step[id(part)]
 
             from fear import attack_penalty
-            with attack_penalty(self.game, host, target, part.profile):
+            from combat_weapons import weapon_target
+            with attack_penalty(self.game, host, target, part.profile), weapon_target(part.profile, host, target):
                 result = simulate_battle(part.unit(attack_count), target.unit,
                                          charge=getattr(host, 'chargedThisTurn', False),
                                          charge_distance=float(getattr(host, 'chargeDistance', 0) or 0),
@@ -2489,7 +2490,8 @@ class CombatResolver:
                 if weapon is None or weapon.get('tag') == 'ranged':
                     unit.model.equip_best_melee()
                 from fear import attack_penalty
-                with attack_penalty(self.game, model, rival, unit.model):
+                from combat_weapons import weapon_target
+                with attack_penalty(self.game, model, rival, unit.model), weapon_target(unit.model, model, rival):
                     attacks, hits, suffered, saved, wounds = simulate_battle(
                         unit, rival.unit, charge=charged, first_round=first,
                         charge_distance=inches)

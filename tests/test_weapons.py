@@ -164,6 +164,22 @@ class CatalogueLookupTests(unittest.TestCase):
 
 
 class MeleeStrengthTests(unittest.TestCase):
+    def test_charging_weapon_modifiers_are_scoped_to_the_enemy_charged(self):
+        for name, strength in [('Lance', 0), ('Halberd', 1)]:
+            with self.subTest(weapon=name):
+                fighter = model('Chaos Knight', '')
+                fighter.give_weapon(name)
+                fighter.equip_weapon(name)
+                fighter.charging = True
+                fighter._charged_target = False
+                self.assertEqual(fighter.melee_strength_bonus(), strength)
+                self.assertEqual(fighter.melee_ap(), 0 if name == 'Lance' else 1)
+                self.assertEqual(fighter.armour_bane_for_attack(), 1)
+                self.assertEqual(fighter.active_melee_weapon()['name'], name)
+                fighter._charged_target = True
+                self.assertEqual(fighter.melee_strength_bonus(), 2 if name == 'Lance' else 1)
+                self.assertEqual(fighter.melee_ap(), 2)
+
     def test_halberd_strength_always_on(self):
         m = model("State Trooper", ""); m.give_weapon("Halberd")
         m.charging = False
