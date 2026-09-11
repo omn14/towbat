@@ -1,7 +1,10 @@
 """Exercise formed-to-Skirmisher charge scheduling with Panda's real task manager."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
+import asyncio
+
+import pytest
 
 from direct.task.Task import TaskManager
 from panda3d.core import AsyncTaskManager, NodePath, Vec3
@@ -47,3 +50,26 @@ def test_formed_charge_task_is_named_and_forwards_original_state():
         for task in manager.getTasks():
             manager.remove(task)
         attacker.bodyNP.removeNode()
+
+
+@pytest.mark.parametrize('method', ['_resolveChargeInterval', '_skirmishChargeInterval'])
+def test_supplied_charge_dice_are_never_rolled_again(method):
+    from combat_resolution import CombatResolver
+    game = SimpleNamespace(movement=Mock(), playerNP=Mock(), diceInfoText=Mock(), autoRoll=False)
+    combat = CombatResolver(game)
+    combat.swiftstrideChargeChoice = AsyncMock(side_effect=AssertionError('second roll'))
+    combat.rullTerninger = AsyncMock(side_effect=AssertionError('second roll'))
+    combat.chargeRangeText = Mock(return_value='charge')
+    combat.chargeDistance = Mock(side_effect=RuntimeError('after dice'))
+    unit = SimpleNamespace(state='Idle', isSkirmisher=False, bodyNP=Mock())
+    unit.bodyNP.node().getShape.side_effect = RuntimeError('after dice')
+    arguments = [unit, None]
+    if method == '_resolveChargeInterval':
+        arguments.append(0)
+    arguments.extend([Vec3(0), Vec3(0), 'front'])
+    with pytest.raises(RuntimeError, match='after dice'):
+        asyncio.run(getattr(combat, method)(*arguments, chdice=[2, 5, 4]))
+    combat.swiftstrideChargeChoice.assert_not_awaited()
+    combat.rullTerninger.assert_not_awaited()
+    if method == '_skirmishChargeInterval':
+        assert combat.chargeDistance.call_args.args[-1] == [2, 5, 4]

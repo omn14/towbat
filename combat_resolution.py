@@ -1160,7 +1160,9 @@ class CombatResolver:
         if wasPursuing:
             maxmove = 0
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
-        if not self.game.autoRoll:
+        if chdice is not None:
+            terninger = []
+        elif not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
             terninger, chdice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
 
@@ -1569,7 +1571,9 @@ class CombatResolver:
         maxmove = self.game.movement.movementAllowance(unit, oposUnit, self.game.playerNP.getPos())
 
         self.game.diceInfoText.setText(self.chargeRangeText(unit, maxmove))
-        if not self.game.autoRoll:
+        if chdice is not None:
+            terninger = []
+        elif not self.game.autoRoll:
             bonus = await self.swiftstrideChargeChoice(unit)
             terninger, chdice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
         else:

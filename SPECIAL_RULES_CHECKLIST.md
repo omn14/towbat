@@ -477,6 +477,9 @@ only a blocker if that relationship is actually chosen later.
 - [x] **Warband** - Horsemen (amended p. 180). A majority allows one complete
       Charge-roll reroll, but not pursuit or the
       Counter Charge reaction roll. Human owners choose; AI rerolls low rolls.
+      **Corrected (2026-09-11):** legacy formed/loose charge movement now reuses
+      supplied dice instead of rolling again. Three scheduling tests, 15 queued
+      charge scenes and 27 Drilled/Impetuous scenes pass.
       **FAQ correction:** reroll the two Charge dice only; retain the separate
       Swiftstride bonus die unchanged (FAQ v1.5.3, Finest Warhorses clarification).
       Leadership tests use eligible current ranks, capped at 10; fleeing,
