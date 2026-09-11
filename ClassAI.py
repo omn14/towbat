@@ -19,8 +19,16 @@ class ClassAI:
 
 
     async def takeMoveTurn(self):
+        from charge_declarations import collecting, resolve_declarations
+        if collecting(self.game):
+            for unit in self.playerUnits:
+                if unit.state == 'Idle' and not unit.hasMovedThisTurn:
+                    self._move_complete = False
+                    self.moveTowardsClosestEnemy(unit)
+                    await taskMgr.add(self.loopWaitForMoveComplete, self.waitTask, extraArgs=[unit], appendTask=True)
+            await resolve_declarations(self.game)
         for unit in self.playerUnits:
-            if unit.state == "Idle":
+            if unit.state == "Idle" and not unit.hasMovedThisTurn:
                 print(f"AI controlling unit: {unit.unit.name}")
                 # Simple AI logic: Move forward by 1 unit
                 #await taskMgr.add(self.moveTowardsClosestEnemy, f"moveTowardsClosestEnemy-{unit.unit.name}", extraArgs=[unit], appendTask=False)

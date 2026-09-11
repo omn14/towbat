@@ -206,6 +206,9 @@ def unavailable_reason(game, unit):
 
 def commit_move(game, unit, positions=None, destination=None):
     """Validate again, then spend one move; ghost manipulation never rolls dice."""
+    from charge_declarations import ordinary_move_allowed
+    if not ordinary_move_allowed(game):
+        return False
     reason = unavailable_reason(game, unit)
     if reason:
         rule_skipped('Skirmishers', unit, reason)

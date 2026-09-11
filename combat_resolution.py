@@ -145,7 +145,7 @@ class CombatResolver:
             return None
         return SimpleNamespace(distance=distance, movement=movement)
 
-    async def counterChargeInterval(self, charger, defender, origin, facing):
+    async def counterChargeInterval(self, charger, defender, origin, facing, *, defer_charge=False):
         """Resolve a formed single-charge reaction (p. 167; D3+1 is not a Charge roll)."""
         from counter_charge import counter_charge_distance
         from first_charge import begin_charge_attempt, finish_charge_attempt
@@ -207,6 +207,8 @@ class CombatResolver:
                      f'towards {charger.unit.name}; both count as charging, no Swiftstride bonus (p. 167)')
             if defender.bodyNP.isEmpty() or defender.unit.nmodels <= 0:
                 charger.request('Moved')
+                return
+            if defer_charge:
                 return
 
             source = self.game.psychology._unit_box(charger)
@@ -284,8 +286,9 @@ class CombatResolver:
         finally:
             for die in dice_models:
                 die.remove(self.game.world)
-            finish_charge_attempt(charger)
-            finish_charge_attempt(defender)
+            if not defer_charge:
+                finish_charge_attempt(charger)
+                finish_charge_attempt(defender)
             defender.isChargingMove = charger.isChargingMove = False
             self.game.autoCharge = self.game.autoHold = False
 
@@ -392,7 +395,87 @@ class CombatResolver:
         if slot is not None and previous:
             defender.unit.model.equip_weapon(previous)
 
-    async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task, defender=None):
+    async def resolveDeclaredCharge(self, declaration):
+        """Resolve one reserved charge without asking for a second declaration (p. 121)."""
+        from first_charge import finish_charge_attempt
+        from formed_skirmish_charge import route_to_model, starting_boxes
+        from skirmish_charge import formed_contact
+
+        unit, defender = declaration.charger, declaration.defender
+        if (unit.bodyNP.isEmpty() or defender.bodyNP.isEmpty()
+                or unit.unit.nmodels <= 0 or defender.unit.nmodels <= 0):
+            finish_charge_attempt(unit)
+            return
+        origin, facing = Vec3(*declaration.origin), Vec3(*declaration.facing)
+        self.game.unitToMove = unit
+        unit.bodyNP.setPos(origin)
+        unit.bodyNP.setHpr(facing)
+        unit.isChargingMove = True
+        if not getattr(unit, 'isSkirmisher', False) and not getattr(defender, 'isSkirmisher', False):
+            source = self.game.psychology._unit_box(unit)
+            target = self.game.psychology._unit_box(defender)
+            obstacles = [self.game.psychology._unit_box(member) for member in self.game.units
+                         if member not in (unit, defender) and not member.bodyNP.isEmpty()
+                         and getattr(member, 'hostUnit', None) is None]
+            route = route_to_model([source], [target], 0, origin, obstacles)
+            if route is None:
+                rule_skipped('Charge Move', unit, 'declared target has no supported clear route; charge spent (LEFTOVER)')
+                finish_charge_attempt(unit)
+                unit.isChargingMove = False
+                unit.request('Moved')
+                return
+            unit.bodyNP.setPos(*route.destination)
+            unit.bodyNP.setH(route.heading + route.wheel)
+            self.game.playerNP.setPos(*route.destination)
+            self.game.moveArceDistance = route.distance
+            contact = formed_contact([source], [target], origin)
+            direction = contact[4]
+            heading = math.degrees(math.atan2(-direction[0], direction[1]))
+            angle = (heading - unit.bodyNP.getH() + 180) % 360 - 180
+            declaration.flank_angle = (contact[-1], angle)
+            declaration.route = route
+        elif declaration.target_index is not None:
+            from scouts import model_base_boxes
+            obstacles = [box for member in self.game.units if member not in (unit, defender)
+                         and not member.bodyNP.isEmpty() and member.isDeployed
+                         and getattr(member, 'hostUnit', None) is None
+                         for box in model_base_boxes(member)]
+            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                             for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
+            targets = model_base_boxes(defender)
+            route = None
+            if (not defender.skirmishCombat and defender.state != 'IsFleeing'
+                    and declaration.target_index < len(targets)):
+                route = route_to_model(starting_boxes(unit, origin, facing), targets,
+                                       declaration.target_index, origin, obstacles)
+            if route is None:
+                rule_skipped('Skirmishers', unit,
+                             'reserved loose target has no supported route after reactions or form-up; charge spent (LEFTOVER)')
+                finish_charge_attempt(unit)
+                unit.isChargingMove = False
+                unit.request('Moved')
+                return
+            declaration.preview = SimpleNamespace(target=defender, route=route, error=None)
+            self.game.playerNP.setPos(*route.destination)
+            self.game.moveArceDistance = route.distance
+        else:
+            unit.bodyNP.setPos(*declaration.contact_position)
+            unit.bodyNP.setHpr(*declaration.contact_facing)
+            self.game.playerNP.setPos(*declaration.destination)
+            self.game.moveArceDistance = declaration.distance
+            declaration.flank_angle = ('front', 0)
+        try:
+            unit.declaredCharge = declaration
+            await self.chargeAndChargeReaction(unit, None, origin, facing,
+                                              SimpleNamespace(done=None), defender=defender,
+                                              declaration=declaration)
+        finally:
+            finish_charge_attempt(unit)
+            unit.isChargingMove = False
+            unit.declaredCharge = unit.formedSkirmishCharge = None
+
+    async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task, defender=None,
+                                     declaration=None):
         pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
                         'Vanguard' if in_vanguard(self.game) or vanguard_charge_blocked(self.game, unit) else None)
         if unit.state != 'IsPursuing' and pregame_rule:
@@ -413,11 +496,21 @@ class CombatResolver:
             defender = self.game.getSelectedUnit(defenderNP.node())
         else:
             defenderNP = defender.bodyNP
+        if (declaration is None and unit.state != 'IsPursuing'
+                and self.game.fsm.state == 'MovementPhase'
+                and getattr(self.game, 'chargeStage', None) in ('resolving', 'remaining', 'blocked')):
+            rule_skipped('Charge Declaration', unit, 'declarations are closed; no new charge is allowed (p. 119)')
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            unit.isChargingMove = unit.wouldMarch = False
+            self.game.autoCharge = self.game.autoHold = False
+            return task.done
         from formed_skirmish_charge import preview_charge
         from skirmish_charge import supported_skirmish_defender
-        formed_preview = None
-        unit.formedSkirmishCharge = None
-        if supported_skirmish_defender(unit, defender) or c is None:
+        formed_preview = declaration.preview if declaration is not None else None
+        unit.formedSkirmishCharge = formed_preview
+        if declaration is None and (supported_skirmish_defender(unit, defender) or c is None):
             formed_preview = preview_charge(self.game, unit, defender, oposUnit, orotUnit)
             if formed_preview.error:
                 rule_skipped('Skirmishers', unit,
@@ -434,7 +527,7 @@ class CombatResolver:
             unit.formedSkirmishCharge = formed_preview
         visibility = None
         if (getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False)
-                and unit.state != 'IsPursuing'):
+            and unit.state != 'IsPursuing' and declaration is None):
             from skirmish_visibility import charge_visibility
             visibility = charge_visibility(self.game, unit, defender, oposUnit, orotUnit)
             if not visibility.allowed:
@@ -449,7 +542,7 @@ class CombatResolver:
                 self.game.autoHold = False
                 self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
                 return task.done
-        if self.game.autoCharge or self.game.aiControls(unit):
+        if declaration is not None or self.game.autoCharge or self.game.aiControls(unit):
             cynchoice = "Yes"
         else:
             cynchoice = await taskMgr.add(self.game.makeChoiceNew(
@@ -471,13 +564,21 @@ class CombatResolver:
             if visibility is not None:
                 rule_log('Skirmishers', unit,
                          f'{visibility.detail(defender.unitName)} -> charge declared (p. 186)')
+            from charge_declarations import collecting, queue_charge
+            if declaration is None and unit.state != 'IsPursuing' and collecting(self.game):
+                queue_charge(self.game, unit, defender, oposUnit, orotUnit)
+                rule_log('Charge Declaration', unit,
+                         f'targets {defender.unit.name}; {len(self.game.chargeDeclarations)} charge(s) queued, no charge moves yet (p. 119)')
+                unit.updateTextNode()
+                messenger.send('unit-move-complete')
+                return task.done
             print("Charging into combat...")
 
             chargeReaction = ["hold", "flee"]
-            counterOption = self.counterChargeOption(defender, unit, oposUnit, orotUnit)
+            counterOption = self.counterChargeOption(defender, unit, oposUnit, orotUnit) if declaration is None else None
             if counterOption:
                 chargeReaction.insert(0, 'counter charge')
-            shootOption = self.standAndShootOption(defender, unit, oposUnit, orotUnit)
+            shootOption = self.standAndShootOption(defender, unit, oposUnit, orotUnit) if declaration is None else None
             fireFlee = self.fireAndFleeOption(defender, unit, shootOption)
             if fireFlee:
                 chargeReaction.insert(0, "fire & flee")
@@ -487,7 +588,9 @@ class CombatResolver:
             from magic_items import current_turn
             counterTurn = getattr(defender, 'counterChargeTurn', None)
             counterSpent = counterTurn is not None and counterTurn == current_turn(self.game)
-            if self.game.autoHold or counterSpent:
+            if declaration is not None:
+                crchoice = declaration.reaction
+            elif self.game.autoHold or counterSpent:
                 # A pursuit was never declared as a charge, so the unit it
                 # reaches gets no reaction to it (p. 157).
                 crchoice = "hold"
@@ -552,16 +655,21 @@ class CombatResolver:
             if crchoice == "hold":
                 print("Defender holds position.")
 
-                flank, angleToRotate = ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c)
+                flank, angleToRotate = (declaration.flank_angle if declaration is not None and declaration.flank_angle is not None
+                                       else ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c))
 
                 unit.hasMovedThisTurn = True
                 unit.updateTextNode()
-                taskMgr.add(self.chargeInterval, "chargeIntervalTask",
-                            extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank],
-                            appendTask=False)
+                if declaration is not None or unit.state == 'IsPursuing':
+                    await self.chargeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank)
+                else:
+                    taskMgr.add(self.chargeInterval, "chargeIntervalTask",
+                                extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank],
+                                appendTask=False)
 
             elif crchoice == "flee":
-                flank, angleToRotate = ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c)
+                flank, angleToRotate = (declaration.flank_angle if declaration is not None and declaration.flank_angle is not None
+                                       else ('front', 0) if formed_preview is not None else self.getFlankFromContact(unit, c))
                 if formed_preview is not None:
                     rule_skipped('Skirmishers', unit,
                                  'defender flees: legacy chase/redirect movement replaces the planned contact route; '
@@ -572,6 +680,9 @@ class CombatResolver:
                 print("Defender flees!")
                 loserUnit = self.game.getSelectedUnit(defenderNP)
                 loserUnit.request("IsFleeing")
+                if declaration is not None:
+                    await self.fleeInterval(unit, defenderNP, angleToRotate, oposUnit, orotUnit, fireAndFlee)
+                    return task.done
                 taskMgr.add(self.fleeInterval, "fleeIntervalTask",
                             extraArgs=[unit, defenderNP, angleToRotate, oposUnit, orotUnit, fireAndFlee],
                             appendTask=False)
@@ -926,6 +1037,13 @@ class CombatResolver:
             finish_charge_attempt(unit)
 
     async def _resolveChargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
+        declaration = getattr(unit, 'declaredCharge', None)
+        if declaration is not None and declaration.route is not None:
+            planned = SimpleNamespace(target=declaration.defender, route=declaration.route,
+                                      formed_target=True, flank=flank, angle=angleToRotate)
+            unit.formedSkirmishCharge = planned
+            await self._formedSkirmishChargeInterval(unit, planned, oposUnit, orotUnit, chdice)
+            return
         planned = getattr(unit, 'formedSkirmishCharge', None)
         if planned is not None and planned.target.bodyNP == defenderNP:
             await self._formedSkirmishChargeInterval(unit, planned, oposUnit, orotUnit, chdice)
@@ -1145,6 +1263,14 @@ class CombatResolver:
         unit.chargeDistance = float(self.game.moveArceDistance)
         from first_charge import finish_charge_attempt
         finish_charge_attempt(unit, defenderUnit)
+        from magic_items import current_turn
+        counter_turn = getattr(defenderUnit, 'counterChargeTurn', None)
+        if counter_turn is not None and counter_turn == current_turn(self.game):
+            unit.wasChargedThisTurn = True
+            finish_charge_attempt(defenderUnit, unit)
+            rule_log('Counter Charge', defenderUnit,
+                     f'contact with {unit.unit.name}: charge distances '
+                     f'{defenderUnit.chargeDistance:.2f}" / {unit.chargeDistance:.2f}"; both receive charging benefits')
         if wasPursuing:
             joins, whyNot = (self.joinsCombatThisPhase(defenderUnit) if strayed
                              else (False, ""))
@@ -1201,7 +1327,7 @@ class CombatResolver:
         return
 
     async def _formedSkirmishChargeInterval(self, unit, preview, origin, facing, chdice=None):
-        """Resolve the declared per-base route; defenders align only on success (p. 186)."""
+        """Follow a planned charge route; align only after contact (pp. 121, 126, 186)."""
         from direct.interval.IntervalGlobal import Parallel
         from direct.interval.LerpInterval import LerpFunc
         from formed_skirmish_charge import route_to_model, starting_boxes, route_allowance, route_features
@@ -1217,8 +1343,9 @@ class CombatResolver:
             dice_models = []
             chdice = [6, 6] if chdice is None else chdice
         self.game.autoCharge = self.game.autoHold = False
+        formed_target = getattr(preview, 'formed_target', False)
         original = starting_boxes(unit, origin, facing)
-        if original != route.original_boxes:
+        if not formed_target and original != route.original_boxes:
             obstacles = [box for other in self.game.units if other not in (unit, defender)
                          and other.isDeployed and getattr(other, 'hostUnit', None) is None
                          for box in model_base_boxes(other)]
@@ -1247,11 +1374,11 @@ class CombatResolver:
         for die in dice_models:
             die.remove(self.game.world)
         unit.formedSkirmishCharge = unit.formedSkirmishPreview = None
-        unit.isChargingMove = False
         self.game.diceInfoText.setText('')
         self.game.debugTextInfo.setText('')
         self.game.movement.dangerousTerrainTests(unit, origin, unit.bodyNP.getPos(),
                                features=route_features(self.game, route, travel))
+        unit.isChargingMove = False
         if unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty():
             return
         if not reached:
@@ -1260,21 +1387,42 @@ class CombatResolver:
                      f'-> moves {travel:.2f}" without adding M (p. 121)')
             unit.request('Moved')
             return
-        if not await self._formChargedSkirmishers(unit, defender):
+        if formed_target:
+            await self.alignToEnemy(unit, preview.angle, pivot=self.contactPointOn(unit, defender.bodyNP))
+            if defender.state == 'IsFleeing':
+                from first_charge import finish_charge_attempt
+                from command_groups import capture_standard
+                rule_log('Catching the Curs!', unit, f'caught the fleeing {defender.unit.name} (p. 121)')
+                finish_charge_attempt(unit, defender)
+                capture_standard(self.game, defender, unit)
+                self.removeUnitFromPlay(defender)
+                unit.request('Moved')
+                await self.freeReform(unit)
+                return
+        elif not await self._formChargedSkirmishers(unit, defender):
             rule_skipped('Skirmishers', unit, 'contact reached but defender cannot form; charge not engaged (p. 186)')
             unit.request('Moved')
             return
         for participant, opponent in ((unit, defender), (defender, unit)):
-            participant.request('InCombat')
+            if participant.state != 'InCombat':
+                participant.request('InCombat')
             participant.isInCombat = True
             participant.isInCombatWith.append(opponent)
-            participant.isInCombatFlank.append('front')
+            participant.isInCombatFlank.append(preview.flank if formed_target and participant is defender else 'front')
             participant.updateTextNode()
         unit.chargedThisTurn = True
         unit.chargeDistance = route.distance
         defender.wasChargedThisTurn = True
         from first_charge import finish_charge_attempt
         finish_charge_attempt(unit, defender)
+        from magic_items import current_turn
+        counter_turn = getattr(defender, 'counterChargeTurn', None)
+        if counter_turn is not None and counter_turn == current_turn(self.game):
+            unit.wasChargedThisTurn = True
+            finish_charge_attempt(defender, unit)
+            rule_log('Counter Charge', defender,
+                     f'contact with {unit.unit.name}: charge distances '
+                     f'{defender.chargeDistance:.2f}" / {unit.chargeDistance:.2f}"; both receive charging benefits')
 
     async def _formChargedSkirmishers(self, attacker, defender):
         """Loose defenders align to the formed charger, not vice versa (p. 186)."""
@@ -2937,6 +3085,8 @@ class CombatResolver:
         two are still nose to nose with no room to turn in.
         """
         outcome_of = {id(u): o for u, o in outcomes}
+        destinations = {id(response['target']): Vec3(response['target'].bodyNP.getPos())
+                for response in responses if not response['target'].bodyNP.isEmpty()}
         for r in responses:
             winner, target = r['winner'], r['target']
             if winner.bodyNP.isEmpty():
@@ -2957,15 +3107,20 @@ class CombatResolver:
                 rule_skipped('Pursuit', winner,
                              "still in base contact with another enemy")
                 continue
-            if target.bodyNP.isEmpty():
+            destination = destinations.get(id(target))
+            if destination is None:
                 continue
-            await self.pursuitMove(winner, target, outcome_of.get(id(target)))
+            if target.bodyNP.isEmpty():
+                rule_log('Pursuit', winner,
+                         f'{target.unit.name} already caught; completes the declared pursuit '
+                         f'towards ({destination.x:.2f}, {destination.y:.2f}) using current obstacles (p. 156)')
+            await self.pursuitMove(winner, target, outcome_of.get(id(target)), destination=destination)
 
-    async def pursuitMove(self, winner, target, outcome):
+    async def pursuitMove(self, winner, target, outcome, *, destination=None):
         """Pivot to face the quarry and run the pursuit through the charge
         machinery, which rolls the 2D6, sums it, and handles the wheel, the
         align and the contact — the same things a charge needs."""
-        targetPos = target.bodyNP.getPos()
+        targetPos = Vec3(destination) if destination is not None else target.bodyNP.getPos()
         rFrom = winner.bodyNP.getHpr()
         winner.bodyNP.lookAt(targetPos)
         rTo = winner.bodyNP.getHpr()
@@ -2981,10 +3136,14 @@ class CombatResolver:
         winner.pursuitQuarry = target
         self.game.autoCharge = True
         self.game.autoHold = True
-        self.game.pathTowardsMouse(winner, targetPos.x, targetPos.y)
-        self.game.moveUnit(winner)
-        await Wait(5.0)
-        winner.pursuitQuarry = None
+        try:
+            self.game.pathTowardsMouse(winner, targetPos.x, targetPos.y)
+            movement_task = self.game.moveUnit(winner, wait_for_completion=True)
+            if movement_task is not None and movement_task is not False:
+                await movement_task
+        finally:
+            winner.pursuitQuarry = None
+            self.game.autoCharge = self.game.autoHold = False
 
     # ─── Post-Combat: Give Ground ─────────────────────────────────────────
 

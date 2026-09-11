@@ -253,6 +253,7 @@ class HUD(DirectObject):
 
         self.accept('hud-turn', self.set_turn)
         self.accept('hud-phase', self.set_phase)
+        self.accept('hud-charge-stage', self.set_charge_stage)
         self.accept('hud-log', self.log)
         self.accept('hud-unit', self.show_unit)
         self.accept('hud-dice', self.set_dice)
@@ -930,6 +931,8 @@ class HUD(DirectObject):
 
     def set_phase(self, phase: str):
         """Light the current step of the turn sequence."""
+        if phase != 'MovementPhase':
+            self.set_charge_stage(None)
         if phase in self.TRACK:
             self._active_phase = phase
         aside = self.ASIDES.get(phase)
@@ -952,6 +955,11 @@ class HUD(DirectObject):
             line += _markup(_PHASE_ON, f"   [{aside}]")
         self._phase.setText(line)
         self._fit_phase()
+
+    def set_charge_stage(self, stage):
+        self._end_btn['text'] = {'declarations': 'RESOLVE\nCHARGES',
+                                 'resolving': 'RESOLVING',
+                                 'blocked': 'INTERRUPTED'}.get(stage, 'END\nPHASE')
 
     # ─── Battle log ───────────────────────────────────────────────────
 

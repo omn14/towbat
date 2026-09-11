@@ -170,7 +170,7 @@ source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/
 ### Counter Charge
 
 Chaos Knights and Dragon Princes can now Counter Charge eligible frontal charges
-in the formed, single-charge flow. The defender's reaction menu includes the
+in the formed-unit flow. The defender's reaction menu includes the
 option; AI defenders select it automatically when eligible. Distance is measured
 from the charger's original position, not its tentative contact position.
 Too-close, wrong-arc/type, fleeing, engaged and already-used cases are logged.
@@ -181,13 +181,45 @@ gives both units charging benefits, including eligible First Charge effects.
 Once-per-turn use survives save/reload. Charging into an enemy no longer produces
 the erroneous marching log or sets the marching flag.
 
-This remains partial: charges still resolve one at a time, so choosing a target
-after all declarations is not implemented. Drilled, Marching Column and
+This remains partial: Drilled, Marching Column and
 loose-formation interactions remain unfinished; see the checklist's explicit
 limitations. Loading a save does not resume an in-flight reaction animation.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_counter_charge.py tests/test_counter_charge_scene.py
+```
+
+### Charge Declarations
+
+Movement now starts with charge declarations. Confirm each charge using the
+existing movement preview; the charger stays at its original position until
+resolution. Click **Resolve Charges** when declarations are complete, including
+when there are no charges. Ordinary movement is unavailable until then.
+
+Defenders choose their reactions after all declarations. Counter Charge and
+Stand & Shoot select one incoming charger; Flee runs once away from the strongest
+charger, with ties chosen randomly. Reactions finish before the active player
+chooses which charge to move next. Formed routes and contact arcs are recalculated
+against the moved defender, and existing combat links survive later charges.
+Failed planned charges move their Charge roll without adding Movement.
+
+Both AI implementations close declarations before their remaining moves. EnhancedAI
+currently attempts declarations against each eligible unit's nearest enemy;
+this is not a multi-charge tactical search.
+
+Declaration-stage saves retain queued units, original poses and selected loose
+target indices without repeating First Charge attempts. Saves during active or
+interrupted resolution are refused. Reload a declaration-stage save after an
+interruption; snapshots do not resume animation tasks. Legacy Movement saves
+without a recorded stage resume in Remaining Moves to avoid inventing declarations.
+
+Remaining limits include redirection, simultaneous frontage maximisation,
+complex flying/obstructed routes, and multiple form-ups or fleeing loose targets.
+Unsupported reserved loose-target routes are logged and spent rather than silently
+retargeted. Drilled and Impetuous are still the next rule work.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_charge_declarations.py tests/test_charge_declarations_scene.py
 ```
 
 Focused inventory checks use the memory-bounded runner:

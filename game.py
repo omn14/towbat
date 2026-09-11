@@ -2857,14 +2857,16 @@ class MyApp(ShowBase):
             self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
                                      "StrategyPhase"))
 
-    def moveUnit(self, unit):
+    def moveUnit(self, unit, *, wait_for_completion=False):
         """Commit the path plotted by pathTowardsMouse.
 
         Pursuit and the AI plot with explicit coordinates rather than the mouse,
         so this must not require the interactive move arc to be running."""
         if self.awaitingChoice:
             return
-        self.movement.moveUnit(unit)
+        movement_task = self.movement.moveUnit(unit)
+        if wait_for_completion:
+            return movement_task
 
     def aiControls(self, unit):
         """True when *unit* is the AI's to answer for.

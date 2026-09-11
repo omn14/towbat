@@ -239,9 +239,16 @@ def test_preview_is_read_only_and_measures_individual_travel(scene):
     assert not member.hasMovedThisTurn
 
 
+def remaining_moves(app):
+    import asyncio
+    from charge_declarations import resolve_declarations
+    asyncio.run(resolve_declarations(app))
+
+
 def test_adjustment_cannot_grant_free_movement(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     positions = [(position[0] + 20, position[1]) for position in current_positions(member)]
     before = model_base_boxes(member)
     assert not commit_move(app, member, positions)
@@ -253,6 +260,9 @@ def test_adjustment_spends_movement_and_cannot_repeat(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
     positions = [(position[0] + 1, position[1]) for position in current_positions(member)]
+    assert not commit_move(app, member, positions)
+    assert not member.hasMovedThisTurn
+    remaining_moves(app)
     assert commit_move(app, member, positions)
     assert member.hasMovedThisTurn
     assert member.moveSpentThisTurn == pytest.approx(1)
@@ -318,6 +328,7 @@ def test_right_click_move_is_cancellable_before_any_state_change(scene):
 def test_right_click_move_confirm_spends_move_once(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     app.unitToMove = member
     app.movement._skirmishMovePreview(member, member.bodyNP.getPos() + Vec3(0, 1, 0))
     app.startTaskFunction(app.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
@@ -845,6 +856,7 @@ def test_editor_confirm_and_load_cleanup(scene, tmp_path):
     from skirmish_ui import open_editor
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     app.unitToMove = member
     saved = tmp_path / 'before-edit.json'
     save_game_state(app, str(saved))
@@ -866,6 +878,7 @@ def test_editor_confirm_and_load_cleanup(scene, tmp_path):
 def test_ordinary_move_uses_shared_gate_and_preserves_layout(scene, distance):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     app.unitToMove = member
     before = member.savedSkirmishLayout()
     origin = member.bodyNP.getPos()
@@ -896,6 +909,7 @@ def test_last_ordinary_casualty_leaves_character_alive(scene):
 def test_only_models_crossing_dangerous_feature_test(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     first = model_base_boxes(member)[0]
     feature = SimpleNamespace(center=Vec3(first[0], first[1], 0), width=0.1, height=0.1,
                               movement_modifier=-1, is_dangerous=True, is_impassable=False)
@@ -914,6 +928,7 @@ def test_only_models_crossing_dangerous_feature_test(scene):
 def test_lethal_character_terrain_hit_does_not_leave_dead_host_link(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
+    remaining_moves(app)
     character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
                                      files=1, ranks=1), 1, 'Terrain Character')
     assert join_unit(app, character, member)

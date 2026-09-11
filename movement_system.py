@@ -1237,6 +1237,11 @@ class MovementSystem:
 
     def moveUnit(self, unit):
         from scouts import scout_charge_blocked
+        from charge_declarations import ordinary_move_allowed
+        if (self.game.fsm.state == 'MovementPhase'
+            and getattr(self.game, 'chargeStage', None) in ('resolving', 'blocked')):
+            ordinary_move_allowed(self.game)
+            return False
         from skirmish_ui import clear_plot_preview
         clear_plot_preview(self.game)
         if in_vanguard(self.game):
@@ -1263,11 +1268,11 @@ class MovementSystem:
         formed_preview = getattr(unit, 'formedSkirmishPreview', None)
         if formed_preview is not None:
             from functools import partial
-            taskMgr.add(partial(self.game.combat.chargeAndChargeReaction, defender=formed_preview.target),
+            charge_task = taskMgr.add(partial(self.game.combat.chargeAndChargeReaction, defender=formed_preview.target),
                         name='chargeAndChargeReaction',
                         extraArgs=[unit, None, unit.bodyNP.getPos(), unit.bodyNP.getHpr()], appendTask=True)
             unit.isChargingMove = True
-            return
+            return charge_task
 
         pos = self.game.arcPoint
         pos=pos*2
@@ -1285,10 +1290,26 @@ class MovementSystem:
             unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
         #self.game.checkUnitContact(unit)
         c = self.game.checkUnitContactSmall(unit)
+
+        if not c and unit.state != 'IsPursuing' and not ordinary_move_allowed(self.game):
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+            messenger.send('unit-move-complete')
+            return False
         
         if c:
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
             defenderUnit=self.game.getSelectedUnit(defenderNP.node())
+
+            if (same_player(self.game, unit, defenderUnit) and unit.state != 'IsPursuing'
+                    and not ordinary_move_allowed(self.game)):
+                unit.bodyNP.setPos(oposUnit)
+                unit.bodyNP.setHpr(orotUnit)
+                unit.bodyNP.node().setTransformDirty()
+                messenger.send('unit-move-complete')
+                return False
 
             pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
                             'Vanguard' if vanguard_charge_blocked(self.game, unit) else None)
@@ -1385,7 +1406,7 @@ class MovementSystem:
                         unit.request("Moved")
                         return
 
-            taskMgr.add(self.game.chargeAndChargeReaction, extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
+            charge_task = taskMgr.add(self.game.chargeAndChargeReaction, extraArgs=[unit, c,oposUnit, orotUnit],appendTask=True)
             unit.isChargingMove = True   # exempt from Panic while making the charge
             #self.game.getFlankFromContact(unit, c)
             unit.model.setColor(.7,0.7,0.7,1)
@@ -1404,6 +1425,8 @@ class MovementSystem:
             self.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
             self.updateDisrupted(unit)
         self.game.bakeTextures(self.game.ground)
+        if c:
+            return charge_task
 
     # ─── Flee, Pursuit & Rally ────────────────────────────────────────────
 

@@ -187,7 +187,7 @@ itself add gameplay effects.
       consumers outside combat rank scoring, and a complete redirected-charge
       UI remain unaudited. Saving pending state does not restore suspended
       charge/reaction animation tasks. This is not a general effect scheduler.
-- [ ] **Counter Charge: PARTIAL, formed single-charge flow** - Dragon Princes
+- [ ] **Counter Charge: PARTIAL, formed-unit declaration flow** - Dragon Princes
       and Chaos Knights (p. 167; Official FAQ v1.5.3). Eligible defenders now
       get a Counter Charge choice; AI defenders take it when available, falling
       back to Stand & Shoot/Hold otherwise. Checks use declaration-time arc and
@@ -205,15 +205,34 @@ itself add gameplay effects.
       **Corrected:** the enemy-contact movement preview no longer marks/logs
       the charger as marching before its charge declaration. Callback route
       animation uses the existing awaitable Parallel interval pattern.
-      **LEFTOVER:** the engine still declares/resolves one charge at a time;
-      it does NOT yet defer selection until ALL charges are declared, so choosing
-      between multiple chargers and their changed arcs needs a declaration queue.
-      Drilled redress, Marching Column restrictions and loose-formation Counter
+      **Declaration sequencing (pp. 119-121):** confirmed chargers now remain at
+      their original poses until Resolve Charges closes the declaration stage.
+      Counter Charge/Stand & Shoot choose one incoming charger after all
+      declarations; the other chargers face Hold. Flee runs once from the highest
+      Unit Strength charger, with random ties. Reactions finish before the active
+      player chooses the charge-move order. Routes/arcs are rebuilt after defensive
+      movement; a front and flank charge can engage the same moved defender.
+      Ordinary moves and late charges are gated by the stage. Basic and Enhanced
+      AI each make a declaration pass before Remaining Moves; EnhancedAI currently
+      uses nearest-enemy attempts, not a multi-charge tactical search.
+      Declaration-stage saves retain the queue, original poses, loose target
+      index and pending First Charge attempts. Active/interrupted resolution
+      refuses saves; legacy Movement snapshots resume in Remaining Moves.
+      **Corrected during sequencing:** planned formed routes now use the exact
+      route animator and contact-point alignment, not the legacy reconstructed
+      wheel which left a 0.15-inch gap. Re-entering InCombat cleared earlier combat
+      links; already-engaged defenders now keep them. Failed planned charges move
+      only the Charge roll. Flee's board-distance helper imports from special_rules.
+      A queued loose target is not reselected by sight after reactions or reload.
+      **LEFTOVER:** Drilled redress, Marching Column restrictions and loose-formation Counter
       Charge remain unfinished (loose pairs are refused with a log). Complex
       obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
-      need broader verification; unsupported routes fail explicitly. Suspended
-      reaction/animation tasks are not resumed from saves. Do not mark the full
-      rule or formation dependencies complete from the single-charge tests.
+      need broader verification, as do simultaneous frontage maximisation and
+      redirected charges. Multiple loose-defender form-ups and fleeing loose
+      targets are not supported by the queued per-model route; these fail with
+      explicit spent-charge logs. Suspended reaction/animation tasks are not
+      resumed from saves: reload a declaration-stage snapshot after interruption.
+      Do not mark the full rule or formation dependencies complete from these tests.
 - [x] **Cavalry split profiles and Cavalry Support** - separate rider/mount
       WS/S/I/A, weapons, Initiative snapshots and casualty accounting; no
       supporting mounts. Remaining contact-allocation limits are noted above.
@@ -615,9 +634,9 @@ first playable milestone must explicitly restrict the selected known spells.
       Reflexes, hand-weapon effects and contextual rerolls. Remaining Fear/Terror,
       magical-defence and Wizard-armour dependencies are explicit above.
 6. Charges/movement: in progress. First Charge core, counted-pursuit timing and
-      save/load are implemented, as is Counter Charge's formed single-charge
-      flow. Impetuous/Drilled, Counter Charge's multi-declaration timing and
-      formation dependencies remain open.
+      save/load are implemented, as are the declaration queue, post-declaration
+      reaction selection and formed Counter Charge routing. Impetuous/Drilled,
+      formation dependencies and the explicit geometry leftovers remain open.
 7. Magic and remaining dependencies: selected lore effects, Lileath choices,
       effect lifetimes and Gaze of the Gods including Stupidity.
 8. Complete matchup verification using both exact roster imports offscreen.
@@ -671,6 +690,18 @@ charge-move state and the false marching log. Both angled scenes render offscree
 and were inspected. Stand & Shoot, marching, formed-to-Skirmisher, First Charge,
 persistence, mount-preview and task-scheduling regressions pass after this change.
 These checks do not complete point 6 or the full two-army acceptance gate.
+
+**Declaration sequencing verification (2026-09-11):** two queue checks and 15
+actual-roster scene checks cover delayed reactions, independent reaction-target
+and charge-move choices, real front/flank contacts, roll-only failed movement,
+strongest-source Flee and its live animation, both AI entry points, save/reload,
+blocked snapshots, input guards and the Resolve Charges phase button. Its
+offscreen HUD screenshot was inspected. The formed-to-Skirmisher suite now has
+49 checks, including queued loose-target save/reload without sight reselection;
+82 Skirmisher scene checks pass with ordinary moves after declaration closure.
+Counter Charge, Stand & Shoot, marching, persistence, First Charge, Shieldwall,
+mounted-preview and named-task regressions also pass under sequential memory
+caps. No full-suite or complete two-army acceptance run was performed.
 
 Rule wording verified for point 5:
 [Dragon Armour](https://tow.whfb.app/special-rules/dragon-armour), FoF p. 184;
@@ -2304,6 +2335,28 @@ charge path was quietly handling it — check there before believing an absence.
       while it waited is skipped but its waiter is still released, and a reform
       raised from another's callback queues behind rather than on top, because
       the active flag stays set across the callback.
+      **Corrected (2026-09-11):** the queue alone did not serialize pursuits:
+      `pursuitMove` still waited a fixed five seconds, while the charge/reform
+      task continued independently. Dragon Princes could be reforming when
+      Silver Helms opened Swiftstride and planned against their unfinished pose.
+      The game/movement wrappers now expose the actual charge task through an
+      opt-in completion return; pursuit awaits the charge animation and reform
+      callback before starting the next unit. Normal scheduled AI callbacks retain
+      their None return. Quarry state clears in finally, after completion.
+      The pursuit pass retains the quarry's last position so its removal by the
+      first pursuer does not silently skip later declared pursuits. Later paths
+      are computed only after earlier reforms finish, against current obstacles.
+      Four offscreen regression checks include 12-second dice/reform delays, a
+      removed quarry, both real cavalry movement tasks and the live reform queue,
+      plus the scheduled-callback return contract. Another 144 adjacent checks
+      pass (post-combat, Shieldwall, Counter Charge, declarations, formed-to-loose
+      routes and task scheduling), in bounded services; no full-suite run.
+      Wording rechecked at [Pursuit](https://tow.whfb.app/the-combat-phase/pursuit)
+      (p. 156) and [Catching the Curs!](https://tow.whfb.app/the-combat-phase/catching-the-curs)
+      (p. 157).
+      **LEFTOVER:** this repairs task sequencing, not the complete legacy pursuit
+      range/route or multi-unit geometry rules. Suspended dice/reform tasks are
+      not resumed from saves.
 - [x] "During the next turn, the pursuing unit counts as having charged"
       (p. 157). Catching a unit that Fell Back set `chargedThisTurn`, but
       `exitCombatPhase` clears that at the end of the very phase it was set, so

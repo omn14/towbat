@@ -99,6 +99,17 @@ class GamePhaseFSM(FSM):
             return
         if self.state == 'SpellPhase':
             return  # Finish or cancel the cast before advancing the battle phase.
+        if self.state == 'MovementPhase':
+            from charge_declarations import collecting, resolve_declarations
+            if (getattr(self.game, 'awaitingChoice', False)
+                    or getattr(self.game, 'chargeStage', None) in ('resolving', 'blocked')
+                          or any(taskMgr.hasTaskNamed(name) for name in
+                              ('resolveChargesTask', 'chargeAndChargeReaction'))):
+                return
+            if collecting(self.game):
+                taskMgr.remove('taskLoopPathTowardsMouse')
+                taskMgr.add(resolve_declarations(self.game), 'resolveChargesTask')
+                return
         if self.state == 'StrategyPhase':
             if (getattr(self.game, 'awaitingChoice', False)
                     or getattr(self.game, 'rallyingCryBusy', False)
@@ -229,6 +240,8 @@ class GamePhaseFSM(FSM):
         print("Entering Movement Phase")
         self.current_phase_index = 1
         if not getattr(self, '_resuming_spell', False):
+            from charge_declarations import begin_declarations
+            begin_declarations(self.game)
             for unit in self.game.units:
                 unit.panicTestedThisPhase = False
                 unit.fledThisPhase = False

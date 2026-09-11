@@ -212,6 +212,7 @@ def test_cursor_click_confirmation_and_ai_share_route(scene, human, accepts):
     import inspect
     from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel
     app, attacker, defender = approach_scene(scene)
+    app.chargeStage = None
     app.autoCharge = app.autoHold = False
     app.movement.pathTowardsMouse(attacker, 0, 0)
     route = attacker.formedSkirmishPreview.route
@@ -332,10 +333,36 @@ def test_loading_save_clears_unconfirmed_route(scene):
     assert attacker.formedSkirmishCache is None
 
 
+def test_queued_loose_target_survives_reload_without_reselecting_sight(scene, tmp_path):
+    from charge_declarations import resolve_declarations
+    from persistence import load_game_state, save_game_state
+    from tests.test_shieldwall_scene import combat_tasks
+    app, attacker, defender = approach_scene(scene)
+    origin, facing = attacker.bodyNP.getPos(), attacker.bodyNP.getHpr()
+    with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=True):
+        run(app.combat.chargeAndChargeReaction(attacker, None, origin, facing,
+                                              SimpleNamespace(done=None), defender=defender))
+    assert len(app.chargeDeclarations) == 1
+    target_index = app.chargeDeclarations[0].target_index
+    path = save_game_state(app, str(tmp_path / 'loose-declaration.json'))
+    load_game_state(app, path)
+    assert app.chargeDeclarations[0].target_index == target_index
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch('formed_skirmish_charge.model_can_see', side_effect=AssertionError('Sight is declaration-time')), \
+            patch.object(app.combat, 'standAndShootOption', return_value=None), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))):
+        run(resolve_declarations(app))
+    assert attacker.state == defender.state == 'InCombat'
+    assert app.chargeStage == 'remaining'
+
+
 @pytest.mark.parametrize('destroyed', [False, True])
 def test_stand_and_shoot_does_not_reselect_declared_target(scene, destroyed):
     from tests.test_shieldwall_scene import combat_tasks
     app, attacker, defender = approach_scene(scene)
+    app.chargeStage = None
     expected_target = preview_charge(app, attacker, defender).route.target_index
     origin, facing = attacker.bodyNP.getPos(), attacker.bodyNP.getHpr()
     app.autoCharge, app.autoHold, app.autoRoll = True, False, False

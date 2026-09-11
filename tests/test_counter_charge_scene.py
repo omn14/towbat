@@ -42,6 +42,7 @@ def declared_charge(scene, distance=10):
     app.playerNP.setPos(charger.bodyNP.getPos())
     app.moveArceDistance = distance
     app.autoCharge = app.autoHold = False
+    app.chargeStage = None
     contact = SimpleNamespace(getNode1=lambda: defender.bodyNP.node())
     return app, charger, defender, origin, facing, contact
 
@@ -146,6 +147,7 @@ def test_countercharge_usage_survives_reload_and_expires_next_turn(scene, tmp_pa
     path = save_game_state(app, str(tmp_path / 'counter-charge-used.json'))
     defender.counterChargeTurn = None
     load_game_state(app, path)
+    app.chargeStage = None
     assert app.combat.counterChargeOption(defender, charger, origin, facing) is None
     assert 'already used Counter Charge' in capsys.readouterr().out
     with combat_tasks(app) as run, \

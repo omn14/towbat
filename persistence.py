@@ -169,6 +169,10 @@ def save_game_state(game, filename=None):
     Returns:
         The filename that was written.
     """
+    from charge_declarations import save_declarations
+    if getattr(game, 'chargeStage', None) in ('resolving', 'blocked'):
+        battle_log('Save unavailable during interrupted or active charge resolution.', 'info')
+        return None
     if filename is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"savegame_{timestamp}.json"
@@ -178,6 +182,8 @@ def save_game_state(game, filename=None):
         'current_phase': (game.fsm.getCurrentOrNextState()
                           or game.fsm.phases[game.fsm.currentPhaseIndex]),
         'current_phase_index': game.fsm.currentPhaseIndex,
+        'charge_stage': getattr(game, 'chargeStage', None),
+        'charge_declarations': save_declarations(game),
         'current_round': game.roundCounter.currentRoundPlayer,
         'current_player': game.roundCounter.current_player,
         'max_rounds': game.roundCounter.max_rounds,
@@ -381,6 +387,9 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    if getattr(game, 'chargeStage', None) == 'resolving':
+        battle_log('Finish charge resolution before loading a battle.', 'info')
+        return
     if getattr(game, 'spellGenerationBusy', False) is True:
         print('[persistence] Finish the spell-generation choice before loading a battle.')
         return
@@ -705,6 +714,8 @@ def load_game_state(game, filename):
     game.strategyCommandDone = game_state.get('strategy_command_done', True)
     game.capturedStandards = copy.deepcopy(game_state.get('captured_standards', []))
     game.rallyingCryBusy = False
+    from charge_declarations import restore_declarations
+    restore_declarations(game, game_state, unit_map)
     game.roundCounter.apply_selection_masks()
     if game_state['current_phase'] == 'DeployPhase':
         from deployPhase import refresh_deployment

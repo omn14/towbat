@@ -893,6 +893,10 @@ class EnhancedAI:
                 taskMgr.doMethodLater(0.1, self.game.moveUnit, "moveTask", extraArgs=[unit], appendTask=False)
                 self._move_complete = False
                 await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
+                if getattr(self.game, 'chargeStage', None) == 'remaining' and not unit.hasMovedThisTurn:
+                    from rules_log import battle_log
+                    battle_log(f'AI: {unit.unit.name} stays in place after an unavailable remaining move.', 'info')
+                    unit.request('Moved')
             self._unhighlight_acting_unit(unit)
         
         elif action.action_type == 'shoot':
@@ -961,6 +965,21 @@ class EnhancedAI:
 
         self.game.save_game_state('previous_phase.json')
         self._turn_running = True
+
+        from charge_declarations import collecting, resolve_declarations
+        if collecting(self.game):
+            for unit in self.player_units:
+                if unit.state != 'Idle' or unit.hasMovedThisTurn or unit.bodyNP.isEmpty():
+                    continue
+                enemies = [enemy for enemy in self.enemy_units
+                           if not enemy.bodyNP.isEmpty() and enemy.unit.nmodels > 0]
+                if not enemies:
+                    break
+                target = min(enemies, key=lambda enemy: (enemy.bodyNP.getPos() - unit.bodyNP.getPos()).length())
+                position = target.bodyNP.getPos()
+                await self.execute_action(GameAction('move', unit.unitName,
+                                                     {'target_x': position.x, 'target_y': position.y}))
+            await resolve_declarations(self.game)
 
         while True:
             self._move_complete = False  # Reset move completion flag at start of each decision loop

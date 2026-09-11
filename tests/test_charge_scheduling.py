@@ -27,7 +27,7 @@ def test_formed_charge_task_is_named_and_forwards_original_state():
     origin, heading = Vec3(attacker.bodyNP.getPos()), Vec3(attacker.bodyNP.getHpr())
     movement = MovementSystem.__new__(MovementSystem)
     movement.game = SimpleNamespace(combat=SimpleNamespace(chargeAndChargeReaction=charge),
-                                    skirmMoveGhost=None)
+                                    skirmMoveGhost=None, fsm=SimpleNamespace(state='MovementPhase'))
     try:
         with patch('movement_system.taskMgr', manager, create=True), \
                 patch('movement_system.in_vanguard', return_value=False), \
