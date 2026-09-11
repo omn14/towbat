@@ -25,7 +25,7 @@ lost import data, partial support and outstanding roster-specific verification.
 This section tracks implementation work; completed import metadata does not
 itself add gameplay effects.
 
-**Latest regression gate (2026-09-11):** all 108 modules executed in sequential,
+**Last completed regression gate (2026-09-11):** all 108 modules executed in sequential,
 memory-capped services, with 2,465 JUnit cases and no remaining failures, errors
 or skips. Run `180705-6007` stopped after 43 modules at the RAM headroom guard;
 `181524-9677` completed the remaining 65. Focused reruns `181435-9352` and
@@ -35,6 +35,13 @@ bound-spell FSM double explicitly models idle combat and a non-final turn.
 Peak RSS was 1,164.9 MiB under the 1,536 MiB cap. This is a combined regression
 gate, not an end-to-end match certification; the explicit LEFTOVER entries below
 remain open.
+
+**Post-milestone gate:** after commits `3819fbc`, `20392fa` and `4c44795`, run
+`184400-20708` stopped before executing any of 108 modules: 1,968 MiB available
+versus the required 2,048 MiB (1,536 MiB cap plus 512 MiB headroom). Character
+movement, connected-combat challenges and combined matchup acceptance passed
+their focused/adjacent checks, but their final full-suite rerun is still pending.
+Do not treat the earlier completed gate as verification of these later commits.
 
 ### Selected Units
 
