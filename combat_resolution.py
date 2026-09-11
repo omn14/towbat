@@ -1983,17 +1983,20 @@ class CombatResolver:
             await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge,
                                      miscast_damage=miscast_damage)
 
-    async def resolveCombatWithSpells(self, challenge, removals):
+    async def resolveCombatWithSpells(self, challenge, removals, *, contacts=None):
         """One Initiative clock for the whole fight, including its duel (pp. 146, 211)."""
         from combat_initiative import resolve_steps
-        streams = [self._meleeProfileSteps(challenge, removals, interleave=True)]
+        from combat_contacts import CombatContactSnapshot
+        if contacts is None:
+            contacts = CombatContactSnapshot(dict.fromkeys(self.game.attackers + self.game.defenders))
+        streams = [self._meleeProfileSteps(challenge, removals, interleave=True, contacts=contacts)]
         if challenge is not None:
             streams.insert(0, self._challengeSteps(challenge, removals, interleave=True))
         results = await resolve_steps(self.game, streams, challenge)
         duel, melee = (results if challenge is not None else [(0, 0, 0, 0), results[0]])
         return duel[0] + melee[0], duel[1] + melee[1], duel[2], duel[3]
 
-    def _meleeProfileSteps(self, challenge, removals, *, interleave=False):
+    def _meleeProfileSteps(self, challenge, removals, *, interleave=False, contacts=None):
         """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
         from combat_profiles import profile_strike_order
         order = profile_strike_order(self.game.attackers, self.game.defenders,
@@ -2020,9 +2023,10 @@ class CombatResolver:
                 def prepare_step():
                     nonlocal snapshots, attacks_at_step
                     snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
-                    attacks_at_step = {id(candidate): candidate.attacks(
+                    attacks_at_step = {id(candidate): (contacts.attacks(candidate, snapshots[id(candidate.host)], challenge)
+                        if contacts is not None else candidate.attacks(
                         snapshots[id(candidate.host)], self._combatStartModels.get(
-                            id(candidate.host.unit), snapshots[id(candidate.host)]), challenge)
+                            id(candidate.host.unit), snapshots[id(candidate.host)]), challenge))
                         for step, candidate in order if step == initiative}
                 if interleave:
                     from combat_initiative import InitiativeStep
@@ -2675,12 +2679,15 @@ class CombatResolver:
         foesBefore = {id(unit): list(unit.isInCombatWith) for unit in engaged}
         p1_units = [unit for unit in engaged if unit in self.game.player1Units]
         p2_units = [unit for unit in engaged if unit in self.game.player2Units]
+        from combat_contacts import CombatContactSnapshot
+        contacts = CombatContactSnapshot(engaged)
         impact1, impact2 = self.impactHits(modRemoveSequence)
         player1_score += impact1
         player2_score += impact2
         # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
         challenge = await self.challengeExchange(attackerUnit, defenderUnit)
-        wounds1, wounds2, overkill1, overkill2 = await self.resolveCombatWithSpells(challenge, modRemoveSequence)
+        wounds1, wounds2, overkill1, overkill2 = await self.resolveCombatWithSpells(
+            challenge, modRemoveSequence, contacts=contacts)
         player1_score += wounds1 + overkill1
         player2_score += wounds2 + overkill2
 

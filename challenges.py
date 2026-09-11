@@ -59,13 +59,19 @@ def duellists(unit):
     if getattr(unit.unit, 'nmodels', 0) <= 0:
         return []
     if is_character(unit):
-        return [] if is_retired(unit) else [unit]
-    candidates = []
-    joined = get_joined_character(unit)
-    if joined is not None and joined.unit.nmodels > 0 and not is_retired(joined):
-        candidates.append(joined)
-    from command_groups import champions
-    candidates.extend(champions(unit))
+        candidates = [] if is_retired(unit) else [unit]
+    else:
+        candidates = []
+        joined = get_joined_character(unit)
+        if joined is not None and joined.unit.nmodels > 0 and not is_retired(joined):
+            candidates.append(joined)
+        from command_groups import champions
+        candidates.extend(champions(unit))
+    enemies = [enemy for enemy in getattr(unit, 'isInCombatWith', []) if enemy.unit.nmodels > 0]
+    if getattr(unit, 'isInCombat', False) and enemies and hasattr(unit, 'modelWidth'):
+        from combat_contacts import CombatContactSnapshot
+        contacts = CombatContactSnapshot([unit, *enemies])
+        candidates = [candidate for candidate in candidates if contacts.can_challenge(unit, candidate, enemies)]
     return candidates
 
 

@@ -103,6 +103,7 @@ def test_spell_only_wipeout_keeps_combat_credit_and_overrun_context(scene):
     app, baseline = scene
     mage, host, enemy = prepare_combat(app, baseline, joined=False)
     app.movement.removeModelsFromUnit(enemy, enemy.unit.nmodels - 1)
+    enemy.bodyNP.setPos(host.bodyNP.getX(), host.bodyNP.getY() + (host.unitHeight + enemy.unitHeight) / 2, 0)
     with combat_tasks(app) as run, \
             patch.object(app, 'aiControls', return_value=True), \
             patch.object(app, 'makeChoiceNew', AsyncMock(return_value=enemy.unitName)), \

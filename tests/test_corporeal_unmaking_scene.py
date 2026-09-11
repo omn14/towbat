@@ -159,7 +159,7 @@ def test_live_combat_scores_banked_wounds_once_and_turn_end_clears_them(scene):
             patch.object(app.combat, 'shieldwallWeaponChoice', AsyncMock()), \
             patch.object(app.combat, 'impactHits', return_value=(0, 0)), \
             patch.object(app.combat, 'challengeExchange', AsyncMock(return_value=None)), \
-            patch.object(app.combat, 'resolveMeleeWithSpells', AsyncMock(return_value=(0, 0))), \
+            patch.object(app.combat, 'resolveCombatWithSpells', AsyncMock(return_value=(0, 0, 0, 0))), \
             patch.object(app.combat, 'overrunPass', AsyncMock()), \
             patch.object(app.combat, 'breakTestPass', AsyncMock(return_value=[])), \
             patch.object(app.combat, 'declarePass', AsyncMock(return_value=[])), \

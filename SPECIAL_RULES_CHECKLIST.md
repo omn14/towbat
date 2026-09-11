@@ -127,9 +127,28 @@ itself add gameplay effects.
       Shieldwall, command-scene and persistence rechecks supersede those results.
 - LEFTOVER: arbitrary attacks directed at a champion outside a challenge,
   champion-specific template/Look Out Sir allocation, and champion-specific
-  missile attacks still need per-model attack allocation. Exact contact-based
-  full-versus-single attack limits remain the combat engine's existing
-  formation approximation. No bespoke command miniature assets are added.
+      missile attacks still need per-model attack allocation. No bespoke command
+      miniature assets are added.
+- [x] Contact-based live attack counts (2026-09-11): the combat entry snapshots
+      actual model bases before Impact Hits. Base contact grants full A; other
+      eligible fighting/supporting models make one attack per split part only within
+      ground Movement reach, never Fly Movement (pp. 145-146; FAQ v1.5.3). Command and
+      joined-character slots are preserved; champion attacks are not duplicated;
+      earlier casualties suppress later attacks without reducing equal-Initiative
+      snapshots. Press of Battle extends the fighting rank and spear support comes
+      from the next rank, never to the flank/rear. Rules report numeric attack totals.
+      Eight pure geometry and four actual-roster scenes cover narrow contact, Fly
+      versus ground M, champion/mount casualty counts, Horsemen support and challenge
+      eligibility. The Assailment wipeout fixture now re-seats its last defender after
+      resizing; ten Assailment, eight command, 13 Shieldwall and six shared-Initiative
+      scenes pass. LEFTOVER: choosing individual attack targets, closest-enemy
+      routing in multiple combats and casualty-position selection remain open.
+      Standalone legacy attack APIs retain formation-based counts.
+      **Regression gate:** the 104-module isolated suite completed at 1536 MiB per
+      service (2026-09-11, run `170242-180392`, peak 1165 MiB). Its only failure was
+      the banked-wound scoring fixture mocking the retired ordinary-combat entry;
+      updated it to mock the shared resolver, and all eight tests in that module
+      pass on rerun. No unexecuted modules or memory interruption in this gate.
 - [x] Challenge participant/refusal nomination (2026-09-11): the issuer and
       accepting player choose their own character or champion. When refused, the
       challenger selects which eligible model retires, or declines to nominate one
@@ -137,9 +156,11 @@ itself add gameplay effects.
       character/champion/no retirement, including reload. All 44 challenge, eight
       command and ten Assailment regression cases pass. Dead or retired lone
       characters cannot be nominated. AI still never issues and always accepts.
-      LEFTOVER: exact within/adjacent fighting-rank eligibility and nominations
-      across every unit in a complex multiple combat; current choices use the two
-      selected hosts. Duel and ordinary attacks share one Initiative clock.
+      Within/adjacent fighting-rank eligibility now uses live base contact; a
+      character blocked behind command in a column cannot challenge.
+      LEFTOVER: nominations across every unit in a complex multiple combat; current
+      choices use the two selected hosts. Duel and ordinary attacks share one
+      Initiative clock.
 - LEFTOVER: captured-standard VP are persisted, but the tactical assessment
   is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
       remaining movement extensions and magic-item/faction effects belong
@@ -313,7 +334,8 @@ itself add gameplay effects.
       retain their own charge restrictions (pp. 169, 190, 215). Explicit charge
       state survives profile resets. Horsemen's mounts gain no support attacks,
       and their spears are not a missile weapon for Stand & Shoot/Fire & Flee.
-      LEFTOVER: exact contact, ground-M reach and multi-front support allocation.
+      Contact counts and ground-M reach now use live base geometry; multi-front
+      target allocation remains open.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage
