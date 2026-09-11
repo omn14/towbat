@@ -25,7 +25,15 @@ lost import data, partial support and outstanding roster-specific verification.
 This section tracks implementation work; completed import metadata does not
 itself add gameplay effects.
 
-**Latest full regression run (2026-09-11):** `202101-6671` executed all 109
+**Latest full regression attempt (2026-09-11):** `211757-27115`, after the
+charge, combat-target, Skycutter and lifecycle/acceptance milestones, was refused
+before starting any of 109 modules: only 1,041 MiB was available against the
+1,792 MiB admission requirement. No limits were lowered and no unbounded
+fallback was used. **LEFTOVER:** run the final full suite when memory permits;
+passing focused gates do not replace that checkpoint. The HUD investigation
+remains paused at the user's request.
+
+**Previous completed full run (2026-09-11):** `202101-6671` executed all 109
 modules with 2,487 JUnit cases in sequential, memory-capped services. Summed
 process elapsed time was 536.8 seconds; peak RSS was 992.2 MiB. No memory stop
 occurred. At the user's request, available-memory headroom is now 256 MiB,
@@ -38,8 +46,9 @@ terrain module, all from one Panda3D NaN assertion while measuring HUD text
 all 12 cases on focused rerun `203025-11111`. Every case has a passing result
 across those runs, but this is not a clean first-pass gate and no NaN fix is
 claimed. **LEFTOVER:** diagnose the intermittent HUD-text startup assertion.
-This run covers the later combat milestones and lighter scene fixtures; it
-supersedes the older incomplete memory checkpoints. It is not an end-to-end
+This run covers the earlier combat milestones and lighter scene fixtures, but
+predates the latest charge, combat-target, Skycutter and acceptance changes. It
+supersedes older incomplete memory checkpoints only. It is not an end-to-end
 match certification, and the explicit rule LEFTOVER entries below remain open.
 
 **Test-process correction:** a plain `pytest` run produced an initial NaN during
@@ -1286,6 +1295,8 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
       hold/pass phase-flow test, separate from the seeded combat scenarios.
 - [ ] Run one final full isolated regression after these milestones and record
       failures honestly; the earlier full run predates the latest changes.
+      Attempt `211757-27115` started zero modules because available memory was
+      1,041 MiB, below the unchanged 1,792 MiB requirement.
 
 **Selected lifecycle audit (2026-09-11):** 18 new spell cases cover Fury of
 Khaine, Shield of Saphery, Walk Between Worlds, Courage of Aenarion, Drain Magic
