@@ -25,18 +25,23 @@ def test_lileath_and_effect_expiry_survive_repeated_reload(scene, tmp_path):
         assert app.fsm.endOfTurnSpells[0].lifecycle == token
         assert sum(rule.get('name') == 'Oaken Shield' for rule in mage.unit.model.special_rules) == 1
     app.fsm.exitCombatPhase()
-    app.fsm.enterStrategyPhase()
+    with patch('chaos_gifts.begin_turn'):
+        app.fsm.enterStrategyPhase()
     assert len(app.fsm.endOfTurnSpells) == 1
     app.fsm.exitCombatPhase()
-    app.fsm.enterStrategyPhase()
+    with patch('chaos_gifts.begin_turn'):
+        app.fsm.enterStrategyPhase()
     assert not app.fsm.endOfTurnSpells
     assert not any(rule.get('name') == 'Oaken Shield' for rule in mage.unit.model.special_rules)
 
 
 def test_actual_mage_rerolls_without_an_extra_attempt(scene):
+    from battlescribe import get_catalogue
+    from spell_system import restore_spellbook
     app, baseline = scene
     load_game_state(app, baseline)
     mage = members(app)['Mage']
+    restore_spellbook(mage.unit.model, [get_catalogue().spell('Fireball')], 2)
     key = next(iter(mage.unit.model.spells))
     phase = mage.unit.model.spells[key]['phase']
     app.fsm.request(phase.title() + 'Phase')
@@ -94,9 +99,11 @@ def test_live_conjuration_dispels_restored_vortex_and_guards_phase(scene, tmp_pa
     spell.perfect = True
     spell.casting = 20
     app.roundCounter.request('PlayerTwo')
-    app.fsm.request('StrategyPhase')
+    with patch.object(app, 'restoringBattle', True):
+        app.fsm.request('StrategyPhase')
     app.strategyCommandDone = True
     path = save_game_state(app, str(tmp_path / 'vortex.json'))
+    assert path is not None
     load_game_state(app, path)
     assert len(app.remainsInPlay) == 1
     restored_piece = app.remainsInPlay[0].piece

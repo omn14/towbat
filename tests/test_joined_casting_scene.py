@@ -74,11 +74,13 @@ def test_joined_vortex_measures_world_position_and_assailment_uses_host_combat(s
     host.isInCombat = True
     host.isInCombatWith = [target]
     app.fsm.request('CombatPhase')
-    assert 'Hammerhand' in app.castableSpells(wizard)
     hammer = HammerhandSpell('Hammerhand', 7, [], game=app, caster=wizard)
     assert not wizard.isInCombatWith
-    assert hammer.canTarget(target)
-    assert not hammer.canTarget(host)
+    assert 'Hammerhand' not in app.castableSpells(wizard)
+    with patch.object(app, 'assailmentWindow', {'caster': wizard, 'targets': [target]}, create=True):
+        assert 'Hammerhand' in app.castableSpells(wizard)
+        assert hammer.canTarget(target)
+        assert not hammer.canTarget(host)
 
 
 def test_strategy_host_click_uses_joined_self_caster_and_restores_host(scene):

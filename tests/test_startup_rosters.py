@@ -46,7 +46,7 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path)
             missed = next(entry for entry in reference if entry['status'] == 'Not generated')
             choice._inspect_reference(missed['name'])
             assert 'Casting value:' in choice.reference_text.getText()
-            assert 'Engine effect: not implemented' in choice.reference_text.getText()
+            assert 'Engine effect: not implemented' not in choice.reference_text.getText()
             assert not choice.choiceMade and choice.choice is None
             app.graphicsEngine.renderFrame()
             app.graphicsEngine.renderFrame()

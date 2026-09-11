@@ -225,6 +225,7 @@ def test_first_turn_scout_can_still_make_ordinary_movement(scene):
     load_game_state(app, str(baseline))
     scout, _ = finish_deployment(app)
     app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
     app.arcPoint = Vec2((-17 / 50 + 1) / 2, 0.5)
     app.arcPointRotation = 0
     scout.wouldMarch = False

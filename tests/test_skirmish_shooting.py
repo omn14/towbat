@@ -58,6 +58,7 @@ def test_explicit_firing_models_does_not_change_formation(eligible):
     shooter.model.equip_weapon('Asrai Longbow')
     target.model.equip_best_melee()
     before = shooter.nmodels, shooter.files, shooter.ranks
+    shooter.model.ithilmar_rerolled = False
     with patch('battleFunctions.simulate_attack', return_value=(False, False)):
         result = simulate_battle(shooter, target, charge=False, multiple_shots=False, firing_models=eligible)
     assert result[0] == eligible
@@ -73,6 +74,7 @@ def test_normal_volley_clears_previous_reaction_modifier():
     shooter.model.give_weapon('Asrai Longbow')
     shooter.model.equip_weapon('Asrai Longbow')
     shooter.model.characteristics['BS'] = '3'
+    shooter.model.ithilmar_rerolled = False
     target.model.equip_best_melee()
     with patch('battleFunctions.simulate_attack', return_value=(False, False)):
         simulate_battle(shooter, target, charge=False, firing_models=1, stand_and_shoot=True)

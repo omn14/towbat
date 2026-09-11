@@ -65,7 +65,8 @@ def test_turn_end_updates_charge_target_but_not_spent_rule(defender, deferred):
     defender.countsAsChargeTargetNextTurn = deferred
     game = SimpleNamespace(ignore=Mock(), units=[defender], unitCopies=[],
                            roundCounter=Mock())
-    phase = SimpleNamespace(game=game, end_of_turn_spells=[])
+    phase = SimpleNamespace(game=game, endOfTurnSpells=[])
+    game.fsm = phase
     GamePhaseFSM.exitCombatPhase(phase)
     assert defender.wasChargedThisTurn is deferred
     assert not defender.countsAsChargeTargetNextTurn

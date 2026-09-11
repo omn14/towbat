@@ -31,7 +31,8 @@ def test_scoring_queries_are_silent(capsys):
 
 def regiment(name, count=15, skirmisher=False):
     profile = SimpleNamespace(is_skirmisher=lambda: skirmisher, unit_strength=lambda: 1,
-                              models_per_rank=lambda default: 5, max_rank_bonus=lambda default: 2)
+                              models_per_rank=lambda default: 5, max_rank_bonus=lambda default: 2,
+                              troop_type_rule=lambda name: False)
     return SimpleNamespace(unitName=name, isSkirmisher=skirmisher, skirmishCombat=False,
                            isDisrupted=False, isInCombatWith=[], isInCombatFlank=[],
                            unit=SimpleNamespace(name=name, model=profile, nmodels=count, files=5,

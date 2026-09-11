@@ -21,12 +21,14 @@ def test_formed_charge_task_is_named_and_forwards_original_state():
     defender = object()
     attacker = SimpleNamespace(state='Idle', hasMovedThisTurn=False,
                                bodyNP=NodePath('Skycutter'), isChargingMove=False,
+                               unit=SimpleNamespace(model=SimpleNamespace(special_rules=[])),
                                formedSkirmishPreview=SimpleNamespace(target=defender))
     attacker.bodyNP.setPos(3, -8, 0)
     attacker.bodyNP.setH(37)
     origin, heading = Vec3(attacker.bodyNP.getPos()), Vec3(attacker.bodyNP.getHpr())
     movement = MovementSystem.__new__(MovementSystem)
     movement.game = SimpleNamespace(combat=SimpleNamespace(chargeAndChargeReaction=charge),
+                                    units=[attacker],
                                     skirmMoveGhost=None, fsm=SimpleNamespace(state='MovementPhase'))
     try:
         with patch('movement_system.taskMgr', manager, create=True), \

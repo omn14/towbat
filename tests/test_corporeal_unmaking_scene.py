@@ -91,7 +91,7 @@ def test_unsuccessful_cast_has_no_damage_or_combat_credit(scene, outcome):
     app, baseline = scene
     mage, host, enemy = prepare_combat(app, baseline)
     original_count = enemy.unit.nmodels
-    roll = (2, [1, 1]) if outcome == 'failed' else (8, [4, 4])
+    roll = (3, [1, 2]) if outcome == 'failed' else (8, [4, 4])
     with combat_tasks(app) as run, \
             patch.object(app, 'makeChoiceNew', AsyncMock(return_value=None if outcome == 'cancelled' else NAME)), \
             patch.object(Spell, '_roll_casting_dice', AsyncMock(return_value=roll)), \

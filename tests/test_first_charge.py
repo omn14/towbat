@@ -89,7 +89,7 @@ def test_already_zero_rank_bonus_reports_no_additional_loss(cause, capsys):
                              isDisrupted=cause == 'terrain', isSkirmisher=cause == 'skirmish',
                              firstChargeDisruptedBy=['Knights'])
     if cause == 'flank':
-        enemy = SimpleNamespace(unit=SimpleNamespace(model=model('Chaos Warrior', ''), nmodels=5),
+        enemy = SimpleNamespace(unit=SimpleNamespace(model=model('Chaos Warrior', ''), nmodels=10),
                                 bodyNP=SimpleNamespace(isEmpty=lambda: False))
         target.isInCombatWith = [enemy]
         target.isInCombatFlank = ['flank']

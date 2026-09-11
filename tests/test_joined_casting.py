@@ -127,6 +127,7 @@ def test_retired_joined_wizard_cannot_cast_assailment():
     game, host, wizard = joined_game(phase='combat')
     restore_spellbook(wizard.unit.model, [get_catalogue().spell('Hammerhand')], 2)
     host.isInCombat = True
+    game.assailmentWindow = {'caster': wizard, 'targets': []}
     assert casting_units(game, host) == [wizard]
     wizard.retiredFromCombat = True
     assert casting_units(game, host) == []

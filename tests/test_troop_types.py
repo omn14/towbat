@@ -229,8 +229,11 @@ class TestRankBonus(unittest.TestCase):
         self.assertEqual(rank_bonus(self._unit(model("Zombie", ""), 12, 5, 3)), 1)
 
     def test_it_is_capped(self):
-        self.assertEqual(rank_bonus(self._unit(model("Zombie", ""), 50, 5, 10)),
+        self.assertEqual(rank_bonus(self._unit(model("Zombie", ""), 50, 10, 5)),
                          MAX_RANK_BONUS)
+
+    def test_marching_column_has_no_rank_bonus(self):
+        self.assertEqual(rank_bonus(self._unit(model("Zombie", ""), 50, 5, 10)), 0)
 
     def test_a_heavy_chariot_claims_none(self):
         wagon = model("War Wagon", "")

@@ -193,6 +193,7 @@ def test_preview_human_click_and_direct_ai_move_share_refusal(scene):
 
 
 def test_valid_declaration_keeps_sight_decision_after_stand_and_shoot(scene):
+    from charge_declarations import resolve_declarations
     app, member, enemy = column_scenario(scene)
     character = add_visible_character(app, member)
     origin, facing = member.bodyNP.getPos(), member.bodyNP.getHpr()
@@ -206,16 +207,20 @@ def test_valid_declaration_keeps_sight_decision_after_stand_and_shoot(scene):
             patch.object(app.combat, 'standAndShootOption', return_value=SimpleNamespace(weapon={}, distance=5)), \
             patch.object(app.combat, 'fireAndFleeOption', return_value=False), \
             patch.object(app.combat, 'standAndShoot', side_effect=volley), \
+            patch.object(app.combat, 'counterChargeOption', return_value=None), \
+            patch.object(app.combat, 'chargeInterval', AsyncMock(return_value=None)) as charge, \
             patch.object(app.combat, 'getFlankFromContact', return_value=('front', 0)), \
-            patch.object(app.taskMgr, 'add') as scheduled, \
             patch('skirmish_visibility.charge_visibility', wraps=charge_visibility) as checked, \
             patch('combat_resolution.rule_log') as logged:
         asyncio.run(app.combat.chargeAndChargeReaction(
             member, contact, origin, facing, SimpleNamespace(done='done')))
+        assert len(app.chargeDeclarations) == 1
+        assert character in app.units
+        asyncio.run(resolve_declarations(app))
     assert checked.call_count == 1
-    assert '2/3' in logged.call_args.args[2]
+    assert any('2/3' in call.args[2] for call in logged.call_args_list)
     assert member.hasMovedThisTurn
-    assert any(call.args[0] == app.combat.chargeInterval for call in scheduled.call_args_list)
+    charge.assert_awaited_once()
     assert charge_visibility(app, member, enemy).models == (True, False)
 
 
@@ -246,10 +251,10 @@ def test_pursuit_contact_is_not_a_charge_declaration(scene):
     with patch('skirmish_visibility.charge_visibility', side_effect=AssertionError('No declaration')), \
             patch.object(app.combat, 'standAndShootOption', return_value=None), \
             patch.object(app.combat, 'getFlankFromContact', return_value=('front', 0)), \
-            patch.object(app.taskMgr, 'add') as scheduled:
+            patch.object(app.combat, 'chargeInterval', AsyncMock(return_value=None)) as charge:
         asyncio.run(app.combat.chargeAndChargeReaction(member, contact, member.bodyNP.getPos(),
             member.bodyNP.getHpr(), SimpleNamespace(done='done')))
-    assert any(call.args[0] == app.combat.chargeInterval for call in scheduled.call_args_list)
+    charge.assert_awaited_once()
 
 
 @pytest.mark.parametrize('width,height', [(1280, 720), (800, 600)])
