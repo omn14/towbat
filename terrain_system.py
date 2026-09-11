@@ -688,7 +688,7 @@ class TerrainPiece:
     """A single rectangular terrain feature on the battlefield."""
 
     def __init__(self, terrain_type: str, center: Point3,
-                 width: float, height: float, game, going: str = None):
+                 width: float, height: float, game, going: str = None, *, linear_obstacle=False):
         if terrain_type not in TERRAIN_RULES:
             raise ValueError(
                 f"Unknown terrain type '{terrain_type}'. "
@@ -707,6 +707,7 @@ class TerrainPiece:
         self.width = width
         self.height = height
         self.game = game
+        self.linear_obstacle = bool(linear_obstacle)
 
         self.river_centerline = None   # populated for river pieces
         self.debug_np = None
@@ -1379,8 +1380,9 @@ class TerrainManager:
 
     def add_terrain(self, terrain_type: str, center: Point3,
                     width: float, height: float,
-                    going: str = None) -> TerrainPiece:
-        piece = TerrainPiece(terrain_type, center, width, height, self.game, going)
+                    going: str = None, *, linear_obstacle=False) -> TerrainPiece:
+        piece = TerrainPiece(terrain_type, center, width, height, self.game, going,
+                             linear_obstacle=linear_obstacle)
         self.terrain_pieces.append(piece)
         print(f"[Terrain] Added {terrain_type} at ({center.x:.0f}, "
               f"{center.y:.0f}) size {width:.0f}×{height:.0f}  "
@@ -1582,6 +1584,7 @@ class TerrainManager:
                 entry['width'],
                 entry['height'],
                 entry.get('going'),
+                linear_obstacle=entry.get('linear_obstacle', False),
             )
 
     def to_records(self, exclude=()):
@@ -1592,6 +1595,7 @@ class TerrainManager:
                     'width': t.width,
                     'height': t.height,
                     'going': t.going,
+                    **({'linear_obstacle': True} if t.linear_obstacle else {}),
                 }
                 for t in self.terrain_pieces if t not in exclude
             ]

@@ -563,10 +563,14 @@ class model:
         return any(isinstance(r, dict) and r.get('battle_standard')
                    for r in self.special_rules)
 
-    def is_flying(self) -> bool:
-        """True if the model has the Fly special rule."""
+    def can_fly(self) -> bool:
+        """Whether this model has Fly, independent of the current move (p. 170)."""
         return any(isinstance(r, dict) and r.get('fly')
                    for r in self.special_rules)
+
+    def is_flying(self) -> bool:
+        return (self.can_fly() and not getattr(self, '_groundMovement', False)
+                and getattr(self, 'flight_mode', 'fly') == 'fly')
 
     def is_swiftstride(self) -> bool:
         """True if this model has Swiftstride, or rides a mount that does."""

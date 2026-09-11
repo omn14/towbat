@@ -13,6 +13,7 @@ All methods operate on the game instance passed during construction.
 
 import math
 import random
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from panda3d.core import Vec2, Vec3, Point3, NodePath, TransformState
@@ -37,6 +38,7 @@ from direct.interval.LerpInterval import LerpFunc
 from direct.task.Task import Task
 
 from dice import Dice, checkDice
+from flight import grounded, ground_pursuit
 from battleFunctions import (MIN_IMPACT_HIT_CHARGE, base_initiative,
                              charge_initiative_bonus, impact_hit_report,
                              resolve_impact_hits, simulate_battle,
@@ -2963,6 +2965,7 @@ class CombatResolver:
             else:
                 await self.overrunMove(winner)
 
+    @ground_pursuit
     async def overrunMove(self, winner):
         """A normal pursuit move, but directly forwards and without pivoting
         (p. 156)."""
@@ -2996,6 +2999,9 @@ class CombatResolver:
             await LerpPosInterval(winner.bodyNP, duration=1.0,
                                   pos=pos + forward * moved,
                                   blendType='easeInOut')
+            self.game.movement.dangerousTerrainTests(winner, pos, winner.bodyNP.getPos())
+        if winner.bodyNP.isEmpty():
+            return
         if clear < 1.0:
             await self.overrunContact(winner, moved)
 
@@ -3121,7 +3127,8 @@ class CombatResolver:
 
         crashFraction = 1.0
         for unit in moving:
-            hit = self.game.sweepTest(unit, direction, GIVE_GROUND)
+            with nullcontext() if unit is loserUnit else grounded(unit):
+                hit = self.game.sweepTest(unit, direction, GIVE_GROUND)
             # Stop short only of something actually struck, so that a clear
             # path gives the full 2" the rule asks for.
             crashFraction = min(crashFraction,
@@ -3130,6 +3137,7 @@ class CombatResolver:
         if self.surrounded(loserUnit, winners, step):
             return
 
+        origins = [(unit, Vec3(unit.bodyNP.getPos())) for unit in moving]
         self.game.attackSequence2 = Parallel()
         for unit in moving:
             print(f"{unit.unit.name} moves {step.length():.1f}\" "
@@ -3140,6 +3148,10 @@ class CombatResolver:
                                 blendType='easeInOut'))
         if not self.game.attackSequence.isPlaying():
             await self.game.attackSequence2
+            for unit, origin in origins:
+                if not unit.bodyNP.isEmpty():
+                    with nullcontext() if unit is loserUnit else grounded(unit):
+                        self.game.movement.dangerousTerrainTests(unit, origin, unit.bodyNP.getPos())
 
     def surrounded(self, loserUnit, winners, step):
         """Surrounded (p. 155): the Give Ground cannot break contact, so nobody
@@ -3407,6 +3419,7 @@ class CombatResolver:
                          f'towards ({destination.x:.2f}, {destination.y:.2f}) using current obstacles (p. 156)')
             await self.pursuitMove(winner, target, outcome_of.get(id(target)), destination=destination)
 
+    @ground_pursuit
     async def pursuitMove(self, winner, target, outcome, *, destination=None):
         """Pivot to face the quarry and run the pursuit through the charge
         machinery, which rolls the 2D6, sums it, and handles the wheel, the

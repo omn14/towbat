@@ -79,6 +79,7 @@ def test_next_pursuer_uses_confirmed_reform_even_after_quarry_removed(scene):
     responses = [dict(winner=unit, target=target, action='pursue') for unit in (first, second)]
     with combat_tasks(app) as run, \
             patch.object(app.combat, 'stillEngaged', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Keep formation')), \
             patch.object(app, 'pathTowardsMouse', side_effect=preview), \
             patch.object(app, 'moveUnit', side_effect=lambda unit, **kwargs: app.taskMgr.add(move(unit), 'test-pursuit-move')), \
             patch.object(app, 'startFreeReform', side_effect=reform), \
@@ -140,6 +141,7 @@ def test_live_capture_reform_finishes_before_second_path_and_dice(scene, capsys)
     responses = [dict(winner=unit, target=target, action='pursue') for unit in (first, second)]
     with combat_tasks(app) as run, \
             patch.object(app, 'resolvingCombat', True), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Keep formation')), \
             patch.object(app, 'pathTowardsMouse', side_effect=preview), \
             patch.object(app, 'startFreeReform', side_effect=reform), \
             patch.object(app, 'freeReformUnit', side_effect=reform_input), \

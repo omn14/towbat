@@ -132,8 +132,9 @@ def placement_error(game, unit, *, scouting=False, ignore=None, deployment_zone=
             return f'Model bases overlap {other.unit.name}.'
 
     terrain = getattr(game, 'terrain_manager', None)
+    from chariot_terrain import linear_impassable
     for piece in getattr(terrain, 'terrain_pieces', []):
-        if piece.is_impassable:
+        if piece.is_impassable or linear_impassable(piece, unit):
             box = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
             if any(obb_distance(a, box) <= 0 for a in boxes):
                 return f'Cannot deploy in impassable {piece.terrain_type} terrain.'

@@ -580,15 +580,14 @@ class MovementSystem:
 
     def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1', *, features=None) -> int:
         """Test every model against each dangerous feature the move met, and
-        apply the wounds (Rulebook p. 269)."""
+        apply wounds; flying lands, Iron Shod Wheels loses D3 (pp. 170, 194, 269)."""
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return 0
         self.magicalVortexTests(unit, from_pos, to_pos, features=features)
         from tempest import tempest_features
         features = tm.get_terrain_between(from_pos, to_pos) if features is None else features
-        features = [piece for piece in tempest_features(self.game, unit, from_pos, to_pos, features, log=True)
-                if piece.is_dangerous]
+        features = tempest_features(self.game, unit, from_pos, to_pos, features, log=True)
         if not features:
             return 0
         names = ', '.join(sorted({t.terrain_type for t in features}))
@@ -603,12 +602,42 @@ class MovementSystem:
                 rule_log('Ethereal', participant, f'{names}: open ground; skips '
                          f'{len(features) * participant.unit.nmodels} dangerous-terrain tests (p. 167)')
                 continue
-            tested = [piece for piece in features if not (participant.unit.model.is_flying()
-                      and getattr(piece, 'tempest_aura', False))]
+            profile = participant.unit.model
+            iron_shod = profile.troop_type_rule('Iron Shod Wheels')
+            tested = [piece for piece in features
+                      if piece.is_dangerous or iron_shod and piece.movement_modifier < 0]
+            if profile.is_flying():
+                from scouts import model_base_boxes
+                from psychology import obb_distance
+                boxes = model_base_boxes(participant)
+                current = participant.bodyNP.getPos(participant.bodyNP.getTop())
+
+                def grounded_contact(piece):
+                    if getattr(piece, 'tempest_aura', False):
+                        return False
+                    if any(getattr(spell, 'piece', None) is piece
+                           for spell in getattr(self.game, 'remainsInPlay', [])):
+                        return True
+                    terrain_box = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                    return any(obb_distance(
+                        (box[0] + position.x - current.x, box[1] + position.y - current.y, *box[2:]),
+                        terrain_box) <= 0 for position in (from_pos, to_pos) for box in boxes)
+
+                crossed = len(tested)
+                tested = [piece for piece in tested if grounded_contact(piece)]
+                if crossed > len(tested):
+                    rule_log('Fly', participant, f'passes above {crossed - len(tested)} terrain feature(s); '
+                             f'{len(tested)} takeoff/landing or vortex tests remain (p. 170)')
+            if not tested:
+                continue
             wounds = dangerous_terrain_wounds(
-                len(tested), participant.unit.nmodels, damage,
+                len(tested), participant.unit.nmodels, 'D3' if iron_shod else damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                 subject=participant)
+            if iron_shod:
+                rule_log('Iron Shod Wheels', participant,
+                         f'{len(tested)} feature(s), {participant.unit.nmodels} model(s): '
+                         f'difficult counts dangerous, failed tests lose D3 Wounds -> {wounds} (p. 194)')
             print(f"{participant.unit.name}: Dangerous Terrain test ({names}) "
                   f"-> {wounds} wound(s)")
             self.applyWounds(participant, wounds)
@@ -1802,7 +1831,14 @@ class MovementSystem:
         for u in unit.isInCombatWith:
             u.bodyNP.setCollideMask(BitMask32.bit(30))
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
+        from chariot_terrain import obstacle_masks
+        from special_rules import unit_is_ethereal
+        flying = unit.unit.model.is_flying()
+        mask = BitMask32.allOff() if flying else CM.MOVE_BLOCKERS
+        if unit_is_ethereal(unit):
+            mask &= ~CM.TERRAIN_IMPASSABLE
+        with obstacle_masks(self.game, unit, flying):
+            result = base.world.sweepTestClosest(shape, tsFrom, tsTo, mask)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
@@ -1846,7 +1882,9 @@ class MovementSystem:
         """ for u in unit.isInCombatWith:
             u.bodyNP.setCollideMask(BitMask32.bit(30)) """
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
+        from chariot_terrain import obstacle_masks
+        with obstacle_masks(self.game, unit, pass_over):
+            result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])
@@ -1883,7 +1921,9 @@ class MovementSystem:
             u.bodyNP.setCollideMask(BitMask32.bit(30)) """
         #self.game.mountedKnightOfTheRealm.bodyNP.setCollideMask(BitMask32.bit(9))
         #result = base.world.sweepTestClosest(shape, tsFrom, tsTo,BitMask32.bit(9))
-        result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
+        from chariot_terrain import obstacle_masks
+        with obstacle_masks(self.game, unit, pass_over):
+            result = base.world.sweepTestClosest(shape, tsFrom, tsTo,mask)
         #unit.setCollideMask(BitMask32.bit(1))
         for i,u in enumerate(self.game.units):
             u.bodyNP.setCollideMask(omasks[i])

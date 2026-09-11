@@ -266,6 +266,7 @@ def save_game_state(game, filename=None):
             'counterChargeTurn': getattr(unit, 'counterChargeTurn', None),
             'lileathUsedTurn': getattr(unit, 'lileathUsedTurn', None),
             'gazeState': copy.deepcopy(getattr(unit, 'gazeState', {})),
+            'flightMode': getattr(unit.unit.model, 'flight_mode', 'fly'),
             'stupidityFailed': getattr(unit, 'stupidityFailed', False),
             'fearTestTurn': getattr(unit, 'fearTestTurn', None),
             'fearFailed': getattr(unit, 'fearFailed', False),
@@ -603,6 +604,8 @@ def load_game_state(game, filename):
         unit.counterChargeTurn = unit_data.get('counterChargeTurn')
         unit.lileathUsedTurn = unit_data.get('lileathUsedTurn')
         unit.gazeState = copy.deepcopy(unit_data.get('gazeState', {}))
+        unit.unit.model.flight_mode = unit_data.get('flightMode', 'fly')
+        unit.unit.model._groundMovement = False
         unit.stupidityFailed = unit_data.get('stupidityFailed', False)
         unit.fearTestTurn = unit_data.get('fearTestTurn')
         unit.fearFailed = unit_data.get('fearFailed', False)

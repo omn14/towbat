@@ -156,6 +156,7 @@ def test_protection_does_not_prevent_disruption(scene):
 @pytest.mark.parametrize('protected,maximum', [(True, 8), (False, 6)])
 def test_skirmisher_preview_and_committed_move(scene, protected, maximum, capsys):
     app, ranked = restore(scene, 'Cover Woods' if protected else 'Ordinary Woods')
+    app.chargeStage = 'remaining'
     for enemy in app.player2Units:
         enemy.bodyNP.setPos(30, 20, 0)
     origin = ranked.bodyNP.getPos()

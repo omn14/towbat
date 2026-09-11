@@ -1831,6 +1831,8 @@ class MyApp(ShowBase):
         """Publish the selected unit's state to the HUD's unit card."""
         from skirmish_ui import refresh_adjust_button
         refresh_adjust_button(self, unit)
+        from flight import refresh_controls
+        refresh_controls(self, unit)
         model = unit.unit.model
         save = model.effective_armour_save()
         ward = ward_save_value(model)

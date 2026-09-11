@@ -389,9 +389,23 @@ itself add gameplay effects.
       export's hull-level personal weapons are assigned to crew under p. 194.
       Lumbering's 90-degree pivot after Remaining/Reserve movement and prohibition
       on joining are implemented (p. 195), with real Skycutter scene checks.
-      LEFTOVER: other post-move Lumbering contexts,
-      Iron Shod Wheels, flying versus ground movement, landing terrain and
-      ground-only follow-up/pursuit. Do not duplicate the Roc as an extra mount.
+      **Iron Shod Wheels (p. 194):** difficult terrain counts dangerous; a failed
+      test causes D3 Wounds after any allowed reroll. Maps/saves can mark terrain
+      `linear_obstacle: true`; ground chariot sweeps treat it as impassable,
+      including pursuit/overrun and final landing placement.
+      **Fly (p. 170):** selected-unit Fly/Ground controls set the movement mode;
+      committed moves/declarations lock it, and saves retain the choice. Ordinary
+      terrain crossed in the air is ignored; takeoff/landing and magical vortex
+      effects remain. Pursuit, overrun and Follow Up force ground movement and
+      restore the prior mode afterwards. Terrain tests now run after overrun
+      and Follow Up. Actual entrypoints, obstacle masks, damage, reload and
+      1280x720/800x600 control renders have ten focused scene checks.
+      **Corrected:** legacy post-combat sweeps omitted impassable terrain;
+      they now use the shared movement-blocker mask. Older pursuit scenes must
+      answer Drilled, and ordinary terrain fixtures must close declarations.
+      LEFTOVER: other post-move Lumbering contexts; exact swept individual-base
+      terrain intersections, flight modifiers/forced-flight Impetuous interactions,
+      and broader landing-route validation. Do not duplicate the Roc as an extra mount.
 
 **Conditional, not extra purchases:** Archers have **Detachment**, but this
 export does not select a parent regimental unit or detachment relationship.
