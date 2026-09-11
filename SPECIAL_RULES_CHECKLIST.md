@@ -355,7 +355,8 @@ itself add gameplay effects.
       and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
       Verified pure outcomes and the actual imported Mage's casting allowance.
       **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
-      still manual, and seven High Magic/Saphery spell effects below remain unimplemented.
+      still manual, and six High Magic/Saphery spell effects below remain unimplemented.
+      Corporeal Unmaking's damage is coded, with combat timing/challenge limits below.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
@@ -571,8 +572,9 @@ committed as `9b90bce`; selected effects were deliberately left for point 4.
       table; runtime spell classes needed excluding from saved generation data;
       long choice labels overflowed fixed buttons. Dialog geometry and rendered
       selection are covered by the existing offscreen choice-layout tests.
-- LEFTOVER: seven High Magic/Saphery spell effects remain. Shield of Saphery,
-      Fury of Khaine, Walk Between Worlds, Chaos Armour's Ward and the Mark's Panic reroll were
+- LEFTOVER: six High Magic/Saphery spell effects remain uncoded; Corporeal
+      Unmaking has partial combat integration. Shield of Saphery, Fury of Khaine,
+      Walk Between Worlds, Chaos Armour's Ward and the Mark's Panic reroll were
       implemented in the later entries below; their listed limitations remain.
       Unsupported generated spells are explicitly logged as known but inert.
 - LEFTOVER: only a complete, unambiguous six-spell lore plus one normal
@@ -618,11 +620,11 @@ detail scrolling, and Champion armour 5+ to 4+. Old battle saves are not migrate
       spell targeting remain separate from caster selection. The two unit grants
       below now propagate, but do not expand the one-joined-character model.
 
-Runtime audit: `spell_class(name)` resolves **Shield of Saphery, Fury of Khaine
-and Walk Between Worlds**; the other **seven** exported spells below still use `CatalogueSpell`,
+Runtime audit: `spell_class(name)` resolves **Shield of Saphery, Fury of Khaine,
+Walk Between Worlds and Corporeal Unmaking**; the other **six** exported spells below still use `CatalogueSpell`,
 which rolls to cast and prints wording but does not apply the effect. All ten
 form the Mage's available pool, not ten known spells. Full arbitrary legal
-generation still needs the remaining effects; the three coded spells do not
+generation still needs the remaining effects and Assailment integration; four coded effects do not
 complete every possible three-spell selection.
 
 - [x] **Spell generation and Lore of Saphery substitution**: Level 2 plus
@@ -703,7 +705,7 @@ complete every possible three-spell selection.
       needed. Strict once-per-turn Conveyance history after source removal and
       future end-of-Shooting spell expiry relative to Reserve still need handling.
       No new Stomp implementation, tactical AI Reserve policy, or generic Self/aura
-      system is claimed. This is not full matchup acceptance; seven lore effects remain.
+      system is claimed. This is not full matchup acceptance; six lore effects remain uncoded.
 
       Sources: [Walk Between Worlds](https://tow.whfb.app/spell/walk-between-worlds),
       p. 329; [Ethereal](https://tow.whfb.app/special-rules/ethereal), p. 167;
@@ -715,8 +717,62 @@ complete every possible three-spell selection.
       Flaming Attacks and correct S/AP, including Skirmisher targets.
 - [ ] **Tempest** - stationary Remains in Play vortex and terrain-changing
       aura; interact with Fly, Move Through Cover and Ithilmar Barding.
-- [ ] **Corporeal Unmaking** - Assailment hits with armour and Regeneration
-      prohibited, but Ward saves allowed; respect combat/challenge targeting.
+- [ ] **Corporeal Unmaking (damage/pre-fight casting implemented; combat integration partial)** -
+      8+, Combat-range Assailment, D3 automatic magical S5 hits on one engaged
+      enemy unit (Rulebook pp. 107-108, 329). No armour or Regeneration saves;
+      Ward saves remain available. The save resolver accepts independent explicit
+      permissions, with existing callers retaining their normal save sequence.
+      This does not mark the wounds as Killing Blow or borrow caster weapon rules.
+      Ethereal permits these magical wounds. Wound remainders on multi-wound models
+      and actual rendered casualties use the existing movement casualty owner.
+      Numeric logs show hits, wounds, Ward saves and no-armour/no-Regeneration policy.
+
+      The normal Mage/host spell menu, casting allowance, dispel and target-mask
+      paths are wired. A joined Mage targets its host's engagements without a
+      shooting LOS check. Friendly, unengaged, dead/off-board targets, retired
+      casters, completed combats and concurrent combat resolution are rejected.
+      Cancellation spends no attempt; failed/dispelled attempts spend casting
+      allowance without damage. Actual inflicted wounds are banked on the caster's
+      host, capped at target Wounds remaining, added to the combat's Wounds caused
+      row once, and consumed. Save/reload retains casualties, spell usage and that
+      credit; normal turn end clears unused credit, spell detours do not.
+
+      **Corrections on the way:** the generic magic-hit helper requests shooting
+      heavy-casualty Panic and does not bank combat credit, so this Assailment uses
+      its own casualty/accounting path. Save restrictions are explicit, not a
+      high-AP approximation or a fake slaying blow. Prohibited armour is neither
+      rolled nor reported as an active magic-item bonus. Challenge participation
+      is refused rather than allowing protected duellists to receive unit damage.
+
+      **Verification:** 17 new tests (9 pure, 8 actual-roster scenes) cover Ward
+      success/failure, no armour/Regeneration dice, unchanged normal magic saves,
+      S5/T4 thresholds, Ethereal, zero wounds, excess-wound credit cap, lone/joined
+      Mage selection, masks, failed/dispelled/cancelled casts, Chaos Armour Ward
+      saves, multi-wound Aspiring Champion damage, repeated reload, retired and
+      challenge restrictions, concurrent-combat refusal, score-row integration
+      and one-time/turn-end cleanup. The score integration test isolates ordinary
+      attacks and post-combat choices; it is not complete matchup acceptance.
+      350 distinct tests pass across 17 memory-bounded modules, including adjacent
+      armour, slaying, challenge, Shieldwall, High/Battle Magic, Walk, persistence,
+      joined casting, lifecycle and Stand & Shoot coverage. No full-suite run.
+
+      **LEFTOVER:** the existing manual Combat-phase spell menu resolves before
+      the fight, not when the Wizard strikes at Initiative (p. 108). Shared
+      Assailment opportunities for both sides, challenge ordering/allocation and
+      overkill, and spell-only wipeout/post-combat routing need an awaited combat
+      casting window. Casts by duelling Wizards or against units in active
+      challenges are currently refused with a reason, including legal cases that
+      require that missing allocation. Mixed-unit character/champion allocation
+      otherwise follows the existing casualty path. Hammerhand has not been
+      migrated to this accounting; no generic Assailment completion is claimed.
+      Six other lore effects, the earlier lifecycle/geometry limits and Gaze of
+      the Gods/Stupidity remain open. Devil's Visit remains unchanged.
+
+      Sources: [Corporeal Unmaking](https://tow.whfb.app/spell/corporeal-unmaking),
+      p. 329; [Assailment](https://tow.whfb.app/magic/assailment), p. 107;
+      [Casting spells](https://tow.whfb.app/magic/casting-spells), p. 108;
+      [Fighting a challenge](https://tow.whfb.app/characters/fighting-a-challenge),
+      p. 211; [Magic FAQ v1.5.3](https://tow.whfb.app/faq/magic).
 - [x] **Fury of Khaine** - 9+, 12", friendly unit including engaged targets;
       Extra Attacks (+1) until the end of the current turn (Rulebook p. 329).
       Effective A is read from source-owned grants without rewriting current or
@@ -764,7 +820,7 @@ complete every possible three-spell selection.
       Character separation retains timed grants rather than treating them as
       auras; p. 207 explicitly establishes joining propagation, not a separate
       leaving-spell rule. Self retirement is handled for Walk Between Worlds above;
-      other Self/area effects, broader Enchantment classifications and seven lore
+      other Self/area effects, broader Enchantment classifications and six uncoded lore
       effects remain open. These tests
       do not constitute complete matchup acceptance or generic stat-buff support.
 
@@ -833,8 +889,10 @@ complete every possible three-spell selection.
       Impetuous, Drilled and core Marching Column dependencies are now implemented
       and tested together. The explicit movement/geometry leftovers remain open.
 7. Magic and remaining dependencies: Lileath choices, lifecycle core and selected
-      Shield/Fury/Walk effects are implemented. Seven lore effects, listed lifecycle
-      limits and Gaze of the Gods including Stupidity remain.
+      Shield/Fury/Walk effects are implemented. Corporeal Unmaking damage and manual
+      pre-fight casting are implemented, but shared Assailment Initiative/challenge
+      integration remains. Six uncoded lore effects, listed lifecycle limits and
+      Gaze of the Gods including Stupidity remain.
 8. Complete matchup verification using both exact roster imports offscreen.
       Each completed entry needs a rule citation, positive/negative tests, useful
       logs and an explicit `LEFTOVER:` if partial.

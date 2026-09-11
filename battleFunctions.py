@@ -397,7 +397,8 @@ def ward_save_value(model) -> int:
     return best
 
 
-def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None):
+def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None,
+                allow_armour=True, allow_regeneration=True):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
@@ -406,8 +407,9 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
 
     A Killing Blow or Monster Slaying Blow allows no armour or Regeneration
     save; only the Ward save is attempted (p. 172, p. 173).
+    Spell-specific save prohibitions are independent of slaying (p. 329).
     """
-    if not slaying_blow and check_armor_save(model, armor_save_value, AP):
+    if allow_armour and not slaying_blow and check_armor_save(model, armor_save_value, AP):
         return True
     ward = ward_save_value(model)
     if ward:
@@ -416,7 +418,7 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
             ward_rolls.append(rolled)
         if rolled >= ward:
             return True
-    if slaying_blow:
+    if slaying_blow or not allow_regeneration:
         return False
     for rule in getattr(model, 'special_rules', []) or []:
         if rule.get('regen') and check_armor_save(model, rule['regen'], 0):
@@ -476,7 +478,8 @@ def ethereal_blocks_hits(unit, hits, magical, source):
     return True
 
 
-def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
+def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
+                       allow_armour=True, allow_regeneration=True):
     """*hits* automatic hits of the given Strength and AP against *unit*.
 
     Returns (wounds, saves, unsaved). A spell has no attacking model, so there
@@ -487,13 +490,16 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     ethereal_blocks_hits(unit, hits, True, 'spell')
     m = unit.model
     from magic_items import item_armour_save
-    item_armour_save(m, m.armor_save, log=True)
+    if allow_armour:
+        item_armour_save(m, m.armor_save, log=True)
     # to_wound reads its first model only for a Strength, which is given here.
     target = to_wound(m, m, strength=strength)
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
     ward_rolls = []
     saves = sum(1 for _ in range(wounds)
-                if check_saves(m, m.melee_armour_save(), ap, ward_rolls=ward_rolls))
+                if check_saves(m, m.melee_armour_save() if allow_armour else 7, ap,
+                               ward_rolls=ward_rolls, allow_armour=allow_armour,
+                               allow_regeneration=allow_regeneration))
     report_ward_saves(unit, wounds, ward_rolls)
     _report_too_tough_to_wound(unit, hits, strength, target)
     return wounds, saves, wounds - saves

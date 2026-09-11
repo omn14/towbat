@@ -2294,6 +2294,18 @@ class CombatResolver:
         return (scores[id(first)], scores[id(second)],
                 overkill[id(first)], overkill[id(second)])
 
+    @staticmethod
+    def takeAssailmentWounds(units):
+        """Consume pre-fight Assailment wounds once for this combat (p. 151)."""
+        total = 0
+        for unit in units:
+            banked = getattr(unit, 'assailmentWounds', 0)
+            if banked:
+                rule_log('Assailment', unit, f'{banked} wounds add +{banked} combat result (p. 151)')
+                total += banked
+                unit.assailmentWounds = 0
+        return total
+
     async def _verySimpleBattleInner(self, task):
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
@@ -2373,6 +2385,8 @@ class CombatResolver:
         foesBefore = {id(u): list(u.isInCombatWith) for u in engaged}
         p1_units = [u for u in engaged if u in self.game.player1Units]
         p2_units = [u for u in engaged if u in self.game.player2Units]
+        player1_score += self.takeAssailmentWounds(p1_units)
+        player2_score += self.takeAssailmentWounds(p2_units)
         # Wounds are everything banked so far bar the Impact Hits. The
         # challenge's own wounds count as wounds like any other, but Overkill
         # is a separate bonus and has its own row.

@@ -1,13 +1,15 @@
-"""Selected High Magic Enchantments (Rulebook pp. 107-108, 168, 207, 329)."""
+"""Selected High Magic effects (Rulebook pp. 107-108, 168, 207, 329)."""
 
 from panda3d.core import Point3
 
-from battleFunctions import attack_characteristic, ward_save_value
+from battleFunctions import attack_characteristic, resolve_magic_hits, ward_save_value
 from characters import side_of
+from models import roll_dice_expr
 from psychology import PsychologySystem, _box_corners, _polys_overlap, obb_distance
 from rules_log import rule_log, rule_skipped
 from spell_effects import active_spells, end_effect, register
 from spell_system import Spell
+from toHitAndToWound import stat_value
 
 
 def unit_members(target):
@@ -252,5 +254,79 @@ class WalkBetweenWorldsSpell(UnitEnchantmentSpell):
             self.caster._self_spells = [spell for spell in getattr(self.caster, '_self_spells', []) if spell is not self]
 
 
+class CorporealUnmakingSpell(Spell):
+    """D3 S5 Assailment hits; only Ward saves are allowed (Rulebook p. 329).
+
+    Joined Wizards target their host's enemies from the fighting rank (p. 207,
+    Magic FAQ v1.5.3). Challenge casting awaits isolated allocation (p. 211).
+    """
+
+    spell_type = 'Assailment'
+
+    def target_reason(self, target):
+        if self.caster is None or self.game is None or not hasattr(target, 'unit'):
+            return 'a caster and enemy combat unit are required'
+        host = getattr(self.caster, 'hostUnit', None) or self.caster
+        if getattr(self.caster, 'retiredFromCombat', False):
+            return 'the Wizard has retired from the fighting rank'
+        if (self.caster not in self.game.units or self.caster.unit.nmodels <= 0
+                or host.bodyNP.isEmpty() or not getattr(host, 'isDeployed', True)
+                or host.state == 'IsFleeing' or not getattr(host, 'isInCombat', False)):
+            return 'the Wizard must be alive and engaged in combat'
+        if getattr(self.game, 'resolvingCombat', False):
+            return 'combat resolution is already in progress'
+        if getattr(host, 'hasAttackedThisTurn', False):
+            return 'this combat has already been fought'
+        caster_side = side_of(self.game, self.caster, None)
+        target_side = side_of(self.game, target, None)
+        if caster_side is None or target_side is None or caster_side == target_side:
+            return 'only an enemy unit may be targeted'
+        if (target not in self.game.units or target.unit.nmodels <= 0
+                or target.bodyNP.isEmpty() or not getattr(target, 'isDeployed', True)):
+            return 'target is not on the battlefield'
+        if target not in getattr(host, 'isInCombatWith', []):
+            return 'target is not engaged with the Wizard\'s unit'
+        for challenge in getattr(self.game, 'challenges', []):
+            if challenge.answered and (challenge.involves(self.caster) or challenge.involves(target)
+                                       or target in challenge.hosts()):
+                return 'challenge Assailment allocation is not implemented; no hits applied'
+        return None
+
+    def canTarget(self, target):
+        reason = self.target_reason(target)
+        if reason:
+            rule_skipped(self.name, self.caster, f'{reason} (pp. 107, 211, 329)')
+        return reason is None
+
+    def mark_targets(self, mask):
+        """Combat-range spells target engagements, not shooting rays (p. 107)."""
+        found = False
+        for target in self.game.units:
+            if self.target_reason(target):
+                continue
+            target.model.setColor(1, 0, 1, 1)
+            target.bodyNP.setCollideMask(mask)
+            found = True
+        return found
+
+    async def apply(self, target):
+        hits = roll_dice_expr('D3')
+        wounds, saves, unsaved = resolve_magic_hits(target.unit, hits, 5, 0,
+                                                   allow_armour=False, allow_regeneration=False)
+        rule_log(self.name, self.caster,
+                 f'{target.unit.name}: D3 -> {hits} automatic magical S5 hits -> {wounds} wounds, '
+                 f'{saves} Ward saves, {unsaved} unsaved; no armour or Regeneration (p. 329)')
+        if unsaved:
+            per_model = max(1, stat_value(target.unit.model.characteristics.get('W'), 1))
+            remaining = max(0, target.unit.nmodels * per_model - getattr(target, 'woundsOnModel', 0))
+            credited = min(unsaved, remaining)
+            host = getattr(self.caster, 'hostUnit', None) or self.caster
+            host.assailmentWounds = getattr(host, 'assailmentWounds', 0) + credited
+            rule_log(self.name, host, f'{credited} wounds banked for combat result '
+                     f'({remaining} target Wounds remaining; no excess-wound credit, p. 151)')
+            self.game.movement.applyWounds(target, unsaved)
+
+
 HIGH_MAGIC = {'Fury of Khaine': FuryOfKhaineSpell, 'Shield of Saphery': ShieldOfSapherySpell,
-              'Walk Between Worlds': WalkBetweenWorldsSpell}
+              'Walk Between Worlds': WalkBetweenWorldsSpell,
+              'Corporeal Unmaking': CorporealUnmakingSpell}

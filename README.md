@@ -69,9 +69,10 @@ The three selected items now have coded effects:
 
 Vaul's Unmaking targeting, other item effects, general equipment legality and
 adaptation of the existing Ruby Ring handler remain pending. The selected
-High Magic pool now has coded Shield of Saphery, Fury of Khaine and Walk Between
-Worlds effects. The other seven High Magic/Saphery effects remain unimplemented; generating
-those known spells does not make their catalogue wording executable.
+High Magic pool now has coded Shield of Saphery, Fury of Khaine, Walk Between
+Worlds and Corporeal Unmaking effects. Corporeal Unmaking's combat timing and
+challenge handling remain partial. The other six High Magic/Saphery effects
+remain unimplemented; generating those spells does not make their wording executable.
 
 Battle saves contain explicit `magic_item_inventory` records. Recreating a
 bearer restores spent/disabled state; old saves without this field load an empty
@@ -183,7 +184,7 @@ not erase Fury. Saves restore recipients and expiry without duplicate bonuses,
 including surviving recipients after the original target/caster dies. Numeric
 grant and combat-save outcomes appear in the rule log. Target geometry uses
 unit footprints; dispersed formations and challenge-specific targeting still
-need broader verification. Seven other lore effects remain unimplemented.
+need broader verification. Six other lore effects remain unimplemented.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_magic.py tests/test_high_magic_scene.py
@@ -228,6 +229,36 @@ unfinished. See the checklist for those limits.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_walk_between_worlds.py tests/test_walk_between_worlds_scene.py
+```
+
+### Corporeal Unmaking
+
+The Mage's **8+ Combat-range Assailment** now inflicts **D3 automatic magical S5
+hits**, with **no armour or Regeneration saves**; Ward saves work normally
+(Rulebook p. 329). It uses the spell's Strength, not the caster's weapon or
+special attacks. Ethereal does not prevent these magical wounds. Multi-wound
+targets lose wounds rather than whole models, and rule logs report the hits,
+wounds and Ward saves.
+
+When known, select the Mage or its host during Combat and use the existing spell
+menu before starting the fight. Targets are the unit's engaged enemies, including
+for a joined Mage; shooting line of sight is not required. Retired Wizards,
+already-fought units and casts during an active combat resolution are rejected.
+Cancelled, failed and dispelled casts cause no damage. Successful wounds count
+toward the caster's unit's combat result once, capped at the target's remaining
+Wounds. Save/reload preserves casualties, casting usage and unspent combat credit.
+No shooting heavy-casualty Panic test is requested by this Assailment.
+
+**Partial combat integration:** the existing spell menu resolves before the
+fight, not at the Wizard's Initiative as p. 108 requires. Automatic casting
+opportunities for both sides, isolated challenge allocation and spell-only
+wipeout/post-combat routing remain unfinished. Casts by a duelling Wizard or
+against a unit in an active challenge are refused with a diagnostic, not allowed
+to spill wounds into protected models. This does not change Hammerhand's existing
+behavior or complete the shared Assailment engine.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_corporeal_unmaking.py tests/test_corporeal_unmaking_scene.py
 ```
 
 ### High Elf and Chaos Faction Effects

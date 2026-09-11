@@ -435,6 +435,7 @@ class GamePhaseFSM(FSM):
             unit.spellsCastThisTurn = []
             unit.boundSpellPhases = []
             unit.cannotCastThisTurn = False
+            unit.assailmentWounds = 0
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies = []

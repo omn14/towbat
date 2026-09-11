@@ -254,6 +254,7 @@ def save_game_state(game, filename=None):
                                 if getattr(unit, 'marchTestResult', None) != 'pending' else None),
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
             'standAndShootWounds': getattr(unit, 'standAndShootWounds', 0),
+            'assailmentWounds': getattr(unit, 'assailmentWounds', 0),
             'attemptedRallyThisTurn': unit.attemptedRallyThisTurn,
             'usedRallyingCry': getattr(unit, 'usedRallyingCry', False),
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
@@ -581,6 +582,7 @@ def load_game_state(game, filename):
         unit.marchTestResult = unit_data.get('marchTestResult')
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.standAndShootWounds = unit_data.get('standAndShootWounds', 0)
+        unit.assailmentWounds = unit_data.get('assailmentWounds', 0)
         unit.attemptedRallyThisTurn = unit_data['attemptedRallyThisTurn']
         unit.usedRallyingCry = unit_data.get('usedRallyingCry', False)
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
