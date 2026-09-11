@@ -164,6 +164,18 @@ class CatalogueLookupTests(unittest.TestCase):
 
 
 class MeleeStrengthTests(unittest.TestCase):
+    def test_throwing_spear_support_depends_on_explicit_charge_state(self):
+        from battleFunctions import melee_attacks
+        fighter = model('Marauder Horsemen', '')
+        fighter.give_weapon('Throwing Spear')
+        fighter.equip_weapon('Throwing Spear')
+        unit = mk_unit(fighter, nmodels=5, files=3, ranks=2)
+        fighter.charging = False
+        self.assertEqual(melee_attacks(unit, True, charge_distance=1), 5)
+        fighter.charging = True
+        self.assertEqual(melee_attacks(unit, False), 3)
+        self.assertFalse(fighter.missile_weapon())
+
     def test_charging_weapon_modifiers_are_scoped_to_the_enemy_charged(self):
         for name, strength in [('Lance', 0), ('Halberd', 1)]:
             with self.subTest(weapon=name):

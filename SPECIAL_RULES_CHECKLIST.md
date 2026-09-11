@@ -302,6 +302,13 @@ itself add gameplay effects.
       12 Counter Charge and ten Assailment scenes pass.
       LEFTOVER: exact per-model allocation; older saves without contacted-target
       records retain unit-wide charge modifiers until that turn expires.
+      **Throwing Spears corrected (2026-09-11):** removed the blanket ban on
+      supporting attacks after charging. Throwing Spears support only on their
+      charging turn, even after a 1" charge; Thrusting Spears and Press of Battle
+      retain their own charge restrictions (pp. 169, 190, 215). Explicit charge
+      state survives profile resets. Horsemen's mounts gain no support attacks,
+      and their spears are not a missile weapon for Stand & Shoot/Fire & Flee.
+      LEFTOVER: exact contact, ground-M reach and multi-front support allocation.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage

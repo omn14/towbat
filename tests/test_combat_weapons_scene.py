@@ -7,6 +7,7 @@ import pytest
 from characters import join_unit
 from combat_weapons import available_weapons, choose_unit_weapons
 from command_groups import champions
+from combat_profiles import combat_profiles
 from persistence import load_game_state
 from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
@@ -46,6 +47,25 @@ def test_lance_available_on_short_charge_and_champion_follows_unit(scene):
         assert profile.melee_strength_bonus() == 2 and profile.melee_ap() == 2
         assert 'Lance' not in available_weapons(profile, False)
     assert knights.unit.model.get_mount().equipedWeapon['name'] == 'Hand Weapon'
+
+
+def test_horsemen_throwing_spears_support_riders_only_on_short_charge(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    horsemen, enemy = members(app)['Marauder Horsemen'], members(app)['Silver Helm']
+    horsemen.unit.files = 3
+    horsemen.unit.ranks = 2
+    horsemen.chargedThisTurn = True
+    horsemen.chargeDistance = 1
+    with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Throwing Spear')):
+        run(choose_unit_weapons(app, horsemen, set()))
+    horsemen.unit.model.reset_characteristics()
+    parts = combat_profiles(horsemen, enemy)
+    assert {part.role: part.attacks(5, 5) for part in parts} == {'main': 5, 'mount': 3}
+    assert not horsemen.unit.model.missile_weapon()
+    horsemen.chargedThisTurn = False
+    assert {part.role: part.attacks(5, 5) for part in parts} == {'main': 3, 'mount': 3}
 
 
 def test_joined_character_chooses_independently_and_duel_keeps_that_choice(scene):

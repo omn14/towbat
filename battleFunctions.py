@@ -691,7 +691,8 @@ def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance=0)
     supporting attacks (p. 169) — which a model already in a fighting rank may
     not do (p. 145). Infantry with thrusting spears therefore fight three ranks
     deep: the spear rank is pushed back to the third, not absorbed into the
-    second. Both are denied on the turn the model charged.
+    second. Press of Battle and thrusting spear support are denied on the
+    charge; throwing spears support only on the charge (p. 215).
 
     `casualties` are the models lost earlier in this phase, already gone from
     `unit.nmodels`. They cost the unit a *second* attacker only where a model
@@ -737,7 +738,6 @@ def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance=0)
     if charge:
         if m.troop_type_rule('Press of Battle'):
             rule_skipped('Press of Battle', unit, "it charged this turn")
-        return attacks
 
     weapon = (m.equipedWeapon or {}).get('name', 'bare hands')
 
@@ -751,7 +751,7 @@ def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance=0)
                      f"fighting rank is two deep: {able} model(s) in the second "
                      f"rank attack once each")
 
-    if m.fights_in_extra_rank():
+    if m.fights_in_extra_rank(charged=charge):
         rank = min(spare, files)
         spare -= rank
         able = survivors(rank)

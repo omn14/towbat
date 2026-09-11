@@ -643,18 +643,20 @@ class model:
         return (self.troop_type_rule('Parry') and self.has_shield()
                 and self.uses_hand_weapon())
 
-    def fights_in_extra_rank(self) -> bool:
-        """True if the equipped melee weapon allows a supporting attack.
+    def fights_in_extra_rank(self, *, charged=None) -> bool:
+        """Weapon-specific supporting attacks (Rulebook pp. 169, 215).
 
-        The rule lives on the weapon as 'Fight in Extra Rank' (Rulebook p. 169)
-        — a spear or polearm has it, bare hands do not.
-
-        This reads equipedWeapon rather than active_melee_weapon(): a cavalry
-        spear is charge-only for Strength and AP, but its extra rank works the
-        other way round, being denied on the turn the wielder charged.
+        Throwing spears support only when charging; thrusting spears cannot
+        support when charging. Read explicit host state for Initiative snapshots.
         """
         w = self.equipedWeapon or {}
         if w.get('tag') == 'ranged':
+            return False
+        charged = self.charging if charged is None else charged
+        name = str(w.get('name', '')).casefold()
+        if name == 'throwing spear' and not charged:
+            return False
+        if name == 'thrusting spear' and charged:
             return False
         return any('fight in extra rank' in str(r).lower()
                    for r in (w.get('special_rules') or []))
