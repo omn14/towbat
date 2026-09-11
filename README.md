@@ -69,8 +69,9 @@ The three selected items now have coded effects:
 
 Vaul's Unmaking targeting, other item effects, general equipment legality and
 adaptation of the existing Ruby Ring handler remain pending. The selected
-High Magic/Saphery spell effects are still **not implemented**; generation
-records known spells but does not make their catalogue wording executable.
+High Magic pool now has coded Shield of Saphery and Fury of Khaine effects.
+The other eight High Magic/Saphery effects remain unimplemented; generating
+those known spells does not make their catalogue wording executable.
 
 Battle saves contain explicit `magic_item_inventory` records. Recreating a
 bearer restores spent/disabled state; old saves without this field load an empty
@@ -147,14 +148,45 @@ source ownership. Recasting a RIP spell ends its old effect before the roll;
 caster removal ends RIP spells. Reload restores effects and dispel usage without
 duplicate grants. Saving/loading and phase advance wait for in-flight magic.
 
-This is the lifecycle foundation, not the missing High Magic effects. Specific
-Enchantment replacement, dynamic auras/host propagation, and every internal
-subphase's voluntary-ending window remain unfinished. Miscast/Outclassed damage
-still requires manual resolution and is logged as such. See the exact scope in
+This is a lifecycle foundation, not a complete magic engine. Shield's Enchantment
+replacement and the two High Magic unit grants below are implemented; dynamic
+Self/area auras and every internal subphase's voluntary-ending window remain
+unfinished. Miscast/Outclassed damage still requires manual resolution and is
+logged as such. See the exact scope in
 [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_lileaths_blessing.py tests/test_spell_effects.py tests/test_dispelling.py tests/test_magic_lifecycle_scene.py
+```
+
+### Shield of Saphery and Fury of Khaine
+
+Both use the existing casting menu when known, and expire at the **end of the
+current turn**, not the caster's next Start of Turn (Rulebook p. 329).
+
+- Shield of Saphery: 8+, range 18", friendly unengaged unit. Grants a 5+ Ward
+	against wounds; a better existing Ward still wins. A successful, undispelled
+	cast removes earlier Enchantments on the target, not Hexes or native rules.
+- Fury of Khaine: 9+, range 12", friendly unit, including one engaged in combat.
+	Grants Extra Attacks (+1) to the applicable main, champion, mount, crew and
+	joined-character profiles. Identical grants do not stack. Supporting attacks
+	remain limited; shooting volume is unchanged.
+
+Targets need the caster's vision arc and base-to-base range, but not line of
+sight. The caster's own unit is selectable. Joined Wizards use world position
+and facing. Character joins spread either grant without renewing its duration;
+received grants remain until expiry after separation. Shield removes them only
+from its current target's members, preserving separate recipients.
+
+Temporary attacks do not rewrite profile characteristics, so combat resets do
+not erase Fury. Saves restore recipients and expiry without duplicate bonuses,
+including surviving recipients after the original target/caster dies. Numeric
+grant and combat-save outcomes appear in the rule log. Target geometry uses
+unit footprints; dispersed formations and challenge-specific targeting still
+need broader verification. This does not complete the other eight lore effects.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_magic.py tests/test_high_magic_scene.py
 ```
 
 ### High Elf and Chaos Faction Effects

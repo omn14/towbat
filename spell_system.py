@@ -679,6 +679,7 @@ class OakenShieldSpell(Spell):
     """5. Oaken Shield — the caster, and any unit it has joined, gain a 5+ Ward
     save until the caster's next Start of Turn."""
 
+    spell_type = 'Enchantment'
     WARDING_VALUE = 5
     targets_self = True
 
@@ -752,7 +753,9 @@ BATTLE_MAGIC = {
 
 def spell_class(name: str):
     """The coded class for a spell, or None if only its wording is known."""
-    return BATTLE_MAGIC.get((name or '').strip())
+    from high_magic import HIGH_MAGIC
+    key = (name or '').strip()
+    return BATTLE_MAGIC.get(key) or HIGH_MAGIC.get(key)
 
 
 def spell_readout(name: str, spell: dict, width: int = 46) -> str:
@@ -781,7 +784,7 @@ def save_spells(game) -> list:
     """A JSON-safe record of every spell still in play."""
     out = []
     for spell in list(game.fsm.endOfTurnSpells) + list(game.remainsInPlay):
-        target = getattr(spell, 'affected_unit', None)
+        target = spell.save_target() if hasattr(spell, 'save_target') else getattr(spell, 'affected_unit', None)
         piece = getattr(spell, 'piece', None)
         out.append({
             'name': spell.name,
@@ -794,6 +797,7 @@ def save_spells(game) -> list:
             'ticks': spell.ticks_remaining,
             'lifecycle': spell.lifecycle,
             'dispel_attempt_turn': getattr(spell, 'dispel_attempt_turn', None),
+            'effect_state': spell.save_effect() if hasattr(spell, 'save_effect') else None,
             'caster': spell.caster.unitName if spell.caster is not None else None,
             'target': target.unitName if target is not None else None,
             'center': ([piece.center.x, piece.center.y]
@@ -826,6 +830,8 @@ def load_spells(game, records, unit_map):
         if target is not None and hasattr(spell, 'attach'):
             spell.attach(target, data.get('ticks') or 1)
             spell.lifecycle = data.get('lifecycle')
+            if data.get('effect_state') is not None and hasattr(spell, 'load_effect'):
+                spell.load_effect(data['effect_state'], unit_map)
 
 
 class RaiseDeadSpell(Spell):

@@ -638,6 +638,17 @@ def firing_rank_count(files: int, nmodels: int, extra_ranks: int = 0,
     return firing
 
 
+def attack_characteristic(model) -> int:
+    """Read temporary Extra Attacks without rewriting the profile (pp. 96, 168)."""
+    bonuses = {}
+    for rule in model.special_rules:
+        if isinstance(rule, dict) and rule.get('extra_attacks'):
+            name = rule['name']
+            bonuses[name] = max(bonuses.get(name, 0), rule['extra_attacks'])
+    baseline = stat_value(model.characteristics.get('A'))
+    return baseline + min(sum(bonuses.values()), max(0, 10 - baseline))
+
+
 def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
     """Attacks a unit makes in one round of combat.
 
@@ -666,7 +677,7 @@ def melee_attacks(unit, charge: bool, casualties: int = 0) -> int:
     if isinstance(attack_count, int):
         return max(0, attack_count)
     m = unit.model
-    A = stat_value(m.characteristics.get('A'))
+    A = attack_characteristic(m)
     files = max(0, unit.files)
     spare = max(0, unit.nmodels)
     fallen = max(0, casualties)

@@ -1527,6 +1527,10 @@ class MyApp(ShowBase):
         side; a spell may be aimed at a friend, so it passes both.
         """
         pick = CM.OPPONENT_UNIT if pick is None else pick
+        if self.fsm.state == 'SpellPhase':
+            spell = getattr(self.fsm, 'spellInstanceToCast', None)
+            if hasattr(spell, 'mark_targets'):
+                return spell.mark_targets(mask)
         from shooting_geometry import shooting_solution, uses_individual_shooting
         if (self.fsm.state == 'ShootingPhase' and pick == CM.OPPONENT_UNIT
                 and uses_individual_shooting(self, self.unitToMove, self.unitToMove)):

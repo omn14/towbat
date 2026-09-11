@@ -4,7 +4,7 @@ from copy import copy
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from battleFunctions import melee_attacks, stat_value, strike_initiative
+from battleFunctions import attack_characteristic, melee_attacks, strike_initiative
 from command_groups import living_command, command_positions
 from characters import get_joined_character
 
@@ -34,21 +34,21 @@ class CombatProfile:
         if self.role == 'character':
             return melee_attacks(self.fighter.unit, charged)
         if self.role == 'champion':
-            return stat_value(self.profile.characteristics.get('A')) if self.entry in champions else 0
+            return attack_characteristic(self.profile) if self.entry in champions else 0
         blocked = len(champions)
         if joined is not None and not getattr(joined, 'retiredFromCombat', False) and (
             getattr(self.host, 'characterSlot', 0) or 0) < group.files:
             group.files = max(0, group.files - 1)
         if self.role == 'main':
             ordinary = melee_attacks(group, charged, fallen)
-            return max(0, ordinary - blocked * stat_value(group.model.characteristics.get('A')))
+            return max(0, ordinary - blocked * attack_characteristic(group.model))
         behind = max(0, models + fallen - group.files)
         fighting = max(0, min(group.files, models) - min(fallen, behind))
         if challenge is not None and self.host in challenge.hosts():
             for participant in challenge.participants():
                 if getattr(participant, 'command_host', None) is self.host:
                     fighting = max(0, fighting - 1)
-        return fighting * self.count * stat_value(self.profile.characteristics.get('A'))
+        return fighting * self.count * attack_characteristic(self.profile)
 
     def unit(self, attacks):
         return SimpleNamespace(name=self.profile.name, model=self.profile,

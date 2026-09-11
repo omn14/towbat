@@ -352,7 +352,7 @@ itself add gameplay effects.
       and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
       Verified pure outcomes and the actual imported Mage's casting allowance.
       **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
-      still manual, and the High Magic spell effects below remain unimplemented.
+      still manual, and eight High Magic/Saphery spell effects below remain unimplemented.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
@@ -567,8 +567,9 @@ committed as `9b90bce`; selected effects were deliberately left for point 4.
       table; runtime spell classes needed excluding from saved generation data;
       long choice labels overflowed fixed buttons. Dialog geometry and rendered
       selection are covered by the existing offscreen choice-layout tests.
-- LEFTOVER: all ten High Magic/Saphery spell effects, Chaos Armour's Ward,
-      Mark of Chaos Undivided and other faction effects remain later points.
+- LEFTOVER: eight High Magic/Saphery spell effects remain. Shield of Saphery,
+      Fury of Khaine, Chaos Armour's Ward and the Mark's Panic reroll were
+      implemented in the later entries below; their listed limitations remain.
       Unsupported generated spells are explicitly logged as known but inert.
 - LEFTOVER: only a complete, unambiguous six-spell lore plus one normal
       signature is accepted. Missing/ambiguous export pools stay pending with
@@ -610,14 +611,15 @@ detail scrolling, and Champion armour 5+ to 4+. Old battle saves are not migrate
       cover actual selection, targeting, successful/failed/cancelled casting,
       per-bearer accounting and save/reload.
       LEFTOVER: broader joined-unit spell-effect propagation and challenge-specific
-      spell targeting are separate from caster selection; this adds no missing
-      High Magic effects and does not expand the one-joined-character model.
+      spell targeting remain separate from caster selection. The two unit grants
+      below now propagate, but do not expand the one-joined-character model.
 
-Runtime audit: `spell_class(name)` returns `None` for **all ten** exported
-spells below. `CatalogueSpell` rolls to cast and prints wording, but does not
-apply the effect. They form the Mage's available pool, not ten known spells.
-Implement the pool if arbitrary legal spell generation is to work; a smaller
-first playable milestone must explicitly restrict the selected known spells.
+Runtime audit: `spell_class(name)` resolves **Shield of Saphery and Fury of
+Khaine**; the other **eight** exported spells below still use `CatalogueSpell`,
+which rolls to cast and prints wording but does not apply the effect. All ten
+form the Mage's available pool, not ten known spells. Full arbitrary legal
+generation still needs the remaining effects; the two coded spells do not
+complete every possible three-spell selection.
 
 - [x] **Spell generation and Lore of Saphery substitution**: Level 2 plus
       Silvery Wand gives three known spells, with normal duplicate handling
@@ -644,10 +646,61 @@ first playable milestone must explicitly restrict the selected known spells.
       aura; interact with Fly, Move Through Cover and Ithilmar Barding.
 - [ ] **Corporeal Unmaking** - Assailment hits with armour and Regeneration
       prohibited, but Ward saves allowed; respect combat/challenge targeting.
-- [ ] **Fury of Khaine** - timed Extra Attacks (+1), including correct model
-      scope and expiry without losing the buff at an unrelated combat reset.
-- [ ] **Shield of Saphery** - timed 5+ Ward and replacement of existing
-      Enchantments as specified, not an extra cumulative Ward save.
+- [x] **Fury of Khaine** - 9+, 12", friendly unit including engaged targets;
+      Extra Attacks (+1) until the end of the current turn (Rulebook p. 329).
+      Effective A is read from source-owned grants without rewriting current or
+      baseline characteristics. Main, champion, mount, crew/beast and joined
+      character attack consumers receive it; champion subtraction uses the same
+      effective A. Duplicate Fury sources do not add twice, A is capped at 10,
+      supporting-attack limits and ranged shot counts are unchanged. Actual
+      Silver Helm, three-model Dragon Prince and Skycutter profiles are tested.
+      Combat profile resets do not erase the bonus before expiry.
+- [x] **Shield of Saphery** - 8+, 18", friendly unengaged unit; 5+ Ward against
+      any wounds until the end of the current turn (Rulebook p. 329). Uses the
+      best Ward only, separate from armour and Regeneration. Successful,
+      undispelled application removes earlier implemented Enchantments on the
+      target, including Fury and Oaken Shield; failure or dispelling removes
+      nothing. Hexes and native Ward sources survive. A later Fury coexists.
+      Ward-roll reporting includes the rolls and wounds saved, once per exchange.
+
+      **Shared scope and corrections:** both need a vision arc and base-to-base
+      range, not line of sight (pp. 107-108). Legal target marking bypasses shooting
+      rays, includes the caster's unit and uses joined-caster world transforms.
+      Unit grants cover command and split profiles (pp. 192, 194); character joins
+      spread grants in either direction without renewing duration (p. 207).
+      Received grants persist to expiry after separation; Shield removes only its
+      current target's recipients. Effects save their explicit members and a live
+      reconstruction target, so caster/original-recipient death does not lose a
+      survivor's timed effect on reload. Cleanup removes owned rule identities.
+      Corrected the initial duration assumption: **end of this turn**, not next
+      Start of Turn. Numeric before/after grants and ineffective duplicate/weaker
+      grants are logged. Devil's Visit is unchanged.
+
+      **Verification:** 18 new pure/offscreen tests pass: targeting ownership,
+      exact range boundary, rotated/joined vision, screened/own-unit highlighting,
+      engaged exception, failed/dispelled casts, actual spell-menu accounting,
+      replacement order, split profiles, support limits, A cap, deterministic
+      Chaos combat saves, combat resets, join/separation, repeated reload and
+      survivor persistence, and normal Combat-phase end expiry. An additional
+      320 adjacent tests pass across command/challenge/chariot/troop-type,
+      persistence, character, joined-casting and existing magic modules.
+      Two failures also reproduce with committed combat code: missing
+      `ithilmar_rerolled` in the command test's mocked attack, and the Zombie
+      rank-bonus expectation in `test_troop_types.py`. They remain untouched.
+
+      **LEFTOVER:** targeting uses whole-unit footprints; dispersed per-base
+      range/vision and challenge-specific restrictions are not certified here.
+      Character separation retains timed grants rather than treating them as
+      auras; p. 207 explicitly establishes joining propagation, not a separate
+      leaving-spell rule. Dynamic Self/aura retirement, broader Enchantment
+      classifications and the other eight lore effects remain open. These tests
+      do not constitute complete matchup acceptance or generic stat-buff support.
+
+      Sources: [Fury of Khaine](https://tow.whfb.app/spell/fury-of-khaine),
+      [Shield of Saphery](https://tow.whfb.app/spell/shield-of-saphery), p. 329;
+      [Extra Attacks](https://tow.whfb.app/special-rules/extra-attacks), p. 168;
+      [Enchantment](https://tow.whfb.app/magic/enchantment), p. 107;
+      [Spells and characters](https://tow.whfb.app/characters/spells-characters), p. 207.
 - [ ] **Hand of Khaine** - single-model Assailment hit; no armour save,
       but Ward and Regeneration remain available; validate model targeting.
 - [ ] **Courage of Aenarion** - Remains in Play Unbreakable grant, legal
@@ -679,9 +732,10 @@ first playable milestone must explicitly restrict the selected known spells.
       Save/load, casting input and normal phase advance are guarded during magic
       resolution. Verified pure lifetime/choice cases and actual Mage/Chaos scene
       casting, reload, expiry, failed recast, caster death and phase-choice paths.
-      **LEFTOVER:** specific conflicting-Enchantment replacement, dynamic Self/host
-      and area-aura refresh/retirement, and reversible characteristic grants belong
-      to the selected spell implementation work below. The engine's main phases
+      Shield-specific conflicting-Enchantment replacement and both selected unit
+      grants are now implemented above, with non-mutating effective A for Fury.
+      **LEFTOVER:** dynamic Self/host and area-aura refresh/retirement, and other
+      reversible characteristic grants remain open. The engine's main phases
       do not expose every subphase; voluntary ending at internal Command/Conjuration/
       Rally and other subphase starts remains open. Direct debug phase requests
       bypass the normal phase-advance choices. Outclassed/Miscast damage (table
@@ -705,8 +759,9 @@ first playable milestone must explicitly restrict the selected known spells.
       reaction selection and formed Counter Charge routing. Selected-cavalry
       Impetuous, Drilled and core Marching Column dependencies are now implemented
       and tested together. The explicit movement/geometry leftovers remain open.
-7. Magic and remaining dependencies: selected lore effects, Lileath choices,
-      effect lifetimes and Gaze of the Gods including Stupidity.
+7. Magic and remaining dependencies: Lileath choices, lifecycle core and selected
+      Shield/Fury effects are implemented. Eight lore effects, listed lifecycle
+      limits and Gaze of the Gods including Stupidity remain.
 8. Complete matchup verification using both exact roster imports offscreen.
       Each completed entry needs a rule citation, positive/negative tests, useful
       logs and an explicit `LEFTOVER:` if partial.

@@ -109,6 +109,10 @@ def join_unit(game, character, host) -> bool:
     for lst in (game.player1Units, game.player2Units):
         if character in lst:
             lst.remove(character)
+    from spell_effects import active_spells
+    for spell in active_spells(game):
+        if hasattr(spell, 'on_join'):
+            spell.on_join(character, host)
     return True
 
 
