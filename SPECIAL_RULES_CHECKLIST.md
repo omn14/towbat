@@ -1355,9 +1355,14 @@ not certify list legality or claim the armies passed all acceptance scenarios.
       LEFTOVER: line of sight is `los_block_point`, which is terrain only. The
       unit-blocking half is only half modelled anywhere in the engine, so a
       unit can Stand & Shoot through a friend.
-      LEFTOVER: the FAQ case of being charged by two units where only one is
-      too close is not modelled — reactions are resolved per contact, so each
-      charge asks its own question and the two never meet.
+      **Corrected (2026-09-11):** queued reactions now check every incoming
+      charger's declaration-time distance. One inside its chosen Movement blocks
+      all shooting reactions, unless Quick Shot permits them (FAQ v1.5.3).
+      Two focused tests, 21 shooting tests, 15 queued-charge scenes and 12 Counter
+      Charge scenes pass. Formed reactions retain formation-box measurement;
+      loose reactions use individual bases. The nine High Magic scenes also pass
+      after the flight/terrain changes. **LEFTOVER:** no multi-charger proximity
+      gap in queued declarations; wider line-of-sight limits remain above.
       LEFTOVER: the FAQ's ruling that a unit which Stands & Shoots (or Fires &
       Flees) may not then cast a Magic Missile or Magical Vortex is not
       enforced.

@@ -311,6 +311,25 @@ class CombatResolver:
             defender.isChargingMove = charger.isChargingMove = False
             self.game.autoCharge = self.game.autoHold = False
 
+    def chargeReactionMeasure(self, defender, charger, fromPos=None, fromHpr=None, target_boxes=None):
+        """Declaration-time base distance and chosen Movement (p. 120; FAQ v1.5.3)."""
+        from shooting_geometry import uses_individual_shooting
+        if target_boxes is not None or uses_individual_shooting(self.game, defender, charger):
+            from formed_skirmish_charge import starting_boxes
+            from scouts import model_base_boxes
+            targets = target_boxes if target_boxes is not None else starting_boxes(charger, fromPos, fromHpr)
+            distance = min(obb_distance(source, target) for source in model_base_boxes(defender)
+                           for target in targets)
+        else:
+            target = self.game.psychology._unit_box(charger)
+            if fromPos is not None:
+                target = (fromPos.x, fromPos.y, target[2], target[3],
+                          fromHpr.x if fromHpr is not None else target[4])
+            distance = obb_distance(self.game.psychology._unit_box(defender), target)
+        model = charger.unit.model
+        movement = model.get_fly_movement(4) if model.is_flying() else model.get_movement(4)
+        return distance, movement
+
     def standAndShootOption(self, defender, charger, fromPos=None, fromHpr=None):
         """Whether *defender* may Stand & Shoot at *charger* (p. 120).
 
@@ -355,18 +374,7 @@ class CombatResolver:
                 rule_skipped('Stand & Shoot', defender,
                              f"no line of sight to {charger.unit.name}")
                 return None
-        psy = self.game.psychology
-        chargerBox = psy._unit_box(charger)
-        if fromPos is not None:
-            heading = chargerBox[4] if fromHpr is None else fromHpr.x
-            chargerBox = (chargerPos.x, chargerPos.y,
-                          chargerBox[2], chargerBox[3], heading)
-        distance = obb_distance(psy._unit_box(defender), chargerBox)
-        if target_boxes is not None:
-            from scouts import model_base_boxes
-            distance = min(obb_distance(source, target) for source in model_base_boxes(defender)
-                           for target in target_boxes)
-        movement = charger.unit.model.get_movement(4)
+        distance, movement = self.chargeReactionMeasure(defender, charger, fromPos, fromHpr, target_boxes)
         quick = bool(weapon.get('quick_shot')
                      or has_quick_shot(weapon.get('special_rules')))
         if not can_stand_and_shoot(distance, movement, quick):

@@ -100,12 +100,29 @@ async def choose_reactions(game, entries):
         from fear import cannot_flee
         if cannot_flee(defender):
             options.pop('flee')
+        shooting_blocked = False
+        weapon = defender.unit.model.missile_weapon()
+        if weapon:
+            from battlescribe import has_quick_shot
+            from rules_log import rule_skipped
+            quick = bool(weapon.get('quick_shot') or has_quick_shot(weapon.get('special_rules')))
+            if not quick:
+                for entry in incoming:
+                    distance, movement = game.combat.chargeReactionMeasure(
+                        defender, entry.charger, Vec3(*entry.origin), Vec3(*entry.facing))
+                    if distance < movement:
+                        shooting_blocked = True
+                        rule_skipped('Stand & Shoot', defender,
+                                     f'{entry.charger.unit.name} at {distance:.2f}" is inside M{movement:g}; '
+                                     'no shooting reaction against any charger (p. 120; FAQ v1.5.3)')
+                        break
         for index, entry in enumerate(incoming, 1):
             origin, facing = Vec3(*entry.origin), Vec3(*entry.facing)
             suffix = f'{index}: {entry.charger.unit.name}'
             if game.combat.counterChargeOption(defender, entry.charger, origin, facing):
                 options[f'counter charge {suffix}'] = entry
-            shoot = game.combat.standAndShootOption(defender, entry.charger, origin, facing)
+            shoot = (None if shooting_blocked else
+                     game.combat.standAndShootOption(defender, entry.charger, origin, facing))
             if shoot:
                 options[f'stand & shoot {suffix}'] = entry
                 if not cannot_flee(defender) and game.combat.fireAndFleeOption(defender, entry.charger, shoot):
