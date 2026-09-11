@@ -33,6 +33,41 @@ def test_grounded_chariot_treats_difficult_as_dangerous_and_loses_d3(scene):
     damage.assert_called_once_with(unit, 3)
 
 
+def test_base_edge_crossing_is_found_without_explicit_features(scene):
+    from scouts import model_base_boxes
+    app, unit = restore(scene)
+    unit.bodyNP.setPos(0, -2, 0)
+    box, = model_base_boxes(unit)
+    piece = app.terrain_manager.add_terrain('forest', Point3(box[0] + box[2], -10, 0), .2, .2)
+    piece._field = None
+    start, end = Vec3(0, -18, 0), unit.bodyNP.getPos()
+    assert app.terrain_manager.get_terrain_between(start, end) == []
+    with grounded(unit), patch('terrain_system.random.randint', side_effect=[1, 3]), \
+            patch.object(app.movement, 'applyWounds') as damage:
+        assert app.movement.dangerousTerrainTests(unit, start, end) == 3
+    damage.assert_called_once_with(unit, 3)
+
+
+def test_rectangular_terrain_tests_only_crossing_bases(scene):
+    from scouts import model_base_boxes
+    app, skycutter = restore(scene)
+    unit = members(app)['Chaos Warrior']
+    unit.unit.files = unit.unit.nmodels
+    unit.layOutRanks()
+    unit.bodyNP.setPos(0, -2, 0)
+    unit.bodyNP.setH(0)
+    box = max(model_base_boxes(unit), key=lambda box: box[0])
+    piece = app.terrain_manager.add_terrain('forest', Point3(box[0] + box[2] - .05, -10, 0),
+                                          .1, .1, going='dangerous')
+    piece._field = None
+    start, end = Vec3(0, -18, 0), unit.bodyNP.getPos()
+    assert app.movement.movementAllowance(unit, start, end) == app.movement.movementAllowance(unit) - 1
+    with patch('terrain_system.random.randint', return_value=2) as dice, \
+            patch.object(app.movement, 'applyWounds'):
+        assert app.movement.dangerousTerrainTests(unit, start, end) == 0
+    dice.assert_called_once_with(1, 6)
+
+
 def test_flyer_crosses_terrain_without_testing_but_tests_landing(scene):
     app, unit = restore(scene)
     piece = app.terrain_manager.add_terrain('forest', Point3(0, -10, 0), 4, 4)

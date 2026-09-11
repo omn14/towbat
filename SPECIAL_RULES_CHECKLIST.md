@@ -496,9 +496,17 @@ itself add gameplay effects.
       **Corrected:** legacy post-combat sweeps omitted impassable terrain;
       they now use the shared movement-blocker mask. Older pursuit scenes must
       answer Drilled, and ordinary terrain fixtures must close declarations.
-      LEFTOVER: other post-move Lumbering contexts; exact swept individual-base
-      terrain intersections, ground-only combat reach,
-      and broader landing-route validation. Do not duplicate the Roc as an extra mount.
+      **Rectangular terrain corrected (2026-09-11):** movement allowance, hazards
+      and vortex discovery include each translating model base's swept polygon,
+      catching narrow pieces missed by the centre line. Rectangular hazards test
+      only crossing bases; flying uses takeoff/landing bases. Two new actual-scene
+      checks cover a Skycutter edge clip and only one of ten Warriors crossing.
+      Twelve chariot, 11 Move Through Cover, nine High Magic, 11 Walk and 29 Vanguard
+      scenes pass, alongside 70 pure terrain/protection tests.
+      LEFTOVER: other post-move Lumbering contexts; organic terrain outlines,
+      curved/wheeled base sweeps, model-specific hazard casualty selection and
+      broader landing-route validation. Ground-only combat reach is implemented
+      above. Do not duplicate the Roc as an extra mount.
 
 **Conditional, not extra purchases:** Archers have **Detachment**, but this
 export does not select a parent regimental unit or detachment relationship.

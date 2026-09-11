@@ -536,6 +536,29 @@ class MovementSystem:
                 participants.append(character)
         return participants
 
+    def movementTerrainFeatures(self, unit, from_pos, to_pos):
+        """Include rectangular terrain touched by translating bases, not just centres (p. 269)."""
+        tm = getattr(self.game, 'terrain_manager', None)
+        if tm is None or from_pos is None or to_pos is None:
+            return []
+        features = list(tm.get_terrain_between(from_pos, to_pos))
+        if not hasattr(unit, 'bodyNP') or not hasattr(unit, 'model'):
+            return features
+        from scouts import model_base_boxes
+        from spell_templates import swept_circle_distance
+        current = unit.bodyNP.getPos(unit.bodyNP.getTop())
+        paths = [((box[0] + from_pos.x - current.x, box[1] + from_pos.y - current.y, *box[2:]),
+                  (box[0] + to_pos.x - current.x, box[1] + to_pos.y - current.y, *box[2:]))
+                 for box in model_base_boxes(unit)]
+        for piece in getattr(tm, 'terrain_pieces', []):
+            if piece in features or getattr(piece, '_field', None) is not None or getattr(piece, 'river_centerline', None):
+                continue
+            bounds = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+            if any(swept_circle_distance(piece.center, before, after, bounds) < float('inf')
+                   for before, after in paths):
+                features.append(piece)
+        return features
+
     def movementAllowance(self, unit, from_pos=None, to_pos=None, *, log=False, features=None):
         """Slowest participating model after its own terrain penalty (pp. 123, 174,
         269; Official FAQ v1.5.3). An unprotected character need not slow the host.
@@ -543,9 +566,7 @@ class MovementSystem:
         """
         tm = getattr(self.game, 'terrain_manager', None)
         if features is None:
-            features = (tm.get_terrain_between(from_pos, to_pos)
-                        if tm is not None and from_pos is not None and to_pos is not None
-                        else [])
+            features = self.movementTerrainFeatures(unit, from_pos, to_pos)
         from tempest import tempest_features
         features = tempest_features(self.game, unit, from_pos, to_pos, features, log=log)
         modifier = min([0] + [piece.movement_modifier for piece in features])
@@ -584,9 +605,9 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return 0
+        features = self.movementTerrainFeatures(unit, from_pos, to_pos) if features is None else features
         self.magicalVortexTests(unit, from_pos, to_pos, features=features)
         from tempest import tempest_features
-        features = tm.get_terrain_between(from_pos, to_pos) if features is None else features
         features = tempest_features(self.game, unit, from_pos, to_pos, features, log=True)
         if not features:
             return 0
@@ -630,10 +651,32 @@ class MovementSystem:
                              f'{len(tested)} takeoff/landing or vortex tests remain (p. 170)')
             if not tested:
                 continue
+            from scouts import model_base_boxes
+            from spell_templates import swept_circle_distance
+            current = unit.bodyNP.getPos(unit.bodyNP.getTop())
+            boxes = model_base_boxes(participant)[:participant.unit.nmodels]
+            paths = [((box[0] + from_pos.x - current.x, box[1] + from_pos.y - current.y, *box[2:]),
+                      (box[0] + to_pos.x - current.x, box[1] + to_pos.y - current.y, *box[2:])) for box in boxes]
+            tests = 0
+            for piece in tested:
+                if (getattr(piece, '_field', None) is not None or getattr(piece, 'river_centerline', None)
+                        or hasattr(piece, 'tempest_aura')):
+                    tests += participant.unit.nmodels
+                    continue
+                bounds = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                endpoints = profile.is_flying() and not any(
+                    getattr(spell, 'piece', None) is piece for spell in getattr(self.game, 'remainsInPlay', []))
+                tests += sum(any(swept_circle_distance(piece.center, before, after, bounds) < float('inf')
+                                 for before, after in (((start, start), (end, end)) if endpoints else ((start, end),)))
+                             for start, end in paths)
             wounds = dangerous_terrain_wounds(
-                len(tested), participant.unit.nmodels, 'D3' if iron_shod else damage,
+                tests, 1, 'D3' if iron_shod else damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                 subject=participant)
+            logger = rule_log if tests else rule_skipped
+            logger('Dangerous Terrain', participant,
+                   f'{len(tested)} feature(s), {participant.unit.nmodels} model(s): '
+                   f'{tests} base/feature tests -> {wounds} wounds (p. 269)')
             if iron_shod:
                 rule_log('Iron Shod Wheels', participant,
                          f'{len(tested)} feature(s), {participant.unit.nmodels} model(s): '
@@ -653,7 +696,7 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return
-        crossed = set(tm.get_terrain_between(from_pos, to_pos) if features is None else features)
+        crossed = set(self.movementTerrainFeatures(unit, from_pos, to_pos) if features is None else features)
         for spell in list(getattr(self.game, 'remainsInPlay', [])):
             piece = getattr(spell, 'piece', None)
             if piece is None or unit not in spell.enemies(self.game):
