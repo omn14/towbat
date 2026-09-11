@@ -196,6 +196,12 @@ class Spell:
             return
         if await self._dispelled():
             return
+        for member in (self.caster, target):
+            if hasattr(member, 'unit') and (member.unit.nmodels <= 0
+                    or (hasattr(member, 'bodyNP') and member.bodyNP.isEmpty())
+                    or (hasattr(member, 'command_entry') and not member.command_entry.get('active', True))):
+                rule_skipped(self.name, member, 'caster or target removed during the casting/dispel attempt; no effect')
+                return
         await self.apply(target)
 
     def canTarget(self, target) -> bool:
@@ -302,6 +308,8 @@ class Spell:
         self.no_more_spells = entry['no_more_spells']
         if entry['at_casting_value']:
             self.casting = required
+        from miscasts import resolve_miscast_damage
+        resolve_miscast_damage(self.game, self.caster, entry)
         return entry['cast']
 
     # ─── Shared dice-rolling helper ─────────────────────────────────

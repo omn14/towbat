@@ -29,7 +29,7 @@ def carrier(spells=None, level=0):
         state='Idle', isInCombat=False, hasAttackedThisTurn=False,
         marchedThisTurn=False, spellsCastThisTurn=[], boundSpellPhases=[],
         cannotCastThisTurn=False, color=(1, 1, 1, 1), model=Mock(),
-        updateTextNode=Mock(), bodyNP=Mock(), roundsFought=0,
+        updateTextNode=Mock(), bodyNP=Mock(isEmpty=Mock(return_value=False)), roundsFought=0,
         spreadToSkirmish=Mock(),
         countsAsChargedNextTurn=False, isInCombatWith=[], hostUnit=None)
 

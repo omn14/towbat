@@ -94,3 +94,21 @@ def test_outclassed_rolls_table_and_blocks_later_wizard_dispels():
         assert asyncio.run(attempt(game, spell, caster))
     assert 'Outclassed' in wizard_reason(game, defender, spell)
     assert not hasattr(game, 'fatedDispelTurns')
+
+
+def test_outclassed_damages_dispelling_wizard_not_spell_caster():
+    from spell_system import miscast_result
+    game, caster, defender, spell = dispel_case(wizard=True, ai=True)
+    with patch.object(Spell, '_roll_casting_dice', AsyncMock(side_effect=[(2, [1, 1]), (5, [2, 3])])), \
+            patch('miscasts.resolve_miscast_damage') as damage:
+        assert not asyncio.run(attempt(game, spell, caster))
+    damage.assert_called_once_with(game, defender, miscast_result(5), context='Outclassed in the Art')
+
+
+def test_fated_double_one_does_not_roll_miscast_table():
+    game, caster, defender, spell = dispel_case()
+    with patch.object(Spell, '_roll_casting_dice', AsyncMock(return_value=(2, [1, 1]))) as dice, \
+            patch('miscasts.resolve_miscast_damage') as damage:
+        assert not asyncio.run(attempt(game, spell, caster))
+    assert dice.await_count == 1
+    damage.assert_not_called()

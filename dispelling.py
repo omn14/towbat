@@ -113,9 +113,8 @@ async def attempt(game, spell, caster, *, remains=False):
                  f'{"dispelled" if stopped else "not dispelled"}; '
                  f'{"further dispels blocked this turn" if entry["no_more_spells"] else "no dispel lockout"} (pp. 109-110)')
         if entry['strength']:
-            rule_skipped('Outclassed in the Art', wizard,
-                         f'LEFTOVER: {entry["blast"]}" blast, S{entry["strength"]} AP-{entry["ap"]} '
-                         'damage is not automated; resolve the Miscast damage manually')
+            from miscasts import resolve_miscast_damage
+            resolve_miscast_damage(game, wizard, entry, context='Outclassed in the Art')
     rule_log('Wizardly Dispel' if wizard is not None else 'Fated Dispel', wizard or owner,
              f'{spell.name}: {dice} + {result - total} = {result} vs {threshold}; '
              f'{"Unbinding; " if dice == [6, 6] else ""}'

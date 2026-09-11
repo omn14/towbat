@@ -23,7 +23,7 @@ def single_model_targets(targets, challenge):
     return result
 
 
-async def cast_at_initiative(game, caster, targets, damage, *, challenge=None):
+async def cast_at_initiative(game, caster, targets, damage, *, challenge=None, miscast_damage=None):
     from spell_system import may_attempt, spell_class
     from magic_items import item_spell_available
     if caster is None or getattr(caster, 'retiredFromCombat', False):
@@ -33,10 +33,14 @@ async def cast_at_initiative(game, caster, targets, damage, *, challenge=None):
         return
     previous = getattr(game, 'assailmentWindow', None)
     busy = getattr(game, 'magicBusy', False)
-    game.assailmentWindow = dict(caster=caster, targets=targets, damage=damage, challenge=challenge)
+    game.assailmentWindow = dict(caster=caster, targets=targets, damage=damage, challenge=challenge,
+                                miscast_damage=miscast_damage)
     game.magicBusy = True
     try:
         while targets:
+            if caster.unit.nmodels <= 0 or (hasattr(caster, 'bodyNP') and caster.bodyNP.isEmpty()):
+                rule_skipped('Assailment', caster, 'Wizard slain; no further casting attempts')
+                return
             choices = []
             for name, record in profile.spells.items():
                 if record.get('type') != 'Assailment' or spell_class(record.get('name', name)) is None:

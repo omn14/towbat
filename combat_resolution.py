@@ -1909,10 +1909,11 @@ class CombatResolver:
         steps = self._meleeProfileSteps(challenge, removals)
         while True:
             try:
-                caster, targets, damage = next(steps)
+                caster, targets, damage, miscast_damage = next(steps)
             except StopIteration as finished:
                 return finished.value
-            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge)
+            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge,
+                                     miscast_damage=miscast_damage)
 
     def _meleeProfileSteps(self, challenge, removals):
         """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
@@ -1938,6 +1939,9 @@ class CombatResolver:
                     snapshots[id(candidate.host)], self._combatStartModels.get(
                         id(candidate.host.unit), snapshots[id(candidate.host)]), challenge)
                     for step, candidate in order if step == initiative}
+            if snapshots[id(target)] <= 0:
+                rule_skipped('Combat', host, f'I{initiative}: opponent already slain before this Initiative; no attacks')
+                continue
             models = snapshots[id(host)]
             caster = (part.fighter if part.role == 'character' and part.fighter in self.game.units
                       else host if part.role == 'main' else None)
@@ -1973,7 +1977,17 @@ class CombatResolver:
 
                 targets = [enemy for enemy in getattr(host, 'isInCombatWith', []) if enemy.unit.nmodels > 0
                            and not (challenge and challenge.involves(enemy))]
-                yield caster, targets, spell_damage
+                def miscast_damage(victim, wounds, regenerated=0):
+                    victim_host = getattr(victim, 'command_host', None) or getattr(victim, 'hostUnit', None) or victim
+                    credit = min(wounds + regenerated, self.miscastWoundsRemaining(victim))
+                    admitted = self.previewMiscastWounds(victim, wounds, removals)
+                    if id(victim_host) in engaged:
+                        scores[1 if victim_host in self.game.player1Units else 0] += credit
+                        rule_log('Miscast', victim, f'{admitted} Wounds lost in this combat -> '
+                                 f'+{credit} opposing combat result including {regenerated} regenerated, '
+                                 'no overkill (pp. 151, 176)')
+
+                yield caster, targets, spell_damage, miscast_damage
             if id(host) not in animated:
                 animated.add(id(host))
                 host.hasAttackedThisTurn = True
@@ -2029,6 +2043,39 @@ class CombatResolver:
             command_host.unit.nmodels = len(command_host.model.getChildren())
             victim.command_entry['active'] = True
         self.woundDuellist(victim, wounds)
+
+    def previewMiscastWounds(self, victim, wounds, removals):
+        """Bank incidental damage alongside pending combat losses (pp. 109, 146, 150-151)."""
+        from spell_effects import caster_removed
+        specific = getattr(victim, 'command_host', None) or getattr(victim, 'hostUnit', None)
+        if specific is not None:
+            left = max(0, wounds_remaining(victim)) if victim.unit.nmodels else 0
+            admitted = min(left, wounds)
+            if admitted:
+                previous = victim.woundsOnModel
+                victim.woundsOnModel += admitted
+                if admitted == left:
+                    victim.unit.nmodels = 0
+                    if getattr(victim, 'command_host', None) is not None:
+                        victim.command_entry['active'] = False
+                        specific.unit.nmodels = max(0, specific.unit.nmodels - 1)
+                removals.append(Func(self.applyAssailmentModelWounds, victim, previous, admitted))
+        else:
+            per_model = max(1, _stat_int(victim.unit.model.characteristics, 'W', 1))
+            partial = getattr(self, '_pendingWounds', {}).get(id(victim), getattr(victim, 'woundsOnModel', 0))
+            admitted = min(wounds, max(0, victim.unit.nmodels * per_model - partial))
+            self.previewCombatWounds(victim, admitted)
+            removals.append(Func(self.applyCombatWounds, victim, admitted))
+        if victim.unit.nmodels == 0:
+            caster_removed(self.game, victim)
+        return admitted
+
+    def miscastWoundsRemaining(self, victim):
+        if getattr(victim, 'command_host', None) or getattr(victim, 'hostUnit', None):
+            return max(0, wounds_remaining(victim)) if victim.unit.nmodels else 0
+        per_model = max(1, _stat_int(victim.unit.model.characteristics, 'W', 1))
+        partial = getattr(self, '_pendingWounds', {}).get(id(victim), getattr(victim, 'woundsOnModel', 0))
+        return max(0, victim.unit.nmodels * per_model - partial)
 
     async def verySimpleBattleStart(self, task):
         self.game.resolvingCombat = True
@@ -2299,17 +2346,18 @@ class CombatResolver:
         from assailment import drain_steps
         return drain_steps(self._challengeSteps(challenge))
 
-    async def resolveChallengeWithSpells(self, challenge):
+    async def resolveChallengeWithSpells(self, challenge, removals=None):
         from assailment import cast_at_initiative
-        steps = self._challengeSteps(challenge)
+        steps = self._challengeSteps(challenge, removals)
         while True:
             try:
-                caster, targets, damage = next(steps)
+                caster, targets, damage, miscast_damage = next(steps)
             except StopIteration as finished:
                 return finished.value
-            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge)
+            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge,
+                                     miscast_damage=miscast_damage)
 
-    def _challengeSteps(self, challenge):
+    def _challengeSteps(self, challenge, removals=None):
         """Fight the duel, in Initiative order (p. 211).
 
         Returns (player 1 wounds, player 2 wounds, player 1 overkill,
@@ -2334,11 +2382,16 @@ class CombatResolver:
             self._duelName(m) for m in challenge.participants()))
         scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
+        incidental = [0, 0]
+        affected_hosts = {id(member) for member in (getattr(self.game, 'attackers', [])
+                  + getattr(self.game, 'defenders', []) + [challenge.host, challenge.accepter_host])}
         fallen = set()
         cast = set()
         from itertools import groupby
         for initiative, step in groupby(order, key=lambda entry: entry[0]):
             inflicted = {id(participant): 0 for participant in challenge.participants()}
+            hazard_removals = Sequence()
+            hazard_fallen = set()
             for _, model, unit, label, charged, first in step:
                 rival = challenge.opponent_of(model)
                 if id(model) in fallen or id(rival) in fallen:
@@ -2352,7 +2405,20 @@ class CombatResolver:
                         inflicted[id(model)] += wounds
                         scores[id(model)] += min(regenerated, wounds_remaining(target))
 
-                    yield model, [rival], spell_damage
+                    def miscast_damage(victim, wounds, regenerated=0):
+                        victim_host = getattr(victim, 'command_host', None) or getattr(victim, 'hostUnit', None) or victim
+                        credit = min(wounds + regenerated, self.miscastWoundsRemaining(victim))
+                        queue = hazard_removals if removals is None else removals
+                        admitted = self.previewMiscastWounds(victim, wounds, queue)
+                        if victim.unit.nmodels == 0:
+                            hazard_fallen.add(id(victim))
+                        if id(victim_host) in affected_hosts:
+                            incidental[1 if victim_host in self.game.player1Units else 0] += credit
+                            rule_log('Miscast', victim, f'{admitted} Wounds lost -> +{credit} opposing '
+                                     f'combat result including {regenerated} regenerated, '
+                                     'no challenge overkill (pp. 151, 176)')
+
+                    yield model, [rival], spell_damage, miscast_damage
                 weapon = unit.model.equipedWeapon
                 if weapon is None or weapon.get('tag') == 'ranged':
                     unit.model.equip_best_melee()
@@ -2365,14 +2431,21 @@ class CombatResolver:
                          f'strikes{label} at I{initiative}: {attacks} attack(s) -> '
                          f'{hits} hit -> {wounds} unsaved wound(s) on {self._duelName(rival)} (p. 211)')
                 inflicted[id(model)] += wounds
+            hazard_removals.finish()
+            fallen.update(hazard_fallen)
             for model in challenge.participants():
                 rival = challenge.opponent_of(model)
                 wounds = inflicted[id(model)]
-                if not wounds:
+                if not wounds or id(rival) in fallen:
                     continue
-                left = wounds_remaining(rival)
+                left = self.miscastWoundsRemaining(rival) if removals is not None else wounds_remaining(rival)
                 scores[id(model)] += min(wounds, left)
-                if self.woundDuellist(rival, wounds):
+                if removals is not None:
+                    self.previewMiscastWounds(rival, min(wounds, left), removals)
+                    slain = wounds >= left
+                else:
+                    slain = self.woundDuellist(rival, wounds)
+                if slain:
                     fallen.add(id(rival))
                     bonus = overkill_bonus(wounds, left)
                     overkill[id(model)] += bonus
@@ -2387,7 +2460,7 @@ class CombatResolver:
         first, second = challenge.challenger, challenge.accepter
         if not player_one:
             first, second = second, first
-        return (scores[id(first)], scores[id(second)],
+        return (scores[id(first)] + incidental[0], scores[id(second)] + incidental[1],
                 overkill[id(first)], overkill[id(second)])
 
     @staticmethod
@@ -2470,7 +2543,7 @@ class CombatResolver:
         # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
         challenge = await self.challengeExchange(attackerUnit, defenderUnit)
         duel1, duel2, overkill1, overkill2 = (
-            await self.resolveChallengeWithSpells(challenge) if challenge else (0, 0, 0, 0))
+            await self.resolveChallengeWithSpells(challenge, modRemoveSequence) if challenge else (0, 0, 0, 0))
         player1_score += duel1 + overkill1
         player2_score += duel2 + overkill2
         melee1, melee2 = await self.resolveMeleeWithSpells(challenge, modRemoveSequence)

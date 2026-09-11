@@ -355,7 +355,7 @@ itself add gameplay effects.
       and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
       Verified pure outcomes and the actual imported Mage's casting allowance.
       **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
-      still manual. All ten High Magic/Saphery effects are now coded below,
+      now automated below. All ten High Magic/Saphery effects are now coded below,
       including the awaited Assailment Initiative/challenge window.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
@@ -895,10 +895,49 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
       do not expose every subphase; voluntary ending at internal Command/Conjuration/
       Rally and other subphase starts remains open. Direct debug phase requests
       bypass the normal phase-advance choices. Outclassed/Miscast damage (table
-      results 2-7) is explicitly logged for manual resolution, not automated.
+      results 2-7) is now automated in the following entry.
       Wizard armour/special dispel modifiers, broader vortex geometry and advanced
       AI choices remain open. No suspended magic-task save/resume or full matchup
       acceptance is claimed. Live/base snapshots are not a general stat-buff engine.
+
+- [x] **Miscast / Outclassed damage, results 2-7** - Rulebook pp. 95, 109-110,
+      151, 161, 176, 209; Psychology FAQ v1.5.3. Checked the online Miscast table,
+      Outclassed wording, template coverage, Look Out, Sir!, combat-result and
+      heavy-casualty rules. Both casting and Wizardly dispelling call `miscasts.py`;
+      Outclassed centres on the dispelling Wizard, not the original caster.
+      Results 2-4: 5" S10 AP-4; 5-6: 3" S6 AP-2; 7: one S4 AP-1 hit on the
+      Wizard alone. Friend and foe are hit, wholly covered/central-hole bases
+      automatically and partial bases on 4+. World-space character bases are
+      counted once, separately from host and champion profiles. Armour, Ward and
+      Regeneration use the normal magical-hit save sequence; no borrowed weapon
+      effects, Flaming restrictions or shooting-only Look Out, Sir!.
+      All coverage/saves are snapshotted before casualties; selected command and
+      joined-character wounds are applied without spilling into ordinary models.
+      Reports include table result, position/size, coverage rolls, S/AP, wounds,
+      saves and unsaved totals. Outside combat, friendly casualties can cause
+      Panic away from the nearest non-fleeing enemy; destruction Panic uses the
+      existing queue. Engaged casualties share combat's logical damage and
+      deferred physical-removal queue, including earlier pending damage.
+      Wounds lost add opposing combat result (Regeneration included), not challenge
+      overkill. Dead casters stop subsequent attempts and end RIP/Self effects;
+      removed targets/casters abort the pending effect after a failed dispel.
+      Failed attempts remain spent; phase return and save/reload work after death.
+      CORRECTED during implementation: added friendly-fire Panic per FAQ; retained
+      Regeneration's combat credit without calling the casualty handler for zero
+      wounds; preserved pending Impact/melee damage during challenge explosions;
+      blocked later attacks against logically slain but not yet removed targets.
+      Verified 17 pure damage/save cases, 16 actual-roster scene cases and two new
+      dispel-owner/Fated regressions. Existing Assailment, challenge, command and
+      Shieldwall scene checks pass; the focused gates total 248 passing tests.
+      Results 8-12 and Bound/Lileath behavior retain
+      their existing casting/dispel outcomes.
+      **LEFTOVER:** challenge and ordinary combat still run separate Initiative
+      passes, so blasts crossing those groups are not globally interleaved.
+      Broader multiplayer/multi-Wizard-unit ownership and army-wide casting
+      Power Drain remain outside this damage change. One joined character per
+      host and the existing formation/command placement approximations remain.
+      No new visual explosion animation, full-suite pass or complete-matchup
+      acceptance is claimed; damage is visible through casualties and rule logs.
 
 ### Implementation Order and Acceptance
 
@@ -1599,7 +1638,7 @@ army-agnostic and would benefit every faction.
       and uncoded spell effects are not implemented by the Ruby Ring path.
       Multi-model units still share one caster record rather than independent
       per-model Bound allowances. Existing wider magic limitations, including
-      army-wide Power Drain and Miscast damage, are unchanged.
+      army-wide Power Drain, are unchanged. Miscast damage is now automated above.
 - [x] Impact Hits (X) — DONE (Rulebook p. 172): the `(X)` is parsed off the rule
       name (`_param_dice` copes with prose such as `(D6+1, War Wagon only)`), and
       `impactHits` resolves them for every charging unit before any blows are
@@ -3348,10 +3387,9 @@ clamour of battle, friendly units are seldom able to tell the difference"
       Choosing a spell shows its card — type, casting value, range and the
       catalogue's own wording — under the cursor and on the status line
       (`spell_readout`, `Choice(descriptions=...)`).
-      LEFTOVER: Magic Resistance, Unbinding and Outclassed in the Art are still
-      unimplemented, so nothing reduces a spell's chance beyond the single
-      Dispel attempt, and a Remains in Play spell cannot be dispelled after the
-      turn it was cast. The vortex is not removed when it drifts off the table
+      CORRECTED: Magic Resistance, Unbinding, Wizardly Outclassed damage and
+      later-turn Conjuration dispels of Remains in Play are implemented above.
+      LEFTOVER: the vortex is not removed when it drifts off the table
       edge, and it is nudged clear of bases but not of impassable terrain.
 - [x] Too Tough to Wound (Rulebook p. 140; combat chart p. 149) - Strength
       six or more points below the target's Toughness cannot wound. Checked

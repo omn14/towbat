@@ -150,8 +150,8 @@ duplicate grants. Saving/loading and phase advance wait for in-flight magic.
 This is a lifecycle foundation, not a complete magic engine. Shield's Enchantment
 replacement and the two High Magic unit grants below are implemented; dynamic
 Self/area auras beyond Walk Between Worlds and every internal subphase's voluntary-ending window remain
-unfinished. Miscast/Outclassed damage still requires manual resolution and is
-logged as such. See the exact scope in
+unfinished. Miscast/Outclassed table results 2-7 now apply damage automatically,
+including casualties, normal saves and friendly-fire Panic. See the exact scope in
 [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
 
 ```bash
@@ -264,12 +264,40 @@ Forty-two new spell acceptance cases pass. Tempest was rendered offscreen and
 inspected. Full-suite verification is incomplete because the RAM-headroom guard
 stopped it. Known unrelated command mock and intermittent Panda HUD failures remain.
 The checklist records shared-engine limits: planar LOS, terrain/wheel geometry,
-one joined character, legacy Wand slot provenance, manual Miscast damage and
+one joined character, legacy Wand slot provenance, army-wide Power Drain and
 internal-subphase expiry choices. Challenge/ordinary attacks retain separate
-passes; future cross-group effects need global Initiative interleaving.
+passes; cross-group blast timing still needs global Initiative interleaving.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_elf_completion.py tests/test_high_elf_completion_scene.py tests/test_assailment_scene.py
+```
+
+### Miscast and Outclassed Damage
+
+Both casting and Wizardly dispelling use the same damage resolver (Rulebook
+pp. 95, 109-110). Dimensional Cascade uses a centred 5" S10 AP-4 template;
+Calamitous Detonation uses 3" S6 AP-2; Careless Conjuration hits only the Wizard
+at S4 AP-1. Templates affect friend and foe, test partial bases on 4+, and count
+joined characters separately without duplicating their bases. Normal Armour,
+Ward and Regeneration apply; Miscasts are not shooting attacks and do not offer
+Look Out, Sir! (p. 209).
+
+Damage is logged with coverage, hit and save totals. Casualties end the dead
+caster's Remains in Play effects and survive save/load. Friendly heavy casualties
+cause Panic outside combat (p. 161; Psychology FAQ v1.5.3). During combat,
+casualties share the deferred-removal queue and contribute opposing combat result,
+including regenerated wounds, without challenge overkill. Removed casters cannot
+start another casting attempt, and effects do not apply to targets removed during
+dispelling. Bound spells and Fated dispels do not trigger Miscast damage.
+
+There are 35 new regression cases across pure damage, dispel ownership and the
+actual roster scene. Shared limitations remain: separate challenge/ordinary
+Initiative passes, one joined character, per-unit rather than per-model Wizard
+records, and the existing army-wide Power Drain lockout gap. No full-suite or
+complete-matchup acceptance is claimed.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_miscasts.py tests/test_miscasts_scene.py tests/test_dispelling.py
 ```
 
 ### High Elf and Chaos Faction Effects
