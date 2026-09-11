@@ -901,6 +901,12 @@ class MyApp(ShowBase):
         combat resolver and the Panic pass. A queue on either side alone does
         not see the other's reforms.
         """
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            rule_skipped('Stupidity', unit, 'cannot reform (p. 178)')
+            if on_done:
+                on_done()
+            return
         self._reformQueue.append((unit, on_done))
         if self._reformActive:
             print(f"{unit.unit.name} waits to reform: "
@@ -1145,6 +1151,9 @@ class MyApp(ShowBase):
 
     def castableSpells(self, unit):
         """Personal allowance and host restrictions (Rulebook pp. 108, 123, 207, 210)."""
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            return []
         if getattr(self.fsm, 'state', None) == 'ReserveMovePhase':
             return []
         if (getattr(self.fsm, 'state', None) == 'StrategyPhase'
@@ -2033,6 +2042,10 @@ class MyApp(ShowBase):
 
     async def _shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
                        distance=None, *, target_boxes=None):
+        from chaos_gifts import succumbed
+        if succumbed(attackerUnit):
+            rule_skipped('Stupidity', attackerUnit, 'cannot shoot (p. 178)')
+            return
         _moved = self.movedThisTurn(attackerUnit)
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():

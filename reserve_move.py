@@ -41,6 +41,9 @@ def record_movement(game):
 
 
 def unavailable(game, unit):
+    from chaos_gifts import succumbed
+    if succumbed(unit):
+        return 'succumbed to Stupidity; cannot move except to flee (p. 178)'
     if getattr(unit, 'hostUnit', None) is not None or not has_majority(unit):
         return 'a majority of models must have Reserve Move'
     if (not unit.isDeployed or unit.unit.nmodels <= 0 or unit.bodyNP.isEmpty()

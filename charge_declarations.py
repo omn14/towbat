@@ -89,6 +89,10 @@ async def choose_reactions(game, entries):
         if (defender.bodyNP.isEmpty() or defender.unit.nmodels <= 0
                 or defender.state == 'InCombat'):
             continue
+        from chaos_gifts import succumbed
+        if succumbed(defender) and defender.state != 'IsFleeing':
+            rule_log('Stupidity', defender, f'{len(incoming)} declared charge(s): must Hold (p. 178)')
+            continue
         spent = getattr(defender, 'counterChargeTurn', None)
         if spent is not None and spent == current_turn(game):
             continue
@@ -219,6 +223,11 @@ async def resolve_declarations(game):
 
 def queue_charge(game, charger, defender, origin, facing):
     """Reserve a declared charger at its starting pose, not its contact preview (p. 119)."""
+    from chaos_gifts import succumbed
+    if succumbed(charger):
+        from rules_log import rule_skipped
+        rule_skipped('Stupidity', charger, 'cannot declare a charge (p. 178)')
+        return None
     if any(entry.charger is charger for entry in game.chargeDeclarations):
         return None
     entry = ChargeDeclaration(

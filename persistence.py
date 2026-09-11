@@ -201,6 +201,7 @@ def save_game_state(game, filename=None):
         'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
         'strategy_command_done': getattr(game, 'strategyCommandDone', True),
+        'chaos_command_turn': getattr(game, 'chaosCommandTurn', None),
         'fated_dispel_turns': getattr(game, 'fatedDispelTurns', {}),
         'dispel_blocked_turns': getattr(game, 'dispelBlockedTurns', {}),
         'conjuration_done_turn': getattr(game, 'conjurationDoneTurn', None),
@@ -260,6 +261,8 @@ def save_game_state(game, filename=None):
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
             'counterChargeTurn': getattr(unit, 'counterChargeTurn', None),
             'lileathUsedTurn': getattr(unit, 'lileathUsedTurn', None),
+            'gazeState': copy.deepcopy(getattr(unit, 'gazeState', {})),
+            'stupidityFailed': getattr(unit, 'stupidityFailed', False),
             'dispelBlockedTurn': getattr(unit, 'dispelBlockedTurn', None),
             'chargeAttempts': getattr(unit, 'chargeAttempts', 0),
             'chargeAttemptPending': getattr(unit, 'chargeAttemptPending', False),
@@ -588,6 +591,8 @@ def load_game_state(game, filename):
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
         unit.counterChargeTurn = unit_data.get('counterChargeTurn')
         unit.lileathUsedTurn = unit_data.get('lileathUsedTurn')
+        unit.gazeState = copy.deepcopy(unit_data.get('gazeState', {}))
+        unit.stupidityFailed = unit_data.get('stupidityFailed', False)
         unit.dispelBlockedTurn = unit_data.get('dispelBlockedTurn')
         unit.chargeAttempts = unit_data.get('chargeAttempts', 1)
         unit.chargeAttemptPending = unit_data.get('chargeAttemptPending', False)
@@ -742,6 +747,8 @@ def load_game_state(game, filename):
     game.vanguardFirst = game_state.get('vanguard_first')
     game.vanguardActive = game_state.get('vanguard_active')
     game.strategyCommandDone = game_state.get('strategy_command_done', True)
+    game.chaosCommandTurn = game_state.get('chaos_command_turn')
+    game.chaosCommandBusy = False
     game.fatedDispelTurns = game_state.get('fated_dispel_turns', {})
     game.dispelBlockedTurns = game_state.get('dispel_blocked_turns', {})
     game.conjurationDoneTurn = game_state.get('conjuration_done_turn')

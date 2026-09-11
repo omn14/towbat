@@ -693,6 +693,10 @@ class MovementSystem:
         either side" amounts to once the models are interchangeable.
         Drilled grants this manoeuvre without movement cost before moving (p. 167).
         """
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            rule_skipped('Stupidity', unit, 'cannot Redress the Ranks (p. 178)')
+            return False
         from charge_declarations import ordinary_move_allowed
         if not drilled and not ordinary_move_allowed(self.game):
             return False
@@ -812,6 +816,11 @@ class MovementSystem:
         return True
 
     def pathTowardsMouse(self,unit,x=None,y=None):
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            self.game.arcPoint = None
+            self.game.setGroundOverlay(False)
+            return
         from reserve_move import in_reserve, unavailable
         reserve = in_reserve(self.game)
         if reserve and unavailable(self.game, unit):
@@ -1317,6 +1326,10 @@ class MovementSystem:
                 color=(0.4, 1.0, 0.4, 1.0))
 
     def moveUnit(self, unit, *, drilled_ready=False):
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            rule_skipped('Stupidity', unit, 'cannot move except to flee (p. 178)')
+            return False
         from drilled import move_pending
         if move_pending(self.game) and not drilled_ready:
             return False

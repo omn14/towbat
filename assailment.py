@@ -26,7 +26,11 @@ def single_model_targets(targets, challenge):
 async def cast_at_initiative(game, caster, targets, damage, *, challenge=None, miscast_damage=None):
     from spell_system import may_attempt, spell_class
     from magic_items import item_spell_available
+    from chaos_gifts import succumbed
     if caster is None or getattr(caster, 'retiredFromCombat', False):
+        return
+    if succumbed(caster):
+        rule_skipped('Assailment', caster, 'succumbed to Stupidity; cannot cast (p. 178)')
         return
     profile = caster.unit.model
     if not profile.is_wizard() and not any(record.get('bound') for record in profile.spells.values()):

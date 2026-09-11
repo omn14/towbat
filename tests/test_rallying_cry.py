@@ -215,7 +215,7 @@ def test_rally_loss_thresholds(remaining, expected):
 def test_early_rally_only_preserves_normal_attempt_on_failure(
         command, dice, rallied, attempted, monkeypatch):
     unit = SimpleNamespace(
-        unit=SimpleNamespace(model=SimpleNamespace(is_veteran=lambda: False),
+        unit=SimpleNamespace(model=SimpleNamespace(is_veteran=lambda: False, special_rules=[]),
                              nmodels=5, name='Fleeing Troops'),
         request=Mock(), spreadToSkirmish=Mock(), attemptedRallyThisTurn=False)
     game = SimpleNamespace(

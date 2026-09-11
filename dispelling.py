@@ -19,6 +19,9 @@ def side_members(game, side):
 
 def wizard_reason(game, wizard, spell, *, remains=False):
     """Range is base-to-base; a vortex also supplies its circular template (p. 111)."""
+    from chaos_gifts import succumbed
+    if succumbed(wizard):
+        return 'Wizard or host succumbed to Stupidity (p. 178)'
     host = getattr(wizard, 'hostUnit', None) or wizard
     if getattr(host, 'state', None) == 'IsFleeing':
         return 'Wizard or host is fleeing'

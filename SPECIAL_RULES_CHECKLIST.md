@@ -400,11 +400,23 @@ only a blocker if that relationship is actually chosen later.
       the Warriors' actual Banner. Fear/Terror eligibility is tested in the
       shared helper. LEFTOVER: no live Fear/Terror test handlers yet, so those
       benefits cannot fire in battle. Do not mark the full rule complete.
-- [ ] **Gaze of the Gods** - Aspiring Champion. Optional Command-phase table,
-      roll/result log, persistent changes versus effects expiring at the next
-      Start of Turn, characteristic caps and save/load. Include **Stupidity**
-      from the adverse result and its joined-unit effects; a table that applies
-      only the beneficial outcomes is not implemented.
+- [x] **Gaze of the Gods and Stupidity** - Aspiring Champion (RH pp. 81, 116;
+      amended Rulebook p. 178). Own Command offers Roll/Decline; AI rolls.
+      All six results log their changes, character-only bonuses cap at 10,
+      repeated Damnation reduces Ld to a floor of 2, and temporary I/T bonuses
+      expire at the next own Start of Turn without losing capped statistics.
+      Mandatory Stupidity tests precede new Gaze rolls and skip fleeing/engaged
+      units. Failed tests bar movement except fleeing, shooting, casting,
+      Wizardly dispelling and non-Hold reactions, including Reserve Move,
+      redress, reform, pursuit/overrun and Follow Up. Joined hosts share the
+      result. Turn choices lock input/phase advance and save/load; completed
+      tokens, deltas and failed tests survive repeated reloads.
+      **Corrected:** use the amended stationary failure, not old compulsory
+      movement; do not test freshly gained Stupidity in the same Command;
+      restoration must not schedule another Gaze choice. Pure action/timing
+      tests and live Champion Command/reload scenes cover these paths.
+      **LEFTOVER:** no additional selected-roster Gaze effects. Broader
+      charge geometry and movement limitations remain tracked separately.
 - [ ] **Warband** - Horsemen. Charge-roll re-roll and context-limited Rank
       Bonus to Leadership. Their selected Skirmish formation gives no Rank
       Bonus, but that does not remove the charge-reroll benefit. Test fleeing,

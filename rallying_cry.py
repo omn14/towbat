@@ -79,10 +79,13 @@ def begin_command(game):
     game.rallyingCryBusy = False
     if characters:
         battle_log('Strategy: Command', 'info')
+    from chaos_gifts import begin_turn
+    begin_turn(game)
 
 
 def finish_command(game):
-    if getattr(game, 'rallyingCryBusy', False) or getattr(game, 'awaitingChoice', False):
+    if (getattr(game, 'rallyingCryBusy', False) or getattr(game, 'awaitingChoice', False)
+            or getattr(game, 'chaosCommandBusy', False)):
         return False
     for character in command_characters(game):
         if not getattr(character, 'usedRallyingCry', False):

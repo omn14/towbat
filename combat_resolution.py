@@ -502,6 +502,15 @@ class CombatResolver:
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task, defender=None,
                                      declaration=None):
+        from chaos_gifts import succumbed
+        if succumbed(unit):
+            rule_skipped('Stupidity', unit, 'cannot charge (p. 178)')
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            unit.isChargingMove = False
+            self.game.autoCharge = self.game.autoHold = False
+            return task.done
         pregame_rule = ('Scouts' if scout_charge_blocked(self.game, unit) else
                         'Vanguard' if in_vanguard(self.game) or vanguard_charge_blocked(self.game, unit) else None)
         if unit.state != 'IsPursuing' and pregame_rule:
@@ -614,7 +623,10 @@ class CombatResolver:
             from magic_items import current_turn
             counterTurn = getattr(defender, 'counterChargeTurn', None)
             counterSpent = counterTurn is not None and counterTurn == current_turn(self.game)
-            if declaration is not None:
+            if succumbed(defender) and defender.state != 'IsFleeing':
+                crchoice = 'hold'
+                rule_log('Stupidity', defender, 'must Hold when charged (p. 178)')
+            elif declaration is not None:
                 crchoice = declaration.reaction
             elif self.game.autoHold or counterSpent:
                 # A pursuit was never declared as a charge, so the unit it
@@ -2901,6 +2913,10 @@ class CombatResolver:
     async def overrunMove(self, winner):
         """A normal pursuit move, but directly forwards and without pivoting
         (p. 156)."""
+        from chaos_gifts import succumbed
+        if succumbed(winner):
+            rule_skipped('Stupidity', winner, 'cannot overrun (p. 178)')
+            return
         pos = winner.bodyNP.getPos()
         bonus = await self.swiftstrideChoice(
             winner, 'pursuit', distance_to_edge=board_edge_distance(pos.x, pos.y))
@@ -3032,6 +3048,14 @@ class CombatResolver:
 
     async def giveGroundMove(self, loserUnit, followers):
         """The loser backs off 2" and anyone following up comes with it."""
+        from chaos_gifts import succumbed
+        if succumbed(loserUnit):
+            rule_skipped('Stupidity', loserUnit, 'cannot Give Ground; remains in place (p. 178)')
+            return
+        for follower in followers:
+            if succumbed(follower):
+                rule_skipped('Stupidity', follower, 'cannot Follow Up (p. 178)')
+        followers = [follower for follower in followers if not succumbed(follower)]
         from drilled import before_move
         await before_move(self.game, loserUnit, 'Giving Ground')
         winners = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
@@ -3330,6 +3354,10 @@ class CombatResolver:
         """Pivot to face the quarry and run the pursuit through the charge
         machinery, which rolls the 2D6, sums it, and handles the wheel, the
         align and the contact — the same things a charge needs."""
+        from chaos_gifts import succumbed
+        if succumbed(winner):
+            rule_skipped('Stupidity', winner, 'cannot pursue (p. 178)')
+            return
         targetPos = Vec3(destination) if destination is not None else target.bodyNP.getPos()
         rFrom = winner.bodyNP.getHpr()
         winner.bodyNP.lookAt(targetPos)
