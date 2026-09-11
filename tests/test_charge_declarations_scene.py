@@ -241,6 +241,74 @@ def test_queued_charge_rebuilds_route_to_fleeing_horsemen(scene):
 
 
 @pytest.mark.parametrize('dice,caught', [([6, 6], True), ([1, 1], False)])
+def test_horsemen_charger_runs_down_fleeing_elf_once(scene, dice, caught):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    charger, defender = members(app)['Marauder Horsemen'], members(app)['Elven Archer']
+    for index, member in enumerate(app.units):
+        member.bodyNP.setPos(-30 + index * 6, 20, 0)
+    origin, facing = Vec3(0, -12, 0), Vec3(0, 0, 0)
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    defender.bodyNP.setPos(0, 2, 0)
+    defender.bodyNP.setH(0)
+    defender.request('IsFleeing')
+    defender.fledThisPhase = True
+    defender_origin = Vec3(defender.bodyNP.getPos())
+    app.roundCounter.currentRoundPlayer = [2, 2]
+    app.roundCounter.current_player = 2
+    app.playerNP.setPos(0, -2, 0)
+    app.moveArceDistance = 10
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], dice))) as rolls:
+        run(app.combat.resolveDeclaredCharge(entry))
+    assert (defender not in app.units) is caught
+    assert charger.state == 'Moved' and not charger.isInCombat
+    assert not charger.skirmishCombat and not charger.chargeAttemptPending
+    assert rolls.await_count == (1 if caught else 2)
+    if not caught:
+        assert defender.bodyNP.getPos() == defender_origin
+        assert (charger.bodyNP.getPos() - origin).length() == pytest.approx(charger.unit.model.get_movement() + 1)
+
+
+def test_dragon_princes_countercharge_incoming_horsemen(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    charger, defender = members(app)['Marauder Horsemen'], members(app)['Dragon Prince']
+    for index, member in enumerate(app.units):
+        member.bodyNP.setPos(-30 + index * 6, 20, 0)
+    origin, facing = Vec3(0, -15, 0), Vec3(0, 0, 0)
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    defender.bodyNP.setPos(0, 0, 0)
+    defender.bodyNP.setH(180)
+    app.roundCounter.currentRoundPlayer = [2, 2]
+    app.roundCounter.current_player = 2
+    app.playerNP.setPos(0, -2, 0)
+    app.moveArceDistance = 13
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    queue_charge(app, charger, defender, origin, facing)
+    assert app.combat.counterChargeOption(defender, charger, origin, facing) is not None
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(side_effect=[([], [3]), ([], [6, 6])])):
+        run(resolve_declarations(app))
+    assert charger.state == defender.state == 'InCombat'
+    assert charger.isInCombatWith == [defender] and defender.isInCombatWith == [charger]
+    for member in (charger, defender):
+        assert member.chargedThisTurn and member.wasChargedThisTurn
+        assert member.chargeAttempts == 1 and not member.chargeAttemptPending
+
+
+@pytest.mark.parametrize('dice,caught', [([6, 6], True), ([1, 1], False)])
 @pytest.mark.parametrize('reform_dice', [None, [1, 1], [6, 6]])
 def test_live_horsemen_chase_catches_or_moves_full_range(scene, dice, caught, reform_dice):
     from scouts import model_base_boxes

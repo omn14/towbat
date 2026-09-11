@@ -353,13 +353,20 @@ tests or success. README and Copilot test commands now agree on this workflow.
       Leadership helper's dice return contract and an obsolete failed-chase
       test expectation. Validation: 27 declaration scenes, 12 Counter Charge
       scenes and two declaration unit tests pass in isolated processes.
-      **LEFTOVER:** loose-formation Counter Charge remains unfinished
-      (loose pairs are refused with a log). Complex
+      **Skirmisher charger follow-up:** Horsemen now chase a fleeing target
+      at full range, form only their own charging models if they catch it,
+      remove the quarry once and share the Leadership-gated reform handler.
+      Warband rerolls remain charge rerolls, not extra flee moves. Formed
+      defenders may Counter Charge Skirmisher cavalry; distance is measured
+      between actual bases, and both units receive charge benefits on contact.
+      Skirmishers can also form against an already-engaged formed target.
+      Thirty declaration scenes, 12 Counter Charge scenes and 239 planner
+      tests pass in isolated processes.
+      **LEFTOVER:** a Dispersed Formation defender performing Counter Charge
+      remains unsupported (none of the selected units has that combination). Complex
       obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
       need broader verification, as does simultaneous frontage maximisation.
-      The legacy Skirmisher-charger chase path still needs the same p. 129
-      movement/reform treatment; the live chase regression above uses formed
-      cavalry charging the Horsemen. Suspended reaction/animation tasks are not
+      Suspended reaction/animation tasks are not
       resumed from saves: reload a declaration-stage snapshot after interruption.
       Do not mark the full rule or formation dependencies complete from these tests.
 - [x] **Cavalry split profiles and Cavalry Support** - separate rider/mount

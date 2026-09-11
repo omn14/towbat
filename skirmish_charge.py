@@ -263,8 +263,8 @@ def supported_pair(attacker, defender):
 
 def supported_formed_target(attacker, defender):
     return (getattr(attacker, 'isSkirmisher', False) and not attacker.skirmishCombat
-            and not getattr(defender, 'isSkirmisher', False)
-            and defender.state not in ('IsFleeing', 'InCombat') and attacker.state != 'IsPursuing'
+            and not (getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat)
+            and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing'
             and getattr(attacker, 'joinedCharacter', None) is None
             and getattr(defender, 'joinedCharacter', None) is None)
 

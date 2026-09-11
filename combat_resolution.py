@@ -137,16 +137,13 @@ class CombatResolver:
         source = self.game.psychology._unit_box(charger)
         source = (fromPos.x, fromPos.y, source[2], source[3], fromHpr.x)
         flank = formed_contact([source], [target], fromPos)[-1]
-        distance = obb_distance(source, target)
-        profile = charger.unit.model
-        movement = profile.get_fly_movement(4) if profile.is_flying() else profile.get_movement(4)
+        distance, movement = self.chargeReactionMeasure(defender, charger, fromPos, fromHpr)
         reason = unavailable_reason(
             defender, charger, distance=distance, movement=movement, flank=flank,
             turn=current_turn(self.game),
             declared=not self.game.autoHold and charger.state != 'IsPursuing')
-        if reason is None and (getattr(defender, 'isSkirmisher', False)
-                               or getattr(charger, 'isSkirmisher', False)):
-            reason = 'loose-formation Counter Charge geometry is not implemented (LEFTOVER)'
+        if reason is None and getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat:
+            reason = 'Dispersed Formation Counter Charge defender geometry is not implemented (LEFTOVER)'
         if reason:
             rule_skipped('Counter Charge', defender, reason)
             return None
@@ -228,6 +225,10 @@ class CombatResolver:
                 charger.request('Moved')
                 return
             if defer_charge:
+                return
+
+            if charger.isSkirmisher and not charger.skirmishCombat:
+                await self._skirmishChargeInterval(charger, defender.bodyNP, origin, facing, 'front')
                 return
 
             source = self.game.psychology._unit_box(charger)
@@ -1525,29 +1526,7 @@ class CombatResolver:
                 heading = math.degrees(math.atan2(-direction[0], direction[1]))
                 angle = (heading - unit.bodyNP.getH() + 180) % 360 - 180
                 await self.alignToEnemy(unit, angle, pivot=self.contactPointOn(unit, defender.bodyNP))
-            from first_charge import finish_charge_attempt
-            from command_groups import capture_standard
-            rule_log('Running Down the Foe', unit,
-                     f'rolled range {distance:g}" reaches {defender.unit.name} at {route.distance:.2f}"; '
-                     'fleeing unit removed, no combat form-up (p. 129)')
-            finish_charge_attempt(unit, defender)
-            capture_standard(self.game, defender, unit)
-            self.removeUnitFromPlay(defender)
-            unit.request('Moved')
-            if not self.game.aiControls(unit):
-                from psychology import leadership_passed, reroll_leadership
-                choice = await self.game.makeChoiceNew(['Reform', 'Keep formation'], Vec3(0, 0, 10),
-                                                       owner=unit, prompt='Attempt a reform after running down the foe?')
-                if choice == 'Reform':
-                    leadership, _ = self.game.psychology.leadership_of(unit)
-                    rolls = await self.game.rollLeadershipDice()
-                    rolls = await reroll_leadership(self.game, unit, 'Reform', rolls, leadership,
-                                                   self.game.rollLeadershipDice)
-                    passed = leadership_passed(sum(rolls), leadership)
-                    rule_log('Running Down the Foe', unit,
-                             f'reform dice {rolls} vs Ld {leadership}: {"passed" if passed else "failed"} (p. 129)')
-                    if passed:
-                        await self.freeReform(unit)
+            await self.runDownFoe(unit, defender, distance, route.distance)
             return
         if not formed_target and not await self._formChargedSkirmishers(unit, defender):
             rule_skipped('Skirmishers', unit, 'contact reached but defender cannot form; charge not engaged (p. 186)')
@@ -1573,6 +1552,37 @@ class CombatResolver:
             rule_log('Counter Charge', defender,
                      f'contact with {unit.unit.name}: charge distances '
                      f'{defender.chargeDistance:.2f}" / {unit.chargeDistance:.2f}"; both receive charging benefits')
+
+    async def runDownFoe(self, unit, defender, allowance, distance):
+        """Remove a caught fleeing unit and optionally test to reform (p. 129)."""
+        from first_charge import finish_charge_attempt
+        from command_groups import capture_standard
+        from psychology import leadership_passed, reroll_leadership
+        rule_log('Running Down the Foe', unit,
+                 f'rolled range {allowance:g}" reaches {defender.unit.name} at {distance:.2f}"; '
+                 'fleeing unit removed without defender form-up (p. 129)')
+        finish_charge_attempt(unit, defender)
+        capture_standard(self.game, defender, unit)
+        self.removeUnitFromPlay(defender)
+        unit.request('Moved')
+        if unit.isSkirmisher:
+            unit.spreadToSkirmish()
+        if self.game.aiControls(unit):
+            rule_skipped('Running Down the Foe', unit, 'AI keeps formation; no reform test (p. 129)')
+            return
+        choice = await self.game.makeChoiceNew(['Reform', 'Keep formation'], Vec3(0, 0, 10),
+                                               owner=unit, prompt='Attempt a reform after running down the foe?')
+        if choice != 'Reform':
+            rule_skipped('Running Down the Foe', unit, 'keeps formation; no reform test (p. 129)')
+            return
+        leadership, _ = self.game.psychology.leadership_of(unit)
+        rolls = await self.game.rollLeadershipDice()
+        rolls = await reroll_leadership(self.game, unit, 'Reform', rolls, leadership, self.game.rollLeadershipDice)
+        passed = leadership_passed(sum(rolls), leadership)
+        rule_log('Running Down the Foe', unit,
+                 f'reform dice {rolls} vs Ld {leadership}: {"passed" if passed else "failed"} (p. 129)')
+        if passed:
+            await self.freeReform(unit)
 
     async def _formChargedSkirmishers(self, attacker, defender):
         """Loose defenders align to the formed charger, not vice versa (p. 186)."""
@@ -1637,8 +1647,9 @@ class CombatResolver:
         defenderUnit = self.game.getSelectedUnit(defenderNP.node())
         from skirmish_charge import supported_pair, supported_formed_target
         formation = None
+        fleeing = defenderUnit.state == 'IsFleeing'
         formed_target = supported_formed_target(unit, defenderUnit)
-        planned_pair = supported_pair(unit, defenderUnit) or formed_target
+        planned_pair = supported_pair(unit, defenderUnit) or formed_target or fleeing
         if not planned_pair:
             rule_skipped('Skirmishers', unit,
                          f'individual form-up against {defenderUnit.unit.name} is not supported '
@@ -1648,7 +1659,14 @@ class CombatResolver:
             from skirmish_charge import plan_skirmish_charge, plan_formed_charge
             unit.bodyNP.setPos(oposUnit)
             unit.bodyNP.setHpr(orotUnit)
-            if formed_target:
+            if fleeing:
+                targets = model_base_boxes(defenderUnit)
+                if defenderUnit.isSkirmisher and not defenderUnit.skirmishCombat:
+                    from skirmish_charge import first_contact
+                    nearest = first_contact(model_base_boxes(unit), targets)[1]
+                    targets = [targets[nearest]]
+                formation = plan_formed_charge(model_base_boxes(unit), targets, chdist, oposUnit)
+            elif formed_target:
                 formation = plan_formed_charge(
                     model_base_boxes(unit), model_base_boxes(defenderUnit), chdist, oposUnit)
             else:
@@ -1658,14 +1676,14 @@ class CombatResolver:
             if formation is not None:
                 await self._formSkirmishCharge(unit, defenderUnit, formation)
 
-        target = self.game.playerNP.getPos()
+        target = defenderNP.getPos() if fleeing else self.game.playerNP.getPos()
         d = target - oposUnit
         dist = d.length()
         dirn = d / dist if dist > 1e-6 else Vec3(0, 1, 0)
         reached = chdist + 0.001 >= self.game.moveArceDistance
         if planned_pair:
             reached = formation is not None
-        failed_distance = (chdist if unit.state == 'IsPursuing' else
+        failed_distance = (chdist if unit.state == 'IsPursuing' or fleeing else
                            charge_roll(chdice, self.chargeThroughDifficult(unit, oposUnit)))
         travel = dist if reached else min(failed_distance, dist)
         endp = oposUnit + dirn * travel
@@ -1681,9 +1699,9 @@ class CombatResolver:
 
         if not reached:
             print("Charge fell short \u2014 skirmishers did not reach the enemy.")
-            rule_log('Failed Charge', unit,
-                     f'range {chdist:g}" cannot reach; dice {chdice} -> '
-                     f'advances {travel:.2f}" without adding M (p. 121)')
+            rule_log('Running Down the Foe' if fleeing else 'Failed Charge', unit,
+                     f'range {chdist:g}" cannot reach; dice {chdice} -> advances {travel:.2f}" '
+                     + ('at full charge range (p. 129)' if fleeing else 'without adding M (p. 121)'))
             self.game.movement.dangerousTerrainTests(unit, oposUnit, endp)
             unit.isChargingMove = False
             unit.request("Moved")
@@ -1702,11 +1720,10 @@ class CombatResolver:
                 return
 
         if defenderUnit.state == "IsFleeing":
-            print("Contact detected between fleeing unit and pursuer!")
-            from first_charge import finish_charge_attempt
-            finish_charge_attempt(unit, defenderUnit)
-            self.removeUnitFromPlay(defenderUnit)
-            unit.request("Moved")
+            self.game.movement.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
+            unit.isChargingMove = False
+            if unit.unit.nmodels > 0 and not unit.bodyNP.isEmpty():
+                await self.runDownFoe(unit, defenderUnit, chdist, formation.distance if formation else travel)
             return
 
         was_pursuing = unit.state == 'IsPursuing'
@@ -1742,6 +1759,14 @@ class CombatResolver:
         defenderUnit.isInCombatWith.append(unit)
         defenderUnit.isInCombat = True
         defenderUnit.isInCombatFlank.append(formation.flank if formation is not None else flank)
+        from magic_items import current_turn
+        counter_turn = getattr(defenderUnit, 'counterChargeTurn', None)
+        if counter_turn is not None and counter_turn == current_turn(self.game):
+            unit.wasChargedThisTurn = True
+            finish_charge_attempt(defenderUnit, unit)
+            rule_log('Counter Charge', defenderUnit,
+                     f'contact with {unit.unit.name}: {defenderUnit.chargeDistance:.2f}" counter move, '
+                     f'{unit.chargeDistance:.2f}" incoming charge; both receive charge benefits (p. 167)')
         unit.updateTextNode()
         defenderUnit.updateTextNode()
 
