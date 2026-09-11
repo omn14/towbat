@@ -54,3 +54,19 @@ def test_pursuit_never_gets_warband_charge_reroll():
     game = SimpleNamespace(makeChoiceNew=AsyncMock())
     assert asyncio.run(roll_charge(game, unit, False, roll)) == ([], [1, 1])
     game.makeChoiceNew.assert_not_awaited()
+
+
+@pytest.mark.parametrize('dice,reroll', [([1, 2, 6], True), ([5, 2, 1], False)])
+def test_ai_charge_reroll_ignores_separate_swiftstride_die(dice, reroll):
+    unit = member(rules=('Warband', 'Swiftstride'))
+    original = [Mock(), Mock(), Mock()]
+    replacement = [Mock(), Mock()]
+    roll = AsyncMock(side_effect=[(original, dice), (replacement, [4, 5])])
+    game = SimpleNamespace(aiControls=lambda unit: True, makeChoiceNew=AsyncMock(), world=object())
+    result = asyncio.run(roll_charge(game, unit, True, roll))
+    assert result == (replacement + original[2:], [4, 5, dice[2]]) if reroll else result == (original, dice)
+    assert roll.await_count == 1 + reroll
+    original[2].remove.assert_not_called()
+    for die in original[:2]:
+        assert die.remove.call_count == int(reroll)
+    game.makeChoiceNew.assert_not_awaited()

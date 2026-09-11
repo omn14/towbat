@@ -55,7 +55,7 @@ async def roll_charge(game, unit, bonus, roll):
     if getattr(unit, 'state', '') == 'IsPursuing' or not majority(unit):
         return models, dice
     if game.aiControls(unit):
-        choice = 'Re-roll' if max(dice) < 4 else 'Keep'
+        choice = 'Re-roll' if max(dice[:2]) < 4 else 'Keep'
     else:
         choice = await game.makeChoiceNew(['Re-roll', 'Keep'], Vec3(0, 0, 10), owner=unit,
                                          prompt=f'{unit.unit.name}: Warband Charge roll {dice}')

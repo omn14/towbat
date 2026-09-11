@@ -175,9 +175,14 @@ itself add gameplay effects.
       choices use the two selected hosts. Duel and ordinary attacks share one
       Initiative clock.
 - LEFTOVER: captured-standard VP are persisted, but the tactical assessment
-  is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
-      remaining movement extensions and magic-item/faction effects belong
-  to later steps. This does not mark either army fully rules-complete.
+      is not an end-of-battle Victory Points adjudicator. Remaining movement
+                  extensions are listed below. This does not mark either army fully rules-complete.
+- [x] Warband AI Charge reroll correction (2026-09-11): the keep/reroll policy
+                  examines only the two Charge dice, never the separate Swiftstride bonus
+                  (p. 180; FAQ v1.5.3). A low Charge roll with bonus 6 now rerolls, while a high
+                  Charge roll with bonus 1 keeps; neither case rerolls/removes the bonus die.
+                  LEFTOVER: the AI uses a simple high-die threshold rather than estimating
+                  the probability of reaching its declared target.
 
 ### Existing Support to Reuse
 
