@@ -1,7 +1,9 @@
 """Actual model-base contact and ground reach drive live combat snapshots (pp. 145-146)."""
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Vec3
@@ -9,10 +11,12 @@ from panda3d.core import Vec3
 from combat_contacts import CombatContactSnapshot
 from combat_profiles import combat_profiles
 from challenges import duellists
+from command_groups import champions
 from characters import join_unit
 from persistence import load_game_state
 from scouts import model_base_boxes
 from tests.test_faction_rules_scene import members, scene as scene
+from tests.test_shieldwall_scene import combat_tasks
 
 
 def edge_contact(host, enemy):
@@ -109,3 +113,90 @@ def test_challenge_candidate_must_be_within_or_adjacent_to_fighting_rank(scene):
     host.placeCharacter()
     edge_contact(host, enemy)
     assert character in duellists(host)
+
+
+def test_two_enemy_units_share_each_models_attack_budget(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, first, second = (members(app)[name] for name in ('Chaos Warrior', 'Mage', 'Silver Helm'))
+    app.movement.removeModelsFromUnit(second, second.unit.nmodels - 1)
+    host.unit.files = host.unit.nmodels
+    host.layOutRanks()
+    edge_contact(host, first)
+    second.bodyNP.setPos(first.bodyNP.getPos())
+    second.bodyNP.setH(180)
+    own = sorted(model_base_boxes(host), key=lambda box: box[0])[-2]
+    other = model_base_boxes(second)[0]
+    second.bodyNP.setPos(second.bodyNP.getPos() + Vec3(
+        own[0] - other[0], own[1] + own[3] + other[3] - other[1], 0))
+    host.isInCombatWith = [first, second]
+    host.isInCombatFlank = ['front', 'front']
+    second.isInCombatWith, second.isInCombatFlank = [host], ['front']
+    second.isInCombat, second.hasAttackedThisTurn = True, False
+    part, = combat_profiles(host, first)
+    with patch.object(part.profile, 'characteristics', {**part.profile.characteristics, 'A': '1', 'M': '10'}):
+        snapshot = CombatContactSnapshot([host, first, second])
+        allocation = snapshot.allocation(part, host.unit.nmodels)
+        assert sum(count for _, count, _ in allocation.batches) == host.unit.nmodels
+        assert any(targets == [first] for _, _, targets in allocation.batches)
+        assert any(targets == [second] for _, _, targets in allocation.batches)
+        with patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=lambda choices, *args, **kwargs: choices[0])):
+            asyncio.run(allocation.resolve(app))
+        assert {id(target) for target, _ in allocation.attacks} == {id(first), id(second)}
+        assert sum(count for _, count in allocation.attacks) == host.unit.nmodels
+        app.attackers, app.defenders = [host, first, second], [first, host, host]
+        app.attackSequence = Sequence()
+        app.combat._pendingWounds = {}
+        app.combat._combatStartModels = {id(member.unit): member.unit.nmodels for member in (host, first, second)}
+        directed = []
+        def fight(group, target, **kwargs):
+            if group.model is part.profile:
+                directed.append((target, group._attack_count))
+            return group._attack_count, 0, 0, 0, 0
+        with patch('combat_resolution.simulate_battle', side_effect=fight), \
+                patch('assailment.cast_at_initiative'), \
+                patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=lambda choices, *args, **kwargs: choices[0])):
+            assert asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence())) == (0, 0, 0, 0)
+        assert {id(target) for target, _ in directed} == {id(first.unit), id(second.unit)}
+        assert sum(count for _, count in directed) == host.unit.nmodels
+
+
+@pytest.mark.parametrize('kind', ['champion', 'character'])
+def test_specific_targets_require_contact_and_directed_damage_cannot_spill(scene, kind):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, enemy, character = (members(app)[name] for name in ('Mage', 'Chaos Knight', 'Aspiring Champion'))
+    if kind == 'character':
+        assert join_unit(app, character, enemy)
+        enemy.layOutRanks()
+        enemy.placeCharacter()
+        victim = character
+        victim_index = enemy.unit.nmodels
+    else:
+        victim, = champions(enemy)
+        victim_index = next(index for index, entry in CombatContactSnapshot([enemy]).formations[id(enemy)][2].items()
+                            if entry is victim.command_entry)
+    edge_contact(host, enemy)
+    own, other = model_base_boxes(host)[0], model_base_boxes(enemy)[victim_index]
+    host.bodyNP.setPos(host.bodyNP.getPos() + Vec3(other[0] - own[0], other[1] - other[3] - own[3] - own[1], 0))
+    part, = combat_profiles(host, enemy)
+    allocation = CombatContactSnapshot([host, enemy]).allocation(part, 1)
+    assert any(victim in targets for _, _, targets in allocation.batches)
+    host.bodyNP.setX(host.bodyNP.getX() + 20)
+    distant = CombatContactSnapshot([host, enemy]).allocation(part, 1)
+    assert all(victim not in targets for _, _, targets in distant.batches)
+    before = enemy.unit.nmodels
+    remaining = int(victim.unit.model.characteristics['W']) - victim.woundsOnModel
+    removals = Sequence()
+    app.combat._pendingWounds = {}
+    with combat_tasks(app) as run, \
+            patch('combat_resolution.simulate_battle', return_value=(10, 10, 10, 0, 10)), \
+            patch('combat_resolution.take_last_slaying_blows', return_value=0):
+        assert app.combat.resolveProfileAttacks(part, victim, 10, 5, None, removals) == remaining
+        assert victim.unit.nmodels == 0
+        assert enemy.unit.nmodels == before - (kind == 'champion')
+        async def apply_removals():
+            await removals
+        run(apply_removals())
+    assert enemy.unit.nmodels == before - (kind == 'champion')
+    assert len(enemy.model.getChildren()) == enemy.unit.nmodels

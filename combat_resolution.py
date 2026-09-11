@@ -2006,6 +2006,7 @@ class CombatResolver:
         initiative_step = None
         snapshots = {}
         attacks_at_step = {}
+        allocations = {}
         animated = set()
         cast = set()
         self._pendingWounds = getattr(self, '_pendingWounds', {})
@@ -2014,26 +2015,30 @@ class CombatResolver:
             if host.bodyNP.isEmpty() or target.bodyNP.isEmpty():
                 rule_skipped('Combat', host, f'I{initiative}: combatant removed during the challenge; no attacks')
                 continue
-            if challenge is not None and challenge.involves(target):
+            if contacts is None and challenge is not None and challenge.involves(target):
                 rule_skipped('Fighting a Challenge', host,
                              f'{target.unit.name} is protected from outside attacks until combat ends (p. 211)')
                 continue
             if initiative != initiative_step:
                 initiative_step = initiative
                 def prepare_step():
-                    nonlocal snapshots, attacks_at_step
+                    nonlocal snapshots, attacks_at_step, allocations
                     snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
-                    attacks_at_step = {id(candidate): (contacts.attacks(candidate, snapshots[id(candidate.host)], challenge)
+                    if contacts is not None:
+                        allocations = {id(candidate): contacts.allocation(candidate, snapshots[id(candidate.host)], challenge)
+                                       for step, candidate in order if step == initiative}
+                    attacks_at_step = {id(candidate): (sum(count for _, count, targets in allocations[id(candidate)].batches if targets)
                         if contacts is not None else candidate.attacks(
                         snapshots[id(candidate.host)], self._combatStartModels.get(
                             id(candidate.host.unit), snapshots[id(candidate.host)]), challenge))
                         for step, candidate in order if step == initiative}
+                    return list(allocations.values())
                 if interleave:
                     from combat_initiative import InitiativeStep
                     yield InitiativeStep(initiative, prepare_step)
                 else:
                     prepare_step()
-            if snapshots[id(target)] <= 0:
+            if contacts is None and snapshots[id(target)] <= 0:
                 rule_skipped('Combat', host, f'I{initiative}: opponent already slain before this Initiative; no attacks')
                 continue
             models = snapshots[id(host)]
@@ -2100,37 +2105,53 @@ class CombatResolver:
                              f'{part.profile.name} at I{initiative}: no eligible attacks; '
                              f'{models} models remain at this Initiative step')
                 continue
-            if target.unit.model.equipedWeapon.get('tag') == 'ranged':
-                target.unit.model.equip_best_melee()
-            def attack_count():
-                return attacks_at_step[id(part)]
+            if contacts is not None:
+                allocation = allocations[id(part)]
+                if not interleave:
+                    yield allocation
+                batches = allocation.attacks
+            else:
+                batches = [(target, attacks_at_step[id(part)])]
+            for victim, count in batches:
+                scores[0 if host in self.game.player1Units else 1] += self.resolveProfileAttacks(
+                    part, victim, count, initiative, challenge, removals)
+        return scores
 
-            from fear import attack_penalty
-            from combat_weapons import weapon_target
-            with attack_penalty(self.game, host, target, part.profile), weapon_target(part.profile, host, target):
-                result = simulate_battle(part.unit(attack_count), target.unit,
-                                         charge=getattr(host, 'chargedThisTurn', False),
-                                         charge_distance=float(getattr(host, 'chargeDistance', 0) or 0),
-                                         first_round=getattr(host, 'roundsFought', 0) == 1)
-            slaying = take_last_slaying_blows()
-            if not result[0]:
-                rule_skipped('Champion' if part.role == 'champion' else 'Split Profile', host,
-                             f'{part.profile.name} at I{initiative}: no eligible attacks after modifiers')
-                continue
+    def resolveProfileAttacks(self, part, target, count, initiative, challenge, removals):
+        """Resolve one nominated batch; selected wounds cannot spill (pp. 147, 199, 209)."""
+        host = part.host
+        if target.unit.model.equipedWeapon.get('tag') == 'ranged':
+            target.unit.model.equip_best_melee()
+        from fear import attack_penalty
+        from combat_weapons import weapon_target
+        with attack_penalty(self.game, host, target, part.profile), weapon_target(part.profile, host, target):
+            result = simulate_battle(part.unit(count), target.unit,
+                                     charge=getattr(host, 'chargedThisTurn', False),
+                                     charge_distance=float(getattr(host, 'chargeDistance', 0) or 0),
+                                     first_round=getattr(host, 'roundsFought', 0) == 1)
+        slaying = take_last_slaying_blows()
+        if not result[0]:
+            rule_skipped('Champion' if part.role == 'champion' else 'Split Profile', host,
+                         f'{part.profile.name} at I{initiative}: no eligible attacks after modifiers')
+            return 0
+        specific = getattr(target, 'command_host', None) or getattr(target, 'hostUnit', None)
+        if specific is not None:
+            left = self.miscastWoundsRemaining(target)
+            total_wounds = min(left, max(result[-1], left if slaying else 0))
+            self.previewMiscastWounds(target, total_wounds, removals)
+        else:
             wounds, slaying = self.commandWoundLimit(target, result[-1] - slaying, slaying, challenge)
             total_wounds = wounds + slaying
-            self.printBattleResults(host, target, *result)
-            rule_log('Champion' if part.role == 'champion' else 'Split Profile', host,
-                     f"{part.profile.name} ({part.role}) at I{initiative}, "
-                     f"{(part.profile.equipedWeapon or {}).get('name', 'unarmed')}: "
-                     f'{result[0]} attacks -> {total_wounds} unsaved wounds')
             self.previewCombatWounds(target, wounds, slaying)
             if target.unit.nmodels == 0:
                 from command_groups import capture_standard
                 capture_standard(self.game, target, host)
-            scores[0 if host in self.game.player1Units else 1] += total_wounds
             removals.append(Func(self.applyCombatWounds, target, wounds, slaying))
-        return scores
+        self.printBattleResults(host, target, *result)
+        rule_log('Champion' if part.role == 'champion' else 'Split Profile', host,
+                 f'{part.profile.name} ({part.role}) at I{initiative}: {result[0]} attacks against '
+                 f'{target.unit.name} -> {total_wounds} wounds credited; no ordinary overkill')
+        return total_wounds
 
     def applyAssailmentModelWounds(self, victim, previous, wounds):
         """Replay a selected model's damage after simultaneous attacks (pp. 146, 199)."""

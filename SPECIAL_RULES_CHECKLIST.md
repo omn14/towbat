@@ -125,10 +125,9 @@ itself add gameplay effects.
       Full-run peak RSS 1,207.7 MiB under the 1,536 MiB service cap. The first
       full report retains two reload-contact failures; the corrected
       Shieldwall, command-scene and persistence rechecks supersede those results.
-- LEFTOVER: arbitrary attacks directed at a champion outside a challenge,
-  champion-specific template/Look Out Sir allocation, and champion-specific
-      missile attacks still need per-model attack allocation. No bespoke command
-      miniature assets are added.
+- LEFTOVER: champion-specific missile attacks beyond the implemented spell
+      template/Look Out Sir paths still need allocation. No bespoke command
+      miniature assets are added. Directed ordinary melee attacks are covered below.
 - [x] Contact-based live attack counts (2026-09-11): the combat entry snapshots
       actual model bases before Impact Hits. Base contact grants full A; other
       eligible fighting/supporting models make one attack per split part only within
@@ -141,14 +140,28 @@ itself add gameplay effects.
       versus ground M, champion/mount casualty counts, Horsemen support and challenge
       eligibility. The Assailment wipeout fixture now re-seats its last defender after
       resizing; ten Assailment, eight command, 13 Shieldwall and six shared-Initiative
-      scenes pass. LEFTOVER: choosing individual attack targets, closest-enemy
-      routing in multiple combats and casualty-position selection remain open.
+      scenes pass. LEFTOVER: player-selected casualty positions and live enemy-base
+      replacement after earlier casualties remain approximations.
       Standalone legacy attack APIs retain formation-based counts.
       **Regression gate:** the 104-module isolated suite completed at 1536 MiB per
       service (2026-09-11, run `170242-180392`, peak 1165 MiB). Its only failure was
       the banked-wound scoring fixture mocking the retired ordinary-combat entry;
       updated it to mock the shared resolver, and all eight tests in that module
       pass on rerun. No unexecuted modules or memory interruption in this gate.
+- [x] Per-model melee target allocation (2026-09-11): each base shares one quota
+      across engaged enemies. Contacted models take priority; out-of-contact
+      fighting/supporting models use the nearest enemy unit, with owner choices
+      for ties. Multiple attacks can be divided between legal targets. Both sides'
+      same-Initiative choices finish before either rolls (p. 147). A contacted
+      champion or joined character can be nominated separately, with its own
+      profile and capped wounds; excess does not spill into ordinary models or
+      score challenge overkill (pp. 199, 209). Duelling/retired models are protected.
+      Four allocation/timing tests and seven actual-roster contact scenes pass,
+      including two-enemy live routing and selected-model deferred casualties;
+      shared-Initiative and challenge regressions pass. LEFTOVER: one joined
+      character per host, character movement/adjacent-rank attack eligibility,
+      explicit casualty positions and refreshed enemy geometry between Initiative
+      steps. AI chooses the first legal target, not an optimized allocation.
 - [x] Challenge participant/refusal nomination (2026-09-11): the issuer and
       accepting player choose their own character or champion. When refused, the
       challenger selects which eligible model retires, or declines to nominate one
@@ -326,7 +339,7 @@ itself add gameplay effects.
       Charge bonus and selected weapon are not removed. Tests: 56 weapon, 15
       charge-state, five weapon scenes, 42 challenge, 34 persistence, 15 declaration,
       12 Counter Charge and ten Assailment scenes pass.
-      LEFTOVER: exact per-model allocation; older saves without contacted-target
+      LEFTOVER: older saves without contacted-target
       records retain unit-wide charge modifiers until that turn expires.
       **Throwing Spears corrected (2026-09-11):** removed the blanket ban on
       supporting attacks after charging. Throwing Spears support only on their
@@ -334,8 +347,8 @@ itself add gameplay effects.
       retain their own charge restrictions (pp. 169, 190, 215). Explicit charge
       state survives profile resets. Horsemen's mounts gain no support attacks,
       and their spears are not a missile weapon for Stand & Shoot/Fire & Flee.
-      Contact counts and ground-M reach now use live base geometry; multi-front
-      target allocation remains open.
+      Contact counts, ground-M reach and per-model multi-target allocation now use
+      live base geometry; casualty-position limitations above still apply.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage

@@ -93,14 +93,20 @@ class CombatContactSnapshot:
                 return True
         return False
 
-    def attacks(self, part, models, challenge=None):
+    def quotas(self, part, models, challenge=None, *, enemies=None):
         """Full A in contact, one per out-of-contact part, no supporting mounts."""
         from battleFunctions import attack_characteristic
         from rules_log import rule_log, rule_skipped
         host, profile = part.host, part.profile
         boxes, slots, command, initial, joined = self.formations[id(host)]
         charged = bool(getattr(host, 'chargedThisTurn', False))
-        _, positions = self.positions(host, part.target)
+        enemies = [part.target] if enemies is None else enemies
+        per_enemy = [self.positions(host, enemy)[1] for enemy in enemies]
+        positions = [FightingPosition(index, min(group[index].distance for group in per_enemy),
+                  any(group[index].contact for group in per_enemy),
+                  any(group[index].fighting for group in per_enemy),
+                  any(group[index].supporting for group in per_enemy)
+                  and not any(group[index].fighting for group in per_enemy)) for index in range(len(boxes))]
         champion_indices = {index for index, entry in command.items() if entry.get('role') == 'champion'}
         duelling = {id(getattr(member, 'command_entry', None)) for member in challenge.participants()} if challenge else set()
         lost_champions = sum(not command[index].get('active', True) for index in champion_indices)
@@ -150,7 +156,58 @@ class CombatContactSnapshot:
         logger('Fighting Rank', host,
                f'{profile.name} ({part.role}): {contacts} bases in contact, ground M{movement:g}, '
                f'{casualties} earlier ordinary casualties -> {total} attacks (pp. 145-146)')
-        return total
+        return quotas
+
+    def attacks(self, part, models, challenge=None):
+        return sum(self.quotas(part, models, challenge).values())
+
+    def allocation(self, part, models, challenge=None):
+        """Contact-only character targeting and nearest-unit routing (pp. 147, 199, 209)."""
+        from combat_allocation import AttackAllocation, nearest_targets
+        from command_groups import champions
+        host = part.host
+        enemies = [enemy for enemy in getattr(host, 'isInCombatWith', [])
+                   if id(enemy) in self.formations and enemy.unit.nmodels > 0
+                   and not (challenge and challenge.involves(enemy))]
+        if not enemies:
+            return AttackAllocation(host, part.profile, [])
+        quotas = self.quotas(part, models, challenge, enemies=enemies)
+        own_boxes, slots, _, _, _ = self.formations[id(host)]
+        batches = []
+        for index, attacks in quotas.items():
+            if not attacks:
+                continue
+            distances = [(enemy, min(obb_distance(own_boxes[index], box) for box in self.formations[id(enemy)][0]))
+                         for enemy in enemies if self.formations[id(enemy)][0]]
+            nearest = nearest_targets(distances)
+            contact = min((distance for _, distance in distances), default=float('inf')) <= CONTACT_EPSILON
+            targets = []
+            for enemy in nearest:
+                boxes, _, command, initial, joined = self.formations[id(enemy)]
+                promoted = {id(champion.command_entry): champion for champion in champions(enemy, include_retired=True)}
+                ordinary_present = enemy.unit.nmodels > len(promoted)
+                for other_index, box in enumerate(boxes):
+                    touching = obb_distance(own_boxes[index], box) <= CONTACT_EPSILON
+                    entry = command.get(other_index, {})
+                    specific = (joined if other_index >= initial else promoted.get(id(entry)))
+                    if specific is not None:
+                        if (not touching or specific.unit.nmodels <= 0 or specific.retiredFromCombat
+                                or (challenge and challenge.involves(specific))):
+                            continue
+                        target = specific
+                    else:
+                        if entry.get('role') == 'champion' or not ordinary_present or (contact and not touching):
+                            continue
+                        target = enemy
+                    if all(target is not previous for previous in targets):
+                        targets.append(target)
+            batches.append((slots[index], attacks, targets))
+            if not targets:
+                from rules_log import rule_skipped
+                rule_skipped('Dividing Attacks', host,
+                             f'{part.profile.name}, model {slots[index] + 1}: {attacks} potential attacks '
+                             'but no legal contacted or nearest-unit target; personal/challenge protection applies (pp. 147, 199, 209, 211)')
+        return AttackAllocation(host, part.profile, batches)
 
     def positions_without_press(self, host, target):
         facing, _ = self.positions(host, target)
