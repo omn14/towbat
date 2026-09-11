@@ -32,6 +32,30 @@ class FlyRuleTests(unittest.TestCase):
 
 
 class FlyFlagTests(unittest.TestCase):
+    def test_movement_modifiers_affect_flight_but_never_make_it_negative(self):
+        profile = model("State Trooper", "")
+        profile.special_rules.append({"name": "Fly", "fly": True, "fly_movement": 8})
+        initial = profile.get_movement()
+        for modifier in (2, -1, -12):
+            profile.characteristics['M'] = initial + modifier
+            self.assertEqual(profile.get_fly_movement(), max(0, 8 + modifier))
+
+    def test_chariot_flight_uses_modifiers_to_draught_beast_movement(self):
+        profile = model("Lothern Skycutter", "")
+        beast = profile.get_beasts()
+        self.assertIsNotNone(beast)
+        initial_ground, initial_flight = profile.get_movement(), profile.get_fly_movement()
+        beast.characteristics['M'] = initial_ground + 2
+        self.assertEqual(profile.get_movement(), initial_ground + 2)
+        self.assertEqual(profile.get_fly_movement(), initial_flight + 2)
+
+    def test_multiple_fly_values_use_the_best_in_either_order(self):
+        profile = model("State Trooper", "")
+        for values in ((8, 10), (10, 8)):
+            profile.special_rules = [{"name": "Fly", "fly": True, "fly_movement": value}
+                                     for value in values]
+            self.assertEqual(profile.get_fly_movement(), 10)
+
     def test_is_flying_true(self):
         m = model("State Trooper", "")
         m.special_rules.append({"name": "Fly", "fly": True, "fly_movement": 8})

@@ -162,4 +162,6 @@ def test_open_and_flying_movement_have_no_terrain_penalty(troops):
     assert movement.movementAllowance(host, Point3(0), Point3(1)) == 4
     apply_rule_keywords(host.unit.model, ['Fly (9)'])
     apply_rule_keywords(character.unit.model, ['Fly (6)'])
-    assert movement.movementAllowance(host, Point3(0), Point3(1)) == 6
+    assert character.unit.model.get_fly_movement() == 7
+    assert movement.movementAllowance(host, Point3(0), Point3(1)) == 7
+    assert movement.movementAllowance(host, features=[SimpleNamespace(movement_modifier=-1)]) == 7

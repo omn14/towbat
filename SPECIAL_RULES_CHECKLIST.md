@@ -405,11 +405,15 @@ itself add gameplay effects.
       restore the prior mode afterwards. Terrain tests now run after overrun
       and Follow Up. Actual entrypoints, obstacle masks, damage, reload and
       1280x720/800x600 control renders have ten focused scene checks.
+      Multiple Fly values use the best, not their sum or the first. Live Movement
+      characteristic deltas affect Fly too, using the actual mount/beast/crew
+      Movement source for split profiles (FAQ v1.5.3). Nine Fly and 22 terrain
+      tests pass alongside the ten chariot scenes.
       **Corrected:** legacy post-combat sweeps omitted impassable terrain;
       they now use the shared movement-blocker mask. Older pursuit scenes must
       answer Drilled, and ordinary terrain fixtures must close declarations.
       LEFTOVER: other post-move Lumbering contexts; exact swept individual-base
-      terrain intersections, flight modifiers/forced-flight Impetuous interactions,
+      terrain intersections, forced-flight Impetuous interactions and combat reach,
       and broader landing-route validation. Do not duplicate the Roc as an extra mount.
 
 **Conditional, not extra purchases:** Archers have **Detachment**, but this

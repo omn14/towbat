@@ -581,11 +581,15 @@ class model:
         return bool(mount is not None and mount.is_swiftstride())
 
     def get_fly_movement(self, default: int = 0) -> int:
-        """Fly Movement characteristic (the X in 'Fly (X)'), else *default*."""
-        for r in self.special_rules:
-            if isinstance(r, dict) and r.get('fly') and r.get('fly_movement'):
-                return int(r['fly_movement'])
-        return default
+        """Use the best Fly value, never their sum (p. 170; FAQ v1.5.3)."""
+        values = [int(rule['fly_movement']) for rule in self.special_rules
+                  if isinstance(rule, dict) and rule.get('fly') and rule.get('fly_movement')]
+        if not values:
+            return default
+        source = self._movement_profile()
+        baseline = source._base_characteristics or source.characteristics
+        modifier = stat_int(source.characteristics, 'M', 0) - stat_int(baseline, 'M', 0)
+        return max(0, max(values) + modifier)
 
     def is_move_through_cover(self) -> bool:
         """The model's own or shared split-profile rule, never a joined character's
@@ -682,20 +686,23 @@ class model:
 
     def get_movement(self, default: int = 0) -> int:
         """Movement value; mounted units always use their mount's Movement."""
+        return stat_int(self._movement_profile().characteristics, 'M', default)
+
+    def _movement_profile(self):
         mount = self.get_mount()
         if mount is not None:
-            return stat_int(mount.characteristics, 'M', default)
+            return mount
         # A chariot moves at the speed of the beasts that draw it, if any.
         beasts = self.get_beasts()
         if beasts is not None:
-            return stat_int(beasts.characteristics, 'M', default)
+            return beasts
         # A split profile is two rows with gaps in each (p. 97). A war machine
         # has no Movement of its own: it is shifted by the crew that work it.
         if stat_int(self.characteristics, 'M', 0) <= 0:
             crew = self.get_crew()
             if crew is not None:
-                return stat_int(crew.characteristics, 'M', default)
-        return stat_int(self.characteristics, 'M', default)
+                return crew
+        return self
 
     def get_toughness(self, default: int = 4) -> int:
         """Toughness value; mounted units always use the rider's own Toughness."""
