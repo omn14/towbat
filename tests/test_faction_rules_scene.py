@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from panda3d.core import CardMaker, NodePath, getModelPath, loadPrcFileData
+from panda3d.core import CardMaker, NodePath, Point3, getModelPath, loadPrcFileData
 
 from battleFunctions import strike_initiative, ward_save_value
 from characters import join_unit
@@ -16,6 +16,7 @@ from persistence import load_game_state, save_game_state
 from psychology import reroll_leadership
 from spell_generation import generate_spells, pending_wizards
 from special_rules import apply_rule_keywords
+from terrain_system import TerrainManager
 from tests.test_shieldwall_scene import combat_tasks
 from units import MM_PER_UNIT, unitGraphics
 
@@ -46,7 +47,7 @@ def base_model(graphics, modelpath):
 
 @pytest.fixture(scope='module')
 def scene(tmp_path_factory):
-    """Real rules/collisions with simple bases; startup tests keep the artwork."""
+    """Real rules/collisions on an empty map; cases add their own terrain."""
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
     getModelPath().appendDirectory(str(Path(__file__).resolve().parents[1]))
     bake_mat = MyApp.bakeBattleMat
@@ -54,7 +55,8 @@ def scene(tmp_path_factory):
             patch.object(unitGraphics, 'loadFigureModel', base_model), \
             patch.object(MyApp, 'bakeBattleMat', autospec=True,
                          side_effect=lambda app, size=512: bake_mat(app, size=size)):
-        app = MyApp()
+        with patch.object(TerrainManager, 'load_from_json'):
+            app = MyApp()
         try:
             with patch.object(app, 'aiControls', return_value=True):
                 for wizard in pending_wizards(app):
@@ -83,7 +85,9 @@ def test_actual_roster_wards_and_profile_strike_order(scene):
     assert not app.taskMgr.hasTaskNamed('update_cloud_time')
     mat = app.ground.getShaderInput('matTex').getTexture()
     assert (mat.getXSize(), mat.getYSize()) == (512, 512)
+    assert app.terrain_manager.terrain_pieces == []
     load_game_state(app, baseline)
+    assert app.terrain_manager.terrain_pieces == []
     armies = members(app)
     assert len(app.units) == 10
     for member in app.units:
@@ -179,3 +183,22 @@ def test_reload_preserves_native_wards_but_not_disabled_item_armour(scene, tmp_p
     assert strike_initiative(prince.unit.model, first_round=True) == 6
     load_game_state(app, path)
     assert ward_save_value(champion.unit.model) == 5
+
+
+def test_explicit_terrain_json_and_battle_restore_remain_real(scene, tmp_path):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    app.terrain_manager.add_terrain('house', Point3(0, -6, 0), 2, 3)
+    expected = app.terrain_manager.to_records()
+    terrain_path = str(tmp_path / 'one-house.json')
+    app.terrain_manager.save_to_json(terrain_path)
+    app.terrain_manager.clear()
+    app.terrain_manager.load_from_json(terrain_path)
+    assert app.terrain_manager.to_records() == expected
+    battle_path = save_game_state(app, str(tmp_path / 'terrain-battle.json'))
+    load_game_state(app, baseline)
+    assert app.terrain_manager.terrain_pieces == []
+    load_game_state(app, battle_path)
+    assert app.terrain_manager.to_records() == expected
+    assert app.terrain_manager.terrain_pieces[0].is_impassable
+    load_game_state(app, baseline)

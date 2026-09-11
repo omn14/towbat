@@ -41,6 +41,8 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path,
         assert not hasattr(app, 'country_model') and not hasattr(app, 'cloud_plane')
         assert not app.taskMgr.hasTaskNamed('update_campaign_terrain')
         assert not app.taskMgr.hasTaskNamed('update_cloud_time')
+        assert [piece.terrain_type for piece in app.terrain_manager.terrain_pieces] == [
+            'forest', 'forest', 'hill', 'hill', 'river', 'house', 'house']
         assert len(app.units) == 10
         assert all(not member.model.hasPythonTag('test_base_model') for member in app.units)
         assert [member.unit.nmodels for member in app.player1Units] == [1, 6, 5, 3, 1]
