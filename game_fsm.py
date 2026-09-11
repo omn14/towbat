@@ -37,6 +37,10 @@ class GamePhaseFSM(FSM):
         through nextPhase(), so hooking the transition is the only way the
         HUD sees all of them.
         """
+        if (self.state == 'CombatPhase' and request == 'StrategyPhase'
+                and not getattr(self.game, 'restoringBattle', False)
+                and getattr(getattr(self.game, 'roundCounter', None), 'final_turn', False)):
+            request = 'BattleEnded'
         if request == 'SpellPhase' and self.state in self.PHASES:
             self._spell_origin = self.state
         self._resuming_spell = (self.state == 'SpellPhase'
@@ -74,6 +78,13 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if self.state == 'BattleEnded':
+            if getattr(self.game, 'hud', None) is not None:
+                self.game.hud.set_battle_result(self.game.battleResult)
+            return
+        if self.state == 'CombatPhase' and (getattr(self.game, 'resolvingCombat', False)
+                or getattr(self.game, 'awaitingChoice', False) or getattr(self.game, '_reformActive', False)):
+            return
         from free_pivot import pending
         if pending(self.game):
             return
@@ -442,6 +453,25 @@ class GamePhaseFSM(FSM):
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies = []
+
+    def enterBattleEnded(self):
+        """Score only after both players' last End of Turn effects (Rulebook p. 286)."""
+        self.current_phase_index = 3
+        self.game.ignore('mouse1')
+        if getattr(self.game, 'restoringBattle', False):
+            return
+        from victory_points import calculate
+        self.game.battleResult = calculate(self.game, log=True)
+        result = self.game.battleResult
+        scores = result['scores']
+        battle_log(f'Battle ended: Player 1 {scores[0]:g} VP, Player 2 {scores[1]:g} VP; '
+                   f'{result["outcome"]}' + (f' for Player {result["winner"]}' if result['winner'] else ''), 'info')
+        if getattr(self.game, 'hud', None) is not None:
+            self.game.hud.set_battle_result(result)
+
+    def exitBattleEnded(self):
+        if getattr(self.game, 'hud', None) is not None:
+            self.game.hud.set_battle_result(None)
 
     def enterMakeChoice(self):
         print("Entering Make Choice Phase")

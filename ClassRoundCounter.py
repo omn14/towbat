@@ -42,24 +42,30 @@ class RoundCounter(FSM):
                 else:
                     unit.bodyNP.setCollideMask(mask)
 
+    @property
+    def finished(self):
+        return all(rounds >= self.max_rounds for rounds in self.currentRoundPlayer)
+
+    @property
+    def final_turn(self):
+        """A round includes both players' turns (Rulebook pp. 114, 286)."""
+        return not self.finished and all(rounds + (index == self.current_player - 1) >= self.max_rounds
+                                         for index, rounds in enumerate(self.currentRoundPlayer))
+
     def next_turn(self):
-        if self.current_player == 1:
-            self.currentRoundPlayer[0] += 1
-            if self.currentRoundPlayer[0] < self.max_rounds:
-                self.request('PlayerTwo')
-            else:
-                print("Game Over! Player One has completed all rounds.")
-        elif self.current_player == 2:
-            self.currentRoundPlayer[1] += 1
-            if self.currentRoundPlayer[1] < self.max_rounds:
-                self.request('PlayerOne')
-            else:
-                print("Game Over! Player Two has completed all rounds.")
+        if self.finished:
+            return False
+        self.currentRoundPlayer[self.current_player - 1] += 1
+        if self.finished:
+            print("Game Over! Both players have completed all rounds.")
+            return False
+        self.request('PlayerTwo' if self.current_player == 1 else 'PlayerOne')
+        return True
 
     def update_round_display(self):
         """Publish the turn state; the HUD owns the widget that shows it."""
         messenger.send('hud-turn', [
             self.current_player,
-            self.currentRoundPlayer[self.current_player - 1] + 1,
+            min(self.max_rounds, self.currentRoundPlayer[self.current_player - 1] + 1),
             self.max_rounds,
         ])

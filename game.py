@@ -3251,6 +3251,8 @@ class MyApp(ShowBase):
         if bsb is not None:
             print(f"Player {player_num} Battle Standard: {bsb.unit.name}, "
                   f"Command range {command_range(bsb):.0f}\"")
+        from victory_points import register_army
+        register_army(self, units, player_num)
         return general
 
     def set_player_army(self, army_list, player_num, budget=2000):

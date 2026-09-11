@@ -29,7 +29,7 @@ def apply_roster_ownership(group, data):
     """Use selected structural owners; chariot weapons are crew-operated (p. 194)."""
     install_command(group, data.get('command', []))
     group.roster_metadata = {key: deepcopy(data[key]) for key in
-                             ('roster_selections', 'equipment', 'magic_items', 'spell_sources',
+                             ('points_cost', 'roster_selections', 'equipment', 'magic_items', 'spell_sources',
                               'spell_pool', 'spell_generation_pending', 'roster_source') if key in data}
     group.command_models = {entry.get('selection_ref', str(index)): champion_profile(group, entry)
                             for index, entry in enumerate(group.command) if entry.get('role') == 'champion'}

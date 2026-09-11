@@ -1,5 +1,19 @@
 # towbat
 
+## Battle Results
+
+Both players receive their final configured turn before the battle ends. The
+result panel shows standard-battle Victory Points for destroyed/offboard units,
+fleeing or quarter-strength units, the General, the Battle Standard Bearer and
+captured unit standards (amended Rulebook p. 286). Original paid roster values
+are saved independently of casualties, joining and item suppression. The rules
+log retains the per-unit calculation; **Battle Result** reopens the panel.
+
+Ended battles can be saved and reloaded without advancing another turn. Old
+saves lacking the original scoring ledger report incomplete scoring data rather
+than guessing missing units or upgrades. Scenario objectives, special-feature
+bonuses and alternate Matched Play/Battle March scoring are not implemented.
+
 ## Roster Imports
 
 [roster_importer.py](roster_importer.py) converts selected NewRecruit/BattleScribe

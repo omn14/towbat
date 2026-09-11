@@ -174,9 +174,24 @@ itself add gameplay effects.
       LEFTOVER: nominations across every unit in a complex multiple combat; current
       choices use the two selected hosts. Duel and ordinary attacks share one
       Initiative clock.
-- LEFTOVER: captured-standard VP are persisted, but the tactical assessment
-      is not an end-of-battle Victory Points adjudicator. Remaining movement
-                  extensions are listed below. This does not mark either army fully rules-complete.
+- [x] End-of-battle Victory Points (2026-09-11): original paid roster values,
+      starting strength/Wounds and General/BSB flags persist independently of
+      current models and item suppression. Destroyed/offboard units score full
+      cost; fleeing or <=25% strength/Wounds units score half, rounded up, once.
+      General +100, BSB +50 and captured standards +50 are separate, with trophy
+      deduplication. A win needs a 100-point lead; double the opposing score is
+      crushing (amended p. 286). Joined characters score separately and flee with
+      their hosts. Both players receive their last turn, fixing the omitted final
+      Player Two turn. Active combat/choice/reform blocks phase advance; ended
+      games cannot start another turn. A themed, reopenable result panel and
+      numeric per-unit rules log survive reload. Twelve pure VP cases, two round
+      counter cases and five actual-roster scenes pass, including exact 2x500
+      totals, casualties/trophies, joined General and repeated reload. Panels
+      rendered/inspected at 1280x720 and 800x600; persistence, startup and magic
+      lifecycle gates pass. LEFTOVER: scenario objectives/special-feature bonuses,
+      alternate Matched Play/Battle March scoring and old saves without a full
+      original ledger (reported incomplete, never silently guessed). This does
+      not mark the remaining movement/combat geometry or full matchup complete.
 - [x] Warband AI Charge reroll correction (2026-09-11): the keep/reroll policy
                   examines only the two Charge dice, never the separate Swiftstride bonus
                   (p. 180; FAQ v1.5.3). A low Charge roll with bonus 6 now rerolls, while a high

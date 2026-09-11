@@ -210,6 +210,9 @@ def save_game_state(game, filename=None):
         'dispel_blocked_turns': getattr(game, 'dispelBlockedTurns', {}),
         'conjuration_done_turn': getattr(game, 'conjurationDoneTurn', None),
         'captured_standards': copy.deepcopy(getattr(game, 'capturedStandards', [])),
+        'victory_roster': copy.deepcopy(getattr(game, 'victoryRoster', {})),
+        'victory_ledger_complete': getattr(game, 'victoryLedgerComplete', False),
+        'battle_result': copy.deepcopy(getattr(game, 'battleResult', None)),
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
         'challenges': [
@@ -775,6 +778,11 @@ def load_game_state(game, filename):
     game.conjurationDoneTurn = game_state.get('conjuration_done_turn')
     game.magicBusy = False
     game.capturedStandards = copy.deepcopy(game_state.get('captured_standards', []))
+    game.victoryRoster = copy.deepcopy(game_state.get('victory_roster', {}))
+    game.victoryLedgerComplete = game_state.get('victory_ledger_complete', False)
+    game.battleResult = copy.deepcopy(game_state.get('battle_result'))
+    if getattr(game, 'hud', None) is not None:
+        game.hud.set_battle_result(game.battleResult if game_state['current_phase'] == 'BattleEnded' else None)
     game.rallyingCryBusy = False
     from charge_declarations import restore_declarations
     restore_declarations(game, game_state, unit_map)

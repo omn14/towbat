@@ -91,7 +91,7 @@ class HUD(DirectObject):
               'CombatPhase': 'COMBAT'}
     # Detours that are not steps of the turn sequence.
     ASIDES = {'SpellPhase': 'CASTING', 'ReserveMovePhase': 'RESERVE MOVE', 'MakeChoice': 'CHOOSING',
-              'CampaignPhase': 'CAMPAIGN'}
+              'CampaignPhase': 'CAMPAIGN', 'BattleEnded': 'BATTLE ENDED'}
 
     LOG_ENTRIES = 200
     LOG_SCALE = 0.026
@@ -929,7 +929,37 @@ class HUD(DirectObject):
         self._turn.setText(f"PLAYER {player}")
         self._round.setText(f"Round {round_no} / {max_rounds}")
 
+    def set_battle_result(self, result):
+        previous = getattr(self, '_battle_result_panel', None)
+        if previous is not None:
+            previous.destroy()
+        self._battle_result_panel = None
+        if result is None:
+            return
+        panel = T.styled_panel((-.85, .85, -.43, .73), texture=T.TEX_PARCHMENT, parent=aspect2d)
+        self._battle_result_panel = panel
+        T.styled_text('BATTLE RESULT', parent=panel, pos=(0, .61), scale=.065,
+                      fg=T.INK, shadow=None, align=TextNode.ACenter)
+        heading = result['outcome']
+        if result['winner']:
+            heading = f'Player {result["winner"]}: {heading}'
+        T.styled_text(heading, parent=panel, pos=(0, .47), scale=.05,
+                      fg=T.INK, shadow=None, align=TextNode.ACenter, wordwrap=30)
+        for player, horizontal in ((1, .18), (2, .66)):
+            T.styled_text(f'Player {player}', parent=panel, pos=(horizontal, .29), scale=.042,
+                          fg=T.INK, shadow=None, align=TextNode.ARight)
+        for index, rule in enumerate(('Dead or Fled', 'The King is Dead', 'Trophies of War', 'Total VP')):
+            vertical = .16 - index * .13
+            T.styled_text(rule, parent=panel, pos=(-.72, vertical), scale=.042, fg=T.INK, shadow=None)
+            for player, horizontal in ((1, .18), (2, .66)):
+                value = result['scores'][player - 1] if rule == 'Total VP' else sum(
+                    row['points'] for row in result['rows'] if row['player'] == player and row['rule'] == rule)
+                T.styled_text(f'{value:g}', parent=panel, pos=(horizontal, vertical), scale=.042,
+                              fg=T.INK, shadow=None, align=TextNode.ARight)
+        T.tex_button('Close', (0, 0, -.36), lambda: self.set_battle_result(None), parent=panel, scale=.045)
+
     def set_phase(self, phase: str):
+        self._display_phase = phase
         """Light the current step of the turn sequence."""
         if phase != 'MovementPhase':
             self.set_charge_stage(None)
@@ -957,6 +987,9 @@ class HUD(DirectObject):
         self._fit_phase()
 
     def set_charge_stage(self, stage):
+        if getattr(self, '_display_phase', None) == 'BattleEnded':
+            self._end_btn['text'] = 'BATTLE\nRESULT'
+            return
         self._end_btn['text'] = {'declarations': 'RESOLVE\nCHARGES',
                                  'resolving': 'RESOLVING',
                                  'blocked': 'INTERRUPTED'}.get(stage, 'END\nPHASE')
@@ -1101,6 +1134,7 @@ class HUD(DirectObject):
             widget.show() if self._visible else widget.hide()
 
     def destroy(self):
+        self.set_battle_result(None)
         rules_log.remove_listener(self._on_rule)
         self.ignoreAll()
         for widget in self._widgets:
