@@ -541,6 +541,7 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None or from_pos is None or to_pos is None:
             return []
+        from_pos, to_pos = Point3(*from_pos), Point3(*to_pos)
         features = list(tm.get_terrain_between(from_pos, to_pos))
         if not hasattr(unit, 'bodyNP') or not hasattr(unit, 'model'):
             return features
@@ -605,6 +606,7 @@ class MovementSystem:
         tm = getattr(self.game, 'terrain_manager', None)
         if tm is None:
             return 0
+        from_pos, to_pos = Point3(*from_pos), Point3(*to_pos)
         features = self.movementTerrainFeatures(unit, from_pos, to_pos) if features is None else features
         self.magicalVortexTests(unit, from_pos, to_pos, features=features)
         from tempest import tempest_features

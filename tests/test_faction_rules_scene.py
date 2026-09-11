@@ -78,13 +78,16 @@ def test_actual_barding_does_not_protect_joined_mage_or_remove_movement_penalty(
     assert 'Ithilmar Barding' in host.unit.model.dangerous_terrain_reroll_sources()
     assert not mage.unit.model.dangerous_terrain_reroll_sources()
     assert not host.unit.model.is_move_through_cover()
-    terrain = SimpleNamespace(is_dangerous=True, terrain_type='dangerous')
+    position = host.bodyNP.getPos(host.bodyNP.getTop())
+    terrain = SimpleNamespace(is_dangerous=True, terrain_type='dangerous',
+                              center=position, width=20, height=20)
     rolls = [1, 4] + [4] * (host.unit.nmodels - 1) + [1]
     with patch.object(app, 'terrain_manager', SimpleNamespace()), \
             patch.object(app.movement, 'magicalVortexTests'), \
             patch.object(app.movement, 'applyWounds') as wounds, \
             patch('terrain_system.random.randint', side_effect=rolls):
-        assert app.movement.dangerousTerrainTests(host, (0, 0, 0), (1, 0, 0), features=[terrain]) == 1
+        assert app.movement.dangerousTerrainTests(host, tuple(position),
+            (position.x + 1, position.y, position.z), features=[terrain]) == 1
     assert [(call.args[0], call.args[1]) for call in wounds.call_args_list] == [(host, 0), (mage, 1)]
 
 

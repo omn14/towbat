@@ -25,6 +25,17 @@ lost import data, partial support and outstanding roster-specific verification.
 This section tracks implementation work; completed import metadata does not
 itself add gameplay effects.
 
+**Latest regression gate (2026-09-11):** all 108 modules executed in sequential,
+memory-capped services, with 2,465 JUnit cases and no remaining failures, errors
+or skips. Run `180705-6007` stopped after 43 modules at the RAM headroom guard;
+`181524-9677` completed the remaining 65. Focused reruns `181435-9352` and
+`181511-9580` supersede five failures: terrain movement once again accepts tuple
+positions, its barding fixture supplies real rectangular bounds, and the
+bound-spell FSM double explicitly models idle combat and a non-final turn.
+Peak RSS was 1,164.9 MiB under the 1,536 MiB cap. This is a combined regression
+gate, not an end-to-end match certification; the explicit LEFTOVER entries below
+remain open.
+
 ### Selected Units
 
 | Army | Unit | Models | Points | Selected equipment or upgrades |

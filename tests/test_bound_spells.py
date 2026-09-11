@@ -39,6 +39,10 @@ def app_stub(unit, phase='shooting'):
     game.magicBusy = False
     game.assailmentWindow = None
     game.castingSpell = False
+    game.resolvingCombat = False
+    game.awaitingChoice = False
+    game._reformActive = False
+    game.restoringBattle = False
     game.remainsInPlay = []
     game.skirmishEditor = None
     game.unitToMove = unit
@@ -52,6 +56,7 @@ def app_stub(unit, phase='shooting'):
     game.resolveSpell = lambda target: MyApp.resolveSpell(game, target)
     game.roundCounter.current_player = 1
     game.roundCounter.currentRoundPlayer = [0, 0]
+    game.roundCounter.final_turn = False
     return game
 
 
