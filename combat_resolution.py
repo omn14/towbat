@@ -2627,7 +2627,11 @@ class CombatResolver:
         # is a separate bonus and has its own row.
         p1_wounds = player1_score - impact1 - overkill1
         p2_wounds = player2_score - impact2 - overkill2
-        from psychology import combat_flank_bonus, combat_rank_bonus
+        from psychology import close_order_bonus, combat_flank_bonus, combat_rank_bonus
+        close1 = sum(close_order_bonus(unit, log=True) for unit in p1_units if unit.unit.nmodels > 0)
+        close2 = sum(close_order_bonus(unit, log=True) for unit in p2_units if unit.unit.nmodels > 0)
+        player1_score += close1
+        player2_score += close2
         player1_flank_bonus = sum(combat_flank_bonus(unit, log=True) for unit in p2_units if unit.unit.nmodels > 0)
         player2_flank_bonus = sum(combat_flank_bonus(unit, log=True) for unit in p1_units if unit.unit.nmodels > 0)
         player1_rank_bonus = min(MAX_RANK_BONUS, sum(combat_rank_bonus(unit, log=True)
@@ -2679,6 +2683,7 @@ class CombatResolver:
              'Overkill': (overkill1, overkill2),
              'Flank / rear': (player1_flank_bonus, player2_flank_bonus),
              'Rank Bonus': (player1_rank_bonus, player2_rank_bonus),
+             'Close Order': (close1, close2),
              'Battle Standard': (player1_standard, player2_standard),
              'Standard Bearer': (ordinary1, ordinary2),
              'Musician': (music1, music2),

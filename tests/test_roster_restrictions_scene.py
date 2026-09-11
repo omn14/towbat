@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from characters import join_unit
 from persistence import load_game_state
-from psychology import combat_rank_bonus, select_general
+from psychology import close_order_bonus, combat_rank_bonus, select_general
 from tests.test_faction_rules_scene import members, scene as scene
 
 
@@ -61,3 +61,38 @@ def test_lumbering_skycutter_cannot_be_joined(scene):
     load_game_state(app, baseline)
     units = members(app)
     assert not join_unit(app, units['Mage'], units['Lothern Skycutter'])
+
+
+def test_close_order_uses_current_strength_and_active_formation(scene, capsys):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    units = members(app)
+    warriors = units['Chaos Warrior']
+    with patch.object(warriors.unit, 'nmodels', 10), patch.object(warriors.unit, 'files', 5):
+        assert close_order_bonus(warriors, log=True) == 1
+        with patch.object(warriors.unit, 'nmodels', 9):
+            assert close_order_bonus(warriors, log=True) == 0
+        with patch.object(warriors.unit, 'files', 2):
+            assert close_order_bonus(warriors, log=True) == 0
+        with patch.object(warriors, 'isDisrupted', True):
+            assert close_order_bonus(warriors) == 1
+    for name in ('Dragon Prince', 'Lothern Skycutter', 'Chaos Warhound', 'Marauder Horsemen'):
+        assert close_order_bonus(units[name], log=True) == 0
+    horsemen = units['Marauder Horsemen']
+    assert horsemen.isSkirmisher
+    with patch.object(horsemen, 'isSkirmisher', False), patch.object(horsemen, 'skirmishCombat', True):
+        assert close_order_bonus(horsemen) == 0
+    output = capsys.readouterr().out
+    assert 'Unit Strength 9 is below 10' in output
+    assert 'Marching Column' in output
+
+
+def test_joined_character_strength_counts_but_not_as_another_formation(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    units = members(app)
+    champion, warriors = units['Aspiring Champion'], units['Chaos Warrior']
+    assert join_unit(app, champion, warriors)
+    with patch.object(warriors.unit, 'nmodels', 9), patch.object(warriors.unit, 'files', 5):
+        assert close_order_bonus(warriors) == 1
+        assert close_order_bonus(champion) == 0

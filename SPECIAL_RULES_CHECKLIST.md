@@ -254,14 +254,19 @@ itself add gameplay effects.
       captured standards and persistence are wired; see Step 2 limits above.
       A normal standard is
       not a Battle Standard Bearer and does not grant Hold Your Ground.
-- [ ] **Formation-specific effects** - verify Close Order combat-result
-      eligibility at current Unit Strength and Skirmish formation for Horsemen.
+- [x] **Selected formation-specific effects** - Close Order adds +1 combat
+      result per Combat Order unit at current US 10+, including joined character
+      strength (amended pp. 101, 153). Columns and active Skirmish formations do
+      not qualify; disruption alone does not remove this bonus. The single
+      Lumbering Skycutter is Close Order but is below US 10. The actual Horsemen
+      remain Skirmishers even while formed up in combat. Seven live roster
+      restriction/formation scenes, 13 Shieldwall scenes and 17 command tests pass.
       Open Order Quick Turn for Warhounds is implemented: a non-marching
       Remaining Move offers a centre pivot up to 90 degrees, with final-base
       collision, enemy clearance, board-edge and 2M manoeuvre limits (p. 183).
       Mouse-facing confirmation and phase/save locks have offscreen tests.
-      Do not infer an active
-      formation solely from a list of available formation keywords.
+      LEFTOVER: a general Close/Open formation selector for future units with
+      both options; the selected formed units have only one of these options.
 - [x] **Enemy Sighted / march tests** - Drilled/Fly exemptions and musician
       bonuses now combine with context-aware Warband Leadership (pp. 123, 180, 201).
       LEFTOVER: none specific to these selected units' march tests.

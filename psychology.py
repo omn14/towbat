@@ -456,6 +456,34 @@ def side_unit_strength(units_on_side) -> int:
                if not u.bodyNP.isEmpty())
 
 
+def close_order_bonus(unit, *, log=False) -> int:
+    """One point per Combat Order unit at US 10+ (amended pp. 101, 153, 195)."""
+    if getattr(unit, 'hostUnit', None) is not None:
+        return 0
+    profile = unit.unit.model
+    close_order = (profile.troop_type_rule('Lumbering')
+                   or any(isinstance(rule, dict) and rule.get('name', '').casefold() == 'close order'
+                          for rule in profile.special_rules))
+    strength = unit_strength_total(unit)
+    joined = getattr(unit, 'joinedCharacter', None)
+    if joined is not None:
+        strength += unit_strength_total(joined)
+    files = unit.unit.files
+    if is_skirmish_unit(unit) or not close_order:
+        reason = 'not in Close Order formation'
+    elif files <= 0 or -(-unit.unit.nmodels // files) > files:
+        reason = 'Marching Column, not Combat Order'
+    elif strength < 10:
+        reason = f'current Unit Strength {strength} is below 10'
+    else:
+        if log:
+            rule_log('Close Order', unit, f'Combat Order, current Unit Strength {strength} >= 10 -> +1 combat result')
+        return 1
+    if log:
+        rule_skipped('Close Order', unit, f'{reason} -> +0 combat result')
+    return 0
+
+
 def massed_infantry_bonus(units_on_side, own_us: int, enemy_us: int) -> int:
     """Combat result point for weight of numbers (Rulebook p. 190).
 
