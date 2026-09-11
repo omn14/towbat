@@ -12,7 +12,8 @@ from chaos_gifts import begin_turn, start_and_command
 
 def champion():
     profile = SimpleNamespace(characteristics=dict(I=4, T=4, WS=5, A=3, S=4, Ld=8),
-                              special_rules=[], is_veteran=lambda: False)
+                              special_rules=[], is_veteran=lambda: False,
+                              is_flying=lambda: False)
     return SimpleNamespace(unit=SimpleNamespace(model=profile, name='Champion'), gazeState={})
 
 
@@ -41,6 +42,35 @@ def test_caps_do_not_lose_stats_at_expiry():
     apply_gift(member, 2)
     expire_gifts(member)
     assert member.unit.model.characteristics['I'] == 10
+
+
+@pytest.mark.parametrize('roll,stats', [(2, ['I']), (3, ['T']), (4, ['WS']), (5, ['A']), (6, ['S', 'Ld'])])
+def test_gifts_survive_repeated_combat_profile_resets(roll, stats):
+    from models import model
+    member = champion()
+    member.unit.model = model('Aspiring Champion', '')
+    profile = member.unit.model
+    before = {stat: int(profile.characteristics[stat]) for stat in stats}
+    apply_gift(member, roll)
+    for _ in range(2):
+        profile.reset_characteristics()
+        assert {stat: int(profile.characteristics[stat]) for stat in stats} == {
+            stat: value + 1 for stat, value in before.items()}
+    expire_gifts(member)
+    profile.reset_characteristics()
+    assert {stat: int(profile.characteristics[stat]) for stat in stats} == {
+        stat: value + (roll >= 4) for stat, value in before.items()}
+
+
+def test_repeated_damnation_survives_combat_profile_reset():
+    from models import model
+    member = champion()
+    member.unit.model = model('Aspiring Champion', '')
+    before = int(member.unit.model.characteristics['Ld'])
+    apply_gift(member, 1)
+    apply_gift(member, 1)
+    member.unit.model.reset_characteristics()
+    assert int(member.unit.model.characteristics['Ld']) == before - 1
 
 
 def test_stupidity_follows_joined_character_and_leaves_with_them():

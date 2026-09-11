@@ -455,6 +455,10 @@ only a blocker if that relationship is actually chosen later.
       movement; do not test freshly gained Stupidity in the same Command;
       restoration must not schedule another Gaze choice. Pure action/timing
       tests and live Champion Command/reload scenes cover these paths.
+      **Corrected (2026-09-11):** combat profile resets discarded every Gaze
+      statistic change. Actual capped deltas now also update the persisted reset
+      profile; expiry removes only temporary deltas from both profiles. All 24
+      pure tests and three live scenes pass, including reset after reload/expiry.
       **LEFTOVER:** no additional selected-roster Gaze effects. Broader
       charge geometry and movement limitations remain tracked separately.
 - [x] **Warband** - Horsemen (amended p. 180). A majority allows one complete

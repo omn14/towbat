@@ -58,6 +58,9 @@ def apply_gift(member, roll):
             before = _stat_int(member.unit.model.characteristics, stat, 0)
             after = max(2, before - 1) if roll == 1 else min(10, before + 1)
             member.unit.model.characteristics[stat] = after
+            baseline = getattr(member.unit.model, '_base_characteristics', None)
+            if baseline is not None:
+                baseline[stat] = _stat_int(baseline, stat, 0) + after - before
             if temporary:
                 pending = dict(state.get('temporary', {}))
                 pending[stat] = pending.get(stat, 0) + after - before
@@ -72,6 +75,9 @@ def expire_gifts(member):
     for stat, delta in state.pop('temporary', {}).items():
         before = _stat_int(member.unit.model.characteristics, stat, 0)
         member.unit.model.characteristics[stat] = before - delta
+        baseline = getattr(member.unit.model, '_base_characteristics', None)
+        if baseline is not None:
+            baseline[stat] = _stat_int(baseline, stat, 0) - delta
         rule_log('Gaze of the Gods', member, f'Start of Turn: temporary {stat} {before} -> {before - delta}')
     member.gazeState = state
 

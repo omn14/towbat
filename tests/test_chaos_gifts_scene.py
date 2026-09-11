@@ -26,6 +26,7 @@ def test_gifts_and_stupidity_survive_repeated_reload_and_expire_once(scene, tmp_
     for _ in range(2):
         load_game_state(app, saved)
         champion = members(app)['Aspiring Champion']
+        champion.unit.model.reset_characteristics()
         assert succumbed(champion)
         assert int(champion.unit.model.characteristics['I']) == initiative + 1
         assert int(champion.unit.model.characteristics['A']) == attacks + 1
@@ -37,6 +38,7 @@ def test_gifts_and_stupidity_survive_repeated_reload_and_expire_once(scene, tmp_
             patch('chaos_gifts.random.randint', return_value=1):
         asyncio.run(start_and_command(app))
     assert not succumbed(champion)
+    champion.unit.model.reset_characteristics()
     assert int(champion.unit.model.characteristics['I']) == initiative
     assert int(champion.unit.model.characteristics['A']) == attacks + 1
 
