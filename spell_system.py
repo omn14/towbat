@@ -173,6 +173,8 @@ class Spell:
         self.no_more_spells = False # the caster is spent for this turn
         # End-of-turn ticks this spell survives before endSpell() is called.
         self.ticks_remaining = 1
+        self.lifecycle = None
+        self.ended = False
 
     async def spellFunction(self, target):
         """Cast at *target*: roll, offer the Dispel, then apply the effect.
@@ -186,6 +188,10 @@ class Spell:
             target = self.caster or target
         if not self.canTarget(target):
             return
+        self.target = target
+        if self.game is not None:
+            from spell_effects import recasting
+            recasting(self.game, self.caster, self.name)
         if not await self._attempt(target):
             return
         if await self._dispelled():
@@ -244,6 +250,12 @@ class Spell:
         outcome, result = casting_outcome(values, self.wizard_level,
                           self.casting_value, modifier,
                           bound=self.bound, power_level=self.power_level)
+        from lileaths_blessing import reroll_casting
+        values = await reroll_casting(self, values, outcome, result)
+        total = sum(values)
+        outcome, result = casting_outcome(values, self.wizard_level,
+                  self.casting_value, modifier,
+                  bound=self.bound, power_level=self.power_level)
         self.casting = result
         self.perfect = outcome == CAST_PERFECT
         self.no_more_spells = False
@@ -410,12 +422,21 @@ class CurseOfArrowAttractionSpell(Spell):
         self.affected_unit = unit
         unit.unit.model.arrow_attraction = True
         self.ticks_remaining = ticks
-        self.duration_list.append(self)
+        from spell_effects import register
+        register(self, unit)
 
     def endSpell(self):
+        from spell_effects import end_effect
+        end_effect(self, 'effect removed')
+
+    def remove_effect(self):
         affected = getattr(self, 'affected_unit', None)
         if affected is not None:
-            affected.unit.model.arrow_attraction = False
+            from spell_effects import active_spells
+            affected.unit.model.arrow_attraction = any(
+                other is not self and not getattr(other, 'ended', False)
+                and isinstance(other, CurseOfArrowAttractionSpell)
+                and other.affected_unit is affected for other in active_spells(self.game))
 
 
 def distance_to_segment(px, py, ax, ay, bx, by) -> float:
@@ -507,7 +528,8 @@ class PillarOfFireSpell(Spell):
             'pillar_of_fire', Point3(point.x, point.y, 0.1),
             BLAST_TEMPLATE_SMALL, BLAST_TEMPLATE_SMALL)
         # Remains in Play: it lives on the board, not on the turn timer.
-        game.remainsInPlay.append(self)
+        from spell_effects import register
+        register(self, duration='remains')
         self.settle(game)
 
     def scatter(self, game):
@@ -620,6 +642,10 @@ class PillarOfFireSpell(Spell):
                 if not u.bodyNP.isEmpty()]
 
     def endSpell(self):
+        from spell_effects import end_effect
+        end_effect(self, 'effect removed')
+
+    def remove_effect(self):
         if self.piece is None:
             return
         game = self.game
@@ -668,19 +694,18 @@ class OakenShieldSpell(Spell):
     def attach(self, unit, ticks):
         """Put the Ward on *unit*; also how a save restores it."""
         self.affected_unit = unit
-        self.rule = {'name': self.name, 'ward': self.WARDING_VALUE}
-        unit.unit.model.special_rules.append(self.rule)
+        from spell_effects import grant_rule, register
+        grant_rule(self, unit, {'name': self.name, 'ward': self.WARDING_VALUE})
         self.ticks_remaining = ticks
-        self.duration_list.append(self)
+        register(self, unit)
 
     def endSpell(self):
-        affected = getattr(self, 'affected_unit', None)
-        rule = getattr(self, 'rule', None)
-        if affected is None or rule is None:
-            return
-        rules = affected.unit.model.special_rules
-        if rule in rules:
-            rules.remove(rule)
+        from spell_effects import end_effect
+        end_effect(self, 'effect removed')
+
+    def remove_effect(self):
+        from spell_effects import revoke_rule
+        revoke_rule(self)
 
 
 class CurseOfCowardlyFlightSpell(Spell):
@@ -767,6 +792,8 @@ def save_spells(game) -> list:
             'power_level': spell.power_level,
             'spell_range': spell.spell_range,
             'ticks': spell.ticks_remaining,
+            'lifecycle': spell.lifecycle,
+            'dispel_attempt_turn': getattr(spell, 'dispel_attempt_turn', None),
             'caster': spell.caster.unitName if spell.caster is not None else None,
             'target': target.unitName if target is not None else None,
             'center': ([piece.center.x, piece.center.y]
@@ -789,13 +816,16 @@ def load_spells(game, records, unit_map):
                     effect=data.get('effect', ''), game=game, caster=caster,
                     bound=data.get('bound', False), power_level=data.get('power_level', 0),
                     spell_range=data.get('spell_range'))
+        spell.dispel_attempt_turn = data.get('dispel_attempt_turn')
         center = data.get('center')
         if center is not None and hasattr(spell, 'place'):
             spell.place(game, Point3(center[0], center[1], 0.1))
+            spell.lifecycle = data.get('lifecycle')
             continue
         target = unit_map.get(data.get('target'))
         if target is not None and hasattr(spell, 'attach'):
             spell.attach(target, data.get('ticks') or 1)
+            spell.lifecycle = data.get('lifecycle')
 
 
 class RaiseDeadSpell(Spell):

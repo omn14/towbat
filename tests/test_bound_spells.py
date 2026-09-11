@@ -36,6 +36,9 @@ def carrier(spells=None, level=0):
 
 def app_stub(unit, phase='shooting'):
     game = Mock()
+    game.magicBusy = False
+    game.castingSpell = False
+    game.remainsInPlay = []
     game.skirmishEditor = None
     game.unitToMove = unit
     game.units = [unit]
@@ -47,6 +50,7 @@ def app_stub(unit, phase='shooting'):
     game.castableSpells = lambda u: MyApp.castableSpells(game, u)
     game.resolveSpell = lambda target: MyApp.resolveSpell(game, target)
     game.roundCounter.current_player = 1
+    game.roundCounter.currentRoundPlayer = [0, 0]
     return game
 
 

@@ -1514,6 +1514,8 @@ class MovementSystem:
             finish_charge_attempt(pursuerUnit, fleeUnit)
             from command_groups import capture_standard
             capture_standard(self.game, fleeUnit, pursuerUnit)
+            from spell_effects import caster_removed
+            caster_removed(self.game, fleeUnit)
             self.game.world.removeRigidBody(fleeUnit.bodyNP.node())
             fleeUnit.model.removeNode()
             fleeUnit.bodyNP.removeNode()

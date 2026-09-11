@@ -74,6 +74,8 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if getattr(self.game, 'magicBusy', False) or getattr(self.game, 'castingSpell', False):
+            return
         if getattr(self.game, 'spellGenerationBusy', False) is True:
             return
         if any(getattr(unit, 'marchTestResult', None) == 'pending' for unit in self.game.units):
@@ -125,6 +127,19 @@ class GamePhaseFSM(FSM):
                 else:
                     finish_command(self.game)
                 return
+            from dispelling import conjuration, conjuration_spells
+            from magic_items import current_turn
+            if (getattr(self.game, 'conjurationDoneTurn', None) != current_turn(self.game)
+                    and conjuration_spells(self.game)):
+                self.game.magicBusy = True
+                taskMgr.add(conjuration(self.game), 'conjurationTask')
+                return
+        if (getattr(self.game, 'remainsInPlay', [])
+                and not getattr(self, '_magic_boundary_ready', False)):
+            from spell_effects import advance_with_choices
+            self.game.magicBusy = True
+            taskMgr.add(advance_with_choices(self), 'endSpellChoiceTask')
+            return
         """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
         for unit in units:
             self.game.fallBackContactTest(unit.bodyNP)
@@ -209,8 +224,11 @@ class GamePhaseFSM(FSM):
         if getattr(self, '_resuming_spell', False):
             return
         # Start of Turn: a Magical Vortex drifts before anything else happens.
+        from spell_effects import start_turn
+        start_turn(self.game)
         for spell in list(getattr(self.game, 'remainsInPlay', [])):
-            spell.scatter(self.game)
+            if hasattr(spell, 'scatter'):
+                spell.scatter(self.game)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
             unit.standAndShootWounds = 0
@@ -237,6 +255,9 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if taskMgr.hasTaskNamed("taskLoopStrategy"):
             taskMgr.remove("taskLoopStrategy")
+        if getattr(self, '_spell_origin', None) != 'StrategyPhase':
+            from spell_effects import end_phase
+            end_phase(self.game, 'StrategyPhase')
 
     def enterMovementPhase(self):
         print("Entering Movement Phase")
@@ -268,6 +289,8 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if getattr(self, '_spell_origin', None) == 'MovementPhase':
             return
+        from spell_effects import end_phase
+        end_phase(self.game, 'MovementPhase')
         # The charge move is over — clear the Panic exemption.
         for unit in self.game.units:
             unit.isChargingMove = False
@@ -303,6 +326,9 @@ class GamePhaseFSM(FSM):
         )
 
     def exitShootingPhase(self):
+        if getattr(self, '_spell_origin', None) != 'ShootingPhase':
+            from spell_effects import end_phase
+            end_phase(self.game, 'ShootingPhase')
         self.game.ignore('mouse1')
         self._cleanup_phase()
         self.game.setGroundOverlay(False)
@@ -347,6 +373,9 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if getattr(self, '_spell_origin', None) == 'CombatPhase':
             return
+        from spell_effects import end_phase, end_turn
+        end_phase(self.game, 'CombatPhase')
+        end_turn(self.game)
         from first_charge import expire_first_charge
         for unit in self.game.units:
             expire_first_charge(unit)
@@ -370,11 +399,6 @@ class GamePhaseFSM(FSM):
             unit.spellsCastThisTurn = []
             unit.boundSpellPhases = []
             unit.cannotCastThisTurn = False
-        for spell in list(self.end_of_turn_spells):
-            spell.ticks_remaining -= 1
-            if spell.ticks_remaining <= 0:
-                spell.endSpell()
-                self.end_of_turn_spells.remove(spell)
         for u in self.game.unitCopies:
             u.removeNode()
         self.game.unitCopies = []

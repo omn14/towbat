@@ -126,6 +126,37 @@ returns selection to the host without detaching the character. Host fleeing,
 marching and combat restrictions still apply, and ranged aiming uses the
 joined model's world position and facing.
 
+### Magic Lifetimes and Dispelling
+
+The High Elf Mage can now use Lileath's Blessing to reroll one failed Casting
+roll per turn. Declining retains the use; a natural Miscast cannot be rerolled,
+and a replacement roll can Miscast. The reroll spends no extra casting attempt.
+Its usage survives reload and remains on the Mage when joined to a unit.
+
+Successful spells offer the defending player legal Wizardly choices, a Fated
+dispel, or Pass. Chaos can attempt one Fated dispel per turn despite having no
+Wizard. Joined Wizards, Dispel range and engaged/fleeing restrictions are checked.
+Double 6 unbinds, ties fail, and immediate perfect invocations bypass dispelling.
+When advancing out of Strategy, surviving enemy Remains in Play spells offer
+Conjuration dispels against their minimum casting value. Fated use is shared
+with immediate dispels. Normal main-phase advance also offers each caster the
+choice to keep or end their own Remains in Play spells.
+
+Existing Battle Magic wards/hexes now have explicit expiry and independent
+source ownership. Recasting a RIP spell ends its old effect before the roll;
+caster removal ends RIP spells. Reload restores effects and dispel usage without
+duplicate grants. Saving/loading and phase advance wait for in-flight magic.
+
+This is the lifecycle foundation, not the missing High Magic effects. Specific
+Enchantment replacement, dynamic auras/host propagation, and every internal
+subphase's voluntary-ending window remain unfinished. Miscast/Outclassed damage
+still requires manual resolution and is logged as such. See the exact scope in
+[SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_lileaths_blessing.py tests/test_spell_effects.py tests/test_dispelling.py tests/test_magic_lifecycle_scene.py
+```
+
 ### High Elf and Chaos Faction Effects
 
 The loaded rosters now use Dragon/Chaos Armour Ward saves, first-round Elven

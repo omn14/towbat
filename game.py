@@ -56,7 +56,7 @@ from collision_masks import CollisionMask as CM
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
 from game_fsm import GamePhaseFSM
 from spell_system import (CatalogueSpell, DevilsVisitSpell, RaiseDeadSpell,
-                          Spell, dispel_result, is_dispelled, may_attempt, restore_spellbook,
+                          Spell, may_attempt, restore_spellbook,
                           spell_class, spell_readout)
 from persistence import (list_saves, load_game_state, load_settings,
                          save_game_state, save_label, save_setting)
@@ -1207,6 +1207,7 @@ class MyApp(ShowBase):
         if (unit is None or getattr(self, 'awaitingChoice', False) is True
                 or getattr(self, 'spellGenerationBusy', False) is True
                 or getattr(self, 'castingSpell', False) is True
+            or getattr(self, 'magicBusy', False) is True
                 or getattr(self.fsm, 'state', None) == 'SpellPhase'):
             return
         from spell_system import casting_units
@@ -1687,6 +1688,8 @@ class MyApp(ShowBase):
                         
 
     async def setActiveUnit(self,taskfunction,taskname):
+        if getattr(self, 'magicBusy', False) is True:
+            return
         if getattr(self, 'spellGenerationBusy', False) is True:
             return
         if getattr(self, 'skirmishEditor', None) is not None:
@@ -1952,28 +1955,13 @@ class MyApp(ShowBase):
         taskMgr.add(_cast())
 
     async def dispelAttempt(self, spell, caster):
-        """Offer the opposing side its Dispel attempt (Rulebook p. 110).
-
-        A Wizard on the other side attempts a Wizardly dispel, adding half its
-        Level; anyone else trusts to fate and adds nothing. Returns True if the
-        spell is stopped — which is *before* its effect is worked out, so there
-        is nothing to undo.
-        """
-        foes = enemy_units(self, caster)
-        dispeller = max((u for u in foes if u.unit.model.is_wizard()),
-                        key=lambda u: u.unit.model.wizard_level(0), default=None)
-        level = dispeller.unit.model.wizard_level(0) if dispeller else 0
-        kind = f"Wizardly dispel by {dispeller.unit.name}" if dispeller else "Fated dispel"
-        total, values = await Spell._roll_casting_dice(
-            position_base=Vec3(-20, 0, 10))
-        result = dispel_result(values, level, wizardly=dispeller is not None)
-        if is_dispelled(result, spell.casting):
-            print(f"[Magic] {kind}: {values} = {result} beats {spell.casting} "
-                  f"-> {spell.name} is dispelled.")
-            return True
-        print(f"[Magic] {kind}: {values} = {result} does not beat "
-              f"{spell.casting} -> {spell.name} holds.")
-        return False
+        """Let the defending player choose a legal dispel (Rulebook p. 110)."""
+        from dispelling import attempt
+        self.magicBusy = True
+        try:
+            return await attempt(self, spell, caster)
+        finally:
+            self.magicBusy = False
 
     def movedThisTurn(self, unit) -> bool:
         """Moved for *any* reason this turn (p. 139, p. 174).

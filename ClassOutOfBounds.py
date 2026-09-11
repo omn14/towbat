@@ -78,6 +78,8 @@ class OutOfBounds:
                     return
                 if selected_unit.state == 'IsFleeing':
                     print("Unit is fleeing out of the battle field, it is destroyed!")
+                    from spell_effects import caster_removed
+                    caster_removed(self.game, selected_unit)
                     base.world.removeRigidBody(selected_unit.bodyNP.node())
                     self.game.units.remove(selected_unit)
                     if selected_unit in self.game.player1Units:

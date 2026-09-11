@@ -344,9 +344,15 @@ itself add gameplay effects.
 - [ ] **Sons of Caledor** - restrict who may join Dragon Princes. The Mage
       is this army's General, so that exception must allow them to join;
       being a Wizard alone is neither permission nor a prohibition.
-- [ ] **Lileath's Blessing** - Mage. Optional failed Casting-roll re-roll once
-      per turn, with human/AI choice and a saved usage flag. FAQ v1.5.3 excludes
-      natural double-1 Miscasts from failed-Casting-roll re-rolls.
+- [x] **Lileath's Blessing** - Mage (Forces of Fantasy p. 185; Magic FAQ v1.5.3).
+      Human chooses Re-roll/Keep after a failed Casting roll; AI uses the reroll.
+      Once-per-turn use belongs to the caster and survives save/reload. Declining
+      retains it, and the replacement roll uses the same modifiers without spending
+      another casting attempt. Natural double-1 Miscasts, successful/perfect rolls,
+      and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
+      Verified pure outcomes and the actual imported Mage's casting allowance.
+      **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
+      still manual, and the High Magic spell effects below remain unimplemented.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
@@ -648,11 +654,41 @@ first playable milestone must explicitly restrict the selected known spells.
       engaged target, specified Enchantment replacement and reversible removal.
 - [ ] **Vaul's Unmaking** - character-targeted item disabling; requires the
       item system above, including targeting a joined or engaged character.
-- [ ] **Shared magic lifecycle** - casting/dispelling and Lileath choices,
-      Remains in Play dispels/recasts, caster loss, conflicting Enchantments,
-      aura refresh, correct duration boundaries and save/load. Verify the
-      Chaos player's dispel options despite having no Wizard. Current saved
-      live/base snapshots are not a general temporary-effect engine.
+- [ ] **Shared magic lifecycle (implemented core, partial overall)** -
+      `spell_effects.py` records caster ownership, casting turn and explicit
+      next-owner-Start-of-Turn, end-of-turn, end-of-phase or Remains in Play
+      lifetimes (p. 111). Oaken Shield and Curse of Arrow Attraction use this
+      lifecycle; identical spells do not stack and independent sources survive
+      another source ending. Ward cleanup uses identity, preserving native rules.
+      Ending is idempotent; a phase detour is not an expiry boundary. Old tick-only
+      records retain their old expiry, and Devil's Visit's effect is unchanged.
+      Corrected reload ordering: remove old effects before restoring profiles,
+      then restore source references/lifetimes without rerolls or duplicate grants.
+      RIP recasts end the old spell before rolling, even if the new attempt fails
+      (Magic FAQ v1.5.3). Casualties, joined-character death, pursuit catches and
+      fleeing off the board end that caster's RIP spells, not their timed effects.
+      Owners can voluntarily end RIP spells on normal main-phase advance; AI keeps
+      them. Both immediate dispels and subsequent-turn Conjuration use owner-aware
+      optional choices. Chaos has one Fated attempt per player per turn, persisted
+      and shared between those timing windows (p. 110). Wizardly choices include
+      joined Wizards, 18/24-inch base-to-base range, fleeing/off-board exclusions,
+      and the engaged-Wizard target restriction. Conjuration also measures to a
+      vortex template and tests minimum casting value, including spells originally
+      cast perfectly (p. 111). Double 6 unbinds; Wizardly double 1 rolls Outclassed,
+      including dispel success/turn lockouts. Decisions and outcomes are logged.
+      Save/load, casting input and normal phase advance are guarded during magic
+      resolution. Verified pure lifetime/choice cases and actual Mage/Chaos scene
+      casting, reload, expiry, failed recast, caster death and phase-choice paths.
+      **LEFTOVER:** specific conflicting-Enchantment replacement, dynamic Self/host
+      and area-aura refresh/retirement, and reversible characteristic grants belong
+      to the selected spell implementation work below. The engine's main phases
+      do not expose every subphase; voluntary ending at internal Command/Conjuration/
+      Rally and other subphase starts remains open. Direct debug phase requests
+      bypass the normal phase-advance choices. Outclassed/Miscast damage (table
+      results 2-7) is explicitly logged for manual resolution, not automated.
+      Wizard armour/special dispel modifiers, broader vortex geometry and advanced
+      AI choices remain open. No suspended magic-task save/resume or full matchup
+      acceptance is claimed. Live/base snapshots are not a general stat-buff engine.
 
 ### Implementation Order and Acceptance
 

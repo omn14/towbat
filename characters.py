@@ -114,6 +114,8 @@ def join_unit(game, character, host) -> bool:
 
 def on_host_removed(game, host):
     """Clean up a joined character when its host unit is destroyed."""
+    from spell_effects import caster_removed
+    caster_removed(game, host)
     character = get_joined_character(host)
     if character is None:
         return
@@ -150,6 +152,8 @@ def slay_character(game, character):
     under the host, so `removeModelsFromUnit` would remove a body twice and
     leave the host pointing at a destroyed model.
     """
+    from spell_effects import caster_removed
+    caster_removed(game, character)
     host = getattr(character, 'hostUnit', None)
     if (host is not None and getattr(host, 'isSkirmisher', False)
             and not getattr(host, 'skirmishCombat', False)):

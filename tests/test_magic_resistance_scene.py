@@ -103,6 +103,7 @@ def test_loaded_scene_casts_bound_and_ordinary_with_strongest_resistance(scene, 
     app.fsm.spellInstanceToCast = spell
     with patch.object(Spell, '_roll_casting_dice', AsyncMock(
             side_effect=[(9, [4, 5]), (9, [4, 5])])), \
+            patch.object(app, 'aiControls', return_value=True), \
             patch.object(spell, 'apply', AsyncMock()) as effect:
         asyncio.run(app.resolveSpell(host))
         effect.assert_not_awaited()

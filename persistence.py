@@ -171,6 +171,9 @@ def save_game_state(game, filename=None):
     """
     from charge_declarations import save_declarations
     from drilled import move_pending
+    if getattr(game, 'magicBusy', False) is True or getattr(game, 'castingSpell', False) is True:
+        battle_log('Finish magic resolution before saving a battle.', 'info')
+        return None
     if move_pending(game):
         battle_log('Finish the Drilled movement choice before saving.', 'info')
         return None
@@ -198,6 +201,9 @@ def save_game_state(game, filename=None):
         'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
         'strategy_command_done': getattr(game, 'strategyCommandDone', True),
+        'fated_dispel_turns': getattr(game, 'fatedDispelTurns', {}),
+        'dispel_blocked_turns': getattr(game, 'dispelBlockedTurns', {}),
+        'conjuration_done_turn': getattr(game, 'conjurationDoneTurn', None),
         'captured_standards': copy.deepcopy(getattr(game, 'capturedStandards', [])),
         'spells_in_play': save_spells(game),
         # A challenge outlives the turn it was issued in (To The Death!, p. 211).
@@ -248,6 +254,8 @@ def save_game_state(game, filename=None):
             'usedRallyingCry': getattr(unit, 'usedRallyingCry', False),
             'chargedThisTurn': getattr(unit, 'chargedThisTurn', False),
             'counterChargeTurn': getattr(unit, 'counterChargeTurn', None),
+            'lileathUsedTurn': getattr(unit, 'lileathUsedTurn', None),
+            'dispelBlockedTurn': getattr(unit, 'dispelBlockedTurn', None),
             'chargeAttempts': getattr(unit, 'chargeAttempts', 0),
             'chargeAttemptPending': getattr(unit, 'chargeAttemptPending', False),
             'firstChargePending': getattr(unit, 'firstChargePending', False),
@@ -401,6 +409,9 @@ def load_game_state(game, filename):
     if getattr(game, 'spellGenerationBusy', False) is True:
         print('[persistence] Finish the spell-generation choice before loading a battle.')
         return
+    if getattr(game, 'magicBusy', False) is True or getattr(game, 'castingSpell', False) is True:
+        battle_log('Finish magic resolution before loading a battle.', 'info')
+        return
     path = save_path(filename)
     # A save left behind in the old location still loads.
     if not os.path.exists(path) and os.path.exists(filename):
@@ -419,6 +430,11 @@ def load_game_state(game, filename):
         return
 
     _repair_missing_profiles(game_state['units'])
+    from spell_effects import active_spells, end_effect
+    for spell in active_spells(game):
+        end_effect(spell, 'reloading battle')
+    game.fsm.endOfTurnSpells = []
+    game.remainsInPlay = []
 
     editor = getattr(game, 'skirmishEditor', None)
     if editor is not None:
@@ -561,6 +577,8 @@ def load_game_state(game, filename):
         unit.usedRallyingCry = unit_data.get('usedRallyingCry', False)
         unit.chargedThisTurn = unit_data.get('chargedThisTurn', False)
         unit.counterChargeTurn = unit_data.get('counterChargeTurn')
+        unit.lileathUsedTurn = unit_data.get('lileathUsedTurn')
+        unit.dispelBlockedTurn = unit_data.get('dispelBlockedTurn')
         unit.chargeAttempts = unit_data.get('chargeAttempts', 1)
         unit.chargeAttemptPending = unit_data.get('chargeAttemptPending', False)
         unit.firstChargePending = unit_data.get('firstChargePending', False)
@@ -702,12 +720,6 @@ def load_game_state(game, filename):
 
     # Spells still in play: a hex, a ward or a vortex outlives the turn it was
     # cast in, so it has to come back or the save silently ends it.
-    for spell in list(game.fsm.endOfTurnSpells):
-        spell.endSpell()
-    game.fsm.endOfTurnSpells = []
-    for spell in list(getattr(game, 'remainsInPlay', [])):
-        spell.endSpell()
-    game.remainsInPlay = []
     if 'terrain' in game_state and getattr(game, 'terrain_manager', None) is not None:
         game.terrain_manager.clear()
         game.terrain_manager.load_records(game_state['terrain'])
@@ -720,6 +732,10 @@ def load_game_state(game, filename):
     game.vanguardFirst = game_state.get('vanguard_first')
     game.vanguardActive = game_state.get('vanguard_active')
     game.strategyCommandDone = game_state.get('strategy_command_done', True)
+    game.fatedDispelTurns = game_state.get('fated_dispel_turns', {})
+    game.dispelBlockedTurns = game_state.get('dispel_blocked_turns', {})
+    game.conjurationDoneTurn = game_state.get('conjuration_done_turn')
+    game.magicBusy = False
     game.capturedStandards = copy.deepcopy(game_state.get('captured_standards', []))
     game.rallyingCryBusy = False
     from charge_declarations import restore_declarations

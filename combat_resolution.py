@@ -107,6 +107,8 @@ class CombatResolver:
 
     def removeUnitFromPlay(self, unit):
         """Take a run-down unit off the board, node and bookkeeping alike."""
+        from spell_effects import caster_removed
+        caster_removed(self.game, unit)
         self.game.world.removeRigidBody(unit.bodyNP.node())
         unit.model.removeNode()
         unit.bodyNP.removeNode()
@@ -1580,14 +1582,7 @@ class CombatResolver:
             print("Contact detected between fleeing unit and pursuer!")
             from first_charge import finish_charge_attempt
             finish_charge_attempt(unit, defenderUnit)
-            self.game.world.removeRigidBody(defenderUnit.bodyNP.node())
-            defenderUnit.model.removeNode()
-            defenderUnit.bodyNP.removeNode()
-            self.game.units.remove(defenderUnit)
-            if defenderUnit in self.game.player1Units:
-                self.game.player1Units.remove(defenderUnit)
-            if defenderUnit in self.game.player2Units:
-                self.game.player2Units.remove(defenderUnit)
+            self.removeUnitFromPlay(defenderUnit)
             unit.request("Moved")
             return
 
