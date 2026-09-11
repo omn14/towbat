@@ -14,12 +14,12 @@ from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
 
 
-def declared_charge(scene, distance=10):
+def declared_charge(scene, distance=10, *, cavalry='Silver Helm'):
     app, baseline = scene
     load_game_state(app, baseline)
     app.terrain_manager.clear()
     armies = members(app)
-    charger, defender = armies['Silver Helm'], armies['Chaos Knight']
+    charger, defender = armies[cavalry], armies['Chaos Knight']
     for index, member in enumerate(app.units):
         member.bodyNP.setPos(-35 + index * 7, 20, 0)
     defender.bodyNP.setPos(0, 0, 0)

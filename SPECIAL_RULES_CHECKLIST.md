@@ -1170,24 +1170,25 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
 2. Command groups and split-profile ownership: completed core, leftovers above.
 3. Minimum magic-item system: completed and committed as `9b90bce`.
 4. Selected Banner/Helm/Wand effects and spell generation: completed as above,
-      with unsupported spell effects and verification caveats explicitly retained.
+      with wider item-system and verification caveats explicitly retained.
 5. Frequent faction effects: completed core Ward grants, profile-local Elven
-      Reflexes, hand-weapon effects and contextual rerolls. Remaining Fear/Terror,
-      magical-defence and Wizard-armour dependencies are explicit above.
+      Reflexes, hand-weapon effects, contextual rerolls and selected Fear/Warband
+      interactions. General magical-defence and Wizard-armour limits remain above.
 6. Charges/movement: in progress. First Charge core, counted-pursuit timing and
       save/load are implemented, as are the declaration queue, post-declaration
       reaction selection and formed Counter Charge routing. Selected-cavalry
       Impetuous, Drilled and core Marching Column dependencies are now implemented
       and tested together. The explicit movement/geometry leftovers remain open.
 7. Magic and remaining dependencies: all ten selected lore effects, Lileath,
-      item suppression and Initiative/challenge Assailment are implemented.
-      Listed shared lifecycle/geometry limits and Gaze of the Gods including
-      Stupidity remain. The RAM-blocked full-suite gate is still open.
+      item suppression, Initiative/challenge Assailment and Gaze of the Gods
+      including Stupidity are implemented. Shared geometry limits remain.
+      The 108-module regression gate completed as recorded at the top; later
+      milestones require their own final full-suite rerun.
 8. Complete matchup verification using both exact roster imports offscreen.
       Each completed entry needs a rule citation, positive/negative tests, useful
       logs and an explicit `LEFTOVER:` if partial.
 
-- [ ] Import/reload keeps both totals at 500, all ten units, exact model counts,
+- [x] Import/reload keeps both totals at 500, all ten units, exact model counts,
       command roles, three item identities and correct crew/mount equipment.
 - [x] Mage remains Level 2 with three generated known spells; no duplicate
       grants, extra casting slot or new random generation after loading.
@@ -1196,20 +1197,34 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
       when made unusable; spending only the re-roll preserves its armour effect.
 - [x] Warriors gain Veteran from their banner and use only one allowed
       reroll alongside Mark of Chaos Undivided; failed Break tests do not get
-      Veteran. Verified through the live Panic choice; Mark's Fear/Terror callers
-      remain pending. Banner loss and joined-character scope are tested separately.
-- [ ] Silver Helms/Dragon Princes versus Chaos Knights test first charge,
+      Veteran. Live Panic and Fear/Warband callers are covered. Banner loss and
+      joined-character scope are tested separately.
+- [x] Silver Helms/Dragon Princes versus Chaos Knights test first charge,
       counter charge, riders versus mounts, armour/Ward, and first-round timing.
 - [x] Combined movement slice: failed Impetuous, required Drilled from column,
       Counter Charge and First Charge against Chaos Knights, human/AI choices,
       live EnhancedAI resolver entry, voluntary declarations and reload. This
       does not complete the broader combat acceptance item above.
-- [ ] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
+- [x] Skycutter versus Chaos tests S5 AP-2 Impact Hits, Fear-strength boundaries,
       crew shooting/melee, Roc attacks, terrain and flight; Horsemen cannot
       shoot or Fire & Flee with their melee-only Throwing Spears.
 - [ ] Test expiry/disable/reload at least once for every timed or limited-use
       source, plus a rendered playable two-army save with no silent unsupported
       effects. Use focused checks per feature and one full suite at completion.
+
+**Combined acceptance (2026-09-11):** the fresh-startup test now continues from
+Wand spell generation and successful/dispelled casting through two full identity
+reloads, both selected cavalry Counter Charge/First Charge fights with seeded
+real attack/save rolls, post-combat movement, saved survivors and battle-end
+scoring. A specialist checkpoint covers three BS4 Skycutter shots, its S5 AP-2
+Impact Hits, split crew/Roc ownership and live melee attacks, ignored flyover versus D3 ground-terrain
+damage, Fear strength thresholds and melee-only Horsemen equipment, then reloads
+the wounds/Fear state. Numeric rule logs are asserted; the ready-board and result
+screens were rendered and inspected. Generated ready/after-combat/specialist
+saves are retained in the test artifact directory. A local ready save and render
+are also retained under `.pytest_cache/he-chaos-500-ready.{json,png}` (not staged).
+LEFTOVER: this is a set of seeded acceptance scenarios, not an autonomous
+six-turn match; explicit movement and casualty-position limits above remain open.
 
 **Point 5 verification:** 41 focused faction checks and four actual-roster
 offscreen checks pass. The latter load all ten models from the tracked startup
