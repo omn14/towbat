@@ -339,6 +339,8 @@ def save_game_state(game, filename=None):
             # Character joined to this unit's front rank, if any.
             'joined_character': (unit.joinedCharacter.unitName
                                  if getattr(unit, 'joinedCharacter', None) else None),
+            'character_slot': getattr(unit, 'characterSlot', None),
+            'character_combat_return_slot': getattr(unit, 'characterCombatReturnSlot', None),
             'retiredFromCombat': bool(getattr(unit, 'retiredFromCombat', False)),
         }
 
@@ -722,6 +724,13 @@ def load_game_state(game, filename):
         character = unit_map.get(char_name) if char_name else None
         if host is not None and character is not None:
             join_unit(game, character, host)
+            previous = unit_data.get('character_combat_return_slot')
+            position = unit_data.get('character_slot')
+            if previous is not None and position is not None:
+                host.characterCombatReturnSlot = previous
+                host.characterSlot = position
+                host.layOutRanks()
+                host.placeCharacter()
 
     # A model that refused a challenge stays hidden, so its retirement is
     # restored after joining — join_unit puts it back in the front rank.

@@ -367,7 +367,8 @@ class unitGraphics(FSM):
         occupied = set(positions.values())
         if self.characterSlot is not None:
             candidates = [slot for slot in range(max(len(children), files) + 1) if slot not in occupied]
-            self.characterSlot = min(candidates, key=lambda slot: (slot // files, abs(slot % files - files // 2)))
+            if getattr(self, 'characterCombatReturnSlot', None) is None or self.characterSlot not in candidates:
+                self.characterSlot = min(candidates, key=lambda slot: (slot // files, abs(slot % files - files // 2)))
         reserved = self.characterSlot
         slot = 0
         for index, child in enumerate(children):
@@ -569,6 +570,8 @@ class unitGraphics(FSM):
         self.isInCombatWith=[]
         self.isInCombatFlank=[]
         self.roundsFought=0
+        from characters import return_through_ranks
+        return_through_ranks(self)
         # A challenge lasts only as long as the combat that held it (p. 211).
         for challenge in list(getattr(base, 'challenges', None) or []):
             if self in challenge.hosts():

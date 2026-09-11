@@ -32,6 +32,74 @@ def has_joined_character(host) -> bool:
     return get_joined_character(host) is not None
 
 
+async def move_through_ranks(game, hosts):
+    """Optional fighting-rank moves, inactive player's characters first (pp. 208-209)."""
+    from combat_contacts import CombatContactSnapshot
+    from command_groups import command_positions
+    from rules_log import rule_log, rule_skipped
+    hosts = list(dict.fromkeys(hosts))
+    ordered = sorted(hosts, key=lambda host: side_of(game, host) == game.roundCounter.current_player)
+    for host in ordered:
+        character = get_joined_character(host)
+        if character is None or character.unit.nmodels <= 0 or getattr(character, 'retiredFromCombat', False):
+            continue
+        enemies = [enemy for enemy in host.isInCombatWith if enemy in hosts and enemy.unit.nmodels > 0]
+        if not enemies:
+            continue
+        snapshot = CombatContactSnapshot([host, *enemies])
+        _, slots, _, initial, _ = snapshot.formations[id(host)]
+        positions = [snapshot.positions(host, enemy)[1] for enemy in enemies]
+        if len(slots) <= initial:
+            continue
+        if any(group[initial].fighting for group in positions):
+            rule_skipped('Moving Through the Ranks', character,
+                         f'already in a fighting rank of {host.unit.name}, slot {host.characterSlot + 1} (p. 209)')
+            continue
+        occupied = set(command_positions(host).values())
+        candidates = sorted({slots[index] for group in positions for index, place in enumerate(group)
+                             if place.fighting and index < initial and slots[index] not in occupied})
+        options = {f'Rank {slot // host.unit.files + 1}, file {slot % host.unit.files + 1}': slot
+                   for slot in candidates}
+        if not options:
+            rule_skipped('Moving Through the Ranks', character,
+                         f'{host.unit.name}: no fighting-rank slot free of command models (pp. 198, 209)')
+            continue
+        selected = (next(iter(options)) if game.aiControls(host) else
+                    await game.makeChoiceNew(['Stay in place', *options], Point3(0, 0, 10), owner=host,
+                                             prompt=f'{character.unit.name}: move through the ranks?'))
+        if selected not in options:
+            rule_skipped('Moving Through the Ranks', character,
+                         f'stays in slot {host.characterSlot + 1}; declines {len(options)} fighting-rank positions (p. 209)')
+            continue
+        previous, destination = host.characterSlot, options[selected]
+        if getattr(host, 'characterCombatReturnSlot', None) is None:
+            host.characterCombatReturnSlot = previous
+        children = list(host.model.getChildren())
+        displaced = children[slots.index(destination)]
+        displaced.setPos(previous % host.unit.files * host.modelWidth,
+                         -(previous // host.unit.files) * host.modelHeight, 0)
+        host.characterSlot = destination
+        host.placeCharacter()
+        rule_log('Moving Through the Ranks', character,
+                 f'{host.unit.name}: slot {previous + 1} -> {destination + 1}, {selected.lower()} (pp. 208-209)')
+
+
+def return_through_ranks(host):
+    """Return to the previous formation position when the combat ends (p. 208)."""
+    previous = getattr(host, 'characterCombatReturnSlot', None)
+    if previous is None:
+        return
+    host.characterSlot = previous
+    host.layOutRanks()
+    host.characterCombatReturnSlot = None
+    host.placeCharacter()
+    character = get_joined_character(host)
+    if character is not None:
+        from rules_log import rule_log
+        rule_log('Moving Through the Ranks', character,
+                 f'{host.unit.name} no longer engaged; returns to slot {host.characterSlot + 1} (p. 208)')
+
+
 def same_player(game, a, b) -> bool:
     """True if both unitGraphics belong to the same player."""
     return ((a in game.player1Units and b in game.player1Units) or
@@ -120,6 +188,7 @@ def join_unit(game, character, host) -> bool:
     # The character stands in the middle of the front rank, and the unit's own
     # models close up around it, so the one it displaces ends up at the back.
     host.characterSlot = max(1, host.unit.files) // 2
+    host.characterCombatReturnSlot = None
     host.skirmishCharacterPosition = None
     host.layOutRanks()
     host.placeCharacter()
@@ -160,6 +229,7 @@ def detach_character(host):
     character = get_joined_character(host)
     host.joinedCharacter = None
     host.characterSlot = None
+    host.characterCombatReturnSlot = None
     host.skirmishCharacterPosition = None
     hm = host.unit.model
     hm.special_rules = [r for r in hm.special_rules

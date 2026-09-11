@@ -107,6 +107,18 @@ remain open.
       overflow cannot remove a champion while ordinary models remain (p. 199).
       Champions issue, accept and refuse challenges; their own mounts join the
       duel without bringing the regiment's other mounts (pp. 199, 210-211).
+- [x] Joined-character fighting-rank movement (2026-09-11, pp. 208-209): combat
+      selection offers free slots in the fighting rank, inactive player first,
+      before weapon choices and contact snapshots. Command models are not
+      displaced. Staying put and having no eligible slot are logged. A temporary
+      slot survives rank layout and repeated reloads, then returns when combat
+      ends. Live character profiles are no longer restricted to the front rank:
+      full A in rear base contact and one noncontact attack within ground M are
+      verified, with distant characters receiving no attacks. Eleven contact
+      scenes cover this plus command protection, ordering and declined moves;
+      challenge, Initiative, weapon, character, command and persistence gates pass.
+      LEFTOVER: positions adjacent outside the formation, more than one joined
+      character per host, and choosing exact displaced/casualty model positions.
 - [x] Standards captured on combat destruction or a fleeing catch are recorded
       once, permanently, with their 50 VP value and winning player; trophies
       survive the captured unit disappearing and save/load (pp. 200, 286).
@@ -170,7 +182,7 @@ remain open.
       Four allocation/timing tests and seven actual-roster contact scenes pass,
       including two-enemy live routing and selected-model deferred casualties;
       shared-Initiative and challenge regressions pass. LEFTOVER: one joined
-      character per host, character movement/adjacent-rank attack eligibility,
+      character per host, outside-formation adjacent-character positions,
       explicit casualty positions and refreshed enemy geometry between Initiative
       steps. AI chooses the first legal target, not an optimized allocation.
 - [x] Challenge participant/refusal nomination (2026-09-11): the issuer and

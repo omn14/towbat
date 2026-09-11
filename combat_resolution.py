@@ -2677,6 +2677,8 @@ class CombatResolver:
         for unit in defenderUnit.isInCombatWith:
             self.game.attackers.append(self.game.getSelectedUnit(unit.bodyNP.node()))
             self.game.defenders.append(defenderUnit)
+        from characters import move_through_ranks
+        await move_through_ranks(self.game, self.game.attackers + self.game.defenders)
         from combat_weapons import choose_unit_weapons
         self._combatArmedProfiles = set()
         for unit in dict.fromkeys(self.game.attackers + self.game.defenders):

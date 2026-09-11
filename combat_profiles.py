@@ -1,4 +1,4 @@
-"""Per-profile attacks on a shared base (Rulebook pp. 146, 192, 194, 199)."""
+"""Per-profile attacks on a shared base (Rulebook pp. 146, 192, 194, 199, 209)."""
 
 from copy import copy
 from dataclasses import dataclass
@@ -33,6 +33,8 @@ class CombatProfile:
                  and not entry.get('retired', False)]
         joined = get_joined_character(self.host)
         if self.role == 'character':
+            if (getattr(self.host, 'characterSlot', 0) or 0) >= group.files:
+                return 0
             return melee_attacks(self.fighter.unit, charged, charge_distance=distance) if self.fighter.unit.nmodels > 0 else 0
         if self.role == 'champion':
             return attack_characteristic(self.profile, charged=charged, inches=distance) if self.entry in champions else 0
@@ -79,8 +81,7 @@ def combat_profiles(host, target, challenge=None):
             parts.append(CombatProfile(host, target, champion, 'champion', entry=entry))
     joined = get_joined_character(host)
     if joined is not None and not getattr(joined, 'retiredFromCombat', False) and not (
-            challenge is not None and challenge.involves(joined)) and (
-            getattr(host, 'characterSlot', 0) or 0) < host.unit.files:
+            challenge is not None and challenge.involves(joined)):
         parts.append(CombatProfile(host, target, joined.unit.model, 'character', fighter=joined))
         for tag in ('mount', 'crew', 'beasts'):
             part = getattr(joined.unit.model, f'get_{tag}')()

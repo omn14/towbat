@@ -161,6 +161,43 @@ def test_two_enemy_units_share_each_models_attack_budget(scene):
         assert sum(count for _, count in directed) == host.unit.nmodels
 
 
+def test_joined_character_in_rear_fighting_rank_gets_live_attacks(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, character, enemy = (members(app)[name] for name in ('Chaos Knight', 'Aspiring Champion', 'Mage'))
+    assert join_unit(app, character, host)
+    host.unit.files = 1
+    host.layOutRanks()
+    host.placeCharacter()
+    edge_contact(host, enemy)
+    assert host.characterSlot >= 3
+    parts = [part for part in combat_profiles(host, enemy) if part.role == 'character']
+    assert len(parts) == 1
+    part = parts[0]
+    assert CombatContactSnapshot([host, enemy]).attacks(part, host.unit.nmodels) == 0
+    own, other = model_base_boxes(host)[-1], model_base_boxes(enemy)[0]
+    enemy.bodyNP.setPos(enemy.bodyNP.getPos() + Vec3(
+        own[0] - other[0], own[1] - own[3] - other[3] - other[1], 0))
+    host.isInCombatFlank = ['rear']
+    snapshot = CombatContactSnapshot([host, enemy])
+    attacks = int(character.unit.model.characteristics['A'])
+    assert snapshot.attacks(part, host.unit.nmodels) == attacks
+    app.attackers, app.defenders = [host, enemy], [enemy, host]
+    app.attackSequence = Sequence()
+    app.combat._pendingWounds = {}
+    app.combat._combatStartModels = {id(member.unit): member.unit.nmodels for member in (host, enemy)}
+    counts = []
+    def fight(group, target, **kwargs):
+        if group.model is character.unit.model:
+            counts.append(group._attack_count)
+        return group._attack_count, 0, 0, 0, 0
+    with patch('combat_resolution.simulate_battle', side_effect=fight), \
+            patch('assailment.cast_at_initiative'), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=lambda choices, *args, **kwargs: choices[0])):
+        assert asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence())) == (0, 0, 0, 0)
+    assert counts == [attacks]
+
+
 @pytest.mark.parametrize('kind', ['champion', 'character'])
 def test_specific_targets_require_contact_and_directed_damage_cannot_spill(scene, kind):
     app, baseline = scene
@@ -200,3 +237,75 @@ def test_specific_targets_require_contact_and_directed_damage_cannot_spill(scene
         run(apply_removals())
     assert enemy.unit.nmodels == before - (kind == 'champion')
     assert len(enemy.model.getChildren()) == enemy.unit.nmodels
+
+
+def test_move_through_rear_rank_preserves_command_and_returns_after_combat(scene, tmp_path, capsys):
+    from characters import move_through_ranks
+    from command_groups import command_positions
+    from persistence import save_game_state
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, character, enemy = (members(app)[name] for name in ('Chaos Warrior', 'Aspiring Champion', 'Mage'))
+    assert join_unit(app, character, host)
+    host.request('InCombat')
+    edge_contact(host, enemy)
+    previous = host.characterSlot
+    own = min(model_base_boxes(host), key=lambda box: box[1])
+    other = model_base_boxes(enemy)[0]
+    enemy.bodyNP.setPos(enemy.bodyNP.getPos() + Vec3(
+        own[0] - other[0], own[1] - own[3] - other[3] - other[1], 0))
+    host.isInCombatFlank = ['rear']
+    command = command_positions(host)
+    with patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=lambda options, *args, **kwargs: options[1])) as choice:
+        asyncio.run(move_through_ranks(app, [host, enemy]))
+    choice.assert_awaited_once()
+    assert host.characterSlot >= host.unit.files
+    assert host.characterSlot not in command.values()
+    assert host.characterCombatReturnSlot == previous
+    destination = host.characterSlot
+    host.layOutRanks()
+    host.placeCharacter()
+    assert host.characterSlot == destination
+    assert command_positions(host) == command
+    part = next(part for part in combat_profiles(host, enemy) if part.role == 'character')
+    assert CombatContactSnapshot([host, enemy]).attacks(part, host.unit.nmodels) == 1
+    saved = save_game_state(app, str(tmp_path / 'rank-move.json'))
+    assert saved is not None
+    for _ in range(2):
+        load_game_state(app, saved)
+        host = members(app)['Chaos Warrior']
+        assert host.characterSlot == destination
+        assert host.characterCombatReturnSlot == previous
+    host.request('Idle')
+    assert host.characterSlot == previous
+    assert host.characterCombatReturnSlot is None
+    assert 'Moving Through the Ranks' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('active_player', [1, 2])
+def test_rank_move_choices_start_with_inactive_player_and_may_be_declined(scene, active_player, capsys):
+    from characters import move_through_ranks, side_of
+    app, baseline = scene
+    load_game_state(app, baseline)
+    armies = members(app)
+    first, second = armies['Elven Archer'], armies['Chaos Warrior']
+    assert join_unit(app, armies['Mage'], first)
+    assert join_unit(app, armies['Aspiring Champion'], second)
+    for host in (first, second):
+        host.unit.files = 3
+        host.layOutRanks()
+        host.placeCharacter()
+    edge_contact(first, second)
+    own = min(model_base_boxes(first), key=lambda box: box[1])
+    other = max(model_base_boxes(second), key=lambda box: box[1])
+    second.bodyNP.setPos(second.bodyNP.getPos() + Vec3(
+        own[0] - other[0], own[1] - own[3] - other[3] - other[1], 0))
+    first.isInCombatFlank = second.isInCombatFlank = ['rear']
+    before = [model_base_boxes(host) for host in (first, second)]
+    with patch.object(app.roundCounter, 'current_player', active_player), \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Stay in place')) as choice:
+        asyncio.run(move_through_ranks(app, [first, second]))
+    assert [side_of(app, call.kwargs['owner']) for call in choice.await_args_list] == [3 - active_player, active_player]
+    assert [model_base_boxes(host) for host in (first, second)] == before
+    assert 'declines' in capsys.readouterr().out
