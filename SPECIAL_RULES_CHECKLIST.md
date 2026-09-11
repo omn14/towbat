@@ -179,8 +179,15 @@ tests or success. README and Copilot test commands now agree on this workflow.
       versus ground M, champion/mount casualty counts, Horsemen support and challenge
       eligibility. The Assailment wipeout fixture now re-seats its last defender after
       resizing; ten Assailment, eight command, 13 Shieldwall and six shared-Initiative
-      scenes pass. LEFTOVER: player-selected casualty positions and live enemy-base
-      replacement after earlier casualties remain approximations.
+      scenes pass. Enemy target bases now refresh before each Initiative's
+      allocation: rear casualties, lost command and slain joined characters
+      leave the target footprint without removing the rendered models early.
+      The original attacker entitlement snapshot remains separate, so stepping
+      forward does not earn attacks and same-Initiative groups remain simultaneous.
+      Sixteen contact scenes plus nine shared-Initiative scenes pass, including
+      higher/equal/lower Initiative casualty timing and joined-character removal.
+      LEFTOVER: player-selected casualty positions, exact closing-in/replacement
+      positions and p. 158 translations to restore lost contact remain approximations.
       Standalone legacy attack APIs retain formation-based counts.
       **Regression gate:** the 104-module isolated suite completed at 1536 MiB per
       service (2026-09-11, run `170242-180392`, peak 1165 MiB). Its only failure was
@@ -199,8 +206,9 @@ tests or success. README and Copilot test commands now agree on this workflow.
       including two-enemy live routing and selected-model deferred casualties;
       shared-Initiative and challenge regressions pass. LEFTOVER: one joined
       character per host, outside-formation adjacent-character positions,
-      explicit casualty positions and refreshed enemy geometry between Initiative
-      steps. AI chooses the first legal target, not an optimized allocation.
+      explicit casualty/closing-in positions. Enemy target footprints are now
+      refreshed between Initiative steps as described above. AI chooses the first
+      legal target, not an optimized allocation.
 - [x] Challenge participant/refusal nomination (2026-09-11): the issuer and
       accepting player choose their own character or champion. When refused, the
       challenger selects which eligible model retires, or declines to nominate one

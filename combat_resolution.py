@@ -2054,6 +2054,7 @@ class CombatResolver:
                     nonlocal snapshots, attacks_at_step, allocations
                     snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
                     if contacts is not None:
+                        contacts.refresh()
                         allocations = {id(candidate): contacts.allocation(candidate, snapshots[id(candidate.host)], challenge)
                                        for step, candidate in order if step == initiative}
                     attacks_at_step = {id(candidate): (sum(count for _, count, targets in allocations[id(candidate)].batches if targets)

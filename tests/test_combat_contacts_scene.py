@@ -77,6 +77,80 @@ def test_champion_is_not_duplicated_and_later_mounts_lose_fallen_bases(scene):
     assert snapshot.attacks(parts['champion'], 3) == 2
 
 
+def test_target_geometry_refresh_waits_for_next_initiative(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, enemy = members(app)['Mage'], members(app)['Chaos Knight']
+    enemy.unit.files = 1
+    enemy.layOutRanks()
+    edge_contact(host, enemy)
+    snapshot = CombatContactSnapshot([host, enemy])
+    original = snapshot.target_boxes(enemy)
+    app.combat.previewCombatWounds(enemy, 2)
+    assert snapshot.target_boxes(enemy) == original
+    snapshot.refresh()
+    assert len(snapshot.target_boxes(enemy)) == 2
+    command_indices = snapshot.formations[id(enemy)][2]
+    assert list(dict(snapshot.targets[id(enemy)])) == list(command_indices)[:2]
+    assert len(enemy.model.getChildren()) == 4
+
+
+@pytest.mark.parametrize('casualty_initiative,expected', [(6, 2), (5, 4), (4, 4)])
+def test_live_initiative_uses_surviving_enemy_footprint(scene, casualty_initiative, expected):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, enemy, caster = (members(app)[name] for name in ('Silver Helm', 'Chaos Knight', 'Mage'))
+    assert join_unit(app, caster, host)
+    host.layOutRanks()
+    host.placeCharacter()
+    edge_contact(host, enemy)
+    snapshot = CombatContactSnapshot([host, enemy])
+    app.attackers, app.defenders = [host, enemy], [enemy, host]
+    app.attackSequence = Sequence()
+    app.combat._pendingWounds = {}
+    app.combat._combatStartModels = {id(member.unit): member.unit.nmodels for member in (host, enemy)}
+    observed = []
+
+    def initiative(profile, **kwargs):
+        if profile is caster.unit.model:
+            return casualty_initiative
+        return 5 if profile is host.unit.model else 1
+
+    async def cast(game, member, targets, damage, **kwargs):
+        if member is caster:
+            damage(enemy, 2)
+
+    def fight(group, target, **kwargs):
+        if group.model is host.unit.model:
+            observed.append(len(snapshot.target_boxes(enemy)))
+        return group._attack_count, 0, 0, 0, 0
+
+    with patch('combat_profiles.strike_initiative', side_effect=initiative), \
+            patch('assailment.cast_at_initiative', side_effect=cast), \
+            patch('combat_resolution.simulate_battle', side_effect=fight), \
+            patch.object(app, 'aiControls', return_value=True):
+        asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence(), contacts=snapshot))
+    assert observed and set(observed) == {expected}
+    assert enemy.unit.nmodels == 2 and len(enemy.model.getChildren()) == 4
+
+
+def test_dead_joined_character_base_leaves_next_target_snapshot(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, character, enemy = (members(app)[name] for name in ('Chaos Knight', 'Aspiring Champion', 'Mage'))
+    assert join_unit(app, character, host)
+    host.layOutRanks()
+    host.placeCharacter()
+    edge_contact(enemy, host)
+    snapshot = CombatContactSnapshot([host, enemy])
+    initial = len(snapshot.target_boxes(host))
+    app.combat.previewMiscastWounds(character, app.combat.miscastWoundsRemaining(character), Sequence())
+    assert len(snapshot.target_boxes(host)) == initial
+    snapshot.refresh()
+    assert len(snapshot.target_boxes(host)) == initial - 1
+    assert all(index < host.unit.nmodels for index, _ in snapshot.targets[id(host)])
+
+
 def test_horsemen_support_reaches_only_next_rank_and_not_mounts(scene):
     app, baseline = scene
     load_game_state(app, baseline)

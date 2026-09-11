@@ -60,8 +60,9 @@ class CombatContactSnapshot:
     def __init__(self, hosts):
         from command_groups import living_command
         from scouts import model_base_boxes
+        self.hosts = list(hosts)
         self.formations = {}
-        for host in hosts:
+        for host in self.hosts:
             boxes = model_base_boxes(host)
             children = list(host.model.getChildren())[:host.unit.nmodels]
             files = max(1, host.unit.files)
@@ -72,10 +73,33 @@ class CombatContactSnapshot:
                 slots.append(getattr(host, 'characterSlot', 0) or 0)
             command = {index: entry for index, entry in enumerate(living_command(host))}
             self.formations[id(host)] = (boxes, slots, command, len(children), joined)
+        self.targets = {identity: list(enumerate(formation[0])) for identity, formation in self.formations.items()}
+
+    def refresh(self):
+        """Remove rear-rank target bases between Initiative steps, never mid-step (pp. 146, 150)."""
+        from rules_log import rule_log
+        for host in self.hosts:
+            boxes, slots, command, initial, joined = self.formations[id(host)]
+            live_command = [index for index in command if command[index].get('active', True)]
+            ordinary = sorted((index for index in range(initial) if index not in command), key=lambda index: slots[index])
+            survivors = set(live_command[:max(0, host.unit.nmodels)])
+            survivors.update(ordinary[:max(0, host.unit.nmodels - len(survivors))])
+            if joined is not None and joined.unit.nmodels > 0 and len(boxes) > initial:
+                survivors.add(initial)
+            remaining = [(index, box) for index, box in enumerate(boxes) if index in survivors]
+            previous = self.targets[id(host)]
+            self.targets[id(host)] = remaining
+            if len(previous) != len(remaining):
+                rule_log('Remove Casualties', host,
+                         f'{len(previous)} -> {len(remaining)} target bases before the next Initiative; '
+                         'equal-Initiative allocations remain fixed (pp. 146, 150)')
+
+    def target_boxes(self, host):
+        return [box for _, box in self.targets[id(host)]]
 
     def positions(self, host, target):
         boxes, slots, _, _, _ = self.formations[id(host)]
-        enemy_boxes = self.formations[id(target)][0]
+        enemy_boxes = self.target_boxes(target)
         facing = 'front'
         try:
             facing = host.isInCombatFlank[host.isInCombatWith.index(target)]
@@ -191,8 +215,8 @@ class CombatContactSnapshot:
         for index, attacks in quotas.items():
             if not attacks:
                 continue
-            distances = [(enemy, min(obb_distance(own_boxes[index], box) for box in self.formations[id(enemy)][0]))
-                         for enemy in enemies if self.formations[id(enemy)][0]]
+            distances = [(enemy, min(obb_distance(own_boxes[index], box) for box in self.target_boxes(enemy)))
+                         for enemy in enemies if self.target_boxes(enemy)]
             nearest = nearest_targets(distances)
             contact = min((distance for _, distance in distances), default=float('inf')) <= CONTACT_EPSILON
             targets = []
@@ -200,7 +224,7 @@ class CombatContactSnapshot:
                 boxes, _, command, initial, joined = self.formations[id(enemy)]
                 promoted = {id(champion.command_entry): champion for champion in champions(enemy, include_retired=True)}
                 ordinary_present = enemy.unit.nmodels > len(promoted)
-                for other_index, box in enumerate(boxes):
+                for other_index, box in self.targets[id(enemy)]:
                     touching = obb_distance(own_boxes[index], box) <= CONTACT_EPSILON
                     entry = command.get(other_index, {})
                     specific = (joined if other_index >= initial else promoted.get(id(entry)))
@@ -226,5 +250,5 @@ class CombatContactSnapshot:
     def positions_without_press(self, host, target):
         facing, _ = self.positions(host, target)
         boxes, slots, _, _, _ = self.formations[id(host)]
-        return facing, fighting_positions(boxes, self.formations[id(target)][0], host.unit.files,
+        return facing, fighting_positions(boxes, self.target_boxes(target), host.unit.files,
                                            facing=facing, slots=slots)
