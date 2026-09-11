@@ -134,7 +134,7 @@ def enemy_units(game, unit):
 
 
 def join_unit(game, character, host) -> bool:
-    """Attach *character* to the front rank of *host*. Returns True on success."""
+    """Join the front rank, displacing ordinary models to the rear (Rulebook p. 207)."""
     if character is host or has_joined_character(host) or is_character(host):
         return False
     from rules_log import rule_log, rule_skipped
@@ -190,9 +190,17 @@ def join_unit(game, character, host) -> bool:
     host.characterSlot = max(1, host.unit.files) // 2
     host.characterCombatReturnSlot = None
     host.skirmishCharacterPosition = None
+    front_rank_y = host.model.getY()
     host.layOutRanks()
-    host.placeCharacter()
     host.rebuildFootprint()
+    if (not getattr(game, 'restoringBattle', False)
+            and not (host.isSkirmisher and not host.skirmishCombat)):
+        host.bodyNP.setY(host.bodyNP, front_rank_y - host.model.getY())
+        host.bodyNP.node().setTransformDirty()
+    host.placeCharacter()
+    if getattr(game, 'movement', None) is not None:
+        game.movement.alignModelsToHillNormal(host)
+        game.movement.alignModelsToHillNormal(character)
 
     # Remember the character's side before it leaves the player lists so a save
     # can still record which player it belongs to.

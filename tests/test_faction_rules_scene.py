@@ -77,6 +77,40 @@ def members(app):
     return {member.unit.model.name: member for member in app.units}
 
 
+@pytest.mark.parametrize('character_name,host_name', [('Mage', 'Silver Helm'),
+                                                    ('Aspiring Champion', 'Chaos Warrior')])
+def test_join_on_hill_keeps_all_models_on_surface(scene, request, tmp_path, character_name, host_name):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    request.addfinalizer(lambda: load_game_state(app, baseline))
+    roster = members(app)
+    character, host = roster[character_name], roster[host_name]
+    app.terrain_manager.add_terrain('hill', Point3(0, 0, .1), 18, 16)
+    host.bodyNP.setPos(0, 0, 0)
+    host.bodyNP.setH(35)
+    character.bodyNP.setPos(0, -5, 0)
+    for member in (host, character):
+        for child in member.model.getChildren():
+            position = child.getPos(app.render)
+            child.setZ(app.render, app.terrain_manager.get_surface_height(position))
+    assert join_unit(app, character, host)
+    host_position = Point3(host.bodyNP.getPos(app.render))
+    character_position = Point3(character.bodyNP.getPos(app.render))
+    for iteration in range(3):
+        if iteration:
+            saved = save_game_state(app, str(tmp_path / 'joined-hill.json'))
+            assert saved is not None
+            load_game_state(app, saved)
+        assert host.bodyNP.getPos(app.render).almostEqual(host_position, 1e-5)
+        assert character.bodyNP.getPos(app.render).almostEqual(character_position, 1e-5)
+        for member in (host, character):
+            for child in member.model.getChildren():
+                position = child.getPos(app.render)
+                height = app.terrain_manager.get_surface_height(position)
+                assert height > .1
+                assert position.z == pytest.approx(height, abs=1e-5)
+
+
 def test_actual_roster_wards_and_profile_strike_order(scene):
     app, baseline = scene
     assert app.campaign_map is None

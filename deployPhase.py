@@ -415,9 +415,11 @@ def endMoveUnit(game,taskToEnd):
                 and not has_joined_character(host)):
             root = held.bodyNP.getParent()
             old_transform = held.bodyNP.getTransform()
+            host_transform = host.bodyNP.getTransform()
             side_units = game.player1Units if side_of(game, held) == 1 else game.player2Units
             index = side_units.index(held)
-            join_unit(game, held, host)
+            if not join_unit(game, held, host):
+                return
             error = (placement_error(game, host, scouting=host.deployedAsScouts)
                      or placement_error(game, held, scouting=scouting, ignore=host))
             if error:
@@ -429,6 +431,10 @@ def endMoveUnit(game,taskToEnd):
                 side_units.insert(index, held)
                 host.layOutRanks()
                 host.rebuildFootprint()
+                host.bodyNP.setTransform(host_transform)
+                host.bodyNP.node().setTransformDirty()
+                game.movement.alignModelsToHillNormal(host)
+                game.movement.alignModelsToHillNormal(held)
                 game.roundCounter.apply_selection_masks()
                 _deployment_refused(held, error, scouting)
                 return

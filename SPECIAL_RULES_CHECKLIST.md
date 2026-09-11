@@ -132,6 +132,22 @@ tests or success. README and Copilot test commands now agree on this workflow.
       overflow cannot remove a champion while ordinary models remain (p. 199).
       Champions issue, accept and refuse challenges; their own mounts join the
       duel without bringing the regiment's other mounts (pp. 199, 210-211).
+- [x] Character deployment positioning corrected (2026-09-11, p. 207): adding
+      a character keeps the formed unit's front rank fixed and adds displaced
+      models at the rear. An Aspiring Champion can therefore join Chaos Warriors
+      at their forward deployment line without the enlarged footprint pushing
+      the front outside the zone. Position the character after the final
+      footprint resize, then reapply terrain height/normal to both character
+      and host; rank layout no longer leaves the host at Z=0 inside a hill.
+      Rejected joins restore the host transform and surface alignment, and a
+      rejected rule gate no longer continues as though joining succeeded.
+      Save/load retains the saved joined transform rather than applying another
+      join displacement. Mage/Silver Helm and Champion/Warrior hill cases include
+      two reloads; actual deployment drops cover flat/hill and central/front-line
+      placements. All 65 focused faction, restriction, Scout-deployment and
+      persistence cases pass. LEFTOVER: genuinely out-of-zone rear ranks still
+      refuse the join; existing outside-formation/multiple-character limits below
+      remain. No general casualty or movement terrain-alignment rewrite is claimed.
 - [x] Joined-character fighting-rank movement (2026-09-11, pp. 208-209): combat
       selection offers free slots in the fighting rank, inactive player first,
       before weapon choices and contact snapshots. Command models are not

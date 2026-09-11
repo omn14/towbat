@@ -2,10 +2,45 @@
 
 from unittest.mock import patch
 
+import pytest
+from panda3d.core import Point3
+
 from characters import join_unit
 from persistence import load_game_state
 from psychology import close_order_bonus, combat_rank_bonus, select_general
 from tests.test_faction_rules_scene import members, scene as scene
+
+
+@pytest.mark.parametrize('hill', [False, True])
+@pytest.mark.parametrize('front_line', [False, True])
+def test_champion_deployment_drop_joins_warriors(scene, hill, front_line, capsys):
+    from deployPhase import endMoveUnit
+    app, baseline = scene
+    load_game_state(app, baseline)
+    roster = members(app)
+    champion, warriors = roster['Aspiring Champion'], roster['Chaos Warrior']
+    for member in app.units:
+        member.isDeployed = False
+        member.bodyNP.setPos(-30, -30, 0)
+    app.roundCounter.request('PlayerTwo')
+    app.deploymentStage = 'ordinary'
+    app.unitToMove = champion
+    warriors.isDeployed = True
+    position = Point3(0, 12 + warriors.unitHeight / 2 + .01 if front_line else 18, 0)
+    warriors.bodyNP.setPos(position)
+    warriors.bodyNP.setH(180)
+    champion.bodyNP.setPos(position)
+    front = warriors.bodyNP.getY() - warriors.unitHeight / 2
+    if hill:
+        app.terrain_manager.add_terrain('hill', position, 16, 12)
+        app.movement.alignModelsToHillNormal(warriors)
+        app.movement.alignModelsToHillNormal(champion)
+    with patch('deployPhase._advance_after_deploy'), patch('deployPhase.taskMgr', app.taskMgr, create=True):
+        endMoveUnit(app, 'test-champion-join')
+    assert champion.hostUnit is warriors, capsys.readouterr().out
+    assert warriors.joinedCharacter is champion
+    assert champion.isDeployed and champion not in app.player2Units
+    assert warriors.bodyNP.getY() - warriors.unitHeight / 2 == pytest.approx(front)
 
 
 def test_warhounds_cannot_be_joined_or_use_general_or_battle_standard(scene):

@@ -723,7 +723,10 @@ def load_game_state(game, filename):
         host = unit_map.get(unit_data['name'])
         character = unit_map.get(char_name) if char_name else None
         if host is not None and character is not None:
+            host_transform = host.bodyNP.getTransform()
             join_unit(game, character, host)
+            host.bodyNP.setTransform(host_transform)
+            host.bodyNP.node().setTransformDirty()
             previous = unit_data.get('character_combat_return_slot')
             position = unit_data.get('character_slot')
             if previous is not None and position is not None:
