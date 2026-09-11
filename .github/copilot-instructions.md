@@ -5,7 +5,13 @@
 Every terminal command starts with `source .venv/bin/activate`. The default
 `python` on PATH has no Panda3D.
 
-- Tests: `python -m pytest tests -q`
+- Full suite: `python run_tests_isolated.py` (sequential memory-bounded services).
+- Subsets: pass test module paths to the same runner. Do not run multiple modules
+  in one pytest process: shared Panda3D state can cause NaN transforms and
+  cascading `Attempt to spawn multiple ShowBase instances!` errors. The pytest
+  guard rejects multi-module runs; single-module runs and discovery remain allowed.
+- Keep the full-suite 1536 MiB cap and 512 MiB available-memory headroom. Do not
+  bypass the guard or fall back to an unbounded run when memory is insufficient.
 - `python game.py` blocks on window creation. To check anything visual, render
   offscreen instead: `loadPrcFileData("", "window-type offscreen ...")`, build
   the scene, `base.graphicsEngine.renderFrame()`, `base.screenshot(...)`.

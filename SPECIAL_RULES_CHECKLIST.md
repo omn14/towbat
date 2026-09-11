@@ -36,12 +36,24 @@ Peak RSS was 1,164.9 MiB under the 1,536 MiB cap. This is a combined regression
 gate, not an end-to-end match certification; the explicit LEFTOVER entries below
 remain open.
 
-**Post-milestone gate:** after commits `3819fbc`, `20392fa` and `4c44795`, run
-`184400-20708` stopped before executing any of 108 modules: 1,968 MiB available
-versus the required 2,048 MiB (1,536 MiB cap plus 512 MiB headroom). Character
-movement, connected-combat challenges and combined matchup acceptance passed
-their focused/adjacent checks, but their final full-suite rerun is still pending.
-Do not treat the earlier completed gate as verification of these later commits.
+**Post-milestone gate:** after commits `3819fbc`, `20392fa` and `4c44795`, the
+initial retry `184400-20708` could not start. The later isolated run
+`190616-28096` passed the first 30/108 modules before the memory headroom guard
+stopped it. Startup acceptance passed separately in `191124-30241`, and all
+nine runner/guard tests passed in `190519-27776`. The remaining 76-module resume
+`191206-30528` could not start: 2,027 MiB available versus the required 2,048 MiB
+(1,536 MiB cap plus 512 MiB headroom). No failure occurred in the executed modules,
+but the final full-suite rerun is still pending. Do not treat the earlier
+completed gate as verification of these later commits.
+
+**Test-process correction:** a plain `pytest` run produced an initial NaN during
+scene setup followed by hundreds of `Attempt to spawn multiple ShowBase
+instances!` errors. The chariot terrain, layout and startup tests pass in fresh
+processes; the original NaN has not been reproduced independently. Multi-module
+in-process runs now fail before fixture setup with the isolated runner command,
+rather than allowing shared Panda3D state to cascade. Single-module runs and
+test discovery remain supported. The guard reports a usage error, not skipped
+tests or success. README and Copilot test commands now agree on this workflow.
 
 ### Selected Units
 

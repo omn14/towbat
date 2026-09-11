@@ -455,7 +455,7 @@ source .venv/bin/activate && python run_tests_isolated.py tests/test_selected_it
 Focused import checks use constructed fixtures, not the local army exports:
 
 ```bash
-source .venv/bin/activate && python -m pytest tests/test_roster_importer.py tests/test_spells.py tests/test_bound_spells.py -q
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 512 tests/test_roster_importer.py tests/test_spells.py tests/test_bound_spells.py
 ```
 
 ## Save Profiles
@@ -484,14 +484,14 @@ preserving saved rules and battle state. Loading does not rewrite the save file.
 Activate the project environment for every command:
 
 ```bash
-source .venv/bin/activate && python -m pytest tests/test_persistence.py tests/test_special_rules.py -q
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 512 tests/test_persistence.py tests/test_special_rules.py
 ```
 
 Use calculation and serialization tests while editing. Add the relevant real-game
 scene tests when changing live behavior or save/load integration:
 
 ```bash
-source .venv/bin/activate && python -m pytest tests/test_persistence.py tests/test_skycutter_scene.py -q --durations=8
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_persistence.py tests/test_skycutter_scene.py
 ```
 
 Scene tests start Panda3D offscreen and should reuse a module-scoped scene with
@@ -505,6 +505,19 @@ Run the complete suite using separate, memory-bounded processes per test module:
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py
 ```
+
+Plain `pytest` or any multi-module in-process run is rejected before fixture
+setup, with a usage error pointing to the isolated runner. Test discovery
+(`pytest --collect-only`) and single-module pytest runs remain available. This
+guard applies to all module batches, including calculation-only subsets; use
+the runner for those too. It does not skip failures or report blocked runs as
+passing.
+
+A NaN transform during scene construction can leave Panda3D's global `base`
+registered. Every later scene in that process then fails with `Attempt to spawn
+multiple ShowBase instances!`. Investigate the first failure in its module's
+isolated log; the later constructor failures can be a cascade, not independent
+rule failures. Process isolation also prevents state leaking from earlier tests.
 
 On this 8 GB machine, a monolithic scene-test run caused `systemd-oomd` to kill
 the entire VS Code process group. The isolated runner uses Linux systemd user

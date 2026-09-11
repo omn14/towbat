@@ -55,3 +55,23 @@ def test_limits_must_be_positive(value):
 
     with pytest.raises(ArgumentTypeError):
         positive_int(value)
+
+
+@pytest.mark.parametrize('paths,collect_only,blocked', [
+    ([], False, False),
+    (['first.py', 'first.py'], False, False),
+    (['first.py', 'second.py'], False, True),
+    (['first.py', 'second.py'], True, False),
+])
+def test_multi_module_guard_preserves_single_module_and_discovery(paths, collect_only, blocked):
+    from types import SimpleNamespace
+    from tests.conftest import pytest_runtestloop
+
+    session = SimpleNamespace(
+        items=[SimpleNamespace(path=Path(path)) for path in paths],
+        config=SimpleNamespace(getoption=lambda name: collect_only if name == 'collectonly' else None))
+    if blocked:
+        with pytest.raises(pytest.UsageError, match='python run_tests_isolated.py'):
+            pytest_runtestloop(session)
+    else:
+        assert pytest_runtestloop(session) is None
