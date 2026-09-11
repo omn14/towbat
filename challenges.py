@@ -4,10 +4,9 @@ Challenges — Rulebook p. 210-211.
 A duel fought inside a combat between two characters. The rules with no
 Panda3D in them live here; `combat_resolution` runs the exchange and the fight.
 
-p. 211 says the duellists direct all their attacks at one another and that no
-other model may attack either of them, so a challenge is sealed off from the
-combat around it: its Initiative order only has to be internally consistent.
-That is why it can be resolved as its own pass.
+Duellists direct all attacks at each other and cannot be targeted by outside
+attacks (p. 211). Their Initiative steps still share the combat's clock because
+incidental Miscast damage can cross between the duel and the surrounding units.
 """
 
 from characters import get_joined_character, is_character

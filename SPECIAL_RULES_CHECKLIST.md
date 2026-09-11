@@ -133,7 +133,8 @@ itself add gameplay effects.
 - LEFTOVER: when a unit has both a joined character and champion, the current
   challenge picker prefers the character; explicit participant/refusal
   nomination is not yet offered. AI still never issues and always accepts.
-  The duel remains a separate pass from the surrounding combat.
+      Duel and ordinary attacks now share one Initiative clock; see the timing
+      milestone below. Participant nomination remains independent work.
 - LEFTOVER: captured-standard VP are persisted, but the tactical assessment
   is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
       remaining movement extensions and magic-item/faction effects belong
@@ -871,9 +872,10 @@ limits remain explicitly recorded below.
       tests now exercise the Initiative window. New live tests cover lone/joined
       casting, selected champions, higher/equal-Initiative deaths, both owners,
       challenge overkill and spell-only wipeout score/overrun routing.
-      **LEFTOVER:** challenge and ordinary attacks retain separate resolution
-      passes; future effects crossing those groups need global Initiative
-      interleaving. Suspended combat choices cannot be saved/resumed. The shared
+      **Corrected (2026-09-11):** duel and ordinary attacks now interleave at
+      global Initiative boundaries with both groups snapshotted before either
+      resolves a shared step (pp. 146, 211).
+      **LEFTOVER:** suspended combat choices cannot be saved/resumed. The shared
       lifecycle/geometry limits remain. Devil's Visit is unchanged.
 
       Sources: [Corporeal Unmaking](https://tow.whfb.app/spell/corporeal-unmaking),
@@ -1033,9 +1035,16 @@ the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
       Shieldwall scene checks pass; the focused gates total 248 passing tests.
       Results 8-12 and Bound/Lileath behavior retain
       their existing casting/dispel outcomes.
-      **LEFTOVER:** challenge and ordinary combat still run separate Initiative
-      passes, so blasts crossing those groups are not globally interleaved.
-      Broader multiplayer/multi-Wizard-unit ownership and army-wide casting
+      **Global Initiative completed (2026-09-11):** the live combat entry uses
+      one scheduler for duel and ordinary profiles. Equal-Initiative groups
+      freeze attacks before either applies losses; later steps see those losses.
+      Standalone duel/ordinary APIs remain available. Direct outside attacks
+      cannot target a duellist, even after its rival dies. Two scheduler tests and
+      six actual-roster cross-group Miscast cases pass in both directions at
+      higher/equal/lower Initiative, including numeric combat credit and deferred
+      one-time casualties. Existing ten Assailment, 42 challenge, eight command,
+      16 Miscast and 13 Shieldwall cases pass.
+      **LEFTOVER:** broader multiplayer/multi-Wizard-unit ownership and army-wide casting
       Power Drain remain outside this damage change. One joined character per
       host and the existing formation/command placement approximations remain.
       No new visual explosion animation, full-suite pass or complete-matchup

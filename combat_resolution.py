@@ -1983,7 +1983,17 @@ class CombatResolver:
             await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge,
                                      miscast_damage=miscast_damage)
 
-    def _meleeProfileSteps(self, challenge, removals):
+    async def resolveCombatWithSpells(self, challenge, removals):
+        """One Initiative clock for the whole fight, including its duel (pp. 146, 211)."""
+        from combat_initiative import resolve_steps
+        streams = [self._meleeProfileSteps(challenge, removals, interleave=True)]
+        if challenge is not None:
+            streams.insert(0, self._challengeSteps(challenge, removals, interleave=True))
+        results = await resolve_steps(self.game, streams, challenge)
+        duel, melee = (results if challenge is not None else [(0, 0, 0, 0), results[0]])
+        return duel[0] + melee[0], duel[1] + melee[1], duel[2], duel[3]
+
+    def _meleeProfileSteps(self, challenge, removals, *, interleave=False):
         """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
         from combat_profiles import profile_strike_order
         order = profile_strike_order(self.game.attackers, self.game.defenders,
@@ -1992,6 +2002,7 @@ class CombatResolver:
         scores = [0, 0]
         initiative_step = None
         snapshots = {}
+        attacks_at_step = {}
         animated = set()
         cast = set()
         self._pendingWounds = getattr(self, '_pendingWounds', {})
@@ -2000,13 +2011,24 @@ class CombatResolver:
             if host.bodyNP.isEmpty() or target.bodyNP.isEmpty():
                 rule_skipped('Combat', host, f'I{initiative}: combatant removed during the challenge; no attacks')
                 continue
+            if challenge is not None and challenge.involves(target):
+                rule_skipped('Fighting a Challenge', host,
+                             f'{target.unit.name} is protected from outside attacks until combat ends (p. 211)')
+                continue
             if initiative != initiative_step:
                 initiative_step = initiative
-                snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
-                attacks_at_step = {id(candidate): candidate.attacks(
-                    snapshots[id(candidate.host)], self._combatStartModels.get(
-                        id(candidate.host.unit), snapshots[id(candidate.host)]), challenge)
-                    for step, candidate in order if step == initiative}
+                def prepare_step():
+                    nonlocal snapshots, attacks_at_step
+                    snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
+                    attacks_at_step = {id(candidate): candidate.attacks(
+                        snapshots[id(candidate.host)], self._combatStartModels.get(
+                            id(candidate.host.unit), snapshots[id(candidate.host)]), challenge)
+                        for step, candidate in order if step == initiative}
+                if interleave:
+                    from combat_initiative import InitiativeStep
+                    yield InitiativeStep(initiative, prepare_step)
+                else:
+                    prepare_step()
             if snapshots[id(target)] <= 0:
                 rule_skipped('Combat', host, f'I{initiative}: opponent already slain before this Initiative; no attacks')
                 continue
@@ -2424,7 +2446,7 @@ class CombatResolver:
             await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge,
                                      miscast_damage=miscast_damage)
 
-    def _challengeSteps(self, challenge, removals=None):
+    def _challengeSteps(self, challenge, removals=None, *, interleave=False):
         """Fight the duel, in Initiative order (p. 211).
 
         Returns (player 1 wounds, player 2 wounds, player 1 overkill,
@@ -2456,6 +2478,18 @@ class CombatResolver:
         cast = set()
         from itertools import groupby
         for initiative, step in groupby(order, key=lambda entry: entry[0]):
+            step = list(step)
+            frozen_attacks = {}
+            if interleave:
+                from battleFunctions import melee_attacks
+                from combat_initiative import InitiativeStep
+                def prepare_step():
+                    fallen.update(id(participant) for participant in challenge.participants()
+                                  if participant.unit.nmodels <= 0)
+                    for _, participant, group, _, charged, _, inches in step:
+                        group.model.charging = charged
+                        frozen_attacks[id(group)] = melee_attacks(group, charged, charge_distance=inches)
+                yield InitiativeStep(initiative, prepare_step)
             inflicted = {id(participant): 0 for participant in challenge.participants()}
             hazard_removals = Sequence()
             hazard_fallen = set()
@@ -2491,9 +2525,12 @@ class CombatResolver:
                     unit.model.equip_best_melee()
                 from fear import attack_penalty
                 from combat_weapons import weapon_target
+                fighting_unit = (SimpleNamespace(name=unit.name, model=unit.model, nmodels=unit.nmodels,
+                                 files=unit.files, ranks=unit.ranks, _attack_count=frozen_attacks[id(unit)])
+                                 if interleave else unit)
                 with attack_penalty(self.game, model, rival, unit.model), weapon_target(unit.model, model, rival):
                     attacks, hits, suffered, saved, wounds = simulate_battle(
-                        unit, rival.unit, charge=charged, first_round=first,
+                        fighting_unit, rival.unit, charge=charged, first_round=first,
                         charge_distance=inches)
                 slaying = take_last_slaying_blows()
                 if slaying:
@@ -2617,13 +2654,9 @@ class CombatResolver:
         player2_score += impact2
         # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
         challenge = await self.challengeExchange(attackerUnit, defenderUnit)
-        duel1, duel2, overkill1, overkill2 = (
-            await self.resolveChallengeWithSpells(challenge, modRemoveSequence) if challenge else (0, 0, 0, 0))
-        player1_score += duel1 + overkill1
-        player2_score += duel2 + overkill2
-        melee1, melee2 = await self.resolveMeleeWithSpells(challenge, modRemoveSequence)
-        player1_score += melee1
-        player2_score += melee2
+        wounds1, wounds2, overkill1, overkill2 = await self.resolveCombatWithSpells(challenge, modRemoveSequence)
+        player1_score += wounds1 + overkill1
+        player2_score += wounds2 + overkill2
 
         player1_score += self.takeAssailmentWounds(p1_units)
         player2_score += self.takeAssailmentWounds(p2_units)
