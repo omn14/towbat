@@ -73,7 +73,7 @@ class CannonFire:
             return
         target = Point3(self.game.mousePosOnGround)
         self.game.ignore('mouse1')
-        taskMgr.add(self._fire_task(cannonUnit, target))
+        taskMgr.add(self._fire_task(cannonUnit, target), 'cannonFire')
 
     async def _fire_task(self, cannonUnit, target):
         try:
@@ -145,7 +145,8 @@ class CannonFire:
         total_hit = total_wound = total_saved = total_cas = 0
         for unit, count in hits:
             total_hit += count
-            slain, wounded, saved = self._apply_wounds(unit, count, strength, ap)
+            slain, wounded, saved = self._apply_wounds(
+                unit, count, strength, ap, magical=cannonUnit.unit.model.has_magical_attacks(weapon=weapon))
             total_wound += wounded
             total_saved += saved
             total_cas += slain
@@ -185,12 +186,15 @@ class CannonFire:
                 results.append((unit, count))
         return results
 
-    def _apply_wounds(self, unit, hits, strength, ap):
+    def _apply_wounds(self, unit, hits, strength, ap, *, magical=False):
         """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141).
 
         Returns (slain, wounded, saved). Casualties are capped by the number of
         models actually present (not the stored nmodels, which may be stale).
         """
+        from battleFunctions import ethereal_blocks_hits
+        if ethereal_blocks_hits(unit.unit, hits, magical, 'cannon shot'):
+            return 0, 0, 0
         model = unit.unit.model
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         target = wound_target(strength, toughness)

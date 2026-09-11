@@ -215,11 +215,12 @@ def route_features(game, route, travel=None):
 
 
 def route_allowance(game, unit, route):
+    from special_rules import is_ethereal
     profiles = [member.unit.model for member in game.movement.movementParticipants(unit)]
     flying = all(profile.is_flying() for profile in profiles)
     modifier = min([0, *(piece.movement_modifier for piece in route_features(game, route))])
     return min(profile.get_fly_movement(0) if flying else
-               profile.get_movement(0) if profile.is_move_through_cover() or modifier == 0 else
+               profile.get_movement(0) if profile.is_move_through_cover() or is_ethereal(profile) or modifier == 0 else
                max(1, profile.get_movement(0) + modifier) for profile in profiles)
 
 

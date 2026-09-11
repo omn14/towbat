@@ -69,8 +69,8 @@ The three selected items now have coded effects:
 
 Vaul's Unmaking targeting, other item effects, general equipment legality and
 adaptation of the existing Ruby Ring handler remain pending. The selected
-High Magic pool now has coded Shield of Saphery and Fury of Khaine effects.
-The other eight High Magic/Saphery effects remain unimplemented; generating
+High Magic pool now has coded Shield of Saphery, Fury of Khaine and Walk Between
+Worlds effects. The other seven High Magic/Saphery effects remain unimplemented; generating
 those known spells does not make their catalogue wording executable.
 
 Battle saves contain explicit `magic_item_inventory` records. Recreating a
@@ -150,7 +150,7 @@ duplicate grants. Saving/loading and phase advance wait for in-flight magic.
 
 This is a lifecycle foundation, not a complete magic engine. Shield's Enchantment
 replacement and the two High Magic unit grants below are implemented; dynamic
-Self/area auras and every internal subphase's voluntary-ending window remain
+Self/area auras beyond Walk Between Worlds and every internal subphase's voluntary-ending window remain
 unfinished. Miscast/Outclassed damage still requires manual resolution and is
 logged as such. See the exact scope in
 [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
@@ -183,10 +183,51 @@ not erase Fury. Saves restore recipients and expiry without duplicate bonuses,
 including surviving recipients after the original target/caster dies. Numeric
 grant and combat-save outcomes appear in the rule log. Target geometry uses
 unit footprints; dispersed formations and challenge-specific targeting still
-need broader verification. This does not complete the other eight lore effects.
+need broader verification. Seven other lore effects remain unimplemented.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_magic.py tests/test_high_magic_scene.py
+```
+
+### Walk Between Worlds
+
+The Mage can cast this **10+ Self-range Conveyance** through the normal Movement
+phase spell menu. It grants the caster and current joined unit **Ethereal and
+Reserve Move until the caster's next Start of Turn** (Rulebook p. 329). It is not
+an Enchantment, so Shield of Saphery does not remove it.
+
+Ethereal prevents non-magical attack wounds, including Killing Blow and mundane
+Impact Hits or artillery. Magical attacks and spells still wound normally.
+Ensorcelled hand weapons qualify; mundane Chaos lances do not. Movement ignores
+terrain penalties and dangerous-terrain tests. Impassable terrain may be crossed,
+but not occupied at the end of a move; other units still block movement.
+Magical vortex damage remains magical. Ethereal and non-Ethereal characters and
+units cannot join each other.
+
+After shooting resolves, End Phase opens **Reserve Move** when eligible units
+exist. Select a unit and use the existing movement controls; End Phase declines
+unused moves and proceeds to Combat. A majority must have the rule. Units that
+charged, attempted a charge, marched or fled during Movement cannot use it;
+engaged, fleeing and newly rallied units are excluded. This is a separate Basic
+Movement allowance, not a march or charge, and cannot reopen shooting or casting.
+Normal redress and the Dragon Princes' free Drilled redress are supported. The
+AI currently declines optional Reserve Moves; after reloading directly into its
+Reserve window, End Phase may be needed to continue.
+
+Reload preserves the extra movement budget and completed moves. Self grants
+follow the Mage's host: leaving or retiring removes the host's benefit, returning
+to the fighting rank restores it while the spell lasts, and caster removal ends
+this Self-dependent effect. Native rules remain intact.
+
+The tested core covers the actual lone and joined Mage, exact-M Reserve Moves
+through a house, illegal endpoints, combat damage, expiry and repeated reload.
+Complex precomputed charge routes may still conservatively block Ethereal
+terrain passage. Impassable endpoints in other charge/reaction/pursuit paths,
+detailed swept wheel/formation geometry and broader Self/aura spells remain
+unfinished. See the checklist for those limits.
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_walk_between_worlds.py tests/test_walk_between_worlds_scene.py
 ```
 
 ### High Elf and Chaos Faction Effects

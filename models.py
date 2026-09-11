@@ -831,13 +831,17 @@ class model:
                             for rule in weapon.get('special_rules', []))
                 and any(rule.get(key) for rule in self.special_rules if isinstance(rule, dict)))
 
-    def has_magical_attacks(self) -> bool:
-        """Current weapon's attacks, not spells or another profile (RH p. 81)."""
-        weapon = self.equipedWeapon or {}
-        return (self.faction_hand_weapon('ensorcelled_weapons')
+    def has_magical_attacks(self, *, weapon=None, innate_only=False) -> bool:
+        """Weapon attacks or model-only automatic hits (pp. 167, 172; RH p. 81)."""
+        innate = any(rule.get('magical_attacks') or rule.get('name', '').lower() == 'magical attacks'
+                     for rule in self.special_rules if isinstance(rule, dict))
+        if innate_only:
+            return innate
+        weapon = (self.equipedWeapon or {}) if weapon is None else weapon
+        return ((weapon is self.equipedWeapon and self.faction_hand_weapon('ensorcelled_weapons'))
                 or bool(weapon.get('magical') or weapon.get('magic_item'))
                 or any(str(rule).lower() == 'magical attacks' for rule in weapon.get('special_rules', []))
-                or any(rule.get('magical_attacks') for rule in self.special_rules if isinstance(rule, dict)))
+                or innate)
 
     def armour_bane_for_attack(self) -> int:
         """Armour Bane (X) of the weapon used for the current attack."""

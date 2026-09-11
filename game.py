@@ -1062,6 +1062,9 @@ class MyApp(ShowBase):
         return task.done
 
     def taskLoopPathTowardsMouse(self, task):
+        from reserve_move import in_reserve, unavailable
+        if in_reserve(self) and unavailable(self, self.unitToMove):
+            return task.done
         if self.unitToMove.state != "Idle":
             print("Unit is not idle, cannot move.")
             return task.done
@@ -1142,6 +1145,8 @@ class MyApp(ShowBase):
 
     def castableSpells(self, unit):
         """Personal allowance and host restrictions (Rulebook pp. 108, 123, 207, 210)."""
+        if getattr(self.fsm, 'state', None) == 'ReserveMovePhase':
+            return []
         if (getattr(self.fsm, 'state', None) == 'StrategyPhase'
             and not getattr(self, 'strategyCommandDone', True)):
             return []
@@ -1190,10 +1195,13 @@ class MyApp(ShowBase):
     def redressRanks(self, delta):
         """Widen (v) or narrow (shift-v) the selected unit's front rank."""
         from vanguard import in_vanguard
-        if self.awaitingChoice or (self.fsm.state != 'MovementPhase' and not in_vanguard(self)):
+        from reserve_move import in_reserve, unavailable
+        if self.awaitingChoice or (self.fsm.state != 'MovementPhase' and not in_vanguard(self) and not in_reserve(self)):
             return
         unit = getattr(self, 'unitToMove', None)
         if unit is not None and not unit.bodyNP.isEmpty():
+            if in_reserve(self) and unavailable(self, unit):
+                return
             if self.movement.redressRanks(unit, delta):
                 self.refreshSelectedUnit()
 
@@ -1738,6 +1746,10 @@ class MyApp(ShowBase):
                         # Set the active unit based on which was clicked
                         for unit in self.units:
                             if unit_name == unit.unitName:
+                                from reserve_move import in_reserve, unavailable
+                                if in_reserve(self) and unavailable(self, unit):
+                                    rule_skipped('Reserve Move', unit, unavailable(self, unit))
+                                    return
                                 self.unitToMove = unit
                         """ if unit_name == self.bretBowmen.unitName:
                             self.unitToMove = self.bretBowmen
@@ -1765,7 +1777,7 @@ class MyApp(ShowBase):
                         # mouse1 stays bound: the player still has to be able
                         # to pick the next unit to shoot with.
                         self.cancelAiming('locked on target')
-                        taskMgr.add(self.shootAt(self.unitToMove, selected_unit))
+                        taskMgr.add(self.shootAt(self.unitToMove, selected_unit), 'shootingVolley')
 
             if self.fsm.state == 'SpellPhase':
                 result3 = self.world.rayTestClosest(pFrom, pTo, BitMask32.bit(5))
@@ -2000,6 +2012,16 @@ class MyApp(ShowBase):
 
     async def shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
                       distance=None, *, target_boxes=None):
+        """Finish all shooting before the Reserve Move window (Rulebook p. 177)."""
+        self.shootingInFlight = getattr(self, 'shootingInFlight', 0) + 1
+        try:
+            return await self._shootAt(attackerUnit, defenderUnit, stand_and_shoot,
+                                       distance, target_boxes=target_boxes)
+        finally:
+            self.shootingInFlight -= 1
+
+    async def _shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
+                       distance=None, *, target_boxes=None):
         _moved = self.movedThisTurn(attackerUnit)
         if getattr(attackerUnit, 'marchedThisTurn', False):
             if not attackerUnit.unit.model.fires_after_marching():

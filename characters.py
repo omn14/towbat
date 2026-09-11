@@ -69,6 +69,11 @@ def join_unit(game, character, host) -> bool:
     """Attach *character* to the front rank of *host*. Returns True on success."""
     if character is host or has_joined_character(host) or is_character(host):
         return False
+    from special_rules import is_ethereal
+    if is_ethereal(character.unit.model) != is_ethereal(host.unit.model):
+        from rules_log import rule_skipped
+        rule_skipped('Ethereal', character, f'cannot join {host.unit.name}: both must be Ethereal or neither (p. 167)')
+        return False
 
     host.joinedCharacter = character
     character.hostUnit = host
@@ -144,6 +149,8 @@ def detach_character(host):
                         if not (isinstance(r, dict) and r.get('tag') == JOIN_TAG)]
     if character is not None:
         character.hostUnit = None
+        from spell_effects import refresh_self_spells
+        refresh_self_spells(character)
     return character
 
 

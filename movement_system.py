@@ -552,12 +552,18 @@ class MovementSystem:
         flying = all(profile.is_flying() for profile in profiles)
         base = [profile.get_fly_movement(0) if flying else profile.get_movement(0)
                 for profile in profiles]
-        protected = [profile.is_move_through_cover() for profile in profiles]
+        from special_rules import is_ethereal
+        ethereal = [is_ethereal(profile) for profile in profiles]
+        protected = [profile.is_move_through_cover() or spirit for profile, spirit in zip(profiles, ethereal)]
         adjusted = [movement if flying or immune or modifier == 0
                     else max(1, movement + modifier)
                     for movement, immune in zip(base, protected)]
         allowance = min(adjusted)
-        if log and modifier < 0 and any(protected):
+        if log and modifier < 0 and any(ethereal):
+            rule_log('Ethereal', unit, f'treats terrain ({modifier:+g}M) as open ground; '
+                     f'{sum(ethereal)}/{len(profiles)} participating profiles Ethereal; '
+                     f'unit allowance {allowance:g}" (p. 167)')
+        elif log and modifier < 0 and any(protected):
             detail = '; '.join(
                 f'{participant.unit.name}: M{before:g} -> {after:g}'
                 f'{" (Move Through Cover)" if immune else " (no Move Through Cover)"}'
@@ -588,6 +594,11 @@ class MovementSystem:
             participants.append(character)
         total = 0
         for participant in participants:
+            from special_rules import is_ethereal
+            if is_ethereal(participant.unit.model):
+                rule_log('Ethereal', participant, f'{names}: open ground; skips '
+                         f'{len(features) * participant.unit.nmodels} dangerous-terrain tests (p. 167)')
+                continue
             wounds = dangerous_terrain_wounds(
                 len(features), participant.unit.nmodels, damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
@@ -790,6 +801,12 @@ class MovementSystem:
         return True
 
     def pathTowardsMouse(self,unit,x=None,y=None):
+        from reserve_move import in_reserve, unavailable
+        reserve = in_reserve(self.game)
+        if reserve and unavailable(self.game, unit):
+            self.game.arcPoint = None
+            self.game.setGroundOverlay(False)
+            return
         if x is None and y is None and (base.mouseWatcherNode is None or not base.mouseWatcherNode.hasMouse()):
             if getattr(unit, 'formedSkirmishPreview', None) is not None:
                 from skirmish_ui import clear_plot_preview
@@ -854,7 +871,7 @@ class MovementSystem:
                 self.game.setGroundOverlay(False)
                 return
             unit._movementAim = Vec3(result.getHitPos())
-            if not in_vanguard(self.game) and plot_charge(self.game, unit, result.getHitPos()):
+            if not in_vanguard(self.game) and not reserve and plot_charge(self.game, unit, result.getHitPos()):
                 return
 
             #self.game.smiley.setPos(result.getHitPos() + Vec3(0,0,2))
@@ -938,7 +955,7 @@ class MovementSystem:
             M = max(1, M + terrainMod)
             # This arc is the one kept when the path runs into a unit, so it is
             # the charge-declaration range rather than a march.
-            move = M if in_vanguard(self.game) else max_charge_range(M, unit_has_swiftstride(unit))
+            move = M if in_vanguard(self.game) or reserve else max_charge_range(M, unit_has_swiftstride(unit))
             move = max(0.0, move - unit.moveSpentThisTurn)
             if unit.state == "IsPursuing":
                 move = 21
@@ -1023,7 +1040,7 @@ class MovementSystem:
             # A march doubles Movement (p. 123); the first M is an ordinary move
             # that leaves the unit free to shoot.
             from drilled import march_multiplier
-            march = M * (1 if in_vanguard(self.game) else march_multiplier(unit)) * _mod
+            march = M * (1 if in_vanguard(self.game) or reserve else march_multiplier(unit)) * _mod
             move = max(0.0, march - unit.moveSpentThisTurn)
             # Move Sideways is itself a manoeuvre (p. 124), and a marching unit
             # may only wheel.
@@ -1031,7 +1048,7 @@ class MovementSystem:
             if unit.state == "IsPursuing":
                 move = 21
 
-            if not in_vanguard(self.game):
+            if not in_vanguard(self.game) and not reserve:
                 move = int(move)
             
             """ self.game.unitToMove.unit.model.reset_characteristics()
@@ -1154,6 +1171,17 @@ class MovementSystem:
 
     # ─── Unit Movement Execution ──────────────────────────────────────────
 
+    def etherealDestinationBlocked(self, unit):
+        """Ethereal may cross, but not finish in impassable terrain (p. 167)."""
+        from psychology import obb_distance
+        from special_rules import unit_is_ethereal
+        if not unit_is_ethereal(unit):
+            return False
+        box = self.game.psychology._unit_box(unit)
+        return any(obb_distance(box, (piece.center.x, piece.center.y,
+                                     piece.width / 2, piece.height / 2, 0)) <= 0
+                   for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
+
     def _destOnUnit(self, unit, endp) -> bool:
         """True if placing *unit* at *endp* would overlap another unit's body.
 
@@ -1189,9 +1217,11 @@ class MovementSystem:
         flying = vanguard_flying(unit) if in_vanguard(self.game) else _model.is_flying()
         # Flyers use their Fly Movement characteristic instead of M.
         allowance = self.movementAllowance(unit, cur, target)
+        from reserve_move import in_reserve
+        reserve = in_reserve(self.game)
         maxmove = (21.0 if unit.state == "IsPursuing" else
                    max(0.0, allowance * 2.0 - unit.moveSpentThisTurn))
-        if in_vanguard(self.game):
+        if in_vanguard(self.game) or reserve:
             maxmove = max(0.0, allowance - unit.moveSpentThisTurn)
         elif unit.state == 'Idle':
             maxmove = max(maxmove, max_charge_range(allowance, unit_has_swiftstride(unit)))
@@ -1279,6 +1309,9 @@ class MovementSystem:
         from drilled import move_pending
         if move_pending(self.game) and not drilled_ready:
             return False
+        from reserve_move import commit, in_reserve
+        if in_reserve(self.game):
+            return commit(self.game, unit)
         from scouts import scout_charge_blocked
         from charge_declarations import ordinary_move_allowed
         if (self.game.fsm.state == 'MovementPhase'
@@ -1331,6 +1364,13 @@ class MovementSystem:
         if not getattr(unit, 'isSkirmisher', False):
             unit.bodyNP.setH(unit.bodyNP.getH() + self.game.arcPointRotation)
             unit.bodyNP.setPos(unit.bodyNPback.getPos(render))
+        if self.etherealDestinationBlocked(unit):
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            rule_skipped('Ethereal', unit, 'cannot end movement inside impassable terrain; move restored (p. 167)')
+            self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
+            return False
         #self.game.checkUnitContact(unit)
         c = self.game.checkUnitContactSmall(unit)
 
@@ -1749,6 +1789,9 @@ class MovementSystem:
             pass_over = vanguard_flying(unit) if in_vanguard(self.game) else unit.unit.model.is_flying()
         if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
+        from special_rules import unit_is_ethereal
+        if unit_is_ethereal(unit):
+            mask &= ~CM.TERRAIN_IMPASSABLE
         startPos=unit.bodyNP.getPos()
         Hpr=unit.bodyNP.getHpr()
         shape = unit.bodyNP.node().getShape(0)
@@ -1790,6 +1833,9 @@ class MovementSystem:
             pass_over = vanguard_flying(unit) if in_vanguard(self.game) else unit.unit.model.is_flying()
         if mask == CM.MOVE_BLOCKERS and pass_over:
             mask = BitMask32.allOff()
+        from special_rules import unit_is_ethereal
+        if unit_is_ethereal(unit):
+            mask &= ~CM.TERRAIN_IMPASSABLE
         
         #tsFrom = TransformState.makePosHpr(startPos, nHpr)
         tsTo = TransformState.makePosHpr(tsFrom.getPos() + direction * length, tsFrom.getHpr())

@@ -72,7 +72,7 @@ class Bombardment:
         point = Point3(self.game.mousePosOnGround)
         target = min(enemies, key=lambda u: (u.bodyNP.getPos() - point).length())
         self.game.ignore('mouse1')
-        taskMgr.add(self._fire_task(unit, target))
+        taskMgr.add(self._fire_task(unit, target), 'bombardmentFire')
 
     async def _fire_task(self, unit, target):
         try:
@@ -178,6 +178,12 @@ class Bombardment:
 
         total_hit = total_cas = 0
         for enemy, children in by_unit.items():
+            from battleFunctions import ethereal_blocks_hits
+            source = getattr(getattr(unit, 'unit', None), 'model', None)
+            magical = source.has_magical_attacks(weapon=weapon) if source is not None else False
+            if ethereal_blocks_hits(enemy.unit, len(children), magical, 'bombardment'):
+                total_hit += len(children)
+                continue
             model = enemy.unit.model
             from magic_items import item_armour_save
             item_armour_save(model, model.armor_save, log=True)
@@ -186,12 +192,12 @@ class Bombardment:
             for child in children:
                 total_hit += 1
                 if enemy is central_enemy and child is central_child:
-                    if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls):
+                    if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls, magical=magical):
                         wounds = roll_dice_expr(mw) if mw else 1
                         if wounds >= stat_int(model.characteristics, 'W', 1):
                             cas += 1
                 else:
-                    if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls):
+                    if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls, magical=magical):
                         cas += 1
             report_ward_saves(enemy.unit, None, ward_rolls)
             cas = min(cas, len(enemy.model.getChildren()))
@@ -207,8 +213,11 @@ class Bombardment:
         self.game.debugText.setText(summary)
         battle_log(summary, 'good' if total_cas else 'combat')
 
-    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None):
+    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None, magical=False):
         """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141)."""
+        from special_rules import is_ethereal
+        if is_ethereal(model) and not magical:
+            return False
         toughness = model.get_toughness() if hasattr(model, 'get_toughness') else 4
         if random.randint(1, 6) < wound_target(strength, toughness):
             return False

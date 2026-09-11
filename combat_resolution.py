@@ -1004,7 +1004,8 @@ class CombatResolver:
             return False
         profiles = [participant.unit.model
                     for participant in self.game.movement.movementParticipants(unit)]
-        if all(profile.is_flying() for profile in profiles):
+        from special_rules import is_ethereal
+        if all(profile.is_flying() for profile in profiles) or all(is_ethereal(profile) for profile in profiles):
             return False
         planned = getattr(unit, 'formedSkirmishCharge', None)
         if planned is not None:
@@ -1038,6 +1039,10 @@ class CombatResolver:
                      f'-> {movement + result:g}" range (pp. 121, 269)')
         profiles = [participant.unit.model
                     for participant in self.game.movement.movementParticipants(unit)]
+        from special_rules import is_ethereal
+        if difficult and all(is_ethereal(profile) for profile in profiles):
+            rule_log('Ethereal', unit, f'charge treats terrain as open ground: dice {dice} '
+                     f'keep highest -> {result}; M{movement:g} -> {movement + result:g}" (p. 167)')
         if (difficult
             and any(profile.is_move_through_cover() for profile in profiles)
             and not all(profile.is_flying() for profile in profiles)):
@@ -2175,6 +2180,8 @@ class CombatResolver:
     def retireFromCombat(self, model, host):
         """A model that refused a challenge hides in the rear ranks (p. 210)."""
         model.retiredFromCombat = True
+        from spell_effects import refresh_self_spells
+        refresh_self_spells(model)
         if host is not None and host is not model:
             host.placeCharacter()
             host.layOutRanks()

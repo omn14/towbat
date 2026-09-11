@@ -22,6 +22,18 @@ from battlescribe import get_catalogue
 from rulesFunctions import plus1attacks
 
 
+def is_ethereal(model):
+    """Native or spell-granted Ethereal status (Rulebook p. 167)."""
+    return any(rule.get('ethereal') or rule.get('name', '').lower() == 'ethereal'
+               for rule in model.special_rules if isinstance(rule, dict))
+
+
+def unit_is_ethereal(unit):
+    """Every model must be able to cross terrain (pp. 123, 167)."""
+    joined = getattr(unit, 'joinedCharacter', None)
+    return is_ethereal(unit.unit.model) and (joined is None or is_ethereal(joined.unit.model))
+
+
 def parse_special_rule(text: str):
     """Split a catalogue rule string into (display_name, param).
 

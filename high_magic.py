@@ -31,6 +31,8 @@ class UnitEnchantmentSpell(Spell):
     spell_type = 'Enchantment'
     allows_engaged = False
     grant = {}
+    duration = 'end_turn'
+    duration_text = 'end of this turn'
 
     def target_reason(self, target):
         if not hasattr(target, 'unit') or self.caster is None or self.game is None:
@@ -89,7 +91,7 @@ class UnitEnchantmentSpell(Spell):
         self.grants = []
         if self.duration_list is None and self.game is not None:
             self.duration_list = self.game.fsm.endOfTurnSpells
-        register(self, self.affected_unit, duration='end_turn')
+        register(self, self.affected_unit, duration=self.duration)
         self.refresh()
 
     def refresh(self):
@@ -113,7 +115,7 @@ class UnitEnchantmentSpell(Spell):
             report = rule_log if before != after else rule_skipped
             report(self.name, self.affected_unit,
                    f'{profile.name}: {self.stat_name} {before} -> {after}; '
-                   'until end of this turn; same spell does not stack (p. 329)')
+                     f'until {self.duration_text}; same spell does not stack (p. 329)')
 
     def on_join(self, character, host):
         """Joining spreads an existing unit spell without renewing its duration (p. 207)."""
@@ -185,4 +187,70 @@ class ShieldOfSapherySpell(UnitEnchantmentSpell):
         await super().apply(target)
 
 
-HIGH_MAGIC = {'Fury of Khaine': FuryOfKhaineSpell, 'Shield of Saphery': ShieldOfSapherySpell}
+class WalkBetweenWorldsSpell(UnitEnchantmentSpell):
+    """Self/host Ethereal and Reserve Move until next Start of Turn (p. 329; Magic FAQ)."""
+    spell_type = 'Conveyance'
+    targets_self = True
+    self_scope = True
+    allows_engaged = True
+    RANGE = 0
+    grant = {'ethereal': True, 'reserve_move': True}
+    duration = 'next_start'
+    duration_text = 'caster\'s next Start of Turn'
+    stat_name = 'Ethereal/Reserve Move'
+
+    @staticmethod
+    def value(profile):
+        from reserve_move import has_reserve_move
+        from special_rules import is_ethereal
+        return is_ethereal(profile), has_reserve_move(profile)
+
+    def target_reason(self, target):
+        if self.caster is None or target is not self.caster:
+            return 'Self spell: only its caster may be targeted'
+        host = getattr(self.caster, 'hostUnit', None) or self.caster
+        if getattr(self.caster, 'retiredFromCombat', False):
+            return 'a retired Wizard cannot cast (Magic FAQ v1.5.3)'
+        if getattr(host, 'state', None) == 'IsFleeing':
+            return 'a fleeing Wizard or host cannot cast'
+        return super().target_reason(target)
+
+    def attach(self, target, ticks):
+        if self.caster is None:
+            return
+        spells = getattr(self.caster, '_self_spells', [])
+        if self not in spells:
+            self.caster._self_spells = [*spells, self]
+        super().attach(self.caster, ticks)
+
+    def refresh(self):
+        previous = list(getattr(self, 'affected_members', []))
+        self.affected_members = [self.caster]
+        host = getattr(self.caster, 'hostUnit', None)
+        if host is not None and not getattr(self.caster, 'retiredFromCombat', False):
+            self.affected_members.append(host)
+        self.affected_unit = self.caster
+        super().refresh()
+        removed = [member.unit.name for member in previous if member not in self.affected_members]
+        if removed:
+            rule_log(self.name, self.caster, f'host benefit removed from {", ".join(removed)}; '
+                     'caster no longer supplies its Self spell to that unit (p. 329; Magic FAQ v1.5.3)')
+
+    def on_join(self, character, host):
+        if character is self.caster:
+            self.refresh()
+
+    def load_effect(self, data, unit_map):
+        self.refresh()
+
+    def save_target(self):
+        return self.caster
+
+    def remove_effect(self):
+        super().remove_effect()
+        if self.caster is not None:
+            self.caster._self_spells = [spell for spell in getattr(self.caster, '_self_spells', []) if spell is not self]
+
+
+HIGH_MAGIC = {'Fury of Khaine': FuryOfKhaineSpell, 'Shield of Saphery': ShieldOfSapherySpell,
+              'Walk Between Worlds': WalkBetweenWorldsSpell}

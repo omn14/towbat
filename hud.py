@@ -90,7 +90,7 @@ class HUD(DirectObject):
               'MovementPhase': 'MOVEMENT', 'ShootingPhase': 'SHOOTING',
               'CombatPhase': 'COMBAT'}
     # Detours that are not steps of the turn sequence.
-    ASIDES = {'SpellPhase': 'CASTING', 'MakeChoice': 'CHOOSING',
+    ASIDES = {'SpellPhase': 'CASTING', 'ReserveMovePhase': 'RESERVE MOVE', 'MakeChoice': 'CHOOSING',
               'CampaignPhase': 'CAMPAIGN'}
 
     LOG_ENTRIES = 200

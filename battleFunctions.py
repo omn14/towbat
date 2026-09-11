@@ -294,6 +294,10 @@ def simulate_attack(model1,model2):
         wound = True
     else:
         wound = False
+    from special_rules import is_ethereal
+    model1.ethereal_prevented = bool(wound and is_ethereal(model2) and not model1.attack_magical)
+    if model1.ethereal_prevented:
+        wound = False
     # Armour Bane (X): a natural 6 to wound improves this attack's AP by X.
     bane = model1.armour_bane_for_attack() if (wound and natural_wound == 6) else 0
     model1.attack_AP = model1.AP + bane
@@ -460,6 +464,18 @@ def _report_too_tough_to_wound(unit, hits, strength, target):
                      f"-> wounds on {target}+ (p. 140)")
 
 
+def ethereal_blocks_hits(unit, hits, magical, source):
+    """Report an automatic-hit batch's magical exception once (pp. 167, 172)."""
+    from special_rules import is_ethereal
+    if hits <= 0 or not is_ethereal(unit.model):
+        return False
+    if magical:
+        rule_skipped('Ethereal', unit, f'{hits} magical hit(s) from {source} can wound (p. 167)')
+        return False
+    rule_log('Ethereal', unit, f'{hits} non-magical hit(s) from {source} cannot wound (p. 167)')
+    return True
+
+
 def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     """*hits* automatic hits of the given Strength and AP against *unit*.
 
@@ -468,6 +484,7 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int):
     """
     if hits <= 0:
         return 0, 0, 0
+    ethereal_blocks_hits(unit, hits, True, 'spell')
     m = unit.model
     from magic_items import item_armour_save
     item_armour_save(m, m.armor_save, log=True)
@@ -586,6 +603,8 @@ def resolve_impact_hits(unit1, unit2):
     from models import roll_dice_expr
     contacting = max(0, min(unit1.files, unit1.nmodels))
     hits = sum(roll_dice_expr(expr) for _ in range(contacting))
+    if ethereal_blocks_hits(unit2, hits, m.has_magical_attacks(innate_only=True), 'Impact Hits'):
+        return hits, 0, 0, 0
 
     strength = unmodified_strength(m)
     target = to_wound(m, unit2.model, strength=strength)
@@ -790,6 +809,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     hatred_rerolls = 0
     hatred_converted = 0
     ithilmar_rerolls = ithilmar_converted = 0
+    ethereal_prevented = 0
     ward_rolls = []
     hated = first_round and unit1.model.hates(unit2.model)
     unit1.model.hatred_rerolls = hated
@@ -812,6 +832,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                      f"not a hand weapon")
     for i in range(attacks1):
         hit,wound = simulate_attack(unit1.model, unit2.model)
+        ethereal_prevented += int(getattr(unit1.model, 'ethereal_prevented', False))
         struck = getattr(unit1.model, 'slaying_blow', None)
         if getattr(unit1.model, 'hatred_rerolled', False):
             hatred_rerolls += 1
@@ -837,6 +858,14 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             #    total_wounds = unit2.nmodels
             #    break # cannot wound more models than you have
     wound_target = to_wound(unit1.model, unit2.model)
+    from special_rules import is_ethereal
+    if is_ethereal(unit2.model):
+        if ethereal_prevented:
+            rule_log('Ethereal', unit2, f'prevents {ethereal_prevented} wound(s) from '
+                     f'{attacks1} non-magical attacks by {unit1.name} (p. 167)')
+        else:
+            cause = 'magical attacks can wound' if unit1.model.has_magical_attacks() else 'no wounds to prevent'
+            rule_skipped('Ethereal', unit2, f'{attacks1} attacks by {unit1.name}: {cause} (p. 167)')
     report_ward_saves(unit2, suffered_wounds, ward_rolls)
     _report_too_tough_to_wound(
         unit2, total_hits, stat_value(unit1.model.characteristics.get('S')),

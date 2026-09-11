@@ -107,9 +107,19 @@ def recasting(game, caster, name):
 
 def caster_removed(game, caster):
     joined = getattr(caster, 'joinedCharacter', None)
+    for spell in active_spells(game):
+        if getattr(spell, 'self_scope', False) and (spell.caster is caster or spell.caster is joined):
+            end_effect(spell, 'Self spell caster slain or leaves the battlefield')
     for spell in list(getattr(game, 'remainsInPlay', [])):
         if spell.caster is caster or (joined is not None and spell.caster is joined):
             end_effect(spell, 'caster slain or leaves the battlefield')
+
+
+def refresh_self_spells(caster):
+    """Self-spell host benefits follow the caster's presence (Magic FAQ v1.5.3)."""
+    for spell in list(getattr(caster, '_self_spells', [])):
+        if not spell.ended:
+            spell.refresh()
 
 
 async def choose_ending(game):

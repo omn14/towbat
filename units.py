@@ -583,6 +583,8 @@ class unitGraphics(FSM):
         char = getattr(self, 'joinedCharacter', None)
         if char is not None and getattr(char, 'retiredFromCombat', False):
             char.retiredFromCombat = False
+            from spell_effects import refresh_self_spells
+            refresh_self_spells(char)
             self.placeCharacter()
             rule_log('Refusing a Challenge', char,
                      "its unit is no longer engaged, so it returns to the "

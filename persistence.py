@@ -246,6 +246,10 @@ def save_game_state(game, filename=None):
             'isInCombat': unit.isInCombat,
             'hasMovedThisTurn': unit.hasMovedThisTurn,
             'marchedThisTurn': getattr(unit, 'marchedThisTurn', False),
+            'reserveDoneTurn': getattr(unit, 'reserveDoneTurn', None),
+            'reserveMovementTurn': getattr(unit, 'reserveMovementTurn', None),
+            'reserveMovementBlocked': getattr(unit, 'reserveMovementBlocked', None),
+            'reserveMoveOriginal': getattr(unit, 'reserveMoveOriginal', None),
             'marchTestResult': (getattr(unit, 'marchTestResult', None)
                                 if getattr(unit, 'marchTestResult', None) != 'pending' else None),
             'hasAttackedThisTurn': unit.hasAttackedThisTurn,
@@ -570,6 +574,10 @@ def load_game_state(game, filename):
         unit.isInCombat = unit_data['isInCombat']
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
         unit.marchedThisTurn = unit_data.get('marchedThisTurn', False)
+        unit.reserveDoneTurn = unit_data.get('reserveDoneTurn')
+        unit.reserveMovementTurn = unit_data.get('reserveMovementTurn')
+        unit.reserveMovementBlocked = unit_data.get('reserveMovementBlocked')
+        unit.reserveMoveOriginal = unit_data.get('reserveMoveOriginal')
         unit.marchTestResult = unit_data.get('marchTestResult')
         unit.hasAttackedThisTurn = unit_data['hasAttackedThisTurn']
         unit.standAndShootWounds = unit_data.get('standAndShootWounds', 0)
@@ -741,6 +749,9 @@ def load_game_state(game, filename):
     from charge_declarations import restore_declarations
     restore_declarations(game, game_state, unit_map)
     game.roundCounter.apply_selection_masks()
+    if game_state['current_phase'] == 'ReserveMovePhase':
+        from reserve_move import prepare
+        prepare(game)
     if game_state['current_phase'] == 'DeployPhase':
         from deployPhase import refresh_deployment
         refresh_deployment(game)

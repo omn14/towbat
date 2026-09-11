@@ -267,7 +267,9 @@ itself add gameplay effects.
       for Furious Charge/Impact Hits separately from lance/spear conditions.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
-      against Ethereal and any relevant saves. Warhounds' Fear interaction
+      against Ethereal and any relevant saves. Magical-versus-Ethereal damage
+      is now implemented below, including explicit automatic-hit sources.
+      LEFTOVER: broader defence consumers and Warhounds' Fear interaction
       with Flaming Attacks must follow the troop-type rule and FAQ.
 
 ### High Elf Rules
@@ -337,7 +339,8 @@ itself add gameplay effects.
       active-character Leadership helper. Existing declaration/rally tests now
       supply Impetuous dice or close declarations before ordinary redress.
       **LEFTOVER:** free-redress hooks for Vanguard, pursuit/overrun, Follow Up,
-      reserve and spell-granted movement; broader column/Counter Charge restrictions;
+      and other spell-granted movement; Reserve Move now offers Drilled before
+      committing. Broader column/Counter Charge restrictions remain;
       swept manoeuvre obstruction, 1-inch separation and complex joined footprints.
       Endpoint fit is not a full model-by-model legal-path proof. AI does not
       optimize optional frontage. Suspended movement tasks cannot be saved.
@@ -352,7 +355,7 @@ itself add gameplay effects.
       and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
       Verified pure outcomes and the actual imported Mage's casting allowance.
       **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
-      still manual, and eight High Magic/Saphery spell effects below remain unimplemented.
+      still manual, and seven High Magic/Saphery spell effects below remain unimplemented.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
@@ -381,13 +384,14 @@ only a blocker if that relationship is actually chosen later.
       native Chaos Ward. Missing/X values never invent a save.
       LEFTOVER: Wizard armour permission is not implemented; no Chaos Wizard
       is selected. Future spell Ward grants must use the existing best-save rule.
-- [ ] **Ensorcelled Weapons** - Aspiring Champion, Knights and Warriors.
+- [x] **Ensorcelled Weapons** - Aspiring Champion, Knights and Warriors.
       A single non-magical hand weapon gains AP-1 and Magical Attacks; great
       weapons, halberds, lances and mounts do not receive those benefits.
       AP-1 is live and attacks carry a Magical classification without mutating
       their stored weapon. Eligible/ineligible weapon batches log once.
-      LEFTOVER: magical-versus-mundane defence consumers (including Ethereal)
-      are not implemented; classification alone is not complete rule support.
+      Ethereal now consumes this magical classification: qualifying hand weapons
+      can wound it, mundane lances cannot. LEFTOVER: other magical-defence effects
+      and tactical weapon selection; not a general magic-weapon implementation.
 - [ ] **Mark of Chaos Undivided** - Aspiring Champion, Knights, Warriors and
       Horsemen. Failed Fear/Panic/Terror re-rolls, not Break or ordinary Rally
       re-rolls. Coordinate with Veteran and never re-roll a re-roll.
@@ -567,8 +571,8 @@ committed as `9b90bce`; selected effects were deliberately left for point 4.
       table; runtime spell classes needed excluding from saved generation data;
       long choice labels overflowed fixed buttons. Dialog geometry and rendered
       selection are covered by the existing offscreen choice-layout tests.
-- LEFTOVER: eight High Magic/Saphery spell effects remain. Shield of Saphery,
-      Fury of Khaine, Chaos Armour's Ward and the Mark's Panic reroll were
+- LEFTOVER: seven High Magic/Saphery spell effects remain. Shield of Saphery,
+      Fury of Khaine, Walk Between Worlds, Chaos Armour's Ward and the Mark's Panic reroll were
       implemented in the later entries below; their listed limitations remain.
       Unsupported generated spells are explicitly logged as known but inert.
 - LEFTOVER: only a complete, unambiguous six-spell lore plus one normal
@@ -614,11 +618,11 @@ detail scrolling, and Champion armour 5+ to 4+. Old battle saves are not migrate
       spell targeting remain separate from caster selection. The two unit grants
       below now propagate, but do not expand the one-joined-character model.
 
-Runtime audit: `spell_class(name)` resolves **Shield of Saphery and Fury of
-Khaine**; the other **eight** exported spells below still use `CatalogueSpell`,
+Runtime audit: `spell_class(name)` resolves **Shield of Saphery, Fury of Khaine
+and Walk Between Worlds**; the other **seven** exported spells below still use `CatalogueSpell`,
 which rolls to cast and prints wording but does not apply the effect. All ten
 form the Mage's available pool, not ten known spells. Full arbitrary legal
-generation still needs the remaining effects; the two coded spells do not
+generation still needs the remaining effects; the three coded spells do not
 complete every possible three-spell selection.
 
 - [x] **Spell generation and Lore of Saphery substitution**: Level 2 plus
@@ -637,9 +641,76 @@ complete every possible three-spell selection.
 - [ ] **Drain Magic** - Remains in Play casting-value aura. This Chaos list
       contains no Wizard or Bound item, so it normally has no enemy caster to
       affect here; retain correct eligibility rather than inventing a target.
-- [ ] **Walk Between Worlds** - caster/host Ethereal and Reserve Move until
-      the specified next Start of Turn. Requires those rules, magical versus
-      mundane damage, movement timing and removal without permanent stat drift.
+- [x] **Walk Between Worlds (selected caster/host and movement core)** - 10+,
+      Self, Conveyance, until the caster's next Start of Turn (Rulebook p. 329).
+      Ordinary spell-menu casting, casting allowance, dispel and save/load paths
+      use the Mage as the owner. Grants Ethereal and Reserve Move to the caster,
+      current host, command and split profiles without rewriting characteristics.
+      As a Conveyance it survives Shield's Enchantment replacement. Same grants
+      do not stack; native rules survive source removal. Unlike Shield/Fury's
+      fixed recipients, this Self grant follows the current caster/host: departure
+      removes the old host benefit; retirement removes it immediately, and return
+      to the fighting rank restores it while active (Magic FAQ v1.5.3). Caster
+      death/removal ends this Self-dependent grant. Opponent Start of Turn and
+      ordinary turn end do not expire it; the caster's next Start of Turn does.
+
+      **Ethereal (p. 167):** mundane melee/missile wounds are suppressed before
+      Killing Blow/Monster Slayer can trigger. Automatic hits have an explicit
+      magical source: model-only Impact Hits cannot borrow a magical weapon;
+      cannon/bombardment use their firing weapon; spells remain magical (p. 172).
+      Native Magical Attacks and qualifying Ensorcelled hand weapons are recognised.
+      Each damage batch logs prevented wounds or why magical hits bypass immunity.
+      Terrain penalties and dangerous-terrain tests are skipped per Ethereal
+      movement profile, while magical vortex damage still resolves. Shared sweeps
+      remove terrain blockers only, not units; ordinary and Reserve Move commits
+      reject impassable endpoints.
+      Loose per-base terrain movement and difficult-charge dice recognise immunity.
+      Characters and units with mismatched Ethereal status cannot join.
+
+      **Reserve Move (p. 177):** after all shooting resolves, an optional phase
+      window provides a separate Basic Movement allowance. Majority ownership,
+      charged/attempted-charge, marched, Movement-phase fleeing, current combat,
+      fleeing and rally restrictions are checked. Snapshotting Movement restrictions
+      avoids losing the fleeing flag when Shooting resets phase state. No march,
+      charge, enemy approach within 1", or further spell casting/shooting is allowed.
+      Existing preview, wheel/sideways/backwards limits and ordinary redress apply;
+      Drilled offers free redress before committing and locks phase advance during
+      the choice. End Phase declines unused moves. Save/reload retains original
+      movement state, the separate budget and per-turn completion; no second move
+      is granted. AI currently declines rather than choosing an unverified route.
+
+      **Corrections and verification:** the full half-depth of the formation,
+      not its inset Bullet collision anchor, places Reserve destinations; the
+      inset anchor incorrectly rejected exact-M moves. Live shooting is awaited
+      before Reserve entry; game callback return conventions remain unchanged.
+      28 new tests pass (17 pure, 11 actual-roster scenes), covering damage sources,
+      slaying immunity, terrain penalties, mixed profiles, restrictions, Self casting,
+      joins/retirement/death, turn expiry, reload before/during/after Reserve moves,
+      Drilled, no-charge/no-march, and lone/joined Mage moves through a house with
+      illegal endpoints rejected. The Reserve HUD screenshot was rendered and
+      inspected. Across 24 bounded modules: 652 tests pass, three existing mocked
+      attack failures reproduce with committed damage code in
+      `test_skirmish_shooting.py` (missing `ithilmar_rerolled`); left untouched.
+
+      **LEFTOVER:** precomputed formed-charge obstacle lists may still block
+      Ethereal passage conservatively. Other charge/reaction/pursuit callers of
+      shared sweeps do not all validate impassable endpoints yet. Reserve wheels
+      use the existing preview cost and a straight displacement sweep, not a full
+      swept arc; loose Reserve moves translate the existing formation, without
+      individual rearrangement. Native mixed split-rule inheritance and highly
+      irregular terrain require further coverage. Reload into an AI Reserve window
+      prepares state but does not reschedule its decline task; End Phase may be
+      needed. Strict once-per-turn Conveyance history after source removal and
+      future end-of-Shooting spell expiry relative to Reserve still need handling.
+      No new Stomp implementation, tactical AI Reserve policy, or generic Self/aura
+      system is claimed. This is not full matchup acceptance; seven lore effects remain.
+
+      Sources: [Walk Between Worlds](https://tow.whfb.app/spell/walk-between-worlds),
+      p. 329; [Ethereal](https://tow.whfb.app/special-rules/ethereal), p. 167;
+      [Reserve Move](https://tow.whfb.app/special-rules/reserve-move), p. 177;
+      [Magical Attacks](https://tow.whfb.app/special-rules/magical-attacks), p. 172;
+      [Conveyance](https://tow.whfb.app/magic/conveyance), p. 107;
+      [Magic FAQ v1.5.3](https://tow.whfb.app/faq/magic).
 - [ ] **Fiery Convocation** - scattered large template, per-base hits,
       Flaming Attacks and correct S/AP, including Skirmisher targets.
 - [ ] **Tempest** - stationary Remains in Play vortex and terrain-changing
@@ -692,8 +763,9 @@ complete every possible three-spell selection.
       range/vision and challenge-specific restrictions are not certified here.
       Character separation retains timed grants rather than treating them as
       auras; p. 207 explicitly establishes joining propagation, not a separate
-      leaving-spell rule. Dynamic Self/aura retirement, broader Enchantment
-      classifications and the other eight lore effects remain open. These tests
+      leaving-spell rule. Self retirement is handled for Walk Between Worlds above;
+      other Self/area effects, broader Enchantment classifications and seven lore
+      effects remain open. These tests
       do not constitute complete matchup acceptance or generic stat-buff support.
 
       Sources: [Fury of Khaine](https://tow.whfb.app/spell/fury-of-khaine),
@@ -734,7 +806,8 @@ complete every possible three-spell selection.
       casting, reload, expiry, failed recast, caster death and phase-choice paths.
       Shield-specific conflicting-Enchantment replacement and both selected unit
       grants are now implemented above, with non-mutating effective A for Fury.
-      **LEFTOVER:** dynamic Self/host and area-aura refresh/retirement, and other
+      Walk Between Worlds adds its own dynamic Self/host refresh and retirement.
+      **LEFTOVER:** other dynamic Self/host and area-aura refresh/retirement, and other
       reversible characteristic grants remain open. The engine's main phases
       do not expose every subphase; voluntary ending at internal Command/Conjuration/
       Rally and other subphase starts remains open. Direct debug phase requests
@@ -760,7 +833,7 @@ complete every possible three-spell selection.
       Impetuous, Drilled and core Marching Column dependencies are now implemented
       and tested together. The explicit movement/geometry leftovers remain open.
 7. Magic and remaining dependencies: Lileath choices, lifecycle core and selected
-      Shield/Fury effects are implemented. Eight lore effects, listed lifecycle
+      Shield/Fury/Walk effects are implemented. Seven lore effects, listed lifecycle
       limits and Gaze of the Gods including Stupidity remain.
 8. Complete matchup verification using both exact roster imports offscreen.
       Each completed entry needs a rule citation, positive/negative tests, useful

@@ -101,6 +101,17 @@ class GamePhaseFSM(FSM):
             return
         if self.state == 'SpellPhase':
             return  # Finish or cancel the cast before advancing the battle phase.
+        if self.state == 'ShootingPhase' and (
+                getattr(self.game, 'shootingInFlight', 0) or getattr(self.game, 'awaitingChoice', False)
+                or any(self.game.taskMgr.hasTaskNamed(name) for name in
+                       ('shootingVolley', 'cannonFire', 'bombardmentFire'))):
+            return
+        if self.state == 'ReserveMovePhase':
+            from drilled import move_pending
+            if getattr(self.game, 'awaitingChoice', False) or move_pending(self.game):
+                return
+            self.request('CombatPhase')
+            return
         if self.state == 'MovementPhase':
             from charge_declarations import collecting, resolve_declarations
             from drilled import move_pending
@@ -140,6 +151,10 @@ class GamePhaseFSM(FSM):
             self.game.magicBusy = True
             taskMgr.add(advance_with_choices(self), 'endSpellChoiceTask')
             return
+        if self.state == 'ShootingPhase':
+            from reserve_move import begin
+            if begin(self.game):
+                return
         """ units = self.game.player2Units if self.game.roundCounter.current_player == 2 else self.game.player1Units
         for unit in units:
             self.game.fallBackContactTest(unit.bodyNP)
@@ -289,6 +304,9 @@ class GamePhaseFSM(FSM):
         self.game.ignore('mouse1')
         if getattr(self, '_spell_origin', None) == 'MovementPhase':
             return
+        if not getattr(self.game, 'restoringBattle', False):
+            from reserve_move import record_movement
+            record_movement(self.game)
         from spell_effects import end_phase
         end_phase(self.game, 'MovementPhase')
         # The charge move is over — clear the Panic exemption.
@@ -340,6 +358,24 @@ class GamePhaseFSM(FSM):
         if getattr(self.game, 'rangeRing', None):
             self.game.rangeRing.removeNode()
             self.game.rangeRing = None
+
+    def enterReserveMovePhase(self):
+        self.current_phase_index = 2
+        self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
+        self.game.setActiveUnitTaskName = 'taskLoopPathTowardsMouse'
+        self.game.accept('mouse1', self.game.setActiveUnit,
+                         [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
+        if not getattr(self.game, 'restoringBattle', False):
+            from reserve_move import ai_moves, candidates, prepare
+            prepare(self.game)
+            if candidates(self.game) and all(self.game.aiControls(unit) for unit in candidates(self.game)):
+                self.game.taskMgr.add(ai_moves(self.game), 'reserveMoveAI')
+
+    def exitReserveMovePhase(self):
+        from reserve_move import finish_window
+        finish_window(self.game)
+        self.game.ignore('mouse1')
+        self._cleanup_phase()
 
     def enterCombatPhase(self):
         print("Entering Combat Phase")

@@ -116,6 +116,8 @@ def preview_move(game, unit, positions=None, destination=None):
     error = coherency_error(boxes)
     participants = game.movement.movementParticipants(unit)
     flying = all(member.unit.model.is_flying() for member in participants)
+    from special_rules import is_ethereal
+    ethereal = all(is_ethereal(member.unit.model) for member in participants)
     pieces = getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])
     terrain = [[piece for piece in pieces if swept_base_overlaps(
         after if flying else before, after,
@@ -126,7 +128,7 @@ def preview_move(game, unit, positions=None, destination=None):
     for participant in participants:
         profile = participant.unit.model
         movement = profile.get_fly_movement(0) if flying else profile.get_movement(0)
-        if not flying and not profile.is_move_through_cover() and modifier:
+        if not flying and not profile.is_move_through_cover() and not is_ethereal(profile) and modifier:
             movement = max(1, movement + modifier)
         allowances.append(movement)
     allowance = min(allowances)
@@ -139,7 +141,7 @@ def preview_move(game, unit, positions=None, destination=None):
                abs(corner[1]) > BOARD_HALF_DEPTH + EPSILON for corner in _box_corners(*after)):
             error = error or f'Model {index + 1} would leave the battlefield'
         for piece in features:
-            if piece.is_impassable and (not flying or obb_distance(
+            if piece.is_impassable and (not (flying or ethereal) or obb_distance(
                     after, (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)) <= EPSILON):
                 error = error or f'Model {index + 1} is blocked by impassable terrain'
         for other in game.units:
@@ -247,6 +249,10 @@ def commit_move(game, unit, positions=None, destination=None):
         if participant is None or participant not in game.units:
             continue
         tests = sum(sum(piece.is_dangerous for piece in crossed) for crossed in features)
+        from special_rules import is_ethereal
+        if tests and is_ethereal(participant.unit.model):
+            rule_log('Ethereal', participant, f'open ground: skips {tests} dangerous-terrain tests (p. 167)')
+            continue
         wounds = dangerous_terrain_wounds(tests, 1,
                                          reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                                          subject=participant)
