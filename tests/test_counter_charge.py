@@ -9,7 +9,7 @@ from models import model
 
 
 def fighter(name):
-    return SimpleNamespace(unit=SimpleNamespace(name=name, model=model(name, '')),
+    return SimpleNamespace(unit=SimpleNamespace(name=name, model=model(name, ''), files=4, ranks=1),
                            state='Idle', isInCombat=False)
 
 
@@ -64,6 +64,15 @@ def test_once_per_game_turn_not_once_per_own_turn():
     assert 'already used' in reason(defender, charger)
     assert reason(defender, charger, turn=[2, 2]) is None
     assert reason(defender, charger, turn=[1, 3]) is None
+
+
+def test_column_requires_drilled_before_countercharge():
+    from special_rules import apply_rule_keywords
+    defender, charger = fighter('Chaos Knight'), fighter('Silver Helm')
+    defender.unit.files, defender.unit.ranks = 1, 4
+    assert 'Marching Column' in reason(defender, charger)
+    apply_rule_keywords(defender.unit.model, ['Drilled'])
+    assert reason(defender, charger) is None
 
 
 @pytest.mark.parametrize('d6, distance', [(1, 2), (2, 2), (3, 3), (4, 3), (5, 4), (6, 4)])

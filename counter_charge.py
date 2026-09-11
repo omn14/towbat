@@ -20,6 +20,12 @@ def unavailable_reason(defender, charger, *, distance, movement, flank, turn,
         return 'fleeing units cannot Counter Charge'
     if defender.state == 'InCombat' or getattr(defender, 'isInCombat', False):
         return 'already engaged in combat'
+    from chaos_gifts import succumbed
+    from drilled import has_drilled, marching_column
+    if succumbed(defender):
+        return 'succumbed to Stupidity; must Hold (p. 178)'
+    if marching_column(defender) and not has_drilled(defender):
+        return 'Marching Column cannot make a charge move (p. 101)'
     if list(getattr(defender, 'counterChargeTurn', []) or []) == list(turn):
         return 'already used Counter Charge this turn; must Hold'
     troop_type = charger.unit.model.troop_type().lower()

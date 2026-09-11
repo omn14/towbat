@@ -159,6 +159,18 @@ class CombatResolver:
         from psychology import _box_corners
         from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH
 
+        from drilled import before_move, marching_column
+        preview_position = Vec3(charger.bodyNP.getPos())
+        preview_facing = Vec3(charger.bodyNP.getHpr())
+        charger.bodyNP.setPos(origin)
+        charger.bodyNP.setHpr(facing)
+        await before_move(self.game, defender, 'Counter Charge')
+        if marching_column(defender):
+            rule_skipped('Counter Charge', defender,
+                         'still in Marching Column after Drilled; Holds without a charge move (p. 101)')
+            charger.bodyNP.setPos(preview_position)
+            charger.bodyNP.setHpr(preview_facing)
+            return False
         defender.counterChargeTurn = current_turn(self.game)
         begin_charge_attempt(defender)
         begin_charge_attempt(charger)
@@ -168,8 +180,6 @@ class CombatResolver:
         charger.marchedThisTurn = charger.wouldMarch = False
         dice_models = []
         try:
-            from drilled import before_move
-            await before_move(self.game, defender, 'Counter Charge')
             dice_models, rolls = await self.rullTerninger(1)
             distance = counter_charge_distance(rolls[0])
             for die in dice_models:
@@ -694,8 +704,10 @@ class CombatResolver:
                          f'{counterOption.distance:.2f}" (charger M{counterOption.movement:g})')
                 unit.hasMovedThisTurn = True
                 unit.marchedThisTurn = unit.wouldMarch = False
-                await self.counterChargeInterval(unit, defender, oposUnit, orotUnit)
-                return task.done
+                result = await self.counterChargeInterval(unit, defender, oposUnit, orotUnit)
+                if result is not False:
+                    return task.done
+                crchoice = 'hold'
             if counterOption:
                 rule_skipped('Counter Charge', defender, f'chose {crchoice}; reaction remains unused')
             if crchoice == "fire & flee":
@@ -2958,6 +2970,8 @@ class CombatResolver:
         if succumbed(winner):
             rule_skipped('Stupidity', winner, 'cannot overrun (p. 178)')
             return
+        from drilled import before_move
+        await before_move(self.game, winner, 'overrun')
         pos = winner.bodyNP.getPos()
         bonus = await self.swiftstrideChoice(
             winner, 'pursuit', distance_to_edge=board_edge_distance(pos.x, pos.y))
@@ -3099,6 +3113,8 @@ class CombatResolver:
         followers = [follower for follower in followers if not succumbed(follower)]
         from drilled import before_move
         await before_move(self.game, loserUnit, 'Giving Ground')
+        for follower in followers:
+            await before_move(self.game, follower, 'Follow Up')
         winners = [u for u in loserUnit.isInCombatWith if not u.bodyNP.isEmpty()]
         direction = self.giveGroundDirection(loserUnit, winners)
         moving = [loserUnit] + [f for f in followers if not f.bodyNP.isEmpty()]
@@ -3399,6 +3415,8 @@ class CombatResolver:
         if succumbed(winner):
             rule_skipped('Stupidity', winner, 'cannot pursue (p. 178)')
             return
+        from drilled import before_move
+        await before_move(self.game, winner, 'pursuit')
         targetPos = Vec3(destination) if destination is not None else target.bodyNP.getPos()
         rFrom = winner.bodyNP.getHpr()
         winner.bodyNP.lookAt(targetPos)

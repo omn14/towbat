@@ -303,6 +303,8 @@ async def select_vanguard(game, unit, task):
             finish_vanguard_unit(game, unit)
             return task.done
         game.vanguardActive = unit.unitName
+        from drilled import before_move
+        await before_move(game, unit, 'Vanguard')
     if game.aiControls(unit):
         origin = unit.bodyNP.getPos()
         direction = unit.bodyNP.getQuat().getForward()

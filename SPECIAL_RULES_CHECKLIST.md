@@ -225,8 +225,10 @@ itself add gameplay effects.
       only the Charge roll. Flee's board-distance helper imports from special_rules.
       A queued loose target is not reselected by sight after reactions or reload.
       Drilled now offers free redress before the formed Counter Charge advance.
-      **LEFTOVER:** wider Marching Column/Counter Charge restrictions and loose-formation
-      Counter Charge remain unfinished (loose pairs are refused with a log). Complex
+      A column without Drilled cannot Counter Charge; a column retained after
+      redress Holds, without cancelling the incoming charge (live regression).
+      **LEFTOVER:** loose-formation Counter Charge remains unfinished
+      (loose pairs are refused with a log). Complex
       obstructed/flying routes, pivot/terrain edge cases and joined-model geometry
       need broader verification, as do simultaneous frontage maximisation and
       redirected charges. Multiple loose-defender form-ups and fleeing loose
@@ -324,7 +326,8 @@ itself add gameplay effects.
       resume in Remaining Moves rather than inventing retroactive tests.
 - [x] **Drilled (selected movement paths)** - Dragon Princes (pp. 125, 167;
       FAQ v1.5.3). Free redress immediately before committed Remaining Moves,
-      queued charge moves, Counter Charge and Giving Ground. The front is anchored;
+      queued charge moves, Counter Charge, Giving Ground, pursuit, overrun,
+      Follow Up and first Vanguard activation. The front is anchored;
       up to five files change without spending normal movement/manoeuvre allowance.
       Charge dice precede redress; routes are rebuilt afterwards. Joined characters
       accompany the host. Candidate shapes roll back cleanly, retain character
@@ -340,9 +343,9 @@ itself add gameplay effects.
       not the stale collision marker; complete empty declaration queues; use the
       active-character Leadership helper. Existing declaration/rally tests now
       supply Impetuous dice or close declarations before ordinary redress.
-      **LEFTOVER:** free-redress hooks for Vanguard, pursuit/overrun, Follow Up,
-      and other spell-granted movement; Reserve Move now offers Drilled before
-      committing. Broader column/Counter Charge restrictions remain;
+      **LEFTOVER:** other spell-granted movement outside the selected lores;
+      Reserve Move offers Drilled before committing. Post-combat hooks have
+      regression coverage but still need explicit chosen-redress scene acceptance;
       swept manoeuvre obstruction, 1-inch separation and complex joined footprints.
       Endpoint fit is not a full model-by-model legal-path proof. AI does not
       optimize optional frontage. Suspended movement tasks cannot be saved.

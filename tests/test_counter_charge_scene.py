@@ -209,3 +209,21 @@ def test_ai_still_stands_and_shoots_without_countercharge(scene):
             charger, contact, origin, facing, SimpleNamespace(done='done')))
     volley.assert_awaited_once_with(defender, charger, option.weapon, 10, target_boxes=None)
     assert not defender.counterChargeTurn
+
+
+def test_column_after_drilled_holds_without_cancelling_incoming_charge(scene):
+    app, charger, defender, origin, facing, contact = declared_charge(scene)
+    option = SimpleNamespace(distance=10, movement=8)
+    before = Vec3(defender.bodyNP.getPos())
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'counterChargeOption', return_value=option), \
+            patch('drilled.before_move', AsyncMock(return_value=None)), \
+            patch('drilled.marching_column', return_value=True), \
+            patch.object(app.combat, 'chargeInterval', AsyncMock(return_value=None)) as charge:
+        run(app.combat.chargeAndChargeReaction(
+            charger, contact, origin, facing, SimpleNamespace(done='done')))
+    charge.assert_awaited_once()
+    assert defender.bodyNP.getPos() == before
+    assert not defender.counterChargeTurn
+    assert defender.chargeAttempts == 0

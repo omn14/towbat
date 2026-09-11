@@ -467,6 +467,15 @@ def test_render_vanguard_selection_offscreen(scene, tmp_path):
     assert app.screenshot(str(tmp_path / 'vanguard.png'), defaultFilename=False)
 
 
+def test_drilled_is_offered_once_when_vanguard_movement_begins(scene):
+    app, unit = restore(scene)
+    with patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Move')), \
+            patch('drilled.before_move', AsyncMock(return_value=None)) as redress:
+        asyncio.run(select_vanguard(app, unit, SimpleNamespace(done='done')))
+        asyncio.run(select_vanguard(app, unit, SimpleNamespace(done='done')))
+    redress.assert_awaited_once_with(app, unit, 'Vanguard')
+
+
 if __name__ == '__main__':
     app = build_vanguard_scenario()
     try:
