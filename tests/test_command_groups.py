@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from command_groups import (has_command, install_command, living_command,
                             musician_bonus, musician_leadership,
                             remove_command_casualties, standard_bonus)
@@ -247,7 +249,8 @@ def test_drilled_and_flying_marches_do_not_test():
         game.taskMgr.add.assert_not_called()
 
 
-def test_split_attack_counts_include_existing_charge_hooks():
+@pytest.mark.parametrize('distance,attacks', [(2.99, 4), (3, 8), (7, 8)])
+def test_split_attack_counts_include_furious_charge_at_three_inches(distance, attacks):
     from unittest.mock import patch
     from battleFunctions import simulate_battle
     from combat_profiles import combat_profiles
@@ -259,11 +262,13 @@ def test_split_attack_counts_include_existing_charge_hooks():
     host.unit.model = model('Chaos Knight', '')
     host.unit.ranks = 1
     host.chargedThisTurn = True
+    host.chargeDistance = distance
     apply_rule_keywords(host.unit.model, ['Furious Charge'])
     target = SimpleNamespace(name='Enemy', model=model('Chaos Warrior', ''), nmodels=4, files=4, ranks=1)
     part = combat_profiles(host, None)[0]
     host.unit.model.ithilmar_rerolled = False
     with patch('battleFunctions.simulate_attack', return_value=(False, False)):
-        result = simulate_battle(part.unit(lambda: part.attacks(4, 4)), target, charge=True)
-    assert result[0] == 8
+        count = part.attacks(4, 4)
+        result = simulate_battle(part.unit(count), target, charge=True, charge_distance=distance)
+    assert result[0] == attacks
     assert host.unit.model.characteristics['A'] == '1'

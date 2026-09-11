@@ -62,7 +62,7 @@ class TestBuildSpecialRules(unittest.TestCase):
         rules = self._rules_for("Black Orc")
         fc = _by_name(rules, "Furious Charge")
         self.assertIsNotNone(fc)
-        self.assertTrue(callable(fc.get("charge")))
+        self.assertTrue(fc.get("furious_charge"))
 
     def test_unknown_rule_is_flag(self):
         # A rule with no coded builder still appears as a display flag.

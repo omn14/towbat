@@ -19,7 +19,6 @@ from __future__ import annotations
 import re
 
 from battlescribe import get_catalogue
-from rulesFunctions import plus1attacks
 
 
 def is_ethereal(model):
@@ -146,9 +145,9 @@ def _hatred(model, param, desc):
 
 def _furious_charge(model, param, desc):
     return {"name": "Furious Charge",
-            "description": desc or "+1 Attack on the charge.",
+            "description": desc or "+1 Attack after a charge move of at least 3 inches (p. 171).",
             "tag": "combat",
-            "charge": plus1attacks}
+            "furious_charge": True}
 
 
 def _regeneration(model, param, desc):

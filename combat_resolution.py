@@ -2083,6 +2083,7 @@ class CombatResolver:
             with attack_penalty(self.game, host, target, part.profile):
                 result = simulate_battle(part.unit(attack_count), target.unit,
                                          charge=getattr(host, 'chargedThisTurn', False),
+                                         charge_distance=float(getattr(host, 'chargeDistance', 0) or 0),
                                          first_round=getattr(host, 'roundsFought', 0) == 1)
             slaying = take_last_slaying_blows()
             if not result[0]:
@@ -2446,7 +2447,7 @@ class CombatResolver:
             for unit, label in self.duelCombatants(model, host):
                 order.append((strike_initiative(unit.model, charged=charged,
                                                 inches=inches, first_round=first, log=True),
-                              model, unit, label, charged, first))
+                              model, unit, label, charged, first, inches))
         order.sort(key=lambda e: -e[0])
         battle_log("Challenge: " + " vs ".join(
             self._duelName(m) for m in challenge.participants()))
@@ -2462,7 +2463,7 @@ class CombatResolver:
             inflicted = {id(participant): 0 for participant in challenge.participants()}
             hazard_removals = Sequence()
             hazard_fallen = set()
-            for _, model, unit, label, charged, first in step:
+            for _, model, unit, label, charged, first, inches in step:
                 rival = challenge.opponent_of(model)
                 if id(model) in fallen or id(rival) in fallen:
                     rule_skipped('Challenges & Mounts', model,
@@ -2495,7 +2496,8 @@ class CombatResolver:
                 from fear import attack_penalty
                 with attack_penalty(self.game, model, rival, unit.model):
                     attacks, hits, suffered, saved, wounds = simulate_battle(
-                        unit, rival.unit, charge=charged, first_round=first)
+                        unit, rival.unit, charge=charged, first_round=first,
+                        charge_distance=inches)
                 slaying = take_last_slaying_blows()
                 if slaying:
                     wounds = max(wounds, wounds_remaining(rival))

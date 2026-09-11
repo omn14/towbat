@@ -24,6 +24,7 @@ class CombatProfile:
         group = copy(self.host.unit)
         group.nmodels = max(0, models)
         charged = bool(getattr(self.host, 'chargedThisTurn', False))
+        distance = float(getattr(self.host, 'chargeDistance', 0) or 0)
         fallen = max(0, initial - models)
         positions = command_positions(group)
         commands = [entry for entry in living_command(group)
@@ -32,23 +33,23 @@ class CombatProfile:
                  and not entry.get('retired', False)]
         joined = get_joined_character(self.host)
         if self.role == 'character':
-            return melee_attacks(self.fighter.unit, charged) if self.fighter.unit.nmodels > 0 else 0
+            return melee_attacks(self.fighter.unit, charged, charge_distance=distance) if self.fighter.unit.nmodels > 0 else 0
         if self.role == 'champion':
-            return attack_characteristic(self.profile) if self.entry in champions else 0
+            return attack_characteristic(self.profile, charged=charged, inches=distance) if self.entry in champions else 0
         blocked = len(champions)
         if joined is not None and not getattr(joined, 'retiredFromCombat', False) and (
             getattr(self.host, 'characterSlot', 0) or 0) < group.files:
             group.files = max(0, group.files - 1)
         if self.role == 'main':
-            ordinary = melee_attacks(group, charged, fallen)
-            return max(0, ordinary - blocked * attack_characteristic(group.model))
+            ordinary = melee_attacks(group, charged, fallen, charge_distance=distance)
+            return max(0, ordinary - blocked * attack_characteristic(group.model, charged=charged, inches=distance))
         behind = max(0, models + fallen - group.files)
         fighting = max(0, min(group.files, models) - min(fallen, behind))
         if challenge is not None and self.host in challenge.hosts():
             for participant in challenge.participants():
                 if getattr(participant, 'command_host', None) is self.host:
                     fighting = max(0, fighting - 1)
-        return fighting * self.count * attack_characteristic(self.profile)
+        return fighting * self.count * attack_characteristic(self.profile, charged=charged, inches=distance)
 
     def unit(self, attacks):
         return SimpleNamespace(name=self.profile.name, model=self.profile,

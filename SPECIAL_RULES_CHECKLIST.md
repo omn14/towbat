@@ -278,6 +278,11 @@ itself add gameplay effects.
       when Ithilmar/Ensorcelled Weapons or Parry can beat the automatic choice;
       no shield in melee with a great weapon/halberd. Verify the 3" threshold
       for Furious Charge/Impact Hits separately from lance/spear conditions.
+      **Corrected (2026-09-11):** Furious Charge now requires an actual 3" charge
+      and affects the attack snapshot before dice; no transient A mutation or
+      lost split-profile bonus. Boundary tests cover 2.99", 3" and 7". All 19
+      command-group, 30 rule-builder, eight command-scene and 42 challenge tests
+      pass. Weapon selection and target-specific charging modifiers remain open.
 - [ ] **Flaming and Magical Attacks dependencies** - distinguish weapon,
       spell and model sources; High Magic and Ensorcelled Weapons need these
       against Ethereal and any relevant saves. Magical-versus-Ethereal damage
