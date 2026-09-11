@@ -355,8 +355,8 @@ itself add gameplay effects.
       and Bound spells cannot borrow the blessing; a replacement can itself Miscast.
       Verified pure outcomes and the actual imported Mage's casting allowance.
       **LEFTOVER:** no blessing-specific effect gap; underlying Miscast damage is
-      still manual, and six High Magic/Saphery spell effects below remain unimplemented.
-      Corporeal Unmaking's damage is coded, with combat timing/challenge limits below.
+      still manual. All ten High Magic/Saphery effects are now coded below,
+      including the awaited Assailment Initiative/challenge window.
 - [ ] **Lore of Saphery** - Mage. Implement the permitted generated-spell
       substitution into the lore signature or one of the three faction spells;
       do not grant all alternatives automatically. See spell generation below.
@@ -496,15 +496,19 @@ outcome logs and generation choices. Unknown items still show **unsupported**.
       BSB priority prevents spending both sources on the same roll.
       LEFTOVER: other item-specific timing and transient effect durations
       beyond per-turn uses/rest-of-battle suppression.
-- [ ] **Item suppression for Vaul's Unmaking**: select a carried item on a
+- [x] **Item suppression for Vaul's Unmaking**: select a carried item on a
       legal enemy character, mark it unusable for the rest of the battle and
       remove its active effects. This directly matters for the Chaos General's
       Helm. Do not allow targeting the Warriors' non-character standard bearer
       with a spell restricted to enemy characters.
       Core `disable_item` now records the reason/destroyed state independently
       of spent abilities and removes all registry contributions.
-      LEFTOVER: the actual spell, character-only target selection and adapter
-      for effects implemented outside this registry (including Ruby Ring).
+      The spell selects visible characters, including joined/engaged ones, then
+      lets the casting player choose an item. Item-bound spells check disabled
+      inventory state; ordinary spells remain. Wand extra slots retain their
+      granting item ID and are removed when it is unmade, without changing level.
+      LEFTOVER: future item effects outside the registry need adapters; legacy
+      Wand saves recover extra-slot provenance using saved spellbook order.
 - [x] **Inventory persistence** in `persistence.py`: explicit
       `magic_item_inventory` records save stable IDs/owners, raw source data,
       per-ability use counters and whole-item disabled/destroyed state.
@@ -572,16 +576,13 @@ committed as `9b90bce`; selected effects were deliberately left for point 4.
       table; runtime spell classes needed excluding from saved generation data;
       long choice labels overflowed fixed buttons. Dialog geometry and rendered
       selection are covered by the existing offscreen choice-layout tests.
-- LEFTOVER: six High Magic/Saphery spell effects remain uncoded; Corporeal
-      Unmaking has partial combat integration. Shield of Saphery, Fury of Khaine,
-      Walk Between Worlds, Chaos Armour's Ward and the Mark's Panic reroll were
-      implemented in the later entries below; their listed limitations remain.
-      Unsupported generated spells are explicitly logged as known but inert.
+- All ten High Magic/Saphery effects are implemented below. Unsupported spells
+      from other lores remain explicitly logged as known but inert.
 - LEFTOVER: only a complete, unambiguous six-spell lore plus one normal
       signature is accepted. Missing/ambiguous export pools stay pending with
       a diagnostic; other special generation rules and a full legality engine
-      are not implemented. Mid-battle loss of a Wand-granted spell needs the
-      eventual Vaul/item-suppression spell handler's explicit resolution.
+      are not implemented. Wand extra-slot ownership and loss through item
+      suppression are implemented; legacy saves use saved spellbook order.
 
 Point 4 verification covers pure selected-item/generation rules, actual offscreen
 Break resolution and deployment gating, saved spellbooks, and the real exports'
@@ -616,16 +617,14 @@ detail scrolling, and Champion armour 5+ to 4+. Old battle saves are not migrate
       (p. 208), and Hammerhand's host-opponent check. Pure and offscreen tests
       cover actual selection, targeting, successful/failed/cancelled casting,
       per-bearer accounting and save/reload.
-      LEFTOVER: broader joined-unit spell-effect propagation and challenge-specific
-      spell targeting remain separate from caster selection. The two unit grants
-      below now propagate, but do not expand the one-joined-character model.
+      Challenge Assailment now uses the combat scheduler below.
+      LEFTOVER: this does not expand the one-joined-character model.
 
-Runtime audit: `spell_class(name)` resolves **Shield of Saphery, Fury of Khaine,
-Walk Between Worlds and Corporeal Unmaking**; the other **six** exported spells below still use `CatalogueSpell`,
-which rolls to cast and prints wording but does not apply the effect. All ten
-form the Mage's available pool, not ten known spells. Full arbitrary legal
-generation still needs the remaining effects and Assailment integration; four coded effects do not
-complete every possible three-spell selection.
+Runtime audit: `spell_class(name)` resolves all **ten** High Magic/Lore of Saphery
+entries to implemented effects. These remain the Mage's available pool, not ten
+known spells: Level 2 plus Silvery Wand generates three. The shared Assailment
+window handles both players and challenges. Broader lifecycle, terrain and matchup
+limits remain explicitly recorded below.
 
 - [x] **Spell generation and Lore of Saphery substitution**: Level 2 plus
       Silvery Wand gives three known spells, with normal duplicate handling
@@ -640,7 +639,11 @@ complete every possible three-spell selection.
       Corrected horizontal overflow from Panda scroll-frame border space.
       LEFTOVER: this displays roster wording, not an errata-synchronised rules
       reference; missing text and uncoded effects are labelled, not invented.
-- [ ] **Drain Magic** - Remains in Play casting-value aura. This Chaos list
+- [x] **Drain Magic** - 9+, Self, Remains in Play; enemy Wizards within 24"
+      add 2 to casting values, not casting results (Rulebook p. 328).
+      Live base-to-base range, non-stacking auras, Lileath, recast, dispel, death
+      and save/reload use shared casting/lifecycle paths.
+      [Source](https://tow.whfb.app/spell/drain-magic). This Chaos list
       contains no Wizard or Bound item, so it normally has no enemy caster to
       affect here; retain correct eligibility rather than inventing a target.
 - [x] **Walk Between Worlds (selected caster/host and movement core)** - 10+,
@@ -705,7 +708,8 @@ complete every possible three-spell selection.
       needed. Strict once-per-turn Conveyance history after source removal and
       future end-of-Shooting spell expiry relative to Reserve still need handling.
       No new Stomp implementation, tactical AI Reserve policy, or generic Self/aura
-      system is claimed. This is not full matchup acceptance; six lore effects remain uncoded.
+      system is claimed. All ten lore effects are now implemented, but this is
+      not full matchup acceptance.
 
       Sources: [Walk Between Worlds](https://tow.whfb.app/spell/walk-between-worlds),
       p. 329; [Ethereal](https://tow.whfb.app/special-rules/ethereal), p. 167;
@@ -713,11 +717,26 @@ complete every possible three-spell selection.
       [Magical Attacks](https://tow.whfb.app/special-rules/magical-attacks), p. 172;
       [Conveyance](https://tow.whfb.app/magic/conveyance), p. 107;
       [Magic FAQ v1.5.3](https://tow.whfb.app/faq/magic).
-- [ ] **Fiery Convocation** - scattered large template, per-base hits,
-      Flaming Attacks and correct S/AP, including Skirmisher targets.
-- [ ] **Tempest** - stationary Remains in Play vortex and terrain-changing
-      aura; interact with Fly, Move Through Cover and Ithilmar Barding.
-- [ ] **Corporeal Unmaking (damage/pre-fight casting implemented; combat integration partial)** -
+- [x] **Fiery Convocation** - 10+, 18", 5" template over the target unit,
+      scattering D3+1", enemy-only Flaming S4 AP-2 hits (Rulebook p. 329).
+      Per-base full/partial/hole coverage includes loose formations. Partial
+      coverage rolls 4+; hits and saves resolve before casualties. Champions and
+      joined characters use their own profiles and optional Look Out, Sir!
+      (pp. 199, 209). Friendly overlap is harmless; Flammable alone blocks
+      Regeneration. [Source](https://tow.whfb.app/spell/fiery-convocation).
+      LEFTOVER: shared LOS is planar base/terrain geometry, not eye height.
+- [x] **Tempest** - 9+, 12", stationary 3" dangerous Remains in Play template;
+      enemies within 6" of its edge treat open ground as difficult and difficult
+      terrain as dangerous (p. 329). Hashable source-owned views never mutate
+      native terrain. Circular swept-base tests reject near misses and clip
+      escalation to crossed terrain. Movement, charges, loose-base previews,
+      disruption, dangerous tests and reload use these views. Flyers ignore the
+      aura penalty but not the vortex itself (Magic FAQ v1.5.3); existing Move
+      Through Cover, Ethereal and Barding protections remain per participant.
+      [Source](https://tow.whfb.app/spell/tempest).
+      LEFTOVER: ordinary terrain clipping uses existing bounding rectangles;
+      curved-wheel sweeps and irregular boundaries remain shared engine limits.
+- [x] **Corporeal Unmaking (Initiative and challenge integration)** -
       8+, Combat-range Assailment, D3 automatic magical S5 hits on one engaged
       enemy unit (Rulebook pp. 107-108, 329). No armour or Regeneration saves;
       Ward saves remain available. The save resolver accepts independent explicit
@@ -727,46 +746,33 @@ complete every possible three-spell selection.
       and actual rendered casualties use the existing movement casualty owner.
       Numeric logs show hits, wounds, Ward saves and no-armour/no-Regeneration policy.
 
-      The normal Mage/host spell menu, casting allowance, dispel and target-mask
-      paths are wired. A joined Mage targets its host's engagements without a
-      shooting LOS check. Friendly, unengaged, dead/off-board targets, retired
-      casters, completed combats and concurrent combat resolution are rejected.
-      Cancellation spends no attempt; failed/dispelled attempts spend casting
-      allowance without damage. Actual inflicted wounds are banked on the caster's
-      host, capped at target Wounds remaining, added to the combat's Wounds caused
-      row once, and consumed. Save/reload retains casualties, spell usage and that
-      credit; normal turn end clears unused credit, spell detours do not.
+      Both players receive awaited Wizard-owned choices at Initiative. A joined
+      Mage targets its host's engagements from the fighting rank without shooting
+      LOS. Manual pre-fight casting is blocked. Cancelled choices retain allowance;
+      failed/dispelled attempts spend it. Lileath, ordinary/Bound accounting and
+      dispelling stay shared; nested dispels preserve the combat magic lock.
+      Deferred casualties preserve same-Initiative attacks; earlier kills remove
+      later opportunities. Actual wounds enter combat result, capped outside
+      challenges. Duellists target only their opponent, with up to +5 overkill.
+      Spell-only wipeouts preserve overrun engagement data. Hammerhand shares the
+      window and counts regenerated wounds toward combat result (p. 176).
+      Existing saved pre-fight credit remains compatible and is consumed once.
 
       **Corrections on the way:** the generic magic-hit helper requests shooting
       heavy-casualty Panic and does not bank combat credit, so this Assailment uses
       its own casualty/accounting path. Save restrictions are explicit, not a
       high-AP approximation or a fake slaying blow. Prohibited armour is neither
-      rolled nor reported as an active magic-item bonus. Challenge participation
-      is refused rather than allowing protected duellists to receive unit damage.
+      rolled nor reported as an active magic-item bonus. The former conservative
+      challenge refusal has been replaced by isolated opponent allocation.
 
-      **Verification:** 17 new tests (9 pure, 8 actual-roster scenes) cover Ward
-      success/failure, no armour/Regeneration dice, unchanged normal magic saves,
-      S5/T4 thresholds, Ethereal, zero wounds, excess-wound credit cap, lone/joined
-      Mage selection, masks, failed/dispelled/cancelled casts, Chaos Armour Ward
-      saves, multi-wound Aspiring Champion damage, repeated reload, retired and
-      challenge restrictions, concurrent-combat refusal, score-row integration
-      and one-time/turn-end cleanup. The score integration test isolates ordinary
-      attacks and post-combat choices; it is not complete matchup acceptance.
-      350 distinct tests pass across 17 memory-bounded modules, including adjacent
-      armour, slaying, challenge, Shieldwall, High/Battle Magic, Walk, persistence,
-      joined casting, lifecycle and Stand & Shoot coverage. No full-suite run.
-
-      **LEFTOVER:** the existing manual Combat-phase spell menu resolves before
-      the fight, not when the Wizard strikes at Initiative (p. 108). Shared
-      Assailment opportunities for both sides, challenge ordering/allocation and
-      overkill, and spell-only wipeout/post-combat routing need an awaited combat
-      casting window. Casts by duelling Wizards or against units in active
-      challenges are currently refused with a reason, including legal cases that
-      require that missing allocation. Mixed-unit character/champion allocation
-      otherwise follows the existing casualty path. Hammerhand has not been
-      migrated to this accounting; no generic Assailment completion is claimed.
-      Six other lore effects, the earlier lifecycle/geometry limits and Gaze of
-      the Gods/Stupidity remain open. Devil's Visit remains unchanged.
+      **Verification:** the original Ward/save/damage/reload tests pass; scene
+      tests now exercise the Initiative window. New live tests cover lone/joined
+      casting, selected champions, higher/equal-Initiative deaths, both owners,
+      challenge overkill and spell-only wipeout score/overrun routing.
+      **LEFTOVER:** challenge and ordinary attacks retain separate resolution
+      passes; future effects crossing those groups need global Initiative
+      interleaving. Suspended combat choices cannot be saved/resumed. The shared
+      lifecycle/geometry limits remain. Devil's Visit is unchanged.
 
       Sources: [Corporeal Unmaking](https://tow.whfb.app/spell/corporeal-unmaking),
       p. 329; [Assailment](https://tow.whfb.app/magic/assailment), p. 107;
@@ -820,8 +826,8 @@ complete every possible three-spell selection.
       Character separation retains timed grants rather than treating them as
       auras; p. 207 explicitly establishes joining propagation, not a separate
       leaving-spell rule. Self retirement is handled for Walk Between Worlds above;
-      other Self/area effects, broader Enchantment classifications and six uncoded lore
-      effects remain open. These tests
+      other Self/area effects and broader Enchantment classifications remain open.
+      All ten selected lore effects are implemented below. These tests
       do not constitute complete matchup acceptance or generic stat-buff support.
 
       Sources: [Fury of Khaine](https://tow.whfb.app/spell/fury-of-khaine),
@@ -829,12 +835,33 @@ complete every possible three-spell selection.
       [Extra Attacks](https://tow.whfb.app/special-rules/extra-attacks), p. 168;
       [Enchantment](https://tow.whfb.app/magic/enchantment), p. 107;
       [Spells and characters](https://tow.whfb.app/characters/spells-characters), p. 207.
-- [ ] **Hand of Khaine** - single-model Assailment hit; no armour save,
-      but Ward and Regeneration remain available; validate model targeting.
-- [ ] **Courage of Aenarion** - Remains in Play Unbreakable grant, legal
-      engaged target, specified Enchantment replacement and reversible removal.
-- [ ] **Vaul's Unmaking** - character-targeted item disabling; requires the
-      item system above, including targeting a joined or engaged character.
+- [x] **Hand of Khaine** - 7+, Combat; one selected enemy model suffers one S4
+      hit with no armour; Ward and Regeneration remain available (FoF p. 186).
+      Initiative selection includes ordinary/champion/joined models and excludes
+      protected duellists. Targeted casualties are deferred; regenerated wounds
+      count toward combat result. [Source](https://tow.whfb.app/spell/hand-of-khaine).
+- [x] **Courage of Aenarion** - 10+, 15", Remains in Play Unbreakable; engaged
+      targets allowed. Successful, undispelled casts replace older Enchantments
+      (FoF p. 186). Reversible grants include joined and split profiles; Panic
+      and Break consumers read the same Unbreakable flag.
+      [Source](https://tow.whfb.app/spell/courage-of-aenarion).
+- [x] **Vaul's Unmaking** - 11+, 12", visible enemy character, including joined
+      or engaged characters (FoF p. 186). Caster-owned character/item choices
+      permanently disable the item. Helm armour/re-roll, Wand extra spell and
+      item-bound casting obey disabled state, also after reload. Native abilities
+      survive. [Source](https://tow.whfb.app/spell/vauls-unmaking).
+      LEFTOVER: legacy Wand saves infer the extra slot from saved spell order;
+      future effects outside the item registry still need explicit adapters.
+
+**All-spells verification (2026-09-11):** 42 new pure/live acceptance cases pass,
+plus updated Corporeal and Bound regressions. Coverage includes all ten registry
+entries, replacement/failure/dispel, live aura range/lifetime, template geometry
+and protection, item loss and Initiative combat. Tempest was rendered offscreen
+and inspected. Focused magic, persistence and movement-protection tests pass.
+The 87-module full isolated run stopped after 19 modules at its RAM-headroom guard;
+resuming at the same 1536 MiB cap was also refused. Full-suite verification remains
+**incomplete**. Known unrelated command-group `ithilmar_rerolled` mock failures and
+the intermittent Panda HUD `!mat.is_nan()` assertion remain unfixed.
 - [ ] **Shared magic lifecycle (implemented core, partial overall)** -
       `spell_effects.py` records caster ownership, casting turn and explicit
       next-owner-Start-of-Turn, end-of-turn, end-of-phase or Remains in Play
@@ -888,11 +915,10 @@ complete every possible three-spell selection.
       reaction selection and formed Counter Charge routing. Selected-cavalry
       Impetuous, Drilled and core Marching Column dependencies are now implemented
       and tested together. The explicit movement/geometry leftovers remain open.
-7. Magic and remaining dependencies: Lileath choices, lifecycle core and selected
-      Shield/Fury/Walk effects are implemented. Corporeal Unmaking damage and manual
-      pre-fight casting are implemented, but shared Assailment Initiative/challenge
-      integration remains. Six uncoded lore effects, listed lifecycle limits and
-      Gaze of the Gods including Stupidity remain.
+7. Magic and remaining dependencies: all ten selected lore effects, Lileath,
+      item suppression and Initiative/challenge Assailment are implemented.
+      Listed shared lifecycle/geometry limits and Gaze of the Gods including
+      Stupidity remain. The RAM-blocked full-suite gate is still open.
 8. Complete matchup verification using both exact roster imports offscreen.
       Each completed entry needs a rule citation, positive/negative tests, useful
       logs and an explicit `LEFTOVER:` if partial.

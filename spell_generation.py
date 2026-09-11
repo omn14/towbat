@@ -155,6 +155,8 @@ async def generate_spells(game, member):
                  member, f'{selected} -> {state["signature"]["name"]}; one substitution, {state["count"]} known spells')
         state['stage'] = 'finish'
     known = state['known'] + generated
+    from magic_items import bind_generated_spells
+    bind_generated_spells(member, known)
     bound = [entry for entry in member.unit.model.spells.values() if entry.get('bound')]
     restore_spellbook(member.unit.model, bound + known, member.unit.model.wizard_level())
     state['complete'] = True

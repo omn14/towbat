@@ -123,6 +123,9 @@ def preview_move(game, unit, positions=None, destination=None):
         after if flying else before, after,
         (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0))]
         for before, after in zip(original, boxes)]
+    from tempest import tempest_features
+    terrain = [tempest_features(game, unit, before, after, features, base_paths=[(before, after)])
+               for before, after, features in zip(original, boxes, terrain)]
     modifier = min([0] + [piece.movement_modifier for features in terrain for piece in features])
     allowances = []
     for participant in participants:

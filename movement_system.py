@@ -546,6 +546,8 @@ class MovementSystem:
             features = (tm.get_terrain_between(from_pos, to_pos)
                         if tm is not None and from_pos is not None and to_pos is not None
                         else [])
+        from tempest import tempest_features
+        features = tempest_features(self.game, unit, from_pos, to_pos, features, log=log)
         modifier = min([0] + [piece.movement_modifier for piece in features])
         participants = self.movementParticipants(unit)
         profiles = [participant.unit.model for participant in participants]
@@ -583,8 +585,10 @@ class MovementSystem:
         if tm is None:
             return 0
         self.magicalVortexTests(unit, from_pos, to_pos, features=features)
-        features = (tm.dangerous_between(from_pos, to_pos) if features is None
-                else [piece for piece in features if piece.is_dangerous])
+        from tempest import tempest_features
+        features = tm.get_terrain_between(from_pos, to_pos) if features is None else features
+        features = [piece for piece in tempest_features(self.game, unit, from_pos, to_pos, features, log=True)
+                if piece.is_dangerous]
         if not features:
             return 0
         names = ', '.join(sorted({t.terrain_type for t in features}))
@@ -599,8 +603,10 @@ class MovementSystem:
                 rule_log('Ethereal', participant, f'{names}: open ground; skips '
                          f'{len(features) * participant.unit.nmodels} dangerous-terrain tests (p. 167)')
                 continue
+            tested = [piece for piece in features if not (participant.unit.model.is_flying()
+                      and getattr(piece, 'tempest_aura', False))]
             wounds = dangerous_terrain_wounds(
-                len(features), participant.unit.nmodels, damage,
+                len(tested), participant.unit.nmodels, damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
                 subject=participant)
             print(f"{participant.unit.name}: Dangerous Terrain test ({names}) "
@@ -646,6 +652,11 @@ class MovementSystem:
         """Recompute whether *unit* stands in enough difficult terrain to lose
         its Rank Bonus (Rulebook p. 269)."""
         inside, total = self.modelsInTerrain(unit, lambda t: t.disrupts)
+        from tempest import tempest_features, TempestTerrain
+        position = unit.bodyNP.getPos(unit.bodyNP.getTop())
+        if any(isinstance(piece, TempestTerrain) and piece.tempest_aura
+               for piece in tempest_features(self.game, unit, position, position, [])):
+            inside = total
         was = getattr(unit, 'isDisrupted', False)
         unit.isDisrupted = is_disrupted(inside, total)
         if unit.isDisrupted != was:

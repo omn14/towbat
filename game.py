@@ -1163,15 +1163,17 @@ class MyApp(ShowBase):
         bound_phases = getattr(unit, 'boundSpellPhases', [])
         def available(name, spell):
             if spell.get('bound'):
-                return not spent and phase not in bound_phases
+                from magic_items import item_spell_available
+                return not spent and phase not in bound_phases and item_spell_available(unit, spell)
             return m.is_wizard() and may_attempt(cast, name, level, spent)
 
         def combat_legal(spell):
             host = getattr(unit, 'hostUnit', None) or unit
             engaged = getattr(host, 'isInCombat', False)
             if spell.get('type') == 'Assailment':
-                return (engaged and not getattr(host, 'hasAttackedThisTurn', False)
-                        and not getattr(unit, 'retiredFromCombat', False))
+                window = getattr(self, 'assailmentWindow', None)
+                return bool(window and window['caster'] is unit and engaged
+                            and not getattr(unit, 'retiredFromCombat', False))
             return not engaged or spell.get('range') == 'Self'
         # A unit that marched may still cast, but not the two categories that
         # count as shooting (p. 123).
@@ -1303,6 +1305,14 @@ class MyApp(ShowBase):
         self.fsm.castingUnit = self.unitToMove
         self.debugTextInfo.setText(
             spell_readout(spellchoice, self.fsm.activeSpell))
+
+        if hasattr(self.fsm.spellInstanceToCast, 'choose_target'):
+            target = await self.fsm.spellInstanceToCast.choose_target()
+            if target is not None:
+                await self.resolveSpell(target)
+            else:
+                self.fsm.request(self.fsm.phaseBeforeSpell)
+            return task.done
 
         if (self.fsm.activeSpell.get('range') == 'Self'
                 or self.fsm.spellInstanceToCast.targets_self):
@@ -1973,11 +1983,12 @@ class MyApp(ShowBase):
     async def dispelAttempt(self, spell, caster):
         """Let the defending player choose a legal dispel (Rulebook p. 110)."""
         from dispelling import attempt
+        previous = self.magicBusy
         self.magicBusy = True
         try:
             return await attempt(self, spell, caster)
         finally:
-            self.magicBusy = False
+            self.magicBusy = previous
 
     def movedThisTurn(self, unit) -> bool:
         """Moved for *any* reason this turn (p. 139, p. 174).

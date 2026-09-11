@@ -37,6 +37,7 @@ def carrier(spells=None, level=0):
 def app_stub(unit, phase='shooting'):
     game = Mock()
     game.magicBusy = False
+    game.assailmentWindow = None
     game.castingSpell = False
     game.remainsInPlay = []
     game.skirmishEditor = None
@@ -200,9 +201,43 @@ def test_self_and_assailment_are_not_blocked_by_combat_ui_gate():
                     get_catalogue().spell('Hammerhand')], 2)
     unit.isInCombat = True
     assert app_stub(unit, 'strategy').castableSpells(unit) == ['Oaken Shield']
-    assert app_stub(unit, 'combat').castableSpells(unit) == ['Hammerhand']
+    game = app_stub(unit, 'combat')
+    assert game.castableSpells(unit) == []
+    game.assailmentWindow = {'caster': unit}
+    assert game.castableSpells(unit) == ['Hammerhand']
     unit.hasAttackedThisTurn = True
-    assert app_stub(unit, 'combat').castableSpells(unit) == []
+    assert game.castableSpells(unit) == ['Hammerhand']
+    game.assailmentWindow = None
+    assert game.castableSpells(unit) == []
+
+
+def test_bound_assailment_uses_selection_key_and_spends_only_bound_allowance():
+    from assailment import cast_at_initiative
+    from spell_system import HammerhandSpell, Spell
+    record = dict(get_catalogue().spell('Hammerhand'), bound=True, source='Test item', power_level=1)
+    unit = carrier([record], 0)
+    target = carrier([], 0)
+    unit.isInCombat = True
+    game = app_stub(unit, 'combat')
+    game.aiControls.return_value = True
+    with patch.object(Spell, '_attempt', AsyncMock(return_value=True)), \
+            patch.object(Spell, '_dispelled', AsyncMock(return_value=False)), \
+            patch.object(HammerhandSpell, 'apply', AsyncMock()) as effect:
+        asyncio.run(cast_at_initiative(game, unit, [target], lambda *args: None))
+    effect.assert_awaited_once_with(target)
+    assert unit.boundSpellPhases == ['combat']
+    assert unit.spellsCastThisTurn == []
+    assert game.assailmentWindow is None and not game.magicBusy
+
+
+def test_unmade_ring_cannot_cast_but_ordinary_fireball_remains():
+    from magic_items import install_inventory, disable_item
+    unit = carrier([ring(), get_catalogue().spell('Fireball')], 2)
+    item = install_inventory(unit, [{'name': 'Ruby Ring of Ruin', 'category': 'Enchanted Items'}])[0]
+    game = app_stub(unit)
+    assert len(game.castableSpells(unit)) == 2
+    disable_item(unit, item, "Vaul's Unmaking")
+    assert game.castableSpells(unit) == ['Fireball']
 
 
 @pytest.mark.parametrize('phase', GamePhaseFSM.PHASES)

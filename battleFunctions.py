@@ -398,7 +398,7 @@ def ward_save_value(model) -> int:
 
 
 def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None,
-                allow_armour=True, allow_regeneration=True):
+                allow_armour=True, allow_regeneration=True, regenerated=None):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
@@ -422,6 +422,8 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
         return False
     for rule in getattr(model, 'special_rules', []) or []:
         if rule.get('regen') and check_armor_save(model, rule['regen'], 0):
+            if regenerated is not None:
+                regenerated.append(True)
             return True
     return False
 
@@ -479,7 +481,7 @@ def ethereal_blocks_hits(unit, hits, magical, source):
 
 
 def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
-                       allow_armour=True, allow_regeneration=True):
+                       allow_armour=True, allow_regeneration=True, regenerated=None):
     """*hits* automatic hits of the given Strength and AP against *unit*.
 
     Returns (wounds, saves, unsaved). A spell has no attacking model, so there
@@ -499,7 +501,7 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
     saves = sum(1 for _ in range(wounds)
                 if check_saves(m, m.melee_armour_save() if allow_armour else 7, ap,
                                ward_rolls=ward_rolls, allow_armour=allow_armour,
-                               allow_regeneration=allow_regeneration))
+                               allow_regeneration=allow_regeneration, regenerated=regenerated))
     report_ward_saves(unit, wounds, ward_rolls)
     _report_too_tough_to_wound(unit, hits, strength, target)
     return wounds, saves, wounds - saves

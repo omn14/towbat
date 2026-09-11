@@ -32,7 +32,7 @@ class CombatProfile:
                  and not entry.get('retired', False)]
         joined = get_joined_character(self.host)
         if self.role == 'character':
-            return melee_attacks(self.fighter.unit, charged)
+            return melee_attacks(self.fighter.unit, charged) if self.fighter.unit.nmodels > 0 else 0
         if self.role == 'champion':
             return attack_characteristic(self.profile) if self.entry in champions else 0
         blocked = len(champions)

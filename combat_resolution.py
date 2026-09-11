@@ -1008,12 +1008,17 @@ class CombatResolver:
         if all(profile.is_flying() for profile in profiles) or all(is_ethereal(profile) for profile in profiles):
             return False
         planned = getattr(unit, 'formedSkirmishCharge', None)
+        from tempest import tempest_features
         if planned is not None:
             from formed_skirmish_charge import route_features
-            return (any(piece.movement_modifier < 0 for piece in route_features(self.game, planned.route))
-                    and not all(profile.is_move_through_cover() for profile in profiles))
-        return (tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
-                and not all(profile.is_move_through_cover() for profile in profiles))
+            features = tempest_features(self.game, unit, planned.route.origin, planned.route.destination,
+                         route_features(self.game, planned.route))
+        else:
+            endpoint = self.game.playerNP.getPos()
+            features = tempest_features(self.game, unit, from_pos, endpoint,
+                         tm.get_terrain_between(from_pos, endpoint))
+        return (any(piece.movement_modifier < 0 for piece in features)
+            and not all(profile.is_move_through_cover() or is_ethereal(profile) for profile in profiles))
 
     def chargeDistance(self, unit, from_pos, dice):
         """Terrain-adjusted M plus Charge roll; Move Through Cover keeps the high
@@ -1896,6 +1901,20 @@ class CombatResolver:
         self.game.applyWounds(target, wounds, slaying)
 
     def resolveMeleeProfiles(self, challenge, removals):
+        from assailment import drain_steps
+        return drain_steps(self._meleeProfileSteps(challenge, removals))
+
+    async def resolveMeleeWithSpells(self, challenge, removals):
+        from assailment import cast_at_initiative
+        steps = self._meleeProfileSteps(challenge, removals)
+        while True:
+            try:
+                caster, targets, damage = next(steps)
+            except StopIteration as finished:
+                return finished.value
+            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge)
+
+    def _meleeProfileSteps(self, challenge, removals):
         """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
         from combat_profiles import profile_strike_order
         order = profile_strike_order(self.game.attackers, self.game.defenders,
@@ -1905,12 +1924,56 @@ class CombatResolver:
         initiative_step = None
         snapshots = {}
         animated = set()
+        cast = set()
+        self._pendingWounds = getattr(self, '_pendingWounds', {})
         for initiative, part in order:
             host, target = part.host, part.target
+            if host.bodyNP.isEmpty() or target.bodyNP.isEmpty():
+                rule_skipped('Combat', host, f'I{initiative}: combatant removed during the challenge; no attacks')
+                continue
             if initiative != initiative_step:
                 initiative_step = initiative
                 snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
+                attacks_at_step = {id(candidate): candidate.attacks(
+                    snapshots[id(candidate.host)], self._combatStartModels.get(
+                        id(candidate.host.unit), snapshots[id(candidate.host)]), challenge)
+                    for step, candidate in order if step == initiative}
             models = snapshots[id(host)]
+            caster = (part.fighter if part.role == 'character' and part.fighter in self.game.units
+                      else host if part.role == 'main' else None)
+            if caster is not None and id(caster) not in cast and attacks_at_step[id(part)] > 0:
+                cast.add(id(caster))
+
+                def spell_damage(victim, wounds, regenerated=0):
+                    specific = getattr(victim, 'command_host', None) or getattr(victim, 'hostUnit', None)
+                    if specific is not None:
+                        left = max(0, wounds_remaining(victim)) if victim.unit.nmodels else 0
+                        admitted = min(left, wounds)
+                        scores[0 if host in self.game.player1Units else 1] += admitted + regenerated
+                        if admitted:
+                            previous = victim.woundsOnModel
+                            victim.woundsOnModel += admitted
+                            if admitted == left:
+                                victim.unit.nmodels = 0
+                                if getattr(victim, 'command_host', None) is not None:
+                                    victim.command_entry['active'] = False
+                                    specific.unit.nmodels = max(0, specific.unit.nmodels - 1)
+                            removals.append(Func(self.applyAssailmentModelWounds, victim, previous, admitted))
+                        return
+                    admitted, _ = self.commandWoundLimit(victim, wounds, challenge=challenge)
+                    per_model = max(1, _stat_int(victim.unit.model.characteristics, 'W', 1))
+                    left = max(0, victim.unit.nmodels * per_model - self._pendingWounds.get(
+                        id(victim), getattr(victim, 'woundsOnModel', 0)))
+                    scores[0 if host in self.game.player1Units else 1] += min(left, admitted) + regenerated
+                    self.previewCombatWounds(victim, admitted)
+                    if victim.unit.nmodels == 0:
+                        from command_groups import capture_standard
+                        capture_standard(self.game, victim, host)
+                    removals.append(Func(self.applyCombatWounds, victim, admitted))
+
+                targets = [enemy for enemy in getattr(host, 'isInCombatWith', []) if enemy.unit.nmodels > 0
+                           and not (challenge and challenge.involves(enemy))]
+                yield caster, targets, spell_damage
             if id(host) not in animated:
                 animated.add(id(host))
                 host.hasAttackedThisTurn = True
@@ -1932,7 +1995,7 @@ class CombatResolver:
             if target.unit.model.equipedWeapon.get('tag') == 'ranged':
                 target.unit.model.equip_best_melee()
             def attack_count():
-                return part.attacks(models, self._combatStartModels.get(id(host.unit), models), challenge)
+                return attacks_at_step[id(part)]
 
             result = simulate_battle(part.unit(attack_count), target.unit,
                                      charge=getattr(host, 'chargedThisTurn', False),
@@ -1956,6 +2019,16 @@ class CombatResolver:
             scores[0 if host in self.game.player1Units else 1] += total_wounds
             removals.append(Func(self.applyCombatWounds, target, wounds, slaying))
         return scores
+
+    def applyAssailmentModelWounds(self, victim, previous, wounds):
+        """Replay a selected model's damage after simultaneous attacks (pp. 146, 199)."""
+        victim.unit.nmodels = 1
+        victim.woundsOnModel = previous
+        command_host = getattr(victim, 'command_host', None)
+        if command_host is not None:
+            command_host.unit.nmodels = len(command_host.model.getChildren())
+            victim.command_entry['active'] = True
+        self.woundDuellist(victim, wounds)
 
     async def verySimpleBattleStart(self, task):
         self.game.resolvingCombat = True
@@ -2223,6 +2296,20 @@ class CombatResolver:
         return True
 
     def resolveChallenge(self, challenge):
+        from assailment import drain_steps
+        return drain_steps(self._challengeSteps(challenge))
+
+    async def resolveChallengeWithSpells(self, challenge):
+        from assailment import cast_at_initiative
+        steps = self._challengeSteps(challenge)
+        while True:
+            try:
+                caster, targets, damage = next(steps)
+            except StopIteration as finished:
+                return finished.value
+            await cast_at_initiative(self.game, caster, targets, damage, challenge=challenge)
+
+    def _challengeSteps(self, challenge):
         """Fight the duel, in Initiative order (p. 211).
 
         Returns (player 1 wounds, player 2 wounds, player 1 overkill,
@@ -2231,6 +2318,7 @@ class CombatResolver:
         """
         if not challenge.answered:
             return 0, 0, 0, 0
+        player_one = challenge.host in self.game.player1Units
         order = []
         for model, host in ((challenge.challenger, challenge.host),
                             (challenge.accepter, challenge.accepter_host)):
@@ -2247,6 +2335,7 @@ class CombatResolver:
         scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         fallen = set()
+        cast = set()
         from itertools import groupby
         for initiative, step in groupby(order, key=lambda entry: entry[0]):
             inflicted = {id(participant): 0 for participant in challenge.participants()}
@@ -2256,6 +2345,14 @@ class CombatResolver:
                     rule_skipped('Challenges & Mounts', model,
                                  f'I{initiative}{label}: a participant was slain at a higher Initiative (p. 211)')
                     continue
+                if unit.model is model.unit.model and id(model) not in cast:
+                    cast.add(id(model))
+
+                    def spell_damage(target, wounds, regenerated=0):
+                        inflicted[id(model)] += wounds
+                        scores[id(model)] += min(regenerated, wounds_remaining(target))
+
+                    yield model, [rival], spell_damage
                 weapon = unit.model.equipedWeapon
                 if weapon is None or weapon.get('tag') == 'ranged':
                     unit.model.equip_best_melee()
@@ -2287,9 +2384,8 @@ class CombatResolver:
                                  f'{left} wounds +{bonus} overkill (max {MAX_OVERKILL}) (p. 211)')
         if fallen:
             end_challenge(self.game, challenge)
-        p1 = challenge.host in self.game.player1Units
         first, second = challenge.challenger, challenge.accepter
-        if not p1:
+        if not player_one:
             first, second = second, first
         return (scores[id(first)], scores[id(second)],
                 overkill[id(first)], overkill[id(second)])
@@ -2364,27 +2460,23 @@ class CombatResolver:
         player2_rank_bonus = 0
         modRemoveSequence = Sequence()
         self._pendingWounds = {}
+        engaged = set(self.game.attackers) | set(self.game.defenders)
+        foesBefore = {id(unit): list(unit.isInCombatWith) for unit in engaged}
+        p1_units = [unit for unit in engaged if unit in self.game.player1Units]
+        p2_units = [unit for unit in engaged if unit in self.game.player2Units]
         impact1, impact2 = self.impactHits(modRemoveSequence)
         player1_score += impact1
         player2_score += impact2
         # Challenges are issued when the combat is chosen, at Step 1.1 (p. 210).
         challenge = await self.challengeExchange(attackerUnit, defenderUnit)
         duel1, duel2, overkill1, overkill2 = (
-            self.resolveChallenge(challenge) if challenge else (0, 0, 0, 0))
+            await self.resolveChallengeWithSpells(challenge) if challenge else (0, 0, 0, 0))
         player1_score += duel1 + overkill1
         player2_score += duel2 + overkill2
-        melee1, melee2 = self.resolveMeleeProfiles(challenge, modRemoveSequence)
+        melee1, melee2 = await self.resolveMeleeWithSpells(challenge, modRemoveSequence)
         player1_score += melee1
         player2_score += melee2
 
-        engaged = set(self.game.attackers) | set(self.game.defenders)
-        # Who was fighting whom, taken before any casualty is removed: a unit
-        # that dies puts each of its foes back to Idle on the way out, which
-        # clears their isInCombatWith, so afterwards there is nothing left to
-        # say who has just been left with an empty space in front of them.
-        foesBefore = {id(u): list(u.isInCombatWith) for u in engaged}
-        p1_units = [u for u in engaged if u in self.game.player1Units]
-        p2_units = [u for u in engaged if u in self.game.player2Units]
         player1_score += self.takeAssailmentWounds(p1_units)
         player2_score += self.takeAssailmentWounds(p2_units)
         # Wounds are everything banked so far bar the Impact Hits. The

@@ -16,6 +16,7 @@ from persistence import load_game_state, save_game_state
 from spell_system import Spell, restore_spellbook
 from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
+from assailment import cast_at_initiative
 
 NAME = 'Corporeal Unmaking'
 
@@ -49,9 +50,11 @@ def test_live_cast_uses_chaos_ward_and_preserves_casualty_credit_on_reload(scene
     mage, host, enemy = prepare_combat(app, baseline, joined=joined)
     original_count = enemy.unit.nmodels
     assert ward_save_value(enemy.unit.model) == 6
+    credited = []
+    def damage(target, wounds, regenerated=0):
+        credited.append(wounds)
+        app.movement.applyWounds(target, wounds)
     with combat_tasks(app) as run, \
-            patch('game_fsm.taskMgr', app.taskMgr, create=True), \
-            patch.object(app, 'mouseWatcherNode', SimpleNamespace(hasMouse=lambda: False)), \
             patch.object(app, 'makeChoiceNew', AsyncMock(return_value=NAME)), \
             patch.object(Spell, '_roll_casting_dice', AsyncMock(return_value=(8, [4, 4]))), \
             patch.object(app, 'dispelAttempt', AsyncMock(return_value=False)) as dispel, \
@@ -59,29 +62,23 @@ def test_live_cast_uses_chaos_ward_and_preserves_casualty_credit_on_reload(scene
             patch('battleFunctions.random.randint', side_effect=[6, 6, 1, 6, 1]), \
             patch('battleFunctions.check_armor_save') as armour, \
             patch.object(app.psychology, 'check_heavy_casualties') as panic:
-        app.castSpell()
-        app.taskMgr.remove('taskMagicArcUpdate')
-        run(app.taskMagicArcUpdate(SimpleNamespace(done='done')))
-        spell = app.fsm.spellInstanceToCast
+        assert NAME not in app.castableSpells(mage)
+        run(cast_at_initiative(app, mage, [enemy], damage))
+        spell = dispel.call_args.args[0]
         assert isinstance(spell, CorporealUnmakingSpell)
         assert spell.casting_value == 8 and spell.wizard_level == 2
-        assert enemy.bodyNP.getCollideMask() == BitMask32.bit(5)
-        assert host.bodyNP.getCollideMask() != BitMask32.bit(5)
-        assert members(app)['Chaos Knight'].bodyNP.getCollideMask() != BitMask32.bit(5)
-        run(app.resolveSpell(enemy))
         dispel.assert_awaited_once_with(spell, mage)
         armour.assert_not_called()
         panic.assert_not_called()
     assert enemy.unit.nmodels == original_count - 1
     assert len(enemy.model.getChildren()) == original_count - 1
-    assert host.assailmentWounds == 1
+    assert credited == [1]
     assert mage.spellsCastThisTurn == [NAME]
     assert app.unitToMove is host and app.fsm.state == 'CombatPhase'
     assert not app.fsm.endOfTurnSpells
     path = save_game_state(app, str(tmp_path / 'unmaking.json'))
     for _ in range(2):
         load_game_state(app, path)
-        assert host.assailmentWounds == 1
         assert enemy.unit.nmodels == original_count - 1
         assert ward_save_value(enemy.unit.model) == 6
         assert mage.spellsCastThisTurn == [NAME]
@@ -96,17 +93,11 @@ def test_unsuccessful_cast_has_no_damage_or_combat_credit(scene, outcome):
     original_count = enemy.unit.nmodels
     roll = (2, [1, 1]) if outcome == 'failed' else (8, [4, 4])
     with combat_tasks(app) as run, \
-            patch('game_fsm.taskMgr', app.taskMgr, create=True), \
-            patch.object(app, 'mouseWatcherNode', SimpleNamespace(hasMouse=lambda: False)), \
             patch.object(app, 'makeChoiceNew', AsyncMock(return_value=None if outcome == 'cancelled' else NAME)), \
             patch.object(Spell, '_roll_casting_dice', AsyncMock(return_value=roll)), \
             patch.object(app, 'dispelAttempt', AsyncMock(return_value=outcome == 'dispelled')), \
             patch('high_magic.roll_dice_expr') as hits:
-        app.castSpell()
-        app.taskMgr.remove('taskMagicArcUpdate')
-        run(app.taskMagicArcUpdate(SimpleNamespace(done='done')))
-        if outcome != 'cancelled':
-            run(app.resolveSpell(enemy))
+        run(cast_at_initiative(app, mage, [enemy], lambda *args: None))
         hits.assert_not_called()
     assert enemy.unit.nmodels == original_count
     assert getattr(host, 'assailmentWounds', 0) == 0
@@ -118,7 +109,7 @@ def test_target_guards_cover_joined_retired_fought_and_challenge_casters(scene, 
     app, baseline = scene
     mage, host, enemy = prepare_combat(app, baseline)
     spell = CorporealUnmakingSpell(NAME, 8, game=app, caster=mage)
-    assert spell.canTarget(enemy)
+    assert not spell.canTarget(enemy)
     assert not mage.isInCombatWith
     assert not spell.canTarget(host)
     assert not spell.canTarget(members(app)['Chaos Knight'])
@@ -138,7 +129,7 @@ def test_target_guards_cover_joined_retired_fought_and_challenge_casters(scene, 
     with patch.object(app, 'challenges', [Challenge(members(app)['Dragon Prince'],
                                                    members(app)['Dragon Prince'], rival, enemy)]):
         assert not spell.canTarget(enemy)
-    assert 'challenge Assailment allocation is not implemented' in capsys.readouterr().out
+    assert 'only available when the Wizard fights at Initiative' in capsys.readouterr().out
 
 
 def test_multiwound_target_loses_one_wound_not_a_model(scene, tmp_path):
@@ -168,7 +159,7 @@ def test_live_combat_scores_banked_wounds_once_and_turn_end_clears_them(scene):
             patch.object(app.combat, 'shieldwallWeaponChoice', AsyncMock()), \
             patch.object(app.combat, 'impactHits', return_value=(0, 0)), \
             patch.object(app.combat, 'challengeExchange', AsyncMock(return_value=None)), \
-            patch.object(app.combat, 'resolveMeleeProfiles', return_value=(0, 0)), \
+            patch.object(app.combat, 'resolveMeleeWithSpells', AsyncMock(return_value=(0, 0))), \
             patch.object(app.combat, 'overrunPass', AsyncMock()), \
             patch.object(app.combat, 'breakTestPass', AsyncMock(return_value=[])), \
             patch.object(app.combat, 'declarePass', AsyncMock(return_value=[])), \

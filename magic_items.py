@@ -500,6 +500,24 @@ def activate_ability(game, member, item, ability_key, context, *, confirmed, rec
     return spent
 
 
+def item_spell_available(member, spell):
+    """An unmade item cannot supply a Bound spell (Forces of Fantasy p. 186)."""
+    if not spell.get('bound'):
+        return True
+    owners = [item for item in inventory(member) if item.name == spell.get('source')]
+    return not owners or any(not item.destroyed and item.disabled_reason is None for item in owners)
+
+
+def bind_generated_spells(member, known):
+    """Retain ownership of extra generated slots, not extra Wizard levels (FoF p. 183)."""
+    extra = iter(known[member.unit.model.wizard_level():])
+    for contribution in effects_for(member, EffectKind.SPELLS):
+        for _ in range(int(contribution.effect.value)):
+            record = next(extra, None)
+            if record is not None:
+                record['granted_by_item'] = contribution.item.instance_id
+
+
 def disable_item(member, item, reason, *, destroyed=False):
     """Persist whole-item suppression separately from ability exhaustion."""
     if not reason:
@@ -509,8 +527,17 @@ def disable_item(member, item, reason, *, destroyed=False):
     if item.destroyed or (item.disabled_reason is not None and not destroyed):
         rule_skipped(item.name, member, f'already disabled: {item.disabled_reason or "destroyed"}')
         return False
+    profile = member.unit.model
+    if item.name == 'Silvery Wand':
+        ordinary = [record for record in profile.spells.values() if not record.get('bound')]
+        if not any(record.get('granted_by_item') for record in ordinary):
+            bind_generated_spells(member, ordinary)
     item.disabled_reason = reason
     item.destroyed = destroyed
+    for key, record in list(profile.spells.items()):
+        if record.get('granted_by_item') == item.instance_id:
+            del profile.spells[key]
+            rule_log(item.name, member, f'{key}: item-granted spell removed; Wizard level unchanged (FoF pp. 183, 186)')
     rule_log(item.name, member, f'{reason}; all item effects disabled for the rest of the battle')
     return True
 

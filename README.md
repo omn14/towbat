@@ -67,12 +67,10 @@ The three selected items now have coded effects:
 - The Banner of the Bold grants Veteran to its unit and joined characters.
 	Losing or disabling the standard removes only that source, not native Veteran.
 
-Vaul's Unmaking targeting, other item effects, general equipment legality and
-adaptation of the existing Ruby Ring handler remain pending. The selected
-High Magic pool now has coded Shield of Saphery, Fury of Khaine, Walk Between
-Worlds and Corporeal Unmaking effects. Corporeal Unmaking's combat timing and
-challenge handling remain partial. The other six High Magic/Saphery effects
-remain unimplemented; generating those spells does not make their wording executable.
+All ten selected High Magic/Lore of Saphery spells now have coded effects.
+Vaul's Unmaking disables the selected character's item, including item-bound
+casting and the Wand's extra generated spell. Other item effects and equipment
+legality remain limited to the implemented item registry.
 
 Battle saves contain explicit `magic_item_inventory` records. Recreating a
 bearer restores spent/disabled state; old saves without this field load an empty
@@ -184,7 +182,7 @@ not erase Fury. Saves restore recipients and expiry without duplicate bonuses,
 including surviving recipients after the original target/caster dies. Numeric
 grant and combat-save outcomes appear in the rule log. Target geometry uses
 unit footprints; dispersed formations and challenge-specific targeting still
-need broader verification. Six other lore effects remain unimplemented.
+need broader verification. All ten selected lore effects are now implemented.
 
 ```bash
 source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_magic.py tests/test_high_magic_scene.py
@@ -240,25 +238,38 @@ special attacks. Ethereal does not prevent these magical wounds. Multi-wound
 targets lose wounds rather than whole models, and rule logs report the hits,
 wounds and Ward saves.
 
-When known, select the Mage or its host during Combat and use the existing spell
-menu before starting the fight. Targets are the unit's engaged enemies, including
-for a joined Mage; shooting line of sight is not required. Retired Wizards,
-already-fought units and casts during an active combat resolution are rejected.
-Cancelled, failed and dispelled casts cause no damage. Successful wounds count
-toward the caster's unit's combat result once, capped at the target's remaining
-Wounds. Save/reload preserves casualties, casting usage and unspent combat credit.
-No shooting heavy-casualty Panic test is requested by this Assailment.
+Each Wizard now receives an awaited spell opportunity at Initiative, during
+either player's Combat phase. Pre-fight Assailment casting is blocked. Joined
+Wizards use their host's enemies; duellists target only their opponent. Cancelled
+choices retain allowance; failed/dispelled attempts spend it. Deferred casualties
+preserve simultaneous attacks, and spell-only wipeouts retain overrun context.
+Actual wounds enter combat result; excess challenge wounds can add up to +5
+overkill. Hammerhand and Hand of Khaine share the window, including combat credit
+for regenerated wounds. Assailment does not request shooting-casualty Panic.
 
-**Partial combat integration:** the existing spell menu resolves before the
-fight, not at the Wizard's Initiative as p. 108 requires. Automatic casting
-opportunities for both sides, isolated challenge allocation and spell-only
-wipeout/post-combat routing remain unfinished. Casts by a duelling Wizard or
-against a unit in an active challenge are refused with a diagnostic, not allowed
-to spill wounds into protected models. This does not change Hammerhand's existing
-behavior or complete the shared Assailment engine.
+### Remaining High Elf Spells
+
+- Drain Magic: non-stacking 24" enemy-Wizard aura adds 2 to casting values.
+- Fiery Convocation: scattered 5" enemy-only Flaming S4 AP-2 template, per-base
+	coverage, partial hits and optional champion/character Look Out, Sir!.
+- Tempest: stationary 3" dangerous vortex with a 6" enemy terrain aura;
+	source-owned terrain views support movement, charges, disruption and reload.
+- Hand of Khaine: one selected enemy model suffers one S4 hit, no armour save.
+- Courage of Aenarion: reversible Remains in Play Unbreakable and successful-cast
+	replacement of earlier Enchantments, including on engaged units.
+- Vaul's Unmaking: visible enemy-character/item selection and permanent item
+	suppression, including joined/engaged characters and saved item state.
+
+Forty-two new spell acceptance cases pass. Tempest was rendered offscreen and
+inspected. Full-suite verification is incomplete because the RAM-headroom guard
+stopped it. Known unrelated command mock and intermittent Panda HUD failures remain.
+The checklist records shared-engine limits: planar LOS, terrain/wheel geometry,
+one joined character, legacy Wand slot provenance, manual Miscast damage and
+internal-subphase expiry choices. Challenge/ordinary attacks retain separate
+passes; future cross-group effects need global Initiative interleaving.
 
 ```bash
-source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_corporeal_unmaking.py tests/test_corporeal_unmaking_scene.py
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 768 tests/test_high_elf_completion.py tests/test_high_elf_completion_scene.py tests/test_assailment_scene.py
 ```
 
 ### High Elf and Chaos Faction Effects
@@ -272,8 +283,8 @@ barding. Rule logs include deciding rolls and relevant reasons for not applying.
 Native rules survive save/reload independently of magic-item suppression.
 
 Mark's live Fear/Terror tests, magical-damage defences needed by Ensorcelled
-Weapons, and Wizard armour exceptions remain unfinished. This does not add the
-missing High Magic spell effects or complete the matchup. Per-rule status and
+Weapons, and Wizard armour exceptions remain unfinished. This does not complete
+the matchup. Per-rule status and
 verification caveats are in [SPECIAL_RULES_CHECKLIST.md](SPECIAL_RULES_CHECKLIST.md).
 
 ```bash

@@ -220,6 +220,7 @@ class Spell:
 
     def _resistance(self, target):
         """Only an enemy unit actually targeted resists the cast (pp. 108, 173)."""
+        target = getattr(target, 'command_host', None) or target
         if self.targets_ground:
             return 0, '', [], 'the spell targets the ground, not a unit'
         if self.targets_self or str(self.spell_range).casefold() == 'self':
@@ -246,15 +247,17 @@ class Spell:
         """
         resistance, source, unresolved, skipped = self._resistance(unit)
         modifier = 0 if skipped else resistance
+        from high_magic import drained_casting_value
+        required = drained_casting_value(self)
         total, values = await self._roll_casting_dice()
         outcome, result = casting_outcome(values, self.wizard_level,
-                          self.casting_value, modifier,
+                  required, modifier,
                           bound=self.bound, power_level=self.power_level)
         from lileaths_blessing import reroll_casting
         values = await reroll_casting(self, values, outcome, result)
         total = sum(values)
         outcome, result = casting_outcome(values, self.wizard_level,
-                  self.casting_value, modifier,
+                  required, modifier,
                   bound=self.bound, power_level=self.power_level)
         self.casting = result
         self.perfect = outcome == CAST_PERFECT
@@ -264,7 +267,7 @@ class Spell:
         penalty = f" {modifier:+d} (Magic Resistance)" if modifier else ''
         print(f"{self.name}: casting roll {values} = {total} "
               f"+ {bonus} ({kind}){penalty} = {result} "
-              f"vs {self.casting_value}+ -> {outcome}")
+              f"vs {required}+ -> {outcome}")
         for unsupported in unresolved:
             rule_skipped('Magic Resistance', unit,
                          f'{unsupported}: no resolved numeric modifier; not guessed or re-rolled')
@@ -277,13 +280,13 @@ class Spell:
                 rule_log('Magic Resistance', unit,
                          f'{resistance} from {source} (strongest, not cumulative): '
                          f'{self.name}, dice {total} + bonus {bonus} {modifier:+d} '
-                         f'= {result} vs {self.casting_value}+ -> {outcome} (pp. 108, 173)')
+                         f'= {result} vs {required}+ -> {outcome} (pp. 108, 173)')
         if self.bound:
             rule_log('Bound Spells', self.caster or unit,
                      f'{self.name}: 2D6 {total} + Power Level {bonus}{penalty} '
                      f'= {result}; no Wizard bonus, miscast or perfect invocation (p. 109)')
         battle_log(
-            f"{self.name}: {values} = {result} v {self.casting_value}+ "
+            f"{self.name}: {values} = {result} v {required}+ "
             f"-> {outcome}",
             'morale' if outcome == CAST_MISCAST else
             'good' if outcome in (CAST_SUCCESS, CAST_PERFECT) else 'dice')
@@ -298,7 +301,7 @@ class Spell:
         self.perfect = entry['perfect']
         self.no_more_spells = entry['no_more_spells']
         if entry['at_casting_value']:
-            self.casting = self.casting_value
+            self.casting = required
         return entry['cast']
 
     # ─── Shared dice-rolling helper ─────────────────────────────────
@@ -726,6 +729,9 @@ class HammerhandSpell(Spell):
 
     def canTarget(self, unit):
         """A joined Wizard fights its host's opponents (pp. 108, 207)."""
+        window = getattr(self.game, 'assailmentWindow', None)
+        if window is not None and window['caster'] is self.caster:
+            return unit in window['targets'] and unit.unit.nmodels > 0
         caster = self.caster
         host = getattr(caster, 'hostUnit', None) or caster
         if caster is not None and unit not in getattr(host, 'isInCombatWith', []):
@@ -735,7 +741,9 @@ class HammerhandSpell(Spell):
         return True
 
     async def apply(self, unit):
-        self._magic_hits(unit, '2D3', strength=4, ap=2)
+        from assailment import resolve_hits
+        from models import roll_dice_expr
+        resolve_hits(self, unit, roll_dice_expr('2D3'), 4, 2)
 
 
 # The catalogue gives a spell's name, casting value, range and wording; what it

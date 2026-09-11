@@ -27,7 +27,7 @@ def wizard_reason(game, wizard, spell, *, remains=False):
     if getattr(wizard, 'dispelBlockedTurn', None) == current_turn(game):
         return 'Wizard cannot dispel again this turn after being Outclassed'
     target = getattr(spell, 'affected_unit', None) if remains else getattr(spell, 'target', None)
-    target_host = getattr(target, 'hostUnit', None) or target
+    target_host = getattr(target, 'command_host', None) or getattr(target, 'hostUnit', None) or target
     if getattr(host, 'isInCombat', False) and target_host is not host:
         return 'engaged Wizard can only dispel a spell targeting their unit'
     level = wizard.unit.model.wizard_level(0)
