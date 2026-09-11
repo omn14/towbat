@@ -25,31 +25,28 @@ lost import data, partial support and outstanding roster-specific verification.
 This section tracks implementation work; completed import metadata does not
 itself add gameplay effects.
 
-**Last completed regression gate (2026-09-11):** all 108 modules executed in sequential,
-memory-capped services, with 2,465 JUnit cases and no remaining failures, errors
-or skips. Run `180705-6007` stopped after 43 modules at the RAM headroom guard;
-`181524-9677` completed the remaining 65. Focused reruns `181435-9352` and
-`181511-9580` supersede five failures: terrain movement once again accepts tuple
-positions, its barding fixture supplies real rectangular bounds, and the
-bound-spell FSM double explicitly models idle combat and a non-final turn.
-Peak RSS was 1,164.9 MiB under the 1,536 MiB cap. This is a combined regression
-gate, not an end-to-end match certification; the explicit LEFTOVER entries below
-remain open.
+**Latest full regression run (2026-09-11):** `202101-6671` executed all 109
+modules with 2,487 JUnit cases in sequential, memory-capped services. Summed
+process elapsed time was 536.8 seconds; peak RSS was 992.2 MiB. No memory stop
+occurred. At the user's request, available-memory headroom is now 256 MiB,
+making the full-suite start threshold 1,792 MiB. The 1,536 MiB cap and no-swap
+setting are unchanged; three new boundary tests verify admission and rejection.
 
-**Post-milestone gate:** after commits `3819fbc`, `20392fa` and `4c44795`, the
-initial retry `184400-20708` could not start. The later isolated run
-`190616-28096` passed the first 30/108 modules before the memory headroom guard
-stopped it. Startup acceptance passed separately in `191124-30241`, and all
-nine runner/guard tests passed in `190519-27776`. The remaining 76-module resume
-`191206-30528` could not start: 2,027 MiB available versus the required 2,048 MiB
-(1,536 MiB cap plus 512 MiB headroom). No failure occurred in the executed modules,
-but the final full-suite rerun is still pending. Do not treat the earlier
-completed gate as verification of these later commits.
+The initial full run had 2,475 passing cases and 12 setup errors in the chariot
+terrain module, all from one Panda3D NaN assertion while measuring HUD text
+(`HUD._fit`, `TextNode.getWidth`) during startup. The unchanged module passed
+all 12 cases on focused rerun `203025-11111`. Every case has a passing result
+across those runs, but this is not a clean first-pass gate and no NaN fix is
+claimed. **LEFTOVER:** diagnose the intermittent HUD-text startup assertion.
+This run covers the later combat milestones and lighter scene fixtures; it
+supersedes the older incomplete memory checkpoints. It is not an end-to-end
+match certification, and the explicit rule LEFTOVER entries below remain open.
 
 **Test-process correction:** a plain `pytest` run produced an initial NaN during
 scene setup followed by hundreds of `Attempt to spawn multiple ShowBase
 instances!` errors. The chariot terrain, layout and startup tests pass in fresh
-processes; the original NaN has not been reproduced independently. Multi-module
+processes on retry, but the latest gate also hit a NaN in isolated HUD setup.
+Isolation limits cascading errors; it does not fix that underlying failure. Multi-module
 in-process runs now fail before fixture setup with the isolated runner command,
 rather than allowing shared Panda3D state to cascade. Single-module runs and
 test discovery remain supported. The guard reports a usage error, not skipped

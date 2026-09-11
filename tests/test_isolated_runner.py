@@ -75,3 +75,36 @@ def test_multi_module_guard_preserves_single_module_and_discovery(paths, collect
             pytest_runtestloop(session)
     else:
         assert pytest_runtestloop(session) is None
+
+
+@pytest.mark.parametrize('available,expected_exit', [(1791, 2), (1792, 0), (2047, 0)])
+def test_full_suite_memory_threshold_keeps_cap_and_smaller_margin(tmp_path, monkeypatch, available, expected_exit):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    import run_tests_isolated as runner
+
+    output = tmp_path / 'results'
+    module = ROOT / 'tests' / 'test_isolated_runner.py'
+    monkeypatch.setattr(sys, 'argv', ['run_tests_isolated.py', str(module), '--output', str(output)])
+    monkeypatch.setattr(runner.shutil, 'which', lambda name: '/usr/bin/systemd-run')
+    monkeypatch.setattr(runner, 'available_memory_mb', lambda: available)
+    execute = Mock(return_value=SimpleNamespace(returncode=0))
+    monkeypatch.setattr(runner.subprocess, 'run', execute)
+    monkeypatch.setattr(runner, 'read_result', lambda module, directory, code: {
+        'module': str(module.relative_to(ROOT)), 'returncode': code, 'peak_rss_kib': None,
+        'junit': {'tests': 1, 'failures': 0, 'errors': 0, 'skipped': 0}})
+
+    assert runner.main() == expected_exit
+    summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
+    assert summary['memory_limit_mb'] == 1536
+    assert summary['memory_headroom_mb'] == 256
+    assert summary['swap_limit_mb'] == 0
+    assert summary['complete'] is (expected_exit == 0)
+    assert len(summary['results']) == int(expected_exit == 0)
+    if expected_exit:
+        assert 'keeping 256 MiB headroom' in summary['stopped_reason']
+        execute.assert_called_once()
+    else:
+        command = execute.call_args.args[0]
+        assert '--property=MemoryMax=1536M' in command
+        assert '--property=MemorySwapMax=0' in command

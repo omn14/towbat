@@ -560,7 +560,11 @@ and a 180-second timeout per module. Each pytest process exits before the next
 starts, releasing its native scene resources. A module that exceeds its limit
 fails instead of allowing unrestricted memory growth. Isolation cannot protect
 against unrelated system-wide pressure; the runner also checks available memory
-before each module and refuses to start without 512 MiB extra headroom.
+before each module and refuses to start without 256 MiB extra headroom.
+The full-suite start threshold is therefore 1792 MiB available physical RAM,
+reduced from 2048 MiB at the user's request. The per-service cap and no-swap
+setting are unchanged; the smaller margin leaves less protection against other
+applications growing during a test. Reports record `memory_headroom_mb`.
 The Skirmisher scene module measured 1155 MiB peak RSS in isolation; a 1024 MiB
 cap stopped it near the end. The failed bounded run killed only its test service,
 and the same 82 tests passed under the 1536 MiB cap.

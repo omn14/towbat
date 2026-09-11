@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ElementTree
 
 ROOT = Path(__file__).resolve().parent
 FORWARDED_ENV = ("DISPLAY", "XAUTHORITY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR")
+MEMORY_HEADROOM_MB = 256
 
 
 def available_memory_mb() -> int:
@@ -96,6 +97,7 @@ def main() -> int:
     output = (args.output or ROOT / ".pytest_cache" / "isolated" / f"{stamp}-{os.getpid()}").resolve()
     output.mkdir(parents=True, exist_ok=False)
     summary = {"memory_limit_mb": args.memory_mb, "swap_limit_mb": 0,
+               "memory_headroom_mb": MEMORY_HEADROOM_MB,
                "timeout_seconds": args.timeout,
                "planned_modules": [str(module.relative_to(ROOT)) for module in modules],
                "results": [], "complete": False}
@@ -111,8 +113,9 @@ def main() -> int:
     try:
         for index, module in enumerate(modules, start=1):
             available = available_memory_mb()
-            if available < args.memory_mb + 512:
-                summary["stopped_reason"] = f"Only {available} MiB available; keeping 512 MiB headroom"
+            if available < args.memory_mb + MEMORY_HEADROOM_MB:
+                summary["stopped_reason"] = (f"Only {available} MiB available; "
+                                            f"keeping {MEMORY_HEADROOM_MB} MiB headroom")
                 print(summary["stopped_reason"], flush=True)
                 return 2
             module_output = output / f"{index:03d}-{module.stem}"
