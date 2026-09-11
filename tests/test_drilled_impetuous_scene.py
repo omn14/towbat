@@ -195,6 +195,30 @@ def test_impetuous_tests_once_before_reactions_and_forces_failed_charge(scene, r
     assert app.chargeStage == 'remaining'
 
 
+@pytest.mark.parametrize('dice,forced', [([1, 1], False), ([6, 6], True)])
+def test_impetuous_uses_flight_range_despite_selected_ground_mode(scene, dice, forced):
+    from charge_declarations import begin_declarations
+    from impetuous import complete_declarations, legal_targets
+    app, silver, defender, origin, facing, contact = declared_charge(scene)
+    prince = members(app)['Dragon Prince']
+    silver.bodyNP.setPos(25, 20, 0)
+    prince.bodyNP.setPos(0, -24, 0)
+    prince.bodyNP.setH(0)
+    prince.unit.model.flight_mode = 'ground'
+    begin_declarations(app)
+    with patch.object(prince.unit.model, 'special_rules', [*prince.unit.model.special_rules,
+            {'name': 'Fly', 'fly': True, 'fly_movement': 18}]), \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=dice)) as roll:
+        assert any(target is defender for target, _, _ in legal_targets(app, prince))
+        assert prince.unit.model.flight_mode == 'ground'
+        with combat_tasks(app) as run:
+            run(complete_declarations(app))
+        roll.assert_awaited_once()
+        assert bool(app.chargeDeclarations) is forced
+        assert prince.unit.model.flight_mode == ('fly' if forced else 'ground')
+
+
 @pytest.mark.parametrize('reason', ['rear', 'range', 'fleeing', 'restricted'])
 def test_impetuous_does_not_test_without_legal_target(scene, reason):
     from charge_declarations import begin_declarations, resolve_declarations

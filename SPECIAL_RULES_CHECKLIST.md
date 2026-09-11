@@ -409,11 +409,15 @@ itself add gameplay effects.
       characteristic deltas affect Fly too, using the actual mount/beast/crew
       Movement source for split profiles (FAQ v1.5.3). Nine Fly and 22 terrain
       tests pass alongside the ten chariot scenes.
+      Impetuous checks the greatest available ground/Fly Movement even when the
+      player selected Ground; a passed test restores that choice, while a forced
+      declaration commits the mode used for its route. Two new live flight-range
+      cases pass within 27 Drilled/Impetuous scenes, plus ten pure Fly tests.
       **Corrected:** legacy post-combat sweeps omitted impassable terrain;
       they now use the shared movement-blocker mask. Older pursuit scenes must
       answer Drilled, and ordinary terrain fixtures must close declarations.
       LEFTOVER: other post-move Lumbering contexts; exact swept individual-base
-      terrain intersections, forced-flight Impetuous interactions and combat reach,
+      terrain intersections, ground-only combat reach,
       and broader landing-route validation. Do not duplicate the Roc as an extra mount.
 
 **Conditional, not extra purchases:** Archers have **Detachment**, but this

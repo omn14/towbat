@@ -4,6 +4,7 @@ from panda3d.core import Vec3
 
 from characters import enemy_units
 from first_charge import begin_charge_attempt
+from flight import compulsory_mode, compulsory_preview
 from formed_skirmish_charge import preview_charge, route_allowance, route_to_model
 from psychology import active_character, leadership_passed, reroll_leadership
 from rules_log import rule_log, rule_skipped
@@ -26,6 +27,7 @@ def has_impetuous(unit):
     return False
 
 
+@compulsory_preview
 def legal_targets(game, unit):
     """Use front-arc sight, range including wheels, and the shared route planner.
 
@@ -111,6 +113,12 @@ async def complete_declarations(game):
                                             prompt=f'{unit.unit.name}: compulsory Impetuous charge')
             selected = options.get(label, selected)
         target, route, target_index = selected
+        mode = compulsory_mode(game, unit)
+        for member in game.movement.movementParticipants(unit):
+            member.unit.model.flight_mode = mode
+        if unit.unit.model.can_fly():
+            rule_log('Fly', unit, f'compulsory Impetuous charge uses {mode}: '
+                     f'greatest available M{game.movement.movementAllowance(unit):g} (FAQ v1.5.3)')
         facing = tuple(unit.bodyNP.getHpr())
         entry = ChargeDeclaration(unit, target, tuple(unit.bodyNP.getPos()), facing,
                                   tuple(route.destination), (route.heading + route.wheel, 0, 0),

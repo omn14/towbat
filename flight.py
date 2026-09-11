@@ -32,6 +32,31 @@ def set_mode(game, unit, mode):
     return True
 
 
+def compulsory_mode(game, unit):
+    """Use the greatest available Movement for compulsory charges (p. 170; FAQ v1.5.3)."""
+    profiles = [member.unit.model for member in game.movement.movementParticipants(unit)]
+    if not all(profile.can_fly() and not getattr(profile, '_groundMovement', False) for profile in profiles):
+        return 'ground'
+    return ('fly' if min(profile.get_fly_movement() for profile in profiles)
+            >= min(profile.get_movement() for profile in profiles) else 'ground')
+
+
+def compulsory_preview(method):
+    @wraps(method)
+    def preview(game, unit, *args, **kwargs):
+        profiles = [member.unit.model for member in game.movement.movementParticipants(unit)]
+        previous = [getattr(profile, 'flight_mode', 'fly') for profile in profiles]
+        mode = compulsory_mode(game, unit)
+        for profile in profiles:
+            profile.flight_mode = mode
+        try:
+            return method(game, unit, *args, **kwargs)
+        finally:
+            for profile, value in zip(profiles, previous):
+                profile.flight_mode = value
+    return preview
+
+
 def refresh_controls(game, unit):
     from direct.gui.DirectGui import DirectRadioButton, DGG
     import gui_theme as theme

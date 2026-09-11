@@ -32,6 +32,23 @@ class FlyRuleTests(unittest.TestCase):
 
 
 class FlyFlagTests(unittest.TestCase):
+    def test_compulsory_preview_uses_greater_movement_and_restores_player_choice(self):
+        from types import SimpleNamespace
+        from flight import compulsory_mode, compulsory_preview
+        profile = model('Lothern Skycutter', '')
+        profile.flight_mode = 'ground'
+        unit = SimpleNamespace(unit=SimpleNamespace(model=profile))
+        game = SimpleNamespace(movement=SimpleNamespace(movementParticipants=lambda unit: [unit]))
+
+        @compulsory_preview
+        def preview(game, unit):
+            return unit.unit.model.is_flying()
+
+        self.assertTrue(preview(game, unit))
+        self.assertEqual(profile.flight_mode, 'ground')
+        profile._groundMovement = True
+        self.assertEqual(compulsory_mode(game, unit), 'ground')
+
     def test_movement_modifiers_affect_flight_but_never_make_it_negative(self):
         profile = model("State Trooper", "")
         profile.special_rules.append({"name": "Fly", "fly": True, "fly_movement": 8})
