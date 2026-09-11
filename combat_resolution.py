@@ -2285,6 +2285,18 @@ class CombatResolver:
     def _duelName(model):
         return model.unit.name if model is not None else '-'
 
+    async def chooseDuellist(self, candidates, owner, prompt, *, optional=False):
+        """The issuing/accepting owner nominates their participant (p. 210)."""
+        if not candidates:
+            return None
+        if self.game.aiControls(owner) or (len(candidates) == 1 and not optional):
+            return candidates[0]
+        options = {candidate.unitName: candidate for candidate in candidates}
+        labels = [*options, 'No retirement'] if optional else list(options)
+        choice = await taskMgr.add(self.game.makeChoiceNew(
+            labels, Vec3(0, 0, 12), owner=owner, prompt=prompt))
+        return options.get(choice, None if optional else candidates[0])
+
     async def challengeExchange(self, attackerUnit, defenderUnit):
         """Issue, accept or refuse, at Step 1.1 (p. 210).
 
@@ -2321,6 +2333,9 @@ class CombatResolver:
                 rule_skipped('Challenges', challenger,
                              "its player declined to issue a challenge")
                 continue
+            from challenges import duellists
+            challenger = await self.chooseDuellist(duellists(issuer), issuer,
+                                                   f'{issuer.unit.name}: who issues the challenge?')
             challenge = Challenge(challenger, issuer)
             rule_log('Challenges', challenger,
                      f"issues a challenge to {target.unit.name} (p. 210)")
@@ -2357,13 +2372,16 @@ class CombatResolver:
 
     async def answerChallenge(self, challenge, target):
         """Accept or refuse, and retire a coward (p. 210-211)."""
-        if not can_accept(target):
+        from challenges import duellists
+        candidates = duellists(target)
+        if not candidates:
             rule_log('Challenges', challenge.challenger,
                      f"{target.unit.name} has no character to answer, so the "
                      f"challenge goes unanswered (p. 210)")
             return
-        accepter = duellist(target)
-        barred = refusal_barred(accepter, target if accepter is not target else None)
+        accepter = candidates[0]
+        barred = next((reason for candidate in candidates
+                   if (reason := refusal_barred(candidate, target if candidate is not target else None))), None)
         # The AI always accepts.
         if self.game.aiControls(target) or barred is not None:
             answer = "Accept"
@@ -2377,6 +2395,8 @@ class CombatResolver:
                 prompt=f"{self._duelName(challenge.challenger)} challenges "
                        f"{accepter.unit.name}"))
         if answer != "Refuse":
+            accepter = await self.chooseDuellist(candidates, target,
+                                                f'{target.unit.name}: who accepts the challenge?')
             challenge.accepter = accepter
             challenge.accepter_host = target
             rule_log('Challenges', accepter,
@@ -2384,7 +2404,13 @@ class CombatResolver:
                      f"{self._duelName(challenge.challenger)} (p. 210)")
             return
         challenge.refused = True
-        self.retireFromCombat(accepter, target)
+        nominee = await self.chooseDuellist(candidates, challenge.host or challenge.challenger,
+                                           f'{target.unit.name} refused: nominate a model to retire', optional=True)
+        if nominee is None:
+            rule_skipped('Refusing a Challenge', target, 'challenger declines to nominate a retiring model (p. 210)')
+            return
+        challenge.retired = nominee
+        self.retireFromCombat(nominee, target)
 
     def retireFromCombat(self, model, host):
         """A model that refused a challenge hides in the rear ranks (p. 210)."""

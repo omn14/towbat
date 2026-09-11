@@ -130,11 +130,16 @@ itself add gameplay effects.
   missile attacks still need per-model attack allocation. Exact contact-based
   full-versus-single attack limits remain the combat engine's existing
   formation approximation. No bespoke command miniature assets are added.
-- LEFTOVER: when a unit has both a joined character and champion, the current
-  challenge picker prefers the character; explicit participant/refusal
-  nomination is not yet offered. AI still never issues and always accepts.
-      Duel and ordinary attacks now share one Initiative clock; see the timing
-      milestone below. Participant nomination remains independent work.
+- [x] Challenge participant/refusal nomination (2026-09-11): the issuer and
+      accepting player choose their own character or champion. When refused, the
+      challenger selects which eligible model retires, or declines to nominate one
+      (p. 210). Five actual-roster scenes cover both participant choices and
+      character/champion/no retirement, including reload. All 44 challenge, eight
+      command and ten Assailment regression cases pass. Dead or retired lone
+      characters cannot be nominated. AI still never issues and always accepts.
+      LEFTOVER: exact within/adjacent fighting-rank eligibility and nominations
+      across every unit in a complex multiple combat; current choices use the two
+      selected hosts. Duel and ordinary attacks share one Initiative clock.
 - LEFTOVER: captured-standard VP are persisted, but the tactical assessment
   is not an end-of-battle Victory Points adjudicator. Warband's march modifier,
       remaining movement extensions and magic-item/faction effects belong

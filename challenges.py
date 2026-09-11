@@ -52,20 +52,26 @@ class Challenge:
         return [h for h in (self.host, self.accepter_host) if h is not None]
 
 
-def duellist(unit):
-    """The model in *unit* that could fight a challenge, or None.
-
-    Characters and champions may issue or accept (pp. 199, 210).
-    """
+def duellists(unit):
+    """Living, non-retired character/champion candidates (pp. 199, 210)."""
     if unit is None:
-        return None
+        return []
+    if getattr(unit.unit, 'nmodels', 0) <= 0:
+        return []
     if is_character(unit):
-        return unit
+        return [] if is_retired(unit) else [unit]
+    candidates = []
     joined = get_joined_character(unit)
-    if joined is not None and not is_retired(joined):
-        return joined
+    if joined is not None and joined.unit.nmodels > 0 and not is_retired(joined):
+        candidates.append(joined)
     from command_groups import champions
-    return next(iter(champions(unit)), None)
+    candidates.extend(champions(unit))
+    return candidates
+
+
+def duellist(unit):
+    """Default participant for legacy callers and AI (pp. 199, 210)."""
+    return next(iter(duellists(unit)), None)
 
 
 def is_retired(model) -> bool:

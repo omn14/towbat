@@ -68,6 +68,21 @@ class FindingADuellistTests(unittest.TestCase):
         captain.retiredFromCombat = True
         self.assertIsNone(duellist(unit))
 
+    def test_lone_retired_or_dead_characters_cannot_be_nominated(self):
+        captain = _character()
+        captain.retiredFromCombat = True
+        self.assertIsNone(duellist(captain))
+        captain.retiredFromCombat = False
+        captain.unit.nmodels = 0
+        self.assertIsNone(duellist(captain))
+
+    def test_joined_character_and_champion_are_both_candidates(self):
+        from challenges import duellists
+        captain, champion = _character(), _character('Unit Champion')
+        host = _regiment(character=captain)
+        with mock.patch('command_groups.champions', return_value=[champion]):
+            self.assertEqual(duellists(host), [captain, champion])
+
     def test_nothing_has_no_duellist(self):
         self.assertIsNone(duellist(None))
 
