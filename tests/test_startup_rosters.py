@@ -34,8 +34,15 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path,
     with patch('spell_generation.begin_spell_generation', side_effect=capture_generation):
         app = MyApp()
     try:
+        mat = app.ground.getShaderInput('matTex').getTexture()
+        assert (mat.getXSize(), mat.getYSize()) == (4096, 4096)
         assert app.magicBusy is False
+        assert app.campaign_map is None
+        assert not hasattr(app, 'country_model') and not hasattr(app, 'cloud_plane')
+        assert not app.taskMgr.hasTaskNamed('update_campaign_terrain')
+        assert not app.taskMgr.hasTaskNamed('update_cloud_time')
         assert len(app.units) == 10
+        assert all(not member.model.hasPythonTag('test_base_model') for member in app.units)
         assert [member.unit.nmodels for member in app.player1Units] == [1, 6, 5, 3, 1]
         assert [member.unit.nmodels for member in app.player2Units] == [1, 4, 5, 10, 5]
         assert app.fsm.state == 'DeployPhase' and app.spellGenerationBusy

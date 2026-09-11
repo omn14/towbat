@@ -50,7 +50,6 @@ from rulesFunctions import *
 from deployPhase import *
 from gameStateAnalyzer import *
 from listBuilderGUI import ArmyListBuilderGUI
-from campaignMap import CampaignMap, CountryFSM
 from collision_masks import CollisionMask as CM
 
 # ─── Extracted Subsystems ────────────────────────────────────────────────────
@@ -241,7 +240,7 @@ class MyApp(ShowBase):
         self.setup_shader()
         self.setup_table()
         self.setup_bullet()
-        self.setup_campaign_map()
+        self.campaign_map = None
 
         # ── Terrain ───────────────────────────────────────────────────────
         self.terrain_manager = TerrainManager(self)
@@ -2384,7 +2383,11 @@ class MyApp(ShowBase):
             self.fsm.request('CampaignPhase')
 
     def setup_campaign_map(self):
-        """Initialize campaign map components (hidden initially)."""
+        """Load the optional campaign view once, only when first opened."""
+        if self.campaign_map is not None:
+            return
+        from campaignMap import CampaignMap, CountryFSM
+
         # Create campaign map terrain
         self.campaign_map = CampaignMap(self)
         self.campaign_map.load_heightmap("assets/textures/wals_dem_resized.png", height_scale=25)

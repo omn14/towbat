@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import CardMaker, NodePath, getModelPath, loadPrcFileData
 
 from battleFunctions import strike_initiative, ward_save_value
 from characters import join_unit
@@ -17,13 +17,43 @@ from psychology import reroll_leadership
 from spell_generation import generate_spells, pending_wizards
 from special_rules import apply_rule_keywords
 from tests.test_shieldwall_scene import combat_tasks
+from units import MM_PER_UNIT, unitGraphics
+
+
+def base_model(graphics, modelpath):
+    """Catalogue-sized bases, not artwork or silhouette/height validation."""
+    size = graphics.unit.model.get_base_size()
+    assert size is not None, f'Missing catalogue base for {graphics.unit.model.name}'
+    width, depth = (dimension / MM_PER_UNIT for dimension in size)
+    root = NodePath('test-unit-bases')
+    figure = root.attachNewNode('test-base')
+    for face_width, face_height, position, rotation in (
+            (width, 1, (0, -depth / 2, .5), (0, 0, 0)),
+            (width, 1, (0, depth / 2, .5), (180, 0, 0)),
+            (depth, 1, (-width / 2, 0, .5), (-90, 0, 0)),
+            (depth, 1, (width / 2, 0, .5), (90, 0, 0)),
+            (width, depth, (0, 0, 1), (0, -90, 0)),
+            (width, depth, (0, 0, 0), (0, 90, 0))):
+        card = CardMaker('base-face')
+        card.setFrame(-face_width / 2, face_width / 2, -face_height / 2, face_height / 2)
+        face = figure.attachNewNode(card.generate())
+        face.setPos(*position)
+        face.setHpr(*rotation)
+    figure.flattenStrong()
+    root.setPythonTag('test_base_model', True)
+    return root
 
 
 @pytest.fixture(scope='module')
 def scene(tmp_path_factory):
+    """Real rules/collisions with simple bases; startup tests keep the artwork."""
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
     getModelPath().appendDirectory(str(Path(__file__).resolve().parents[1]))
-    with patch('spell_generation.begin_spell_generation'):
+    bake_mat = MyApp.bakeBattleMat
+    with patch('spell_generation.begin_spell_generation'), \
+            patch.object(unitGraphics, 'loadFigureModel', base_model), \
+            patch.object(MyApp, 'bakeBattleMat', autospec=True,
+                         side_effect=lambda app, size=512: bake_mat(app, size=size)):
         app = MyApp()
         try:
             with patch.object(app, 'aiControls', return_value=True):
@@ -47,9 +77,32 @@ def members(app):
 
 def test_actual_roster_wards_and_profile_strike_order(scene):
     app, baseline = scene
+    assert app.campaign_map is None
+    assert not hasattr(app, 'country_model') and not hasattr(app, 'cloud_plane')
+    assert not app.taskMgr.hasTaskNamed('update_campaign_terrain')
+    assert not app.taskMgr.hasTaskNamed('update_cloud_time')
+    mat = app.ground.getShaderInput('matTex').getTexture()
+    assert (mat.getXSize(), mat.getYSize()) == (512, 512)
     load_game_state(app, baseline)
     armies = members(app)
     assert len(app.units) == 10
+    for member in app.units:
+        width, depth = (dimension / MM_PER_UNIT for dimension in member.unit.model.get_base_size())
+        assert member.model.getPythonTag('test_base_model') is True
+        assert len(member.model.getChildren()) == member.unit.nmodels
+        assert member.modelWidth == pytest.approx(width)
+        assert member.modelHeight == pytest.approx(depth)
+        if not member.isSkirmisher:
+            assert member.unitWidth == pytest.approx(width * min(member.unit.files, member.unit.nmodels))
+            assert member.unitHeight == pytest.approx(depth * -(-member.unit.nmodels // member.unit.files))
+        shape = member.bodyNP.node().getShape(0)
+        assert shape.getHalfExtentsWithMargin().x == pytest.approx(member.unitWidth / 2)
+        assert shape.getHalfExtentsWithMargin().y == pytest.approx(member.unitHeight / 2)
+        for child in member.model.getChildren():
+            lower, upper = child.getTightBounds(child)
+            assert upper.x - lower.x == pytest.approx(width)
+            assert upper.y - lower.y == pytest.approx(depth)
+            assert upper.z - lower.z == pytest.approx(1)
     expected = {'Aspiring Champion': 5, 'Chaos Knight': 6, 'Chaos Warrior': 6,
                 'Dragon Prince': 6, 'Mage': 0, 'Silver Helm': 0}
     for name, ward in expected.items():

@@ -25,7 +25,7 @@ class unitGraphics(FSM):
         self.world=BulletWorld
         self.color=color
         self.bitmask=bitmask
-        self.model = loader.loadModel(modelpath)
+        self.model = self.loadFigureModel(modelpath)
         self.model.setScale(scale)
         self.model.setColor(self.color)
         self.model.reparentTo(render)
@@ -497,6 +497,9 @@ class unitGraphics(FSM):
             self.applyFootprint(box_size)
             #self.model.flattenLight()
     
+    def loadFigureModel(self, modelpath):
+        return loader.loadModel(modelpath)
+
     def _varyModelTones(self):
         """Give each miniature its own tone, so a regiment reads as many models
         rather than one solid block of colour.

@@ -481,6 +481,11 @@ preserving saved rules and battle state. Loading does not rewrite the save file.
 
 ## Testing
 
+Battle startup no longer initializes the unused campaign map. Its heightmap,
+texture, country meshes and collisions, and cloud resources are loaded only
+on first entering the campaign view with F6, then reused. Normal battle startup
+and scene tests both benefit; the campaign update tasks run only in that view.
+
 Activate the project environment for every command:
 
 ```bash
@@ -499,6 +504,28 @@ a saved baseline restored between cases. In a measured persistence run, scene
 setup took about 8 seconds after catalogue initialization, while the individual
 new save/load cases took about 0.5-0.8 seconds. Do not pay for a new game instance
 in every test. Use `--durations` to measure before changing fixture isolation.
+
+The shared fixture in `tests/test_faction_rules_scene.py` skips figure artwork:
+it substitutes solid catalogue-sized bases at `unitGraphics.loadFigureModel`
+and bakes a 512-pixel decorative mat instead of 4096 pixels. Unit profiles,
+model counts, command/character placement, Bullet collisions, game state and
+save/load paths remain real. All ten roster units are retained for shared
+combat scenarios. The fixture's patch remains active during save restores and
+is removed at teardown. It is not suitable for artwork, silhouette, mesh-height
+or visual-quality assertions; `tests/test_startup_rosters.py` retains real
+artwork and the full-size mat, with assertions keeping that distinction explicit.
+
+With the smaller mat already enabled, replacing artwork reduced the seven-case
+pivot module from 19.86 to 13.53 seconds elapsed, and setup from 13.09 to 10.11
+seconds in a local before/after run. Peak RSS fell from 420.5 to 404.6 MiB.
+After deferring campaign setup as well, the same module measured 7.04 seconds
+elapsed, 3.66 seconds setup and 265.7 MiB peak RSS. This is about 65% less elapsed
+time than the 19.86-second artwork baseline; no test cases were dropped.
+Timings vary by machine and memory pressure. To run just these checks:
+
+```bash
+source .venv/bin/activate && python run_tests_isolated.py --memory-mb 512 tests/test_free_pivot_scene.py
+```
 
 Run the complete suite using separate, memory-bounded processes per test module:
 

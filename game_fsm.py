@@ -518,6 +518,7 @@ class GamePhaseFSM(FSM):
     def enterCampaignPhase(self):
         """Show campaign map, hide battle scene."""
         print("Entering Campaign Phase")
+        self.game.setup_campaign_map()
         self.game.debugNP.hide()
 
         self._saved_cam_pos = self.game.camera.getPos()
