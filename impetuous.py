@@ -80,25 +80,27 @@ def legal_targets(game, unit):
 
 
 async def complete_declarations(game):
-    """Test once while the resolver owns the phase, before any reactions (p. 172)."""
+    """Test undeclared units before reactions; declared charges already comply (p. 172)."""
     from charge_declarations import ChargeDeclaration
     active = game.player1Units if game.roundCounter.current_player == 1 else game.player2Units
     for unit in list(active):
         if not has_impetuous(unit):
             continue
+        declared = next((entry for entry in game.chargeDeclarations if entry.charger is unit), None)
+        if declared is not None:
+            rule_skipped('Impetuous', unit,
+                         f'already declared a charge at {declared.defender.unit.name}; no Leadership test')
+            continue
         if unit.isSkirmisher:
             rule_skipped('Impetuous', unit, 'LEFTOVER: compulsory loose-formation charge selection is not supported')
             continue
-        declared = next((entry for entry in game.chargeDeclarations if entry.charger is unit), None)
-        targets = []
-        if declared is None:
-            battle_log(f'{unit.unit.name}: Impetuous target search started', 'debug', subject=unit)
-            started = monotonic()
-            targets = legal_targets(game, unit)
-            elapsed = monotonic() - started
-            battle_log(f'{unit.unit.name}: Impetuous target search finished: '
-                       f'{len(targets)} legal targets in {elapsed:.3f}s', 'debug', subject=unit)
-        if declared is None and not targets:
+        battle_log(f'{unit.unit.name}: Impetuous target search started', 'debug', subject=unit)
+        started = monotonic()
+        targets = legal_targets(game, unit)
+        elapsed = monotonic() - started
+        battle_log(f'{unit.unit.name}: Impetuous target search finished: '
+                   f'{len(targets)} legal targets in {elapsed:.3f}s', 'debug', subject=unit)
+        if not targets:
             rule_skipped('Impetuous', unit, 'no legal charge target; no Leadership test or compulsory charge')
             continue
         from warband import leadership_for_test
@@ -109,16 +111,10 @@ async def complete_declarations(game):
         dice = await game.rollLeadershipDice()
         dice = await reroll_leadership(game, unit, 'Impetuous', dice, leadership, game.rollLeadershipDice)
         passed = leadership_passed(sum(dice), leadership)
-        result = ('PASS; existing charge declaration stands' if passed else
-              f'FAIL; existing charge at {declared.defender.unit.name} satisfies compulsory charge') if declared else (
-              'PASS; may act normally' if passed else 'FAIL; must declare a charge')
+        outcome = 'PASS; may act normally' if passed else 'FAIL; must declare a charge'
+        general_detail = f' (Inspiring Presence: {general.unit.name})' if general else ''
         rule_log('Impetuous', unit,
-                 f'2D6={sum(dice)} vs Ld {leadership}'
-                 + (f' (Inspiring Presence: {general.unit.name})' if general else '')
-             + f' -> {result}')
-        if declared is not None:
-            declared.compulsory = not passed
-            continue
+             f'2D6={sum(dice)} vs Ld {leadership}{general_detail} -> {outcome}')
         if passed:
             continue
         selected = targets[0]

@@ -12,6 +12,18 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**Already-declared Impetuous correction:** Per the requested declaration flow,
+an existing charge satisfies the requirement to declare (p. 172); Resolve Charges
+now skips its target search, Leadership roll and rerolls. The skip names the
+declared target, and neither target nor compulsory status is changed. Undeclared
+eligible units still test normally and a failure creates a compulsory charge.
+Recovered the interrupted edit after the VS Code crash and fixed its malformed
+logging indentation. All 34 Drilled/Impetuous tests pass, including voluntary and
+compulsory declaration preservation, reloaded declarations, human/AI Drilled and
+Counter Charge. **LEFTOVER:** AI optional Drilled still keeps its formation, so a
+voluntary Marching Column charge can fail without moving; this change does not
+alter that policy or falsely mark voluntary declarations compulsory.
+
 **Export context and timing correction:** Real phase entry now updates journal
 context before its callbacks run, after outgoing phase cleanup. Strategy entry
 messages no longer inherit Combat, and previous combat/Initiative labels clear
@@ -72,9 +84,9 @@ not established. This is separate from the paused HUD startup NaN investigation.
       friend cannot become eligible merely because combat movement finished first.
       Compulsory tests still bypass exemptions. Nearby units are labelled candidates,
       and a skipped test records its reason rather than suggesting dice were rolled.
-- [x] Impetuous still tests once before reactions, including declared chargers;
-      the message now says an existing declaration satisfies a failed test, instead
-      of demanding another declaration (p. 172). No charge-choice mechanics changed.
+- [x] Impetuous tests undeclared eligible units once before reactions; already
+      declared chargers now log a skip without Leadership dice or rerolls (p. 172).
+      Existing targets and voluntary/compulsory status remain unchanged.
 - Verification: 124 Psychology tests and 31 live Drilled/Impetuous tests pass in
       isolated memory-capped runs, including voluntary declarations after reload.
 - [x] Charge range reports separate the selected 2D6 die from the Swiftstride
@@ -613,8 +625,8 @@ tests or success. README and Copilot test commands now agree on this workflow.
       using Leadership/Inspiring Presence, active joined-character Leadership and
       shared Veteran rerolls. Failure adds a compulsory declaration with owner
       target selection; AI selects the nearest supported legal route. A prior
-      voluntary declaration still tests, so failure cannot evade compulsory
-      Drilled. Ordinary redress is blocked during declarations. Rule presence
+      declaration skips the test and retains its voluntary/compulsory status;
+      voluntary Drilled remains optional. Ordinary redress is blocked during declarations. Rule presence
       includes joined and split-profile models; the old 4+ mechanism is not used.
       **LEFTOVER:** loose Impetuous chargers are explicitly logged as unsupported.
       Routing still needs broader flight/large-target/height and obstructed-charge

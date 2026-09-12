@@ -292,20 +292,28 @@ def test_impetuous_uses_flight_range_despite_selected_ground_mode(scene, dice, f
         assert prince.unit.model.flight_mode == ('fly' if forced else 'ground')
 
 
-def test_impetuous_existing_declaration_satisfies_failure(scene):
+@pytest.mark.parametrize('compulsory', [False, True])
+def test_impetuous_existing_declaration_skips_test(scene, compulsory):
     from types import SimpleNamespace
     from impetuous import complete_declarations
     app, _, defender, _, _, _ = declared_charge(scene)
     prince = members(app)['Dragon Prince']
-    entry = SimpleNamespace(charger=prince, defender=defender, compulsory=False)
+    entry = SimpleNamespace(charger=prince, defender=defender, compulsory=compulsory)
     app.chargeDeclarations = [entry]
     with combat_tasks(app) as run, \
-            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[6, 6])), \
-            patch('impetuous.rule_log') as log:
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[6, 6])) as dice, \
+            patch('impetuous.reroll_leadership', AsyncMock(return_value=[6, 6])) as reroll, \
+            patch('impetuous.legal_targets') as search, \
+            patch('impetuous.rule_skipped') as log:
         run(complete_declarations(app))
+    dice.assert_not_awaited()
+    reroll.assert_not_awaited()
+    search.assert_not_called()
     assert app.chargeDeclarations == [entry]
-    assert entry.compulsory
-    assert any('satisfies compulsory charge' in call.args[2] for call in log.call_args_list)
+    assert entry.compulsory is compulsory
+    assert entry.defender is defender
+    log.assert_called_once_with('Impetuous', prince,
+                               f'already declared a charge at {defender.unit.name}; no Leadership test')
 
 
 @pytest.mark.parametrize('reason', ['rear', 'range', 'fleeing', 'restricted'])
@@ -488,7 +496,7 @@ def test_compulsory_column_charge_countercharge_and_first_charge_after_reload(
         if kwargs['owner'] is defender:
             return next(option for option in options if option.startswith('counter charge'))
         assert kwargs['owner'] is prince
-        assert 'Keep formation' not in options
+        assert ('Keep formation' in options) is voluntary
         return '3 files'
 
     with combat_tasks(app) as run, \
@@ -498,10 +506,24 @@ def test_compulsory_column_charge_countercharge_and_first_charge_after_reload(
             patch.object(app.combat, 'rullTerninger', side_effect=dice), \
             patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)):
         run(resolve_declarations(app))
-    assert events == ['Impetuous', 'Counter Charge', 'Charge roll']
-    leadership_roll.assert_awaited_once()
+    assert events == ([] if voluntary else ['Impetuous']) + ['Counter Charge', 'Charge roll']
+    if voluntary:
+        leadership_roll.assert_not_awaited()
+    else:
+        leadership_roll.assert_awaited_once()
     if ai:
         choices.assert_not_called()
+    if ai and voluntary:
+        assert prince.unit.files == 1 and prince.state == 'Moved'
+        assert not prince.isInCombat and not defender.isInCombat
+        assert not prince.chargeAttemptPending and not defender.chargeAttemptPending
+        assert prince.chargeAttempts == defender.chargeAttempts == 1
+        assert app.chargeStage == 'remaining'
+        output = capsys.readouterr().out
+        assert 'already declared a charge' in output and 'no Leadership test' in output
+        assert 'keeps 1 files' in output and 'charge fails without moving' in output
+        assert '2D6=12 vs Ld' not in output
+        return
     assert prince.unit.files == (2 if ai else 3)
     assert prince.unit.ranks <= prince.unit.files
     assert prince.state == defender.state == 'InCombat'
@@ -513,8 +535,11 @@ def test_compulsory_column_charge_countercharge_and_first_charge_after_reload(
     assert prince.moveSpentThisTurn == 0 and not prince.marchedThisTurn
     assert app.chargeStage == 'remaining'
     output = capsys.readouterr().out
-    expected = 'satisfies compulsory charge' if voluntary else 'must declare a charge'
-    assert '2D6=12 vs Ld' in output and expected in output
+    if voluntary:
+        assert 'already declared a charge' in output and 'no Leadership test' in output
+        assert '2D6=12 vs Ld' not in output
+    else:
+        assert '2D6=12 vs Ld' in output and 'must declare a charge' in output
     assert 'Drilled' in output and 'costs 0' in output
 
 
