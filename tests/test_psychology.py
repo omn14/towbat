@@ -161,6 +161,27 @@ class ExemptionTests(unittest.TestCase):
         u = self._unit(rules=[{'name': 'Immune to Psychology'}])
         self.assertEqual(self.psy.panic_exempt_reason(u), 'Immune to Psychology')
 
+    def test_deferred_panic_keeps_trigger_time_combat_exemption(self):
+        from unittest.mock import patch
+        unit = self._unit(combat=True)
+        unit.bodyNP = SimpleNamespace(isEmpty=lambda: False)
+        self.psy.hold_panic()
+        with patch('psychology.rule_skipped') as log:
+            self.psy.panic_test(unit, cause='nearby friend falls back in good order')
+        unit.isInCombat = False
+        with patch.object(self.psy, '_resolve_panic') as resolve:
+            self.psy.release_panic()
+        resolve.assert_not_called()
+        self.assertIn('engaged in combat when triggered', log.call_args.args[2])
+
+    def test_deferred_eligible_and_compulsory_tests_remain_queued(self):
+        for combat, compulsory in ((False, False), (True, True)):
+            unit = self._unit(combat=combat)
+            unit.bodyNP = SimpleNamespace(isEmpty=lambda: False)
+            self.psy.hold_panic()
+            self.psy.panic_test(unit, cause='nearby friend falls back', compulsory=compulsory)
+        self.assertEqual(len(self.psy._panic_queue), 2)
+
 
 class ObbDistanceTests(unittest.TestCase):
     def test_overlapping_boxes_zero(self):

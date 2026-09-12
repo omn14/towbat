@@ -10,6 +10,22 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle Log Follow-up: 2026-09-12
+
+- [x] Panic exemptions are checked when the triggering event occurs, before a
+      deferred test is queued, and again at resolution (pp. 160-161). An engaged
+      friend cannot become eligible merely because combat movement finished first.
+      Compulsory tests still bypass exemptions. Nearby units are labelled candidates,
+      and a skipped test records its reason rather than suggesting dice were rolled.
+- [x] Impetuous still tests once before reactions, including declared chargers;
+      the message now says an existing declaration satisfies a failed test, instead
+      of demanding another declaration (p. 172). No charge-choice mechanics changed.
+- Verification: 124 Psychology tests and 31 live Drilled/Impetuous tests pass in
+      isolated memory-capped runs, including voluntary declarations after reload.
+- LEFTOVER: The reported Round 3 Silver Helm zero-contact charge is not yet
+      reproduced. Available rolling saves predate that combat. Structured log UI,
+      measured contact warnings and clearer combat reports are in progress.
+
 ## Army Readiness: High Elves vs Warriors of Chaos
 
 Roster-specific audit, 2026-09-09. Sources:

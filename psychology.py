@@ -760,7 +760,7 @@ class PsychologySystem:
             return "making a charge move"
         if getattr(unit, 'isInCombat', False):
             return "engaged in combat"
-        if unit.state == 'IsFleeing':
+        if getattr(unit, 'state', None) == 'IsFleeing':
             return "already fleeing"
         for r in unit.unit.model.special_rules:
             if not isinstance(r, dict):
@@ -787,6 +787,10 @@ class PsychologySystem:
         automatically; failing that one costs it ground rather than its nerve.
         """
         if unit is None or unit.bodyNP.isEmpty():
+            return
+        reason = self.panic_exempt_reason(unit)
+        if reason is not None and not compulsory:
+            rule_skipped('Panic', unit, f'{cause}: {reason} when triggered; no test (p. 160)')
             return
         self._panic_queue.append((unit, flee_from, cause, compulsory))
         if not self._panic_active and not self._panic_hold:
@@ -819,7 +823,7 @@ class PsychologySystem:
             return
         reason = self.panic_exempt_reason(unit)
         if reason is not None and not compulsory:
-            print(f"[Panic] {unit.unit.name} is exempt from Panic ({cause}): {reason}.")
+            rule_skipped('Panic', unit, f'{cause}: {reason} at resolution; no test (p. 160)')
             on_done()
             return
         forced = reason is not None
@@ -1038,7 +1042,7 @@ class PsychologySystem:
         list order.)"""
         near = [u for u in self.units_within(src_box, self.PANIC_RADIUS, side_units)
                 if u is not exclude]
-        print(f"[Panic] {cause}: {len(near)} friendly unit(s) within "
+        print(f"[Panic] {cause}: {len(near)} nearby candidate(s), before exemptions, within "
               f"{self.PANIC_RADIUS:.0f}\": {', '.join(u.unit.name for u in near) or 'none'}")
         for u in near:
             self.panic_test(u, cause=cause)
@@ -1168,10 +1172,12 @@ class PsychologySystem:
             print(f"[Panic] {unit.unit.name} flees/FBIG but combat-start US {us} "
                   f"< {self.PANIC_US_THRESHOLD} — no nearby-friend Panic.")
             return
-        print(f"[Panic] {unit.unit.name} (combat-start US {us}) flees combat — "
-              f"friends within {self.PANIC_RADIUS:.0f}\" test.")
-        self.panic_nearby_friends(self._unit_box(unit), self._friendlies_of(unit),
-                                  cause="nearby friend flees combat", exclude=unit)
+        message = (f'{unit.unit.name} (combat-start US {us}) breaks or falls back in good order: '
+                   f'check eligible friends within {self.PANIC_RADIUS:.0f}" (pp. 160-161).')
+        print(f'[Panic] {message}')
+        self.panic_nearby_friends(
+            self._unit_box(unit), self._friendlies_of(unit),
+            cause='nearby friend breaks or falls back in good order', exclude=unit)
 
     PANIC_US_THRESHOLD = PANIC_US_THRESHOLD
     PANIC_RADIUS = PANIC_RADIUS

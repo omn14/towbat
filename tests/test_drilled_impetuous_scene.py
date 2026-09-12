@@ -292,6 +292,22 @@ def test_impetuous_uses_flight_range_despite_selected_ground_mode(scene, dice, f
         assert prince.unit.model.flight_mode == ('fly' if forced else 'ground')
 
 
+def test_impetuous_existing_declaration_satisfies_failure(scene):
+    from types import SimpleNamespace
+    from impetuous import complete_declarations
+    app, _, defender, _, _, _ = declared_charge(scene)
+    prince = members(app)['Dragon Prince']
+    entry = SimpleNamespace(charger=prince, defender=defender, compulsory=False)
+    app.chargeDeclarations = [entry]
+    with combat_tasks(app) as run, \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[6, 6])), \
+            patch('impetuous.rule_log') as log:
+        run(complete_declarations(app))
+    assert app.chargeDeclarations == [entry]
+    assert entry.compulsory
+    assert any('satisfies compulsory charge' in call.args[2] for call in log.call_args_list)
+
+
 @pytest.mark.parametrize('reason', ['rear', 'range', 'fleeing', 'restricted'])
 def test_impetuous_does_not_test_without_legal_target(scene, reason):
     from charge_declarations import begin_declarations, resolve_declarations
@@ -465,7 +481,8 @@ def test_compulsory_column_charge_countercharge_and_first_charge_after_reload(
     assert prince.moveSpentThisTurn == 0 and not prince.marchedThisTurn
     assert app.chargeStage == 'remaining'
     output = capsys.readouterr().out
-    assert '2D6=12 vs Ld' in output and 'must declare a charge' in output
+    expected = 'satisfies compulsory charge' if voluntary else 'must declare a charge'
+    assert '2D6=12 vs Ld' in output and expected in output
     assert 'Drilled' in output and 'costs 0' in output
 
 

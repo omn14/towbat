@@ -96,10 +96,13 @@ async def complete_declarations(game):
         dice = await game.rollLeadershipDice()
         dice = await reroll_leadership(game, unit, 'Impetuous', dice, leadership, game.rollLeadershipDice)
         passed = leadership_passed(sum(dice), leadership)
+        result = ('PASS; existing charge declaration stands' if passed else
+              f'FAIL; existing charge at {declared.defender.unit.name} satisfies compulsory charge') if declared else (
+              'PASS; may act normally' if passed else 'FAIL; must declare a charge')
         rule_log('Impetuous', unit,
                  f'2D6={sum(dice)} vs Ld {leadership}'
                  + (f' (Inspiring Presence: {general.unit.name})' if general else '')
-                 + (' -> PASS; may act normally' if passed else ' -> FAIL; must declare a charge'))
+             + f' -> {result}')
         if declared is not None:
             declared.compulsory = not passed
             continue
