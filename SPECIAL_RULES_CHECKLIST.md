@@ -65,11 +65,12 @@ lost import data, partial support and outstanding roster-specific verification.
 This section tracks implementation work; completed import metadata does not
 itself add gameplay effects.
 
-**Latest full regression attempt (2026-09-11):** `211757-27115`, after the
-charge, combat-target, Skycutter and lifecycle/acceptance milestones, was refused
-before starting any of 109 modules: only 1,041 MiB was available against the
-1,792 MiB admission requirement. No limits were lowered and no unbounded
-fallback was used. **LEFTOVER:** run the final full suite when memory permits;
+**Latest full regression attempt (2026-09-12):** `191647-99105`, after the
+Panic and battle-history milestones, passed 4/109 modules (124 cases, no
+failures/errors) before available memory fell to 1,495 MiB, below the 1,792 MiB
+admission requirement. The 1,536 MiB cap, no-swap setting and 256 MiB headroom
+remain unchanged. No unbounded fallback was used. The remaining 105 modules
+were not run in this gate. **LEFTOVER:** finish the full suite when memory permits;
 passing focused gates do not replace that checkpoint. The HUD investigation
 remains paused at the user's request.
 
