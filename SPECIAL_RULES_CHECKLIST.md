@@ -12,6 +12,22 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**Exported multi-charge correction:** The 19:49 export and saved starting
+positions reproduce a 0.1857-inch Silver Helm gap: Chaos Knights Counter Charge
+the Dragon Princes 4 inches, the Princes move first, then the Silver Helms move
+against the Knights' current position. Route recomputation was already correct;
+the free alignment wheel used only charger corners, missing defender-corner to
+charger-edge contact. The pivot now considers both units' corners and preserves
+the actual touching point (pp. 126, 157), without moving the defender or increasing
+contact tolerance. Both cavalry units retain contact and positive attack quotas.
+Charge calculations now emit one labelled Summary event, with silent preliminary
+Drilled evaluation and unchanged stored dice. Combat selection uses readable,
+disambiguated labels mapped to the actual enemy units. Verification: 32 charge
+declaration/selection, 14 Counter Charge, 4 pursuit, 49 formed-charge and 19 contact
+scene tests pass (118 total). The formed-charge module needs a 1024 MiB bounded
+service; its 512 MiB attempt was OOM-killed. **LEFTOVER:** broader simultaneous
+frontage and casualty-position limitations are not addressed by this pivot fix.
+
 **Impetuous search stall correction:** Legal-target discovery runs synchronously
 on the main thread before the first Leadership await. It previously planned
 routes even for enemies beyond the maximum declaration range. A conservative
@@ -64,10 +80,9 @@ not established. This is separate from the paused HUD startup NaN investigation.
       tests pass. Offscreen history harness checks scrolling, filters, details,
       paging, export, clipboard success/failure handling, named AI choices, portrait
       controls and vertical rebuilds. Desktop/portrait screenshots inspected.
-- LEFTOVER: The exact Round 3 Silver Helm zero-contact charge is not reproduced;
-      available rolling saves predate it. No contact tolerance or charge geometry
-      was changed. Need that combat save or the new geometry warning to fix its
-      producer. Broader simultaneous-frontage/casualty-position limitations remain.
+- LEFTOVER: The original Round 3 save remains unavailable; the later exported
+      instance of the same Silver Helm gap is reproduced and fixed above.
+      Broader simultaneous-frontage/casualty-position limitations remain.
       Filters currently use readable names, so identically named units share a
       filter. The history is session-only unless exported, not persisted in saves.
       The separate intermittent HUD startup NaN investigation remains paused.

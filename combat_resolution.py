@@ -60,7 +60,7 @@ from psychology import shieldwall_unavailable_reason, reroll_leadership, veteran
 from post_combat import (GIVE_GROUND, detour_angles, facing_vector,
                          fall_back_roll, fire_and_flee_roll, flee_direction,
                          flee_roll, flees_from,
-                         give_ground_direction, nearest_corner, peril_wounds,
+                         give_ground_direction, peril_wounds,
                          pursuit_roll, restraint_test, segment_crosses_box,
                          turn_direction, winner_response)
 from rules_log import rule_log, rule_skipped, battle_log
@@ -452,7 +452,7 @@ class CombatResolver:
                 dice_models, declaration.charge_dice = await roll_charge(self.game, unit, bonus, self.rullTerninger)
                 for die in dice_models:
                     die.remove(self.game.world)
-            self.chargeDistance(unit, origin, declaration.charge_dice)
+            self.chargeDistance(unit, origin, declaration.charge_dice, log=False)
             await before_move(self.game, unit, 'charge move', compulsory=declaration.compulsory)
             origin = Vec3(unit.bodyNP.getPos())
             if marching_column(unit):
@@ -1103,7 +1103,7 @@ class CombatResolver:
         return (any(piece.movement_modifier < 0 for piece in features)
             and not all(profile.is_move_through_cover() or is_ethereal(profile) for profile in profiles))
 
-    def chargeDistance(self, unit, from_pos, dice):
+    def chargeDistance(self, unit, from_pos, dice, *, log=True):
         """Terrain-adjusted M plus Charge roll; Move Through Cover keeps the high
         die (Rulebook pp. 174, 269; Official FAQ v1.5.3). Pursuit is not a charge.
         """
@@ -1116,18 +1116,19 @@ class CombatResolver:
             difficult = any(piece.movement_modifier < 0 for piece in route_features(self.game, planned.route))
         else:
             movement = self.game.movement.movementAllowance(
-                unit, from_pos, self.game.playerNP.getPos(), log=True)
+                unit, from_pos, self.game.playerNP.getPos(), log=log)
             tm = getattr(self.game, 'terrain_manager', None)
             difficult = tm is not None and tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
         rough = self.chargeThroughDifficult(unit, from_pos)
         result = charge_roll(dice, rough)
+        if not log:
+            return movement + result
         bonus = dice[2] if len(dice) > 2 else 0
         chosen = result - bonus
         calculation = (f'M{movement:g} + charge {"min" if rough else "max"}{tuple(dice[:2])} '
                        f'= {chosen:g}' + (f' + Swiftstride {bonus}' if len(dice) > 2 else '')
                        + f' -> {movement + result:g}" range (pp. 121, 178, 269)')
-        rule_log('Charge Move', unit, calculation)
-        battle_log(f'{unit.unit.name}: {calculation}', 'combat', subject=unit)
+        battle_log(f'Charge Move: {unit.unit.name}: {calculation}', 'combat', subject=unit)
         profiles = [participant.unit.model
                     for participant in self.game.movement.movementParticipants(unit)]
         from special_rules import is_ethereal
@@ -1838,19 +1839,27 @@ class CombatResolver:
         newnode.removeNode()
 
     def contactPointOn(self, unit, otherNP):
-        """The corner of *unit*'s base that struck *otherNP*.
+        """Preserve corner-to-edge contact during alignment (pp. 126, 157).
 
-        Bullet's manifold carries a contact point of its own, but for a contact
-        test on a body that was just placed there -- rather than a collision the
-        solver worked out -- it is not reliably on the struck face.
+        Either unit can supply the touching corner. Considering only charger
+        corners pivots away from contact when the defender hits its front edge.
+        Bullet manifolds are unreliable immediately after a planned placement.
         """
-        mine = unit.bodyNP.node().getShape(0).getHalfExtentsWithMargin()
-        theirs = otherNP.node().getShape(0).getHalfExtentsWithMargin()
-        local = [Point3(sx * mine.x, sy * mine.y, 0)
-                 for sx in (-1, 1) for sy in (-1, 1)]
-        seen = [otherNP.getRelativePoint(unit.bodyNP, p) for p in local]
-        i = nearest_corner([(p.x, p.y) for p in seen], theirs.x, theirs.y)
-        return render.getRelativePoint(unit.bodyNP, local[i])
+        candidates = []
+        for source, target in ((unit.bodyNP, otherNP), (otherNP, unit.bodyNP)):
+            source_half = source.node().getShape(0).getHalfExtentsWithMargin()
+            target_half = target.node().getShape(0).getHalfExtentsWithMargin()
+            for horizontal in (-1, 1):
+                for vertical in (-1, 1):
+                    corner = Point3(horizontal * source_half.x, vertical * source_half.y, 0)
+                    relative = target.getRelativePoint(source, corner)
+                    nearest = Point3(max(-target_half.x, min(target_half.x, relative.x)),
+                                     max(-target_half.y, min(target_half.y, relative.y)), 0)
+                    world_corner = render.getRelativePoint(source, corner)
+                    world_nearest = render.getRelativePoint(target, nearest)
+                    pivot = world_corner if source == unit.bodyNP else world_nearest
+                    candidates.append(((world_corner - world_nearest).lengthSquared(), pivot))
+        return min(candidates, key=lambda candidate: candidate[0])[1]
 
     def joinsCombatThisPhase(self, enemy):
         """Pursuit into a New Combat (p. 157): the pursuer fights again only if
@@ -2737,18 +2746,19 @@ class CombatResolver:
         return total
 
     async def _verySimpleBattleInner(self, task):
+        from combat_allocation import target_name
         attacker = self.game.unitToMove.bodyNP
         defender = self.game.unitToMove.isInCombatWith[0].bodyNP
-        engagedWith = [x.unitName for x in self.game.unitToMove.isInCombatWith]
+        enemies = self.game.unitToMove.isInCombatWith
+        names = [target_name(enemy) for enemy in enemies]
+        options = {(f'{name} [{index + 1}]' if names.count(name) > 1 else name): enemy
+                   for index, (name, enemy) in enumerate(zip(names, enemies))}
 
         selected_choice = await taskMgr.add(self.game.makeChoiceNew(
-            engagedWith, Vec3(0, 0, 10), owner=self.game.unitToMove,
+            list(options), Vec3(0, 0, 10), owner=self.game.unitToMove,
             prompt=f"{self.game.unitToMove.unit.name}: which enemy will it fight?"))
 
-        for unit in self.game.unitToMove.isInCombatWith:
-            if unit.unitName == selected_choice:
-                defender = unit.bodyNP
-                break
+        defender = options.get(selected_choice, enemies[0]).bodyNP
         attackerUnit = self.game.getSelectedUnit(attacker.node())
         defenderUnit = self.game.getSelectedUnit(defender.node())
         defender_nmodels = defenderUnit.unit.nmodels

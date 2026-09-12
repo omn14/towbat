@@ -179,6 +179,90 @@ def test_multiple_charges_recompute_contact_after_countercharge(scene):
     assert defender.chargeAttempts == 1 and not defender.chargeAttemptPending
 
 
+def test_silver_helms_contact_after_knights_countercharge_princes(scene, capsys):
+    from combat_contacts import CombatContactSnapshot
+    from combat_profiles import combat_profiles
+    app, silver, knights, _, _, _ = declared_charge(scene)
+    princes = members(app)['Dragon Prince']
+    knights.bodyNP.setPos(-20.2803154, -.4941254, 0)
+    silver.bodyNP.setPos(-23.5819321, -13.4550552, 0)
+    princes.bodyNP.setPos(-17.6098576, -13.5054474, 0)
+    princes.bodyNP.setH(0)
+    before = Vec3(knights.bodyNP.getPos())
+    app.fsm.request('MovementPhase')
+    begin_declarations(app)
+    for member in (silver, princes):
+        begin_charge_attempt(member)
+        queue_charge(app, member, knights, Vec3(member.bodyNP.getPos()), Vec3(member.bodyNP.getHpr()))
+
+    async def choose(options, position, **kwargs):
+        if kwargs.get('owner') is knights:
+            return next(option for option in options if option.startswith('counter charge 2:'))
+        if kwargs.get('prompt') == 'Move which charge next?':
+            return next(option for option in options if 'Dragon Prince' in option)
+        return options[0]
+
+    async def roll(count, bonus=False):
+        if count == 1:
+            return [], [6]
+        assert (knights.bodyNP.getPos() - before).length() == pytest.approx(4, abs=.01)
+        if app.unitToMove is princes:
+            assert not silver.isInCombat
+            return [], [5, 3, 2]
+        assert princes.isInCombatWith == [knights]
+        return [], [2, 6, 3]
+
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=False), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=choose)), \
+            patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[3, 4])), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(side_effect=roll)), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=True)):
+        run(resolve_declarations(app))
+    assert set(knights.isInCombatWith) == {princes, silver}
+    snapshot = CombatContactSnapshot([silver, princes, knights])
+    for member in (princes, silver):
+        positions = snapshot.positions(member, knights)[1]
+        assert any(position.contact for position in positions), [position.distance for position in positions]
+        assert all(snapshot.attacks(part, member.unit.nmodels) > 0
+                   for part in combat_profiles(member, knights))
+    output = capsys.readouterr().out
+    assert output.count('M8 + charge max(5, 3) = 5 + Swiftstride 2 -> 15" range') == 1
+    assert output.count('M8 + charge max(2, 6) = 6 + Swiftstride 3 -> 17" range') == 1
+
+
+def test_combat_selection_uses_readable_distinct_names(scene):
+    app, charger, first, _, _, _ = declared_charge(scene)
+    second = members(app)['Chaos Warrior']
+    previous_name = second.unit.name
+    second.unit.name = first.unit.name
+    charger.isInCombatWith = [first, second]
+    selected = []
+
+    async def choose(options, position, **kwargs):
+        assert options == [f'{first.unit.name} [1]', f'{first.unit.name} [2]']
+        return options[1]
+
+    def select(node):
+        selected.append(node)
+        if len(selected) == 2:
+            raise ValueError('selection verified')
+        return charger
+
+    async def verify_selection():
+        with pytest.raises(ValueError, match='selection verified'):
+            await app.combat._verySimpleBattleInner(SimpleNamespace(done=None))
+
+    try:
+        with combat_tasks(app) as run, \
+                patch.object(app, 'makeChoiceNew', AsyncMock(side_effect=choose)), \
+                patch.object(app, 'getSelectedUnit', side_effect=select):
+            run(verify_selection())
+        assert selected == [charger.bodyNP.node(), second.bodyNP.node()]
+    finally:
+        second.unit.name = previous_name
+
+
 def test_queued_failed_charge_moves_roll_only(scene):
     app, charger, defender, origin, facing, contact = declared_charge(scene, distance=17)
     app.fsm.request('MovementPhase')
