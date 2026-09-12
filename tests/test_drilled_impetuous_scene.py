@@ -311,6 +311,7 @@ def test_impetuous_existing_declaration_satisfies_failure(scene):
 @pytest.mark.parametrize('reason', ['rear', 'range', 'fleeing', 'restricted'])
 def test_impetuous_does_not_test_without_legal_target(scene, reason):
     from charge_declarations import begin_declarations, resolve_declarations
+    from impetuous import preview_charge, route_to_model
     app, silver, defender, origin, facing, contact = declared_charge(scene)
     prince = members(app)['Dragon Prince']
     silver.bodyNP.setPos(25, 20, 0)
@@ -325,10 +326,34 @@ def test_impetuous_does_not_test_without_legal_target(scene, reason):
     app.fsm.request('MovementPhase')
     begin_declarations(app)
     with combat_tasks(app) as run, \
+            patch('impetuous.route_to_model', wraps=route_to_model) as route, \
+            patch('impetuous.preview_charge', wraps=preview_charge) as preview, \
             patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[6, 6])) as dice:
         run(resolve_declarations(app))
     dice.assert_not_awaited()
     assert not app.chargeDeclarations
+    if reason == 'range':
+        route.assert_not_called()
+        preview.assert_not_called()
+
+
+@pytest.mark.parametrize('extra,reachable', [(0, True), (.01, False)])
+def test_impetuous_range_pruning_preserves_boundary_target(scene, extra, reachable):
+    from impetuous import legal_targets, route_to_model
+    from special_rules import max_charge_range, unit_has_swiftstride
+    app, prince, defender, origin, facing, _ = declared_charge(scene, cavalry='Dragon Prince')
+    maximum = max_charge_range(app.movement.movementAllowance(prince), unit_has_swiftstride(prince))
+    origin.y = -(prince.unitHeight + defender.unitHeight) / 2 - maximum - extra
+    prince.bodyNP.setPos(origin)
+    prince.bodyNP.setHpr(facing)
+    with patch('impetuous.enemy_units', return_value=[defender]), \
+            patch('impetuous.route_to_model', wraps=route_to_model) as planner:
+        targets = legal_targets(app, prince)
+    assert bool(targets) is reachable
+    assert planner.call_count == int(reachable)
+    if reachable:
+        assert targets[0][0] is defender
+        assert targets[0][1].distance == pytest.approx(maximum)
 
 
 def test_optional_drilled_column_can_stay_and_fail_charge(scene):

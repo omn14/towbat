@@ -12,6 +12,18 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**Impetuous search stall correction:** Legal-target discovery runs synchronously
+on the main thread before the first Leadership await. It previously planned
+routes even for enemies beyond the maximum declaration range. A conservative
+edge-distance rejection now runs first, using open-ground Movement under the
+existing compulsory-flight preview; reachable targets retain visibility,
+obstacle, wheel and route-terrain checks. Loose targets use their model bases.
+The distant-target regression went from 3.991 seconds/four formed-route calls to
+0.051 seconds/no planner calls. All 33 Drilled/Impetuous tests pass, including
+exact maximum range, just outside range, flight and reload. **LEFTOVER:** complex
+in-range route searches remain synchronous; these are not worker-thread deadlocks,
+and this optimization does not guarantee frame-bounded planning in every position.
+
 **History freeze correction:** Opening history reproduced an endless deferred
 DirectSlider adjustment loop: redraw wrote the slider value, its queued event
 redrew again, and the GUI event queue never drained. Value synchronization is

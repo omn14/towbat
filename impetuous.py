@@ -6,7 +6,7 @@ from characters import enemy_units
 from first_charge import begin_charge_attempt
 from flight import compulsory_mode, compulsory_preview
 from formed_skirmish_charge import preview_charge, route_allowance, route_to_model
-from psychology import active_character, leadership_passed, reroll_leadership
+from psychology import active_character, leadership_passed, obb_distance, reroll_leadership
 from rules_log import rule_log, rule_skipped
 from scouts import model_base_boxes, scout_charge_blocked
 from skirmish_visibility import model_can_see
@@ -43,10 +43,15 @@ def legal_targets(game, unit):
     origin = unit.bodyNP.getPos()
     source = game.psychology._unit_box(unit)
     pieces = game.terrain_manager.terrain_pieces
+    maximum = max_charge_range(game.movement.movementAllowance(unit, features=[]), unit_has_swiftstride(unit))
     for target in enemy_units(game, unit):
         if not target.isDeployed or target.bodyNP.isEmpty() or target.unit.nmodels <= 0:
             continue
         if unit.isSkirmisher:
+            continue
+        target_box = game.psychology._unit_box(target)
+        target_boxes = model_base_boxes(target) if target.isSkirmisher else [target_box]
+        if min((obb_distance(source, box) for box in target_boxes), default=float('inf')) > maximum + 1e-5:
             continue
         if target.isSkirmisher:
             preview = preview_charge(game, unit, target)
@@ -57,7 +62,6 @@ def legal_targets(game, unit):
                   and member.isDeployed and not member.bodyNP.isEmpty()
                   and getattr(member, 'hostUnit', None) is None
                   for box in model_base_boxes(member)]
-        target_box = game.psychology._unit_box(target)
         opaque = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                   for piece in pieces if piece.blocks_line_of_sight
                   and not piece.contains(origin) and not piece.contains(target.bodyNP.getPos())]
@@ -67,8 +71,8 @@ def legal_targets(game, unit):
                                 for piece in pieces if piece.is_impassable)]
         route = route_to_model([source], [target_box], 0, origin, obstacles)
         if route is not None:
-            maximum = max_charge_range(route_allowance(game, unit, route), unit_has_swiftstride(unit))
-            if route.distance <= maximum + 1e-5:
+            route_maximum = max_charge_range(route_allowance(game, unit, route), unit_has_swiftstride(unit))
+            if route.distance <= route_maximum + 1e-5:
                 result.append((target, route, None))
     return sorted(result, key=lambda candidate: candidate[1].distance)
 
