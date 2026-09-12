@@ -110,23 +110,32 @@ def main(shots='/tmp'):
                   'combat', 'Dragon Princes', 'Armour 3+ with AP-2 -> 5+; roll [5]: saved')
     h.open_history()
     history = h._history
+    _pump_events()
     history.set_details(True)
+    _pump_events()
     assert len(history.displayed) == 100
     history.scroll_lines(5)
+    _pump_events()
     before = history.text.getPos()
     h.log('A very long incoming event ' * 30)
+    _pump_events()
     assert history.text.getPos() == before
     history.page(-1)
+    _pump_events()
     assert history.displayed[-1].sequence < h._journal.sequence
     history.set_subject('Missing unit')
+    _pump_events()
     assert not history.displayed
     history.set_subject('Dragon Princes')
+    _pump_events()
     assert len(history.displayed) == 100
     assert history.units.get() == 'Dragon Princes'
     history.scrollbar['value'] = .5
-    history.drag_scroll()
+    _pump_events()
     assert abs(history.scroll / history.max_scroll - .5) < .001
     history.latest()
+    _pump_events()
+    assert history.scroll == 0 and history.frozen is None
     from pathlib import Path
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
@@ -154,6 +163,7 @@ def main(shots='/tmp'):
     region.setCamera(base.cam2d)
     base.setAspectRatio(720 / 960)
     h._layout()
+    _pump_events()
     assert history.width < .75
     for button, _, _ in history.controls:
         frame = button['frameSize']
@@ -167,8 +177,14 @@ def main(shots='/tmp'):
     h._layout()
     history.set_mode('Debug')
     history.latest()
+    _pump_events()
     assert history.scroll == 0
     h.close_history()
+    from rules_log import battle_log
+    battle_log('Charge moves complete. Remaining Moves.', 'info')
+    _pump_events()
+    assert h._history is None
+    assert h._journal.entries[-1].text == 'Charge moves complete. Remaining Moves.'
     state = h.snapshot()
     h.destroy()
     h = hud.HUD(orientation=hud.HUD.VERTICAL)
@@ -180,6 +196,7 @@ def main(shots='/tmp'):
     assert not h.pointer_over_log()
     h.show_tab('log')
     h.open_history()
+    _pump_events()
     assert h._history.mode.get() == 'Debug'
     _shot(shots, 'history_vertical')
     import asyncio
@@ -192,6 +209,18 @@ def main(shots='/tmp'):
     messages = [entry for entry in h._journal.entries if entry.text == 'Chaos Knights: charge reaction: Hold']
     assert len(messages) == 1 and messages[0].category == 'debug'
     h.destroy()
+
+
+def _pump_events():
+    """A redraw must not keep generating deferred scrollbar adjustments."""
+    import faulthandler
+    faulthandler.dump_traceback_later(5, exit=True)
+    try:
+        for frame in range(2):
+            base.eventMgr.doEvents()
+            base.graphicsEngine.renderFrame()
+    finally:
+        faulthandler.cancel_dump_traceback_later()
 
 
 def _shot(directory, name):

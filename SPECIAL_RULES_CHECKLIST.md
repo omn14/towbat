@@ -12,6 +12,16 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**History freeze correction:** Opening history reproduced an endless deferred
+DirectSlider adjustment loop: redraw wrote the slider value, its queued event
+redrew again, and the GUI event queue never drained. Value synchronization is
+now idempotent and ignores programmatic echoes. The offscreen harness now
+processes actual GUI events after opening, scrolling, filtering, resizing,
+incoming logs and closing; all pass. The live charge module also processes
+events and renders after the handoff (30 tests pass). **LEFTOVER:** the reported
+charge-end freeze with history closed was not reproduced, so a shared cause is
+not established. This is separate from the paused HUD startup NaN investigation.
+
 - [x] Panic exemptions are checked when the triggering event occurs, before a
       deferred test is queued, and again at resolution (pp. 160-161). An engaged
       friend cannot become eligible merely because combat movement finished first.

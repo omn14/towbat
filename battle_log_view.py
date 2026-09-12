@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+import math
 import shutil
 import subprocess
 
@@ -26,7 +27,6 @@ class BattleLogView:
         self.details = False
         self.subject = 'All units'
         self.frozen = None
-        self._syncing_scroll = False
         self.panel = T.styled_panel((-1, 1, -.83, .83), parent=aspect2d, texture=T.TEX_PARCHMENT)
         self.panel.setBin('gui-popup', 30)
         self.controls = []
@@ -161,14 +161,19 @@ class BattleLogView:
             heading = entries[0].heading if all(entry.group == entries[0].group for entry in entries) else (
                 'Multiple rounds, phases or combats')
         self.context.setText(heading)
-        self._syncing_scroll = True
-        self.scrollbar['value'] = self.scroll / self.max_scroll if self.max_scroll else 0
-        self._syncing_scroll = False
+        ratio = self.scroll / self.max_scroll if self.max_scroll else 0
+        if not math.isclose(self.scrollbar.getValue(), ratio, abs_tol=1e-6):
+            self.scrollbar['value'] = ratio
 
     def drag_scroll(self):
-        if self._syncing_scroll or not hasattr(self, 'scrollbar') or not hasattr(self, 'displayed'):
+        """Ignore queued adjustments that merely echo a programmatic redraw."""
+        if not hasattr(self, 'scrollbar') or not hasattr(self, 'displayed'):
             return
-        self.scroll = self.scrollbar['value'] * self.max_scroll
+        ratio = self.scroll / self.max_scroll if self.max_scroll else 0
+        value = self.scrollbar.getValue()
+        if math.isclose(value, ratio, abs_tol=1e-6):
+            return
+        self.scroll = value * self.max_scroll
         self.frozen = list(self.displayed) if self.scroll > 0 or self.end is not None else None
         self.redraw()
 

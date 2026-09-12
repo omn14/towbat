@@ -64,6 +64,16 @@ def test_countercharge_reaction_moves_before_the_incoming_charge_roll(scene):
     assert charger.firstChargeDisruptedBy and defender.firstChargeDisruptedBy
     assert charger.chargeAttempts == defender.chargeAttempts == 1
 
+    import faulthandler
+    faulthandler.dump_traceback_later(10, exit=True)
+    try:
+        for frame in range(3):
+            app.eventMgr.doEvents()
+            app.graphicsEngine.renderFrame()
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    assert app.chargeStage == 'remaining'
+
 
 def test_declarations_survive_reload_without_redeclaring_or_spending_another_attempt(scene, tmp_path):
     app, charger, defender, origin, facing, contact = declared_charge(scene)
