@@ -1,5 +1,7 @@
 """Compulsory charge declarations (Rulebook p. 172, amended; FAQ v1.5.3)."""
 
+from time import monotonic
+
 from panda3d.core import Vec3
 
 from characters import enemy_units
@@ -7,7 +9,7 @@ from first_charge import begin_charge_attempt
 from flight import compulsory_mode, compulsory_preview
 from formed_skirmish_charge import preview_charge, route_allowance, route_to_model
 from psychology import active_character, leadership_passed, obb_distance, reroll_leadership
-from rules_log import rule_log, rule_skipped
+from rules_log import battle_log, rule_log, rule_skipped
 from scouts import model_base_boxes, scout_charge_blocked
 from skirmish_visibility import model_can_see
 from special_rules import max_charge_range, unit_has_swiftstride
@@ -88,7 +90,14 @@ async def complete_declarations(game):
             rule_skipped('Impetuous', unit, 'LEFTOVER: compulsory loose-formation charge selection is not supported')
             continue
         declared = next((entry for entry in game.chargeDeclarations if entry.charger is unit), None)
-        targets = [] if declared else legal_targets(game, unit)
+        targets = []
+        if declared is None:
+            battle_log(f'{unit.unit.name}: Impetuous target search started', 'debug', subject=unit)
+            started = monotonic()
+            targets = legal_targets(game, unit)
+            elapsed = monotonic() - started
+            battle_log(f'{unit.unit.name}: Impetuous target search finished: '
+                       f'{len(targets)} legal targets in {elapsed:.3f}s', 'debug', subject=unit)
         if declared is None and not targets:
             rule_skipped('Impetuous', unit, 'no legal charge target; no Leadership test or compulsory charge')
             continue

@@ -9,12 +9,15 @@ the only way to tell, and it is what a bug report is written from.
 from collections import deque
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 import json
+from time import monotonic
 
 PREFIX = "[Rule]"
 _context = {}
 _scope = ContextVar('battle_log_scope', default={})
+_session_started = monotonic()
 
 
 def set_log_context(**values):
@@ -38,6 +41,8 @@ class LogEntry:
     subject: str
     details: str
     context: dict
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds'))
+    elapsed_seconds: float = field(default_factory=lambda: round(monotonic() - _session_started, 3))
 
     @property
     def group(self):
@@ -87,7 +92,7 @@ class BattleJournal:
             if entry.group != previous:
                 lines.append('\n' + entry.heading)
                 previous = entry.group
-            lines.append(f'[{entry.category}] {entry.text}')
+            lines.append(f'[{entry.timestamp} +{entry.elapsed_seconds:.3f}s] [{entry.category}] {entry.text}')
             if entry.details:
                 lines.append('  ' + entry.details.replace('\n', '\n  '))
         return '\n'.join(lines).lstrip()

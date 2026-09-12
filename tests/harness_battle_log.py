@@ -144,7 +144,12 @@ def main(shots='/tmp'):
         history.export()
         exported = json.loads(next(Path(directory).glob('*.json')).read_text())
         assert len(exported) == len(h._journal.entries)
-        assert 'Armour 3+' in next(Path(directory).glob('*.txt')).read_text()
+        text_export = next(Path(directory).glob('*.txt')).read_text()
+        assert 'Armour 3+' in text_export
+        assert all(entry['timestamp'].endswith('+00:00') for entry in exported)
+        assert [entry['elapsed_seconds'] for entry in exported] == sorted(
+            entry['elapsed_seconds'] for entry in exported)
+        assert exported[0]['timestamp'] in text_export
     with patch('battle_log_view.shutil.which', return_value=None):
         history.copy()
         assert 'Clipboard unavailable' in history.status.getText()
@@ -190,6 +195,9 @@ def main(shots='/tmp'):
     h = hud.HUD(orientation=hud.HUD.VERTICAL)
     h.restore(state)
     assert h._journal.sequence == state['entries'][-1].sequence
+    assert list(h._journal.entries) == state['entries']
+    h.log('History restored')
+    assert h._journal.entries[-1].elapsed_seconds >= state['entries'][-1].elapsed_seconds
     pointer.over(h)
     assert h.pointer_over_log()
     h.show_tab('rules')

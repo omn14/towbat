@@ -328,10 +328,17 @@ def test_impetuous_does_not_test_without_legal_target(scene, reason):
     with combat_tasks(app) as run, \
             patch('impetuous.route_to_model', wraps=route_to_model) as route, \
             patch('impetuous.preview_charge', wraps=preview_charge) as preview, \
+            patch('impetuous.monotonic', side_effect=[10, 12.5]), \
+            patch('impetuous.battle_log') as timing, \
             patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[6, 6])) as dice:
         run(resolve_declarations(app))
     dice.assert_not_awaited()
     assert not app.chargeDeclarations
+    assert timing.call_count == 2
+    assert 'target search started' in timing.call_args_list[0].args[0]
+    assert '0 legal targets in 2.500s' in timing.call_args_list[1].args[0]
+    assert all(call.args[1] == 'debug' and call.kwargs['subject'] is prince
+               for call in timing.call_args_list)
     if reason == 'range':
         route.assert_not_called()
         preview.assert_not_called()

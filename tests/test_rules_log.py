@@ -74,6 +74,27 @@ class TestTheLogLine(unittest.TestCase):
 
 
 class TestBattleJournal(unittest.TestCase):
+    def test_exported_event_clocks_are_stable_and_monotonic(self):
+        from datetime import datetime, timedelta, timezone
+        import json
+        from unittest.mock import patch
+        from rules_log import BattleJournal
+        first = datetime(2026, 9, 12, 20, 0, 0, tzinfo=timezone.utc)
+        journal = BattleJournal()
+        with patch('rules_log.datetime') as clock, \
+                patch('rules_log._session_started', 100), \
+                patch('rules_log.monotonic', side_effect=[100.25, 103.75]):
+            clock.now.side_effect = [first, first - timedelta(seconds=1)]
+            journal.append('Search started', 'debug')
+            journal.append('Search finished', 'debug')
+        events = json.loads(journal.export(structured=True))
+        self.assertEqual([entry['elapsed_seconds'] for entry in events], [.25, 3.75])
+        self.assertEqual(events[0]['timestamp'], '2026-09-12T20:00:00.000+00:00')
+        self.assertEqual(events[1]['timestamp'], '2026-09-12T19:59:59.000+00:00')
+        self.assertIn('[2026-09-12T20:00:00.000+00:00 +0.250s] [debug] Search started', journal.export())
+        self.assertIn('+3.750s] [debug] Search finished', journal.export())
+        self.assertEqual(events, json.loads(journal.export(structured=True)))
+
     def test_filters_preserve_full_trace_and_warning(self):
         from rules_log import BattleJournal
         journal = BattleJournal()

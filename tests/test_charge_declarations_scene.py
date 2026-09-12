@@ -263,6 +263,30 @@ def test_combat_selection_uses_readable_distinct_names(scene):
         second.unit.name = previous_name
 
 
+def test_phase_entry_logs_use_new_context_after_exit_logs(scene):
+    from rules_log import battle_log, set_log_context
+    app, _, _, _, _, _ = declared_charge(scene)
+    app.fsm.request('MovementPhase')
+    set_log_context(phase='MovementPhase', combat='previous combat', initiative=9)
+    previous_sequence = app.hud._journal.sequence
+    exit_movement = app.fsm.exitMovementPhase
+
+    def finish_movement():
+        battle_log('test movement exit')
+        exit_movement()
+
+    with patch.object(app.fsm, 'exitMovementPhase', side_effect=finish_movement), \
+            patch('rallying_cry.begin_command', side_effect=lambda game: battle_log('Strategy: Command')):
+        app.fsm.request('StrategyPhase')
+    entries = [entry for entry in app.hud._journal.entries if entry.sequence > previous_sequence]
+    leaving = next(entry for entry in entries if entry.text == 'test movement exit')
+    entering = next(entry for entry in entries if entry.text == 'Strategy: Command')
+    assert leaving.context['phase'] == 'MovementPhase'
+    assert entering.context['phase'] == 'StrategyPhase'
+    assert entering.context['combat'] is None
+    assert entering.context['initiative'] is None
+
+
 def test_queued_failed_charge_moves_roll_only(scene):
     app, charger, defender, origin, facing, contact = declared_charge(scene, distance=17)
     app.fsm.request('MovementPhase')

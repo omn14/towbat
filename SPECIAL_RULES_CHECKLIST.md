@@ -12,6 +12,23 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**Export context and timing correction:** Real phase entry now updates journal
+context before its callbacks run, after outgoing phase cleanup. Strategy entry
+messages no longer inherit Combat, and previous combat/Initiative labels clear
+at the boundary; transient choice/spell states retain their enclosing phase.
+Each event records UTC wall time and monotonic elapsed seconds in both exports.
+Recorded times remain unchanged across exports and HUD orientation rebuilds;
+backwards wall-clock adjustments do not distort elapsed timing. Actual Impetuous
+target searches emit Debug start/finish markers with target count and elapsed
+seconds, not repeated cursor-query messages. Verification: 33 declaration/context,
+33 Drilled/Impetuous, 13 journal, 13 Shieldwall, 14 Counter Charge, 4 pursuit,
+49 formed-charge and 19 contact tests pass (178 distinct cases). The bounded
+offscreen history harness also passes event dispatch, export, timestamp retention,
+scrolling, clipboard and desktop/portrait checks. **LEFTOVER:** old exports cannot
+gain historical timestamps. In-range route searches are still synchronous, now
+explicitly timed. No current full-suite run was attempted; the previous memory
+admission blocker and full-suite safeguards remain unchanged.
+
 **Exported multi-charge correction:** The 19:49 export and saved starting
 positions reproduce a 0.1857-inch Silver Helm gap: Chaos Knights Counter Charge
 the Dragon Princes 4 inches, the Princes move first, then the Silver Helms move

@@ -11,7 +11,7 @@ from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 
 from deployPhase import (DEPLOY_ZONE_DEPTH, DEPLOY_ZONE_WIDTH,
                          stage_undeployed, refresh_deployment, allUnitsDeployed)
-from rules_log import battle_log
+from rules_log import battle_log, set_log_context
 
 
 class GamePhaseFSM(FSM):
@@ -184,6 +184,7 @@ class GamePhaseFSM(FSM):
     # ─── Phase Enter/Exit Handlers ──────────────────────────────────
 
     def enterDeployPhase(self):
+        set_log_context(phase='DeployPhase', combat=None, initiative=None)
         print("Entering Deploy Phase")
         self.game.deploymentStage = 'ordinary'
         self.game.scoutDeployFirst = None
@@ -241,6 +242,7 @@ class GamePhaseFSM(FSM):
         self.game.roundCounter.request('PlayerOne')
 
     def enterStrategyPhase(self):
+        set_log_context(phase='StrategyPhase', combat=None, initiative=None)
         self.current_phase_index = 0
         self.game.setActiveUnitTask = self.game.taskLoopStrategy
         self.game.setActiveUnitTaskName = "taskLoopStrategy"
@@ -289,6 +291,7 @@ class GamePhaseFSM(FSM):
             end_phase(self.game, 'StrategyPhase')
 
     def enterMovementPhase(self):
+        set_log_context(phase='MovementPhase', combat=None, initiative=None)
         print("Entering Movement Phase")
         self.current_phase_index = 1
         if not getattr(self, '_resuming_spell', False):
@@ -343,6 +346,7 @@ class GamePhaseFSM(FSM):
         self.game.unitCopies = []
 
     def enterShootingPhase(self):
+        set_log_context(phase='ShootingPhase', combat=None, initiative=None)
         print("Entering Shooting Phase")
         self.current_phase_index = 2
         if not getattr(self, '_resuming_spell', False):
@@ -374,6 +378,7 @@ class GamePhaseFSM(FSM):
             self.game.rangeRing = None
 
     def enterReserveMovePhase(self):
+        set_log_context(phase='ReserveMovePhase', combat=None, initiative=None)
         self.current_phase_index = 2
         self.game.setActiveUnitTask = self.game.taskLoopPathTowardsMouse
         self.game.setActiveUnitTaskName = 'taskLoopPathTowardsMouse'
@@ -392,6 +397,7 @@ class GamePhaseFSM(FSM):
         self._cleanup_phase()
 
     def enterCombatPhase(self):
+        set_log_context(phase='CombatPhase', combat=None, initiative=None)
         print("Entering Combat Phase")
         self.current_phase_index = 3
         self.game.setActiveUnitTask = self.game.taskStartCombat
@@ -456,6 +462,7 @@ class GamePhaseFSM(FSM):
 
     def enterBattleEnded(self):
         """Score only after both players' last End of Turn effects (Rulebook p. 286)."""
+        set_log_context(phase='BattleEnded', combat=None, initiative=None)
         self.current_phase_index = 3
         self.game.ignore('mouse1')
         if getattr(self.game, 'restoringBattle', False):
@@ -517,6 +524,7 @@ class GamePhaseFSM(FSM):
 
     def enterCampaignPhase(self):
         """Show campaign map, hide battle scene."""
+        set_log_context(phase='CampaignPhase', combat=None, initiative=None)
         print("Entering Campaign Phase")
         self.game.setup_campaign_map()
         self.game.debugNP.hide()
