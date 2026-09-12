@@ -234,6 +234,11 @@ tests or success. README and Copilot test commands now agree on this workflow.
       explicit casualty/closing-in positions. Enemy target footprints are now
       refreshed between Initiative steps as described above. AI chooses the first
       legal target, not an optimized allocation.
+      **Target labels corrected (2026-09-12):** allocation buttons and logs show
+      readable unit names and a `(champion)` suffix instead of internal catalogue
+      selection IDs. Duplicate display names remain separate selectable targets;
+      the chosen label still maps to the original target object. Five focused
+      allocation tests pass. The geometry/AI leftovers above are unchanged.
 - [x] Challenge participant/refusal nomination (2026-09-11): the issuer and
       accepting player choose their own character or champion. When refused, the
       challenger selects which eligible model retires, or declines to nominate one
@@ -598,6 +603,13 @@ tests or success. README and Copilot test commands now agree on this workflow.
       restore the prior mode afterwards. Terrain tests now run after overrun
       and Follow Up. Actual entrypoints, obstacle masks, damage, reload and
       1280x720/800x600 control renders have ten focused scene checks.
+      **Control rendering corrected (2026-09-12):** unscaled radio indicators
+      produced oversized grey/white beveled boxes above the battlefield. Their
+      frames, text and positions now fit inside the Fly/Ground buttons. Selection
+      reflects the current movement mode, and constructing the controls no longer
+      invokes a mode change. Nineteen chariot scene tests pass, including rendered
+      indicator bounds and selection checks at 1280x720, 800x600 and 720x960.
+      Offscreen old/new comparison reproduces the reported boxes and their fix.
       Multiple Fly values use the best, not their sum or the first. Live Movement
       characteristic deltas affect Fly too, using the actual mount/beast/crew
       Movement source for split profiles (FAQ v1.5.3). Nine Fly and 22 terrain
@@ -1100,6 +1112,17 @@ limits remain explicitly recorded below.
       startup test now casts Fury on Dragon Princes with [6, 4], through the real
       dispel handler, checking both Pass and a successful Fated Dispel and that
       the lock returns to idle. Startup and all seven dispel tests pass.
+      **Combat visibility verified (2026-09-12):** real three-Prince combat
+      resolution receives 9 rider and 6 mount attacks under Fury when all three
+      bases contact the enemy, versus 6 and 3 without it. With only one base in
+      contact and the other two eligible in the fighting rank, totals are 5 and
+      4: noncontact models remain capped at one attack regardless of A (p. 146).
+      Both live cases verify end-of-turn expiry; all 18 contact scene tests pass.
+      No attack arithmetic change was needed. Fighting Rank logs now include
+      base/effective A, Extra Attacks sources and the number of capped bases.
+      **LEFTOVER:** the reported battle log was not supplied; these controlled
+      cases do not establish the rolls, casualties or active spell state in that
+      particular combat. Existing geometry limitations remain unchanged.
 - [x] **Shield of Saphery** - 8+, 18", friendly unengaged unit; 5+ Ward against
       any wounds until the end of the current turn (Rulebook p. 329). Uses the
       best Ward only, separate from armour and Regeneration. Successful,

@@ -39,6 +39,22 @@ def test_ai_chooses_a_legal_target_without_a_prompt():
     game.makeChoiceNew.assert_not_awaited()
 
 
+def test_champion_buttons_hide_internal_ids_and_keep_duplicate_units_distinct():
+    first = SimpleNamespace(unitName='P2_ChaosKnight1', unit=SimpleNamespace(name='Chaos Knights'))
+    second = SimpleNamespace(unitName='P2_ChaosKnight2', unit=SimpleNamespace(name='Chaos Knights'))
+    champion = SimpleNamespace(unitName='P2_ChaosKnight1::command::catalogue/selection/id',
+                               command_host=first, unit=SimpleNamespace(name='Doom Knight'))
+    owner = SimpleNamespace(unit=SimpleNamespace(name='Silver Helms'))
+    game = SimpleNamespace(aiControls=lambda unit: False, makeChoiceNew=AsyncMock(
+        side_effect=['Chaos Knights (champion)', 'Chaos Knights [3]']))
+    allocation = AttackAllocation(owner, SimpleNamespace(name='Silver Helm'),
+                                  [(0, 2, [champion, first, second])])
+    asyncio.run(allocation.resolve(game))
+    assert game.makeChoiceNew.call_args.args[0] == [
+        'Chaos Knights (champion)', 'Chaos Knights [2]', 'Chaos Knights [3]']
+    assert allocation.attacks == [(champion, 1), (second, 1)]
+
+
 def test_equal_initiative_choices_finish_before_either_side_rolls():
     events = []
     game = SimpleNamespace()

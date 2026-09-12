@@ -191,9 +191,16 @@ class CombatContactSnapshot:
                    f'{profile.name}: charged={charged}, ground M{movement:g}; '
                    f'{extra} attacks from the additional fighting rank after casualties (p. 190)')
         logger = rule_log if total else rule_skipped
+        bonuses = {rule['name']: rule['extra_attacks'] for rule in profile.special_rules
+                   if isinstance(rule, dict) and rule.get('extra_attacks')}
+        attack_detail = f'A{profile.characteristics.get("A")} -> A{characteristic}'
+        if bonuses:
+            attack_detail += ' (' + ', '.join(f'{name} +{value}' for name, value in bonuses.items()) + ')'
+        limited = sum(attacks > 0 and not positions[index].contact for index, attacks in quotas.items())
         logger('Fighting Rank', host,
                f'{profile.name} ({part.role}): {contacts} bases in contact, ground M{movement:g}, '
-               f'{casualties} earlier ordinary casualties -> {total} attacks (pp. 145-146)')
+               f'{casualties} earlier ordinary casualties; {attack_detail}, '
+               f'{limited} noncontact bases limited to one attack per model -> {total} attacks (pp. 145-146)')
         return quotas
 
     def attacks(self, part, models, challenge=None):

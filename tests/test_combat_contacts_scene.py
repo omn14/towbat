@@ -33,6 +33,50 @@ def edge_contact(host, enemy):
         member.hasAttackedThisTurn = False
 
 
+@pytest.mark.parametrize('target_name', ['Chaos Knight', 'Mage'])
+def test_dragon_princes_fury_reaches_live_attack_counts(scene, target_name, capsys):
+    from high_magic import FuryOfKhaineSpell
+    from spell_effects import end_turn
+    app, baseline = scene
+    load_game_state(app, baseline)
+    roster = members(app)
+    host, enemy = roster['Dragon Prince'], roster[target_name]
+    edge_contact(host, enemy)
+    parts = combat_profiles(host, enemy)
+    snapshot = CombatContactSnapshot([host, enemy])
+    before = {part.role: snapshot.attacks(part, host.unit.nmodels) for part in parts}
+    spell = FuryOfKhaineSpell('Fury of Khaine', 9, game=app, caster=roster['Mage'])
+    asyncio.run(spell.apply(host))
+    contact_count = sum(position.contact for position in snapshot.positions(host, enemy)[1])
+    expected = {role: attacks + contact_count for role, attacks in before.items()}
+    assert {part.role: snapshot.attacks(part, host.unit.nmodels) for part in parts} == expected
+    assert expected == ({'main': 9, 'mount': 6} if target_name == 'Chaos Knight'
+                        else {'main': 5, 'mount': 4})
+    app.attackers, app.defenders = [host], [enemy]
+    app.attackSequence = Sequence()
+    app.combat._pendingWounds = {}
+    app.combat._combatStartModels = {id(member.unit): member.unit.nmodels for member in (host, enemy)}
+    observed = {}
+
+    def fight(group, target, **kwargs):
+        count = group._attack_count() if callable(group._attack_count) else group._attack_count
+        if group.model in (host.unit.model, host.unit.model.get_mount()):
+            name = 'main' if group.model is host.unit.model else 'mount'
+            observed[name] = observed.get(name, 0) + count
+        return count, 0, 0, 0, 0
+
+    with patch('combat_resolution.simulate_battle', side_effect=fight), \
+            patch.object(app, 'aiControls', return_value=True), patch('assailment.cast_at_initiative'):
+        asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence()))
+    assert observed == expected
+    output = capsys.readouterr().out
+    assert 'A2 -> A3 (Fury of Khaine +1)' in output
+    assert 'A1 -> A2 (Fury of Khaine +1)' in output
+    assert ('0' if target_name == 'Chaos Knight' else '2') + ' noncontact bases limited' in output
+    end_turn(app)
+    assert {part.role: snapshot.attacks(part, host.unit.nmodels) for part in parts} == before
+
+
 def test_live_fighting_rank_uses_ground_m_and_noncontact_one_attack(scene, capsys):
     app, baseline = scene
     load_game_state(app, baseline)

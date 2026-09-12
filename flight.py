@@ -70,16 +70,21 @@ def refresh_controls(game, unit):
                 parent=game.a2dTopLeft, text=mode.title(), variable=game.flightModeChoice,
                 value=[mode], text_font=theme.get_font(), text_fg=theme.BTN_TEXT,
                 text_scale=.030, text_pos=(.14, -.023), indicatorValue=0,
+                indicator_frameSize=(-.012, .012, -.012, .012),
+                indicator_pos=(.031, 0, -.019), indicator_borderWidth=(.002, .002),
+                indicator_text_scale=.022, indicator_text_fg=theme.BTN_TEXT,
+                indicator_frameColor=theme.PARCHMENT_DARK,
                 frameColor=theme.BTN_RED, frameSize=(0, .30, -.05, .012),
-                relief=DGG.FLAT, pos=(.74 + index * .31, 0, -.07),
-                command=lambda selected=mode: set_mode(game, game.unitToMove, selected))
+                relief=DGG.FLAT, pos=(.74 + index * .31, 0, -.07))
+            button.indicator['text_pos'] = (0, -.007)
+            button['command'] = lambda selected=mode: set_mode(game, game.unitToMove, selected)
             buttons.append(button)
         for button in buttons:
             button.setOthers(buttons)
         game.flightButtons = buttons
     game.flightModeChoice[0] = getattr(unit.unit.model, 'flight_mode', 'fly') if unit else 'fly'
     for button in buttons:
-        button.setIndicatorValue()
+        button['indicatorValue'] = int(button['value'] == game.flightModeChoice)
         button.show() if selectable(game, unit) else button.hide()
 
 

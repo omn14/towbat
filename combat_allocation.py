@@ -13,6 +13,13 @@ def nearest_targets(candidates, *, epsilon=0.01):
     return [target for target, distance in candidates if distance <= nearest + epsilon]
 
 
+def target_name(target):
+    host = getattr(target, 'command_host', None)
+    if host is not None:
+        return f'{host.unit.name} (champion)'
+    return getattr(getattr(target, 'unit', None), 'name', target.unitName)
+
+
 @dataclass
 class AttackAllocation:
     owner: object
@@ -26,7 +33,9 @@ class AttackAllocation:
         for slot, count, targets in self.batches:
             if not targets or count <= 0:
                 continue
-            options = {target.unitName: target for target in targets}
+            names = [target_name(target) for target in targets]
+            options = {(f'{name} [{index + 1}]' if names.count(name) > 1 else name): target
+                       for index, (name, target) in enumerate(zip(names, targets))}
             if len(targets) == 1 or game.aiControls(self.owner):
                 assignments = [(targets[0], count)]
             else:
@@ -42,4 +51,4 @@ class AttackAllocation:
         self.attacks = list(allocated.values())
         for target, attacks in self.attacks:
             rule_log('Dividing Attacks', self.owner,
-                     f'{self.profile.name}: {attacks} attack(s) allocated to {target.unitName} before rolling (p. 147)')
+                     f'{self.profile.name}: {attacks} attack(s) allocated to {target_name(target)} before rolling (p. 147)')

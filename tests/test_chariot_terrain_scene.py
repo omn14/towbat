@@ -278,7 +278,7 @@ def test_live_follow_up_sweeps_and_tests_terrain_on_ground(scene):
     assert unit.unit.model.is_flying()
 
 
-@pytest.mark.parametrize('size', [(1280, 720), (800, 600)])
+@pytest.mark.parametrize('size', [(1280, 720), (800, 600), (720, 960)])
 def test_flight_controls_render_and_select_ground(scene, tmp_path, size):
     app, unit = restore(scene)
     app.unitToMove = unit
@@ -308,6 +308,17 @@ def test_flight_controls_render_and_select_ground(scene, tmp_path, size):
         image = buffer.getScreenshot()
         assert image.getXSize() == size[0] and image.getYSize() == size[1]
         assert image.write(str(tmp_path / f'flight-controls-{size[0]}.png'))
+        for button in app.flightButtons:
+            frame = button.indicator.guiItem.getFrame()
+            lower = button.getRelativePoint(button.indicator, Point3(frame[0], 0, frame[2]))
+            upper = button.getRelativePoint(button.indicator, Point3(frame[1], 0, frame[3]))
+            left, right, bottom, top = button['frameSize']
+            assert lower.x >= left and upper.x <= right
+            assert lower.z >= bottom and upper.z <= top
+        assert [button['indicatorValue'] for button in app.flightButtons] == [0, 1]
+        app.flightButtons[0].commandFunc(None)
+        assert unit.unit.model.is_flying()
+        assert [button['indicatorValue'] for button in app.flightButtons] == [1, 0]
     finally:
         app.graphicsEngine.removeWindow(buffer)
         app.setAspectRatio(1280 / 720)
