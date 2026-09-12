@@ -62,3 +62,19 @@ def test_caster_snapshot_is_restored_when_resolution_is_interrupted():
     with pytest.raises(RuntimeError, match='interrupted combat'):
         asyncio.run(resolve_steps(game, [interrupted()], None))
     assert game.assailmentInitiativeSurvivors is previous
+
+
+def test_log_initiative_tracks_interleaved_streams_and_preparation():
+    from rules_log import BattleJournal, log_scope
+    journal = BattleJournal()
+
+    def stream(initiatives):
+        for initiative in initiatives:
+            yield InitiativeStep(initiative, lambda: journal.append('prepare') and None)
+            journal.append('attack')
+
+    with log_scope(combat='Princes vs Knights'):
+        asyncio.run(resolve_steps(None, [stream([9, 5]), stream([7, 5])], None))
+    assert [entry.context['initiative'] for entry in journal.entries] == [9, 9, 7, 7, 5, 5, 5, 5]
+    journal.append('after')
+    assert 'combat' not in journal.entries[-1].context

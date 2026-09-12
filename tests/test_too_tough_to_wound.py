@@ -14,6 +14,20 @@ from toHitAndToWound import to_wound
 
 
 class TestToWoundChart(unittest.TestCase):
+    def test_combat_report_shows_effective_and_bane_armour_targets(self):
+        report = {'ap': 2, 'to_hit': 3, 'to_wound': 2, 'modifiers': [], 'save': 3,
+                  'armour': ['heavy armour'], 'regen': None, 'weapon': 'Lance',
+                  'mode': 'melee', 'strength': 5, 'defender': 'Knights', 'toughness': 4,
+                  'attacker_effects': [], 'defender_effects': [],
+                  'save_targets': {5: 2, 7: 1}, 'armour_bypassed': 1,
+                  'rolls': {'Ward rolls': [3]}}
+        text = '\n'.join(format_combat_report(report))
+        self.assertIn('armour 3+ with AP-2 -> 5+', text)
+        self.assertIn('2 wound(s) at 5+', text)
+        self.assertIn('1 wound(s): no armour save', text)
+        self.assertIn('Ward rolls: [3]', text)
+        self.assertIn('bypass armour and Regeneration', text)
+
     def setUp(self):
         self.attacker = SimpleNamespace(characteristics={'S': 3})
         self.defender = SimpleNamespace(characteristics={'T': 3})

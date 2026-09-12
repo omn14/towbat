@@ -77,6 +77,23 @@ def test_dragon_princes_fury_reaches_live_attack_counts(scene, target_name, caps
     assert {part.role: snapshot.attacks(part, host.unit.nmodels) for part in parts} == before
 
 
+def test_charged_unit_without_contact_emits_actionable_warning(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host, enemy = members(app)['Silver Helm'], members(app)['Chaos Knight']
+    edge_contact(host, enemy)
+    host.bodyNP.setY(host.bodyNP.getY() - .03)
+    host.chargedThisTurn = True
+    snapshot = CombatContactSnapshot([host, enemy])
+    with patch('rules_log.battle_log') as log:
+        assert snapshot.attacks(combat_profiles(host, enemy)[0], host.unit.nmodels) == 0
+        assert snapshot.attacks(combat_profiles(host, enemy)[0], host.unit.nmodels) == 0
+    log.assert_called_once()
+    assert '0.0300"' in log.call_args.args[0]
+    assert log.call_args.args[1] == 'warning'
+    assert 'half-width' in log.call_args.kwargs['details']
+
+
 def test_live_fighting_rank_uses_ground_m_and_noncontact_one_attack(scene, capsys):
     app, baseline = scene
     load_game_state(app, baseline)

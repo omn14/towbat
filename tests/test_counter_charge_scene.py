@@ -47,6 +47,16 @@ def declared_charge(scene, distance=10, *, cavalry='Silver Helm'):
     return app, charger, defender, origin, facing, contact
 
 
+@pytest.mark.parametrize('rough,expected,kept', [(False, 18, 'max(6, 2) = 6'),
+                                                (True, 14, 'min(6, 2) = 2')])
+def test_charge_report_separates_swiftstride_bonus(scene, rough, expected, kept, capsys):
+    app, charger, _, origin, _, _ = declared_charge(scene)
+    with patch.object(app.combat, 'chargeThroughDifficult', return_value=rough):
+        assert app.combat.chargeDistance(charger, origin, [6, 2, 4]) == expected
+    output = capsys.readouterr().out
+    assert f'{kept} + Swiftstride 4 -> {expected}" range' in output
+
+
 def test_chaos_knights_are_offered_countercharge_from_declaration_position(scene):
     app, charger, defender, origin, facing, contact = declared_charge(scene)
     choice = AsyncMock(side_effect=['Yes', 'hold'])
@@ -116,7 +126,8 @@ def test_countercharge_moves_and_resolves_both_charge_attempts(
     if ai:
         choices.assert_not_called()
     output = capsys.readouterr().out
-    assert 'no Swiftstride bonus' in output
+    assert 'Swiftstride does not modify this reaction move' in output
+    assert 'incoming charge rolls are separate' in output
     assert 'both receive charging benefits' in output if contact_expected else 'without contact' in output
 
 
@@ -133,6 +144,11 @@ def test_countercharge_pivots_and_contacts_on_an_angled_approach(scene, offset, 
     assert abs((defender.bodyNP.getH() - 180 + 180) % 360 - 180) > 1
     assert charger.state == defender.state == 'InCombat'
     assert obb_distance(app.psychology._unit_box(charger), app.psychology._unit_box(defender)) < .06
+    from combat_contacts import CombatContactSnapshot
+    snapshot = CombatContactSnapshot([charger, defender])
+    for member, target in ((charger, defender), (defender, charger)):
+        positions = snapshot.positions(member, target)[1]
+        assert any(position.contact for position in positions), [position.distance for position in positions]
     assert (charger.bodyNP.getH() - defender.bodyNP.getH()) % 360 == pytest.approx(180, abs=.05)
     app.camera.setPos(0, -28, 28)
     app.camera.lookAt(0, -5, 0)

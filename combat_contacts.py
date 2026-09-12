@@ -58,6 +58,7 @@ class CombatContactSnapshot:
     """Keep pre-casualty base positions while rendered removals are deferred (p. 146)."""
 
     def __init__(self, hosts):
+        self._warned_missing_contacts = set()
         from command_groups import living_command
         from scouts import model_base_boxes
         self.hosts = list(hosts)
@@ -175,6 +176,20 @@ class CombatContactSnapshot:
                   for index in indices if index not in excluded}
         total = sum(quotas.values())
         contacts = sum(positions[index].contact for index in quotas)
+        missing_contact = positions and not any(position.contact for position in positions)
+        if (part.role == 'main' and charged and not total and not casualties
+                and missing_contact and id(host) not in self._warned_missing_contacts):
+            from rules_log import battle_log
+            from scouts import model_base_boxes
+            self._warned_missing_contacts.add(id(host))
+            nearest = min(position.distance for position in positions)
+            geometry = {member.unit.name: model_base_boxes(member)
+                        for member in [host, *host.isInCombatWith]}
+            message = (f'{host.unit.name}: charged and engaged but no model-base contact; '
+                       f'nearest enemy base {nearest:.4f}" (contact tolerance {CONTACT_EPSILON}); '
+                       '0 attacks. Charge alignment needs inspection.')
+            details = 'Model-base boxes (x, y, half-width, half-depth, heading): ' + repr(geometry)
+            battle_log(message, 'warning', subject=host, details=details)
         weapon = profile.equipedWeapon or {}
         if any('fight in extra rank' in str(rule).casefold() for rule in weapon.get('special_rules', [])):
             supporting = sum(attacks for index, attacks in quotas.items() if positions[index].supporting)

@@ -80,6 +80,9 @@ def main(shots='/tmp'):
     pointer.over(h)
     print(f"pointer on page  : {h.pointer_over_log()}")
     h.scroll_log(3)
+    previous_position = z(h)
+    h.log('An incoming wrapped event ' * 30)
+    assert z(h) == previous_position
     print(f"back three lines : z {z(h)}  scroll {h._log_scroll:.3f}")
     h.scroll_log(1000)
     print(f"oldest           : z {z(h)}  scroll {h._log_scroll:.3f}  "
@@ -99,6 +102,96 @@ def main(shots='/tmp'):
     pointer.over(h)
     h.clear_log()
     print(f"cleared          : z {z(h)}  scroll {h._log_scroll:.3f}")
+
+    from rules_log import log_scope
+    for index in range(220):
+        with log_scope(round=3, player=1, phase='CombatPhase', combat='Princes vs Knights', initiative=9):
+            h.log(f'Dragon Princes: {index} attacks -> 4 hits -> 1 wound -> 0 slain',
+                  'combat', 'Dragon Princes', 'Armour 3+ with AP-2 -> 5+; roll [5]: saved')
+    h.open_history()
+    history = h._history
+    history.set_details(True)
+    assert len(history.displayed) == 100
+    history.scroll_lines(5)
+    before = history.text.getPos()
+    h.log('A very long incoming event ' * 30)
+    assert history.text.getPos() == before
+    history.page(-1)
+    assert history.displayed[-1].sequence < h._journal.sequence
+    history.set_subject('Missing unit')
+    assert not history.displayed
+    history.set_subject('Dragon Princes')
+    assert len(history.displayed) == 100
+    assert history.units.get() == 'Dragon Princes'
+    history.scrollbar['value'] = .5
+    history.drag_scroll()
+    assert abs(history.scroll / history.max_scroll - .5) < .001
+    history.latest()
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    import json
+    with TemporaryDirectory() as directory, patch('battle_log_view.Path', return_value=Path(directory)):
+        history.export()
+        exported = json.loads(next(Path(directory).glob('*.json')).read_text())
+        assert len(exported) == len(h._journal.entries)
+        assert 'Armour 3+' in next(Path(directory).glob('*.txt')).read_text()
+    with patch('battle_log_view.shutil.which', return_value=None):
+        history.copy()
+        assert 'Clipboard unavailable' in history.status.getText()
+    with patch('battle_log_view.shutil.which', return_value='/usr/bin/wl-copy'), \
+            patch('battle_log_view.subprocess.run') as copy:
+        history.copy()
+        assert copy.call_args.kwargs['input'] == h._journal.export()
+    history.redraw()
+    _shot(shots, 'history')
+    from panda3d.core import FrameBufferProperties, WindowProperties, GraphicsPipe
+    properties = WindowProperties.size(720, 960)
+    buffer = base.graphicsEngine.makeOutput(base.pipe, 'portrait-history', -10,
+        FrameBufferProperties.getDefault(), properties, GraphicsPipe.BFRefuseWindow,
+        base.win.getGsg(), base.win)
+    region = buffer.makeDisplayRegion()
+    region.setCamera(base.cam2d)
+    base.setAspectRatio(720 / 960)
+    h._layout()
+    assert history.width < .75
+    for button, _, _ in history.controls:
+        frame = button['frameSize']
+        assert abs(button.getX()) + max(abs(frame[0]), abs(frame[1])) < history.width
+    base.graphicsEngine.renderFrame()
+    image = PNMImage()
+    buffer.getScreenshot(image)
+    image.write(os.path.join(shots, 'battle_log_history_portrait.png'))
+    base.graphicsEngine.removeWindow(buffer)
+    base.setAspectRatio(1280 / 720)
+    h._layout()
+    history.set_mode('Debug')
+    history.latest()
+    assert history.scroll == 0
+    h.close_history()
+    state = h.snapshot()
+    h.destroy()
+    h = hud.HUD(orientation=hud.HUD.VERTICAL)
+    h.restore(state)
+    assert h._journal.sequence == state['entries'][-1].sequence
+    pointer.over(h)
+    assert h.pointer_over_log()
+    h.show_tab('rules')
+    assert not h.pointer_over_log()
+    h.show_tab('log')
+    h.open_history()
+    assert h._history.mode.get() == 'Debug'
+    _shot(shots, 'history_vertical')
+    import asyncio
+    from choiceFunctions import Choice
+    choice = Choice(['Hold'], (0, 0, 0), prompt='Chaos Knights: charge reaction')
+    choice.choice = 'Hold'
+    choice.choiceMade = True
+    asyncio.run(choice.cleanup())
+    asyncio.run(choice.cleanup())
+    messages = [entry for entry in h._journal.entries if entry.text == 'Chaos Knights: charge reaction: Hold']
+    assert len(messages) == 1 and messages[0].category == 'debug'
+    h.destroy()
 
 
 def _shot(directory, name):

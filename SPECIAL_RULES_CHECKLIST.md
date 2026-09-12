@@ -22,9 +22,33 @@ identical without the log. See `.github/copilot-instructions.md`.
       of demanding another declaration (p. 172). No charge-choice mechanics changed.
 - Verification: 124 Psychology tests and 31 live Drilled/Impetuous tests pass in
       isolated memory-capped runs, including voluntary declarations after reload.
-- LEFTOVER: The reported Round 3 Silver Helm zero-contact charge is not yet
-      reproduced. Available rolling saves predate that combat. Structured log UI,
-      measured contact warnings and clearer combat reports are in progress.
+- [x] Charge range reports separate the selected 2D6 die from the Swiftstride
+      modifier. Counter Charge wording limits the prohibition to the reaction move
+      (pp. 121, 167, 178, 269; FAQ v1.5.3). Break tests name the unit, dice, modifier,
+      Leadership and final outcome. Combat reports distinguish unsaved wounds from
+      slain models, identify the attacking profile and show effective armour targets.
+- [x] Summary / Rules / Debug history retains 5,000 structured events, groups
+      round/player/phase/combat/Initiative, filters by unit and expands roll details.
+      Interleaved duel and ordinary attacks retain the correct Initiative context.
+      History renders at most 100 events per page, freezes reading position for new
+      wrapped events, survives HUD orientation rebuilds, and exports all retained
+      events as text/JSON. Clipboard helper failure is explicit; export still works.
+- [x] Missing contact after a charge now emits one warning per unit/snapshot,
+      including closest-base distance and model-base boxes for reproduction.
+      Existing angled and multiple-charge tests also assert actual model contact
+      and positive attack quotas, not merely unit footprint proximity.
+- Verification: focused journal 12, Initiative 4, allocation 5, contact scenes 19,
+      Counter Charge 14, charge declarations 30, wound/report 34 and Shieldwall 13
+      tests pass. Offscreen history harness checks scrolling, filters, details,
+      paging, export, clipboard success/failure handling, named AI choices, portrait
+      controls and vertical rebuilds. Desktop/portrait screenshots inspected.
+- LEFTOVER: The exact Round 3 Silver Helm zero-contact charge is not reproduced;
+      available rolling saves predate it. No contact tolerance or charge geometry
+      was changed. Need that combat save or the new geometry warning to fix its
+      producer. Broader simultaneous-frontage/casualty-position limitations remain.
+      Filters currently use readable names, so identically named units share a
+      filter. The history is session-only unless exported, not persisted in saves.
+      The separate intermittent HUD startup NaN investigation remains paused.
 
 ## Army Readiness: High Elves vs Warriors of Chaos
 

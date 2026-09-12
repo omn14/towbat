@@ -139,7 +139,8 @@ def test_multiple_charges_recompute_contact_after_countercharge(scene):
     with combat_tasks(app) as run, \
             patch.object(app, 'aiControls', return_value=True), \
             patch.object(app, 'rollLeadershipDice', AsyncMock(return_value=[1, 1])), \
-            patch.object(app.combat, 'rullTerninger', AsyncMock(side_effect=[([], [3]), ([], [6, 6]), ([], [6, 6])])), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(
+                side_effect=lambda count, bonus=False: ([], [3] if count == 1 else [6, 6]))), \
             patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)):
         run(app.combat.chargeAndChargeReaction(charger, contact, origin, facing, SimpleNamespace(done=None)))
         second_origin = Vec3(12, -3, 0)
@@ -155,9 +156,16 @@ def test_multiple_charges_recompute_contact_after_countercharge(scene):
     assert charger.isInCombatWith == second.isInCombatWith == [defender]
     assert set(defender.isInCombatFlank) == {'front', 'flank'}
     from psychology import obb_distance
+    from combat_contacts import CombatContactSnapshot
+    from combat_profiles import combat_profiles
+    snapshot = CombatContactSnapshot([charger, second, defender])
     for member in (charger, second):
         assert obb_distance(app.psychology._unit_box(member), app.psychology._unit_box(defender)) < .06
         assert member.chargeAttempts == 1 and not member.chargeAttemptPending
+        positions = snapshot.positions(member, defender)[1]
+        assert any(position.contact for position in positions), [position.distance for position in positions]
+        assert all(snapshot.attacks(part, member.unit.nmodels) > 0
+                   for part in combat_profiles(member, defender))
     assert defender.chargeAttempts == 1 and not defender.chargeAttemptPending
 
 

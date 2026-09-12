@@ -73,5 +73,37 @@ class TestTheLogLine(unittest.TestCase):
                                       'armour 5+ -> 4+').splitlines()), 1)
 
 
+class TestBattleJournal(unittest.TestCase):
+    def test_filters_preserve_full_trace_and_warning(self):
+        from rules_log import BattleJournal
+        journal = BattleJournal()
+        for category in ('combat', 'rule', 'skip', 'dice', 'debug', 'warning'):
+            journal.append(category, category, 'Silver Helms')
+        self.assertEqual([entry.category for entry in journal.visible()], ['combat', 'warning'])
+        self.assertEqual(len(journal.visible('Rules')), 4)
+        self.assertEqual(len(journal.visible('Debug')), 6)
+        self.assertEqual(journal.visible(subject='Dragon Princes'), [])
+        self.assertIn('[skip] skip', journal.export())
+
+    def test_context_is_snapshotted_and_scopes_restore_after_errors(self):
+        from rules_log import BattleJournal, log_scope
+        journal = BattleJournal(limit=2)
+        with log_scope(round=3, player=1, phase='CombatPhase', combat='Princes vs Knights'):
+            try:
+                with log_scope(initiative=9):
+                    journal.append('9 attacks', 'combat', details='Fury +3 attacks')
+                    raise ValueError('interrupted')
+            except ValueError:
+                pass
+            journal.append('result', 'combat')
+        self.assertEqual(journal.entries[0].context['initiative'], 9)
+        self.assertNotIn('initiative', journal.entries[1].context)
+        self.assertIn('Round 3 / Player 1', journal.export())
+        self.assertIn('Fury +3 attacks', journal.export())
+        self.assertEqual(len(__import__('json').loads(journal.export(structured=True))), 2)
+        journal.append('new')
+        self.assertEqual([entry.sequence for entry in journal.entries], [2, 3])
+
+
 if __name__ == "__main__":
     unittest.main()

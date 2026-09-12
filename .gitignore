@@ -27,3 +27,6 @@ strategy_armies/player2_army.json
 
 # Interface preferences: follows the player, not the repository
 settings.json
+
+# Battle journal exports belong to the player.
+logs/

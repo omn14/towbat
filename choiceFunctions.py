@@ -35,7 +35,9 @@ class Choice:
                  prompt=None, detail=None, reference=None):
         self.num_choices = len(choices)
         self.choices = choices
+        self.prompt = prompt or 'Choose'
         self.choiceMade = False
+        self._logged_choice = False
         self.choice = None
         # Kept for callers that still speak the old language of hit boxes.
         self.hitbox = None
@@ -257,13 +259,11 @@ class Choice:
     # ─── Answering ───────────────────────────────────────────────────────
 
     def _pick(self, name):
-        print(f"Choice selected: {name}")
         self.choice = name
         taskMgr.add(self.cleanup())
 
     def onCancel(self):
         """Right-click closes the menu without choosing; the caller sees None."""
-        print("Choice cancelled")
         self.choice = None
         taskMgr.add(self.cleanup())
 
@@ -272,6 +272,10 @@ class Choice:
         return task.done if self.choiceMade else task.cont
 
     async def cleanup(self):
+        if not self._logged_choice:
+            from rules_log import battle_log
+            battle_log(f'{self.prompt}: {self.choice if self.choice is not None else "cancelled"}', 'debug')
+            self._logged_choice = True
         self.choiceMade = True
         self.helper1.ignore('mouse3')
         for btn in self.buttons:

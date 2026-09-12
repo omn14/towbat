@@ -196,6 +196,8 @@ def format_combat_report(r):
     mod_str = f"  ({', '.join(r['modifiers'])})" if r['modifiers'] else ""
     save = r['save']
     save_str = f"{save}+" if isinstance(save, int) and save <= 6 else "none"
+    effective = save + ap if isinstance(save, (int, float)) else 7
+    effective_str = f'{effective:g}+' if effective <= 6 else 'none'
     armour = ", ".join(r['armour']) if r['armour'] else "-"
     regen = f"  regen {r['regen']}+" if r['regen'] else ""
     lines = [
@@ -205,8 +207,19 @@ def format_combat_report(r):
     if r.get('to_hit_summary'):
         lines.append(f"   To Hit : {r['to_hit_summary']}")
     lines.append(
-        f"   Target : {r['defender']}  T{r['toughness']}  save {save_str}  "
+        f"   Target : {r['defender']}  T{r['toughness']}  armour {save_str} "
+        f"with {ap_str} -> {effective_str}  "
         f"armour [{armour}]{regen}")
+    for label, rolls in r.get('rolls', {}).items():
+        if rolls:
+            lines.append(f'   {label}: {rolls}')
+    if r.get('save_targets'):
+        targets = ', '.join(f'{count} wound(s) at {target:g}+' if target <= 6 else
+                            f'{count} wound(s): no armour save'
+                            for target, count in sorted(r['save_targets'].items()))
+        lines.append(f'   Actual armour targets (including Armour Bane): {targets}')
+    if r.get('armour_bypassed'):
+        lines.append(f'   Slaying blows: {r["armour_bypassed"]} wound(s) bypass armour and Regeneration')
     if r['attacker_effects']:
         lines.append(f"   Attacker rules : {', '.join(r['attacker_effects'])}")
     if r['defender_effects']:
@@ -828,6 +841,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     ithilmar_rerolls = ithilmar_converted = 0
     ethereal_prevented = 0
     ward_rolls = []
+    hit_rolls = []
+    wound_rolls = []
+    save_targets = {}
+    armour_bypassed = 0
     hated = first_round and unit1.model.hates(unit2.model)
     unit1.model.hatred_rerolls = hated
     global LAST_SLAYING_BLOWS
@@ -849,6 +866,9 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                      f"not a hand weapon")
     for i in range(attacks1):
         hit,wound = simulate_attack(unit1.model, unit2.model)
+        hit_rolls.append(unit1.model.attack_roll)
+        if hit:
+            wound_rolls.append(unit1.model.wound_roll)
         ethereal_prevented += int(getattr(unit1.model, 'ethereal_prevented', False))
         struck = getattr(unit1.model, 'slaying_blow', None)
         if getattr(unit1.model, 'hatred_rerolled', False):
@@ -863,6 +883,11 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             total_wounds += 1
             suffered_wounds += 1
         if wound:
+            if struck:
+                armour_bypassed += 1
+            else:
+                target = defender_save + getattr(unit1.model, 'attack_AP', unit1.model.AP)
+                save_targets[target] = save_targets.get(target, 0) + 1
             if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
                            slaying_blow=bool(struck), ward_rolls=ward_rolls):
@@ -929,6 +954,10 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     global LAST_COMBAT_REPORT
     try:
         LAST_COMBAT_REPORT = build_combat_report(unit1, unit2, charge, attacks1)
+        LAST_COMBAT_REPORT.update(
+            rolls={'To Hit (after modifiers/re-rolls)': hit_rolls,
+                   'To Wound (after modifiers)': wound_rolls, 'Ward rolls': ward_rolls},
+            save_targets=save_targets, armour_bypassed=armour_bypassed)
     except Exception as e:
         LAST_COMBAT_REPORT = None
         print(f"[combat-report] skipped: {e}")

@@ -129,6 +129,27 @@ Select a unit and use the small up/down arrows beside the HUD's two detail lines
 to see item names, bearers and use status. A joined character's inventory also
 appears on its host unit's card; the Banner is on the Chaos Warriors' card.
 
+### Battle History
+
+The battle log defaults to **Summary**: attacks, charge ranges, combat scores,
+morale results and warnings. Open **+** beside the log to expand the history.
+**Rules** adds applied and skipped rules; **Debug** also includes low-level
+events and named choices. **Roll details** expands attack reports, effective
+armour targets (including Armour Bane), final To Hit/To Wound rolls and Ward
+rolls. Round, player, phase, combat and Initiative headings group the events.
+
+Filter by unit, scroll with the wheel or scrollbar, and use Older/Newer for
+100-event pages. New events do not move a page you are reading; Latest resumes
+following the log. Up to 5,000 events survive HUD orientation changes, but the
+journal is not part of battle saves. Export writes the complete retained
+history, including filtered-out events, as text and JSON in the ignored
+`logs/` directory. Copy uses `wl-copy`, `xclip` or `xsel` on Linux; unavailable
+clipboard support is reported and Export remains available.
+
+A charged unit with no detected model-base contact and no attacks generates a
+warning with the measured gap and base geometry in its details. This diagnoses
+the reported Silver Helm anomaly; it does not repair an unverified charge pose.
+
 ### Casting With Joined Wizards
 
 Select the host unit and press `C` in the spell's applicable phase. A sole

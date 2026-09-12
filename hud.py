@@ -16,7 +16,6 @@ Sections are laid out as fractions of the bar's width and re-flowed on
 only.
 """
 
-from collections import deque
 import math
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG
@@ -40,6 +39,9 @@ _CATEGORY_COLOURS = {
     'morale': ('log_morale', (0.62, 0.10, 0.08, 1.0)),
     'good':   ('log_good',   (0.13, 0.40, 0.13, 1.0)),
     'info':   ('log_info',   T.INK),
+    'warning': ('log_warning', (0.72, 0.08, 0.04, 1)),
+    'debug': ('log_debug', (.42, .42, .42, 1)),
+    'detail': ('log_detail', (.3, .3, .3, 1)),
 }
 
 _PHASE_ON = 'hud_phase_on'
@@ -93,12 +95,12 @@ class HUD(DirectObject):
     ASIDES = {'SpellPhase': 'CASTING', 'ReserveMovePhase': 'RESERVE MOVE', 'MakeChoice': 'CHOOSING',
               'CampaignPhase': 'CAMPAIGN', 'BattleEnded': 'BATTLE ENDED'}
 
-    LOG_ENTRIES = 200
+    LOG_ENTRIES = 5000
     LOG_SCALE = 0.026
     LOG_TOP = 0.350
     LOG_BOTTOM = 0.048
     # The ledger measures down from its section top, so its bounds are negative.
-    LOG_TOP_V = -0.074
+    LOG_TOP_V = -0.112
     LOG_BOTTOM_V = -0.402
 
     # ── Bar geometry ────────────────────────────────────────────────
@@ -180,7 +182,11 @@ class HUD(DirectObject):
         self._vertical = orientation == self.VERTICAL
         self.SECTIONS = self.SECTIONS_V if self._vertical else self.SECTIONS_H
 
-        self._entries = deque(maxlen=self.LOG_ENTRIES)
+        self._journal = rules_log.BattleJournal(self.LOG_ENTRIES)
+        self._entries = self._journal.entries
+        self._log_mode = 'Summary'
+        self._log_frozen = None
+        self._history = None
         self._log_scroll = 0.0
         self._log_max_scroll = 0.0
         self._log_w = 1.0
@@ -361,6 +367,8 @@ class HUD(DirectObject):
         self._log_text['wordwrap'] = (log_w - 0.04) / self.LOG_SCALE
         self._fit_phase()
         self._redraw_log()
+        if self._history is not None:
+            self._history.layout()
         if hasattr(self, '_detail_lines'):
             self._render_details()
 
@@ -472,6 +480,13 @@ class HUD(DirectObject):
         self._log_text['wordwrap'] = 30
         self._log_anchor = anchor
         self._bind_log_wheel()
+
+        button = DirectButton(parent=anchor, text='+', text_scale=.027,
+                      text_pos=(0, -.009), frameSize=(-.025, .025, -.02, .02),
+                      relief=DGG.FLAT, command=self.open_history)
+        self._place(button, 'log', .92, self.HEAD_Z)
+        button.bind(DGG.ENTER, lambda *_: self._history_tooltip(button))
+        button.bind(DGG.EXIT, lambda *_: self.hide_tooltip())
 
     def _build_centre(self, font):
         anchor = self._section('centre')
@@ -703,7 +718,13 @@ class HUD(DirectObject):
         self._log_text = self._label(anchor, 'tabs', 0.03, -0.070,
                                      self.LOG_SCALE, T.INK)
         self._log_text['wordwrap'] = 30
-        self._tab_panels['log'] = [self._log_text]
+        button = DirectButton(parent=anchor, text='+', text_scale=.027,
+                      text_pos=(0, -.009), frameSize=(-.025, .025, -.02, .02),
+                      relief=DGG.FLAT, command=self.open_history)
+        self._place(button, 'tabs', .94, -.063)
+        button.bind(DGG.ENTER, lambda *_: self._history_tooltip(button))
+        button.bind(DGG.EXIT, lambda *_: self.hide_tooltip())
+        self._tab_panels['log'] = [self._log_text, button]
         self._log_anchor = anchor
         self._bind_log_wheel()
         for key, z in (('rules', -0.230), ('objectives', -0.230)):
@@ -924,6 +945,7 @@ class HUD(DirectObject):
     # ─── Turn / phase ─────────────────────────────────────────────────
 
     def set_turn(self, player: int, round_no: int, max_rounds: int):
+        rules_log.set_log_context(player=player, round=round_no)
         # Kept so a rebuild in the other orientation can restore it.
         self._turn_state = (player, round_no, max_rounds)
         self._turn.setText(f"PLAYER {player}")
@@ -960,6 +982,8 @@ class HUD(DirectObject):
 
     def set_phase(self, phase: str):
         self._display_phase = phase
+        if phase in self.TRACK:
+            rules_log.set_log_context(phase=phase, combat=None, initiative=None)
         """Light the current step of the turn sequence."""
         if phase != 'MovementPhase':
             self.set_charge_stage(None)
@@ -996,21 +1020,37 @@ class HUD(DirectObject):
 
     # ─── Battle log ───────────────────────────────────────────────────
 
-    def log(self, text: str, category: str = 'info'):
+    def log(self, text: str, category: str = 'info', subject=None, details=''):
         """Post one line to the battle log."""
         if category not in _CATEGORY_COLOURS:
             category = 'info'
-        self._entries.append((category, text))
-        # A reader who has scrolled back keeps their place; one at the foot of
-        # the log follows the newest line, which is the usual case.
-        if self._log_scroll > 0:
-            self._log_scroll += self._log_line_height()
+        self._journal.append(text, category, subject, details)
         self._redraw_log()
+        if self._history is not None:
+            self._history.redraw()
+
+    def open_history(self):
+        self.hide_tooltip()
+        if self._history is None:
+            from battle_log_view import BattleLogView
+            self._history = BattleLogView(self)
+
+    def _history_tooltip(self, button):
+        position = button.getPos(base.aspect2d)
+        self.show_tooltip('Battle history', position.x, position.z)
+
+    def close_history(self):
+        if self._history is not None:
+            self._history.destroy()
+            self._history = None
 
     def clear_log(self):
         self._entries.clear()
         self._log_scroll = 0.0
+        self._log_frozen = None
         self._redraw_log()
+        if self._history is not None:
+            self._history.latest()
 
     def _log_line_height(self) -> float:
         return self.LOG_SCALE * 1.1
@@ -1036,6 +1076,10 @@ class HUD(DirectObject):
         if watcher is None or not watcher.hasMouse():
             return False
         mouse = watcher.getMouse()
+        if self._history is not None:
+            return self._history.pointer_over(mouse)
+        if self._log_text.isHidden():
+            return False
         point = self._log_anchor.getRelativePoint(
             base.render2d, Point3(mouse.getX(), 0, mouse.getY()))
         top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
@@ -1047,29 +1091,48 @@ class HUD(DirectObject):
         """Scroll *lines* back through the log; negative goes forwards."""
         if not self.pointer_over_log():
             return
+        if self._history is not None:
+            self._history.scroll_lines(lines)
+            return
         self._log_scroll = max(
             0.0, min(self._log_max_scroll,
                      self._log_scroll + lines * self._log_line_height()))
+        self._log_frozen = list(self._log_displayed) if self._log_scroll > 0 else None
         self._redraw_log()
 
     def _on_rule(self, kind: str, rule: str, subject: str, detail: str):
         if kind == 'skipped':
-            self.log(f"{rule} — {subject}: not claimed ({detail})", 'skip')
+            self.log(f"{rule} — {subject}: not claimed ({detail})", 'skip', subject)
         else:
-            self.log(f"{rule} — {subject}: {detail}", 'rule')
+            self.log(f"{rule} — {subject}: {detail}", 'rule', subject)
+
+    @staticmethod
+    def log_text(entries, *, details=False):
+        lines = []
+        previous = None
+        for entry in entries:
+            if entry.group != previous:
+                lines.append(_markup('log_info', entry.heading))
+                previous = entry.group
+            prop = _CATEGORY_COLOURS[entry.category][0]
+            lines.append(_markup(prop, f"\u2022 {entry.text}"))
+            if details and entry.details:
+                lines.append(_markup('log_detail', '  ' + entry.details))
+        return '\n'.join(lines)
 
     def _redraw_log(self):
-        lines = []
-        for category, text in self._entries:
-            prop = _CATEGORY_COLOURS[category][0]
-            lines.append(_markup(prop, f"\u2022 {text}"))
-        self._log_text.setText('\n'.join(lines))
+        if self._log_scroll == 0:
+            self._log_frozen = None
+        entries = (self._log_frozen if self._log_frozen is not None else
+                   self._journal.visible(self._log_mode)[-100:])
+        self._log_displayed = entries
+        self._log_text.setText(self.log_text(entries))
 
         # Grow the block upward from the bottom of the page, so the newest
         # line always sits in the same place however much the lines wrap.
         # An empty log measures as NaN, and a NaN position poisons the node for
         # every later redraw, so the first real line would be the one to fail.
-        raw = self._log_text.textNode.getHeight() if self._entries else 0.0
+        raw = self._log_text.textNode.getHeight() if entries else 0.0
         height = raw * self.LOG_SCALE if math.isfinite(raw) else 0.0
         top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
         bottom = self.LOG_BOTTOM_V if self._vertical else self.LOG_BOTTOM
@@ -1111,6 +1174,7 @@ class HUD(DirectObject):
     def snapshot(self):
         """The state a rebuild in the other orientation has to carry over."""
         return {'entries': list(self._entries),
+            'log_mode': self._log_mode,
                 'phase': self._active_phase,
                 'turn': self._turn_state,
                 'dice': self._dice_state,
@@ -1118,6 +1182,8 @@ class HUD(DirectObject):
 
     def restore(self, state):
         self._entries.extend(state.get('entries') or ())
+        self._journal.sequence = max((entry.sequence for entry in self._entries), default=0)
+        self._log_mode = state.get('log_mode', 'Summary')
         self._redraw_log()
         if state.get('phase'):
             self.set_phase(state['phase'])
@@ -1134,6 +1200,7 @@ class HUD(DirectObject):
             widget.show() if self._visible else widget.hide()
 
     def destroy(self):
+        self.close_history()
         self.set_battle_result(None)
         rules_log.remove_listener(self._on_rule)
         self.ignoreAll()

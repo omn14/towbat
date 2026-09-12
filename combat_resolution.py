@@ -220,7 +220,9 @@ class CombatResolver:
             defender.chargeDistance = moved
             rule_log('Counter Charge', defender,
                      f'D6 {rolls[0]} -> D3+1 = {distance}"; advanced {moved:.2f}" '
-                     f'towards {charger.unit.name}; both count as charging, no Swiftstride bonus (p. 167)')
+                     f'towards {charger.unit.name}; both count as charging. '
+                     'Swiftstride does not modify this reaction move; incoming charge rolls are separate '
+                     '(p. 167; FAQ v1.5.3)')
             if defender.bodyNP.isEmpty() or defender.unit.nmodels <= 0:
                 charger.request('Moved')
                 return
@@ -1119,10 +1121,13 @@ class CombatResolver:
             difficult = tm is not None and tm.crosses_difficult(from_pos, self.game.playerNP.getPos())
         rough = self.chargeThroughDifficult(unit, from_pos)
         result = charge_roll(dice, rough)
-        if planned is not None:
-            rule_log('Charge Move', unit,
-                     f'route M{movement:g}, dice {dice} keep {"lowest" if rough else "highest"} '
-                     f'-> {movement + result:g}" range (pp. 121, 269)')
+        bonus = dice[2] if len(dice) > 2 else 0
+        chosen = result - bonus
+        calculation = (f'M{movement:g} + charge {"min" if rough else "max"}{tuple(dice[:2])} '
+                       f'= {chosen:g}' + (f' + Swiftstride {bonus}' if len(dice) > 2 else '')
+                       + f' -> {movement + result:g}" range (pp. 121, 178, 269)')
+        rule_log('Charge Move', unit, calculation)
+        battle_log(f'{unit.unit.name}: {calculation}', 'combat', subject=unit)
         profiles = [participant.unit.model
                     for participant in self.game.movement.movementParticipants(unit)]
         from special_rules import is_ethereal
@@ -1920,17 +1925,21 @@ class CombatResolver:
     def printBattleResults(self, attackerUnit, defenderUnit, attacks, total_hits,
                            suffered_wounds, saves_made, total_wounds):
         from battleFunctions import take_last_combat_report, format_combat_report
-        for line in format_combat_report(take_last_combat_report()):
+        report = take_last_combat_report()
+        details = format_combat_report(report)
+        for line in details:
             print(line)
         weapon = attackerUnit.unit.model.equipedWeapon or {}
-        verb = 'shots' if weapon.get('tag') == 'ranged' else 'attacks'
+        verb = 'shots' if (report or {}).get('mode', weapon.get('tag')) == 'ranged' else 'attacks'
+        profile = (report or {}).get('attacker', attackerUnit.unit.name)
         print(f"   {attacks} {verb} -> {total_hits} hit -> {suffered_wounds} wound "
-              f"-> {saves_made} saved -> {total_wounds} slain "
+              f"-> {saves_made} saved -> {total_wounds} unsaved wounds "
               f"({defenderUnit.unit.name})")
         battle_log(
-            f"{attackerUnit.unit.name} v {defenderUnit.unit.name}: "
-            f"{attacks} {verb}, {total_hits} hit, {total_wounds} slain",
-            'good' if total_wounds else 'combat')
+            f"{attackerUnit.unit.name} / {profile} vs {defenderUnit.unit.name}: "
+            f"{attacks} {verb} -> {total_hits} hits -> {suffered_wounds} wounds -> "
+            f"{saves_made} saved -> {total_wounds} unsaved",
+            'combat', subject=attackerUnit, details='\n'.join(details))
 
     @staticmethod
     def printCombatResult(rows, totals, unit_strengths):
@@ -1952,9 +1961,15 @@ class CombatResolver:
         print(f"   {'(Unit Strength)':<{width}}  {p1_us:>8}  {p2_us:>8}")
         if p1_total == p2_total:
             print("   -> drawn combat")
+            result = 'Draw'
         else:
             winner = 1 if p1_total > p2_total else 2
             print(f"   -> Player {winner} wins by {abs(p1_total - p2_total)}")
+            result = f'Player {winner} wins by {abs(p1_total - p2_total)}'
+        battle_log(f'Combat result: P1 {p1_total} - P2 {p2_total}. {result}.', 'combat',
+                   details='\n'.join(f'{label}: P1 {scores[0]}, P2 {scores[1]}'
+                                     for label, scores in rows.items())
+                   + f'\nUnit Strength: P1 {p1_us}, P2 {p2_us}')
 
     # ─── Impact Hits ──────────────────────────────────────────────────────
 
@@ -2081,6 +2096,8 @@ class CombatResolver:
         cast = set()
         self._pendingWounds = getattr(self, '_pendingWounds', {})
         for initiative, part in order:
+            from rules_log import set_log_context
+            set_log_context(initiative=initiative)
             host, target = part.host, part.target
             if host.bodyNP.isEmpty() or target.bodyNP.isEmpty():
                 rule_skipped('Combat', host, f'I{initiative}: combatant removed during the challenge; no attacks')
@@ -2288,6 +2305,8 @@ class CombatResolver:
             self.game.resolvingCombat = False
             messenger.send('unit-move-complete')
         finally:
+            from rules_log import set_log_context
+            set_log_context(combat=None, initiative=None)
             self._combatArmedProfiles = set()
             if psy:
                 psy.release_panic()
@@ -2752,6 +2771,9 @@ class CombatResolver:
         self.game.attackSequence = Sequence()
         from combat_contacts import engaged_units
         engaged = engaged_units(attackerUnit, defenderUnit)
+        from rules_log import set_log_context
+        set_log_context(combat=' vs '.join(unit.unit.name for unit in engaged), initiative=None)
+        battle_log('Combat: ' + ', '.join(unit.unit.name for unit in engaged), 'combat')
         self.game.attackers = []
         self.game.defenders = []
         for unit in engaged:
@@ -2796,6 +2818,7 @@ class CombatResolver:
         challenge = await self.challengeExchange(attackerUnit, defenderUnit, hosts=engaged)
         wounds1, wounds2, overkill1, overkill2 = await self.resolveCombatWithSpells(
             challenge, modRemoveSequence, contacts=contacts)
+        set_log_context(initiative=None)
         player1_score += wounds1 + overkill1
         player2_score += wounds2 + overkill2
 
@@ -2962,9 +2985,7 @@ class CombatResolver:
                     continue
 
             ldDice = await self.rollBreakDice()
-            print("Leadership dice results for fleeing unit:", ldDice,
-                  "sum:", sum(ldDice), "Ld:", ld, "combat result diff:", diff,
-                  "overwhelmed:", overwhelm)
+            initial_dice = list(ldDice)
             outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
             veteran_reroll_allowed(loserUnit, 'Break', sum(ldDice), ld)
 
@@ -2975,12 +2996,14 @@ class CombatResolver:
             outcome = break_test_outcome(ldDice, ld, diff, overwhelm)
 
             outcome = await self.shieldwallOutcome(loserUnit, outcome)
+            label = {'break': 'Breaks and flees', 'fall_back': 'Falls Back in Good Order',
+                     'give_ground': 'Gives Ground'}[outcome]
+            battle_log(f'{loserUnit.unit.name}: Break test {ldDice} = {sum(ldDice)}, '
+                       f'+ {diff} combat loss = {sum(ldDice) + diff} vs Ld {ld}: {label}',
+                       'morale', subject=loserUnit,
+                       details=f'Initial dice {initial_dice}; final dice {ldDice}; overwhelmed={overwhelm}')
             if outcome in ('break', 'fall_back'):
-                print("losing unit flees from combat!" if outcome == 'break'
-                      else "losing unit FBIG!")
                 self.notifyFleesCombat(loserUnit)
-            else:
-                print("losing unit gives ground!")
             outcomes.append((loserUnit, outcome))
         return outcomes
 
