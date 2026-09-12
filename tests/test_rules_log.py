@@ -74,6 +74,33 @@ class TestTheLogLine(unittest.TestCase):
 
 
 class TestBattleJournal(unittest.TestCase):
+    def test_round_and_turn_headings_repeat_only_at_their_boundaries(self):
+        from dataclasses import replace
+        from rules_log import BattleJournal, LogEntry
+        first = LogEntry(1, 'combat', 'First event', '', '',
+                         dict(round=2, player=1, phase='MovementPhase'))
+        phase = replace(first, sequence=2, context=dict(first.context, phase='CombatPhase'))
+        turn = replace(first, sequence=3, context=dict(first.context, player=2))
+        next_round = replace(turn, sequence=4, context=dict(turn.context, round=3))
+        self.assertEqual(first.headings_since(), [
+            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('context', 'Movement')])
+        self.assertEqual(first.headings_since(first), [])
+        self.assertEqual(phase.headings_since(first), [('context', 'Combat')])
+        self.assertEqual(turn.headings_since(phase), [
+            ('turn', 'Player 2 Turn'), ('context', 'Movement')])
+        self.assertEqual(next_round.headings_since(turn), [
+            ('round', 'Round 3'), ('turn', 'Player 2 Turn'), ('context', 'Movement')])
+        self.assertEqual(phase.headings_since(), [
+            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('context', 'Combat')])
+        journal = BattleJournal()
+        journal.entries.extend([first, phase, turn, next_round])
+        text = journal.export()
+        self.assertEqual(text.count('Round 2'), 1)
+        self.assertEqual(text.count('Player 1 Turn'), 1)
+        self.assertEqual(text.count('Player 2 Turn'), 2)
+        self.assertIn('Round 2\n\nPlayer 1 Turn\nMovement', text)
+        self.assertNotIn('Round 2 / Player', text)
+
     def test_exported_event_clocks_are_stable_and_monotonic(self):
         from datetime import datetime, timedelta, timezone
         import json
@@ -119,7 +146,7 @@ class TestBattleJournal(unittest.TestCase):
             journal.append('result', 'combat')
         self.assertEqual(journal.entries[0].context['initiative'], 9)
         self.assertNotIn('initiative', journal.entries[1].context)
-        self.assertIn('Round 3 / Player 1', journal.export())
+        self.assertIn('Round 3\n\nPlayer 1 Turn', journal.export())
         self.assertIn('Fury +3 attacks', journal.export())
         self.assertEqual(len(__import__('json').loads(journal.export(structured=True))), 2)
         journal.append('new')

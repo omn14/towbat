@@ -12,6 +12,15 @@ identical without the log. See `.github/copilot-instructions.md`.
 
 ## Battle Log Follow-up: 2026-09-12
 
+**Round and turn headings:** History now groups events under a larger Round
+heading, then a smaller Player 1/2 Turn heading, followed by phase/combat context.
+Round and turn labels repeat only at their boundaries or at the start of a
+filtered/page slice. Compact history and text exports share the same grouping;
+JSON event data and timestamps are unchanged. Scroll positioning uses actual text
+bounds so the first heading is not clipped. Verification: 14 journal tests and
+the event-driven offscreen history harness pass, including desktop/portrait
+screenshots, paging, filtering, frozen scrolling and export/rebuild checks.
+
 **Already-declared Impetuous correction:** Per the requested declaration flow,
 an existing charge satisfies the requirement to declare (p. 172); Resolve Charges
 now skips its target search, Leadership roll and rerolls. The skip names the

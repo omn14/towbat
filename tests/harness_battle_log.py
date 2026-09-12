@@ -85,8 +85,9 @@ def main(shots='/tmp'):
     assert z(h) == previous_position
     print(f"back three lines : z {z(h)}  scroll {h._log_scroll:.3f}")
     h.scroll_log(1000)
+    assert h._log_text.getPos()[-1] + h._log_text.textNode.getTop() * h.LOG_SCALE <= top + 1e-5
     print(f"oldest           : z {z(h)}  scroll {h._log_scroll:.3f}  "
-          f"(z should equal the page top, {top})")
+            f"(text top, including heading height, must stay within {top})")
     _shot(shots, 'oldest')
     h.scroll_log(-1000)
     print(f"newest           : z {z(h)}  scroll {h._log_scroll:.3f}")
@@ -104,6 +105,25 @@ def main(shots='/tmp'):
     print(f"cleared          : z {z(h)}  scroll {h._log_scroll:.3f}")
 
     from rules_log import log_scope
+    for round_no, player, phase, message in (
+            (2, 1, 'MovementPhase', 'Silver Helms charge Chaos Knights.'),
+            (2, 1, 'CombatPhase', 'Dragon Princes give ground.'),
+            (2, 2, 'StrategyPhase', 'Chaos Knights hold their position.'),
+            (3, 1, 'MovementPhase', 'Elven Archers advance.')):
+        with log_scope(round=round_no, player=player, phase=phase, combat=None, initiative=None):
+            h.log(message, 'combat')
+    headings = h.log_text(h._journal.entries)
+    assert headings.count('\1log_round\1Round 2\2') == 1
+    assert headings.count('\1log_turn\1Player 1 Turn\2') == 2
+    assert headings.count('\1log_turn\1Player 2 Turn\2') == 1
+    assert 'Round 2 / Player' not in headings
+    middle = h.log_text(list(h._journal.entries)[1:2])
+    assert middle.index('Round 2') < middle.index('Player 1 Turn') < middle.index('Combat')
+    h.open_history()
+    _pump_events()
+    _shot(shots, 'headings')
+    h.close_history()
+    h.clear_log()
     for index in range(220):
         with log_scope(round=3, player=1, phase='CombatPhase', combat='Princes vs Knights', initiative=9):
             h.log(f'Dragon Princes: {index} attacks -> 4 hits -> 1 wound -> 0 slain',
@@ -168,8 +188,13 @@ def main(shots='/tmp'):
     region.setCamera(base.cam2d)
     base.setAspectRatio(720 / 960)
     h._layout()
+    history.scroll_lines(10000)
     _pump_events()
     assert history.width < .75
+    assert history.scroll == history.max_scroll
+    assert 'Round 3' in history.text.getText() and 'Player 1 Turn' in history.text.getText()
+    assert history.text.getPos()[-1] + history.text.textNode.getTop() * history.SCALE <= history.TOP + 1e-5
+    assert history.text.getPos()[-1] + history.text.textNode.getTop() * history.SCALE > history.TOP - .01
     for button, _, _ in history.controls:
         frame = button['frameSize']
         assert abs(button.getX()) + max(abs(frame[0]), abs(frame[1])) < history.width

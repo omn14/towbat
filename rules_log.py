@@ -62,6 +62,26 @@ class LogEntry:
             parts.append(f'I{context["initiative"]}')
         return ' | '.join(parts) or 'Battle'
 
+    def headings_since(self, previous=None):
+        current = self.group
+        before = previous.group if previous is not None else None
+        headings = []
+        if current[0] is not None and (before is None or current[:1] != before[:1]):
+            headings.append(('round', f'Round {current[0]}'))
+        if current[1] is not None and (before is None or current[:2] != before[:2]):
+            headings.append(('turn', f'Player {current[1]} Turn'))
+        if before is None or current != before:
+            parts = [current[2].removesuffix('Phase')] if current[2] else []
+            if current[3]:
+                parts.append(current[3])
+            if current[4] is not None:
+                parts.append(f'I{current[4]}')
+            if parts:
+                headings.append(('context', ' | '.join(parts)))
+            elif not headings:
+                headings.append(('context', 'Battle'))
+        return headings
+
 
 class BattleJournal:
     MODES = ('Summary', 'Rules', 'Debug')
@@ -89,9 +109,9 @@ class BattleJournal:
         lines = []
         previous = None
         for entry in self.entries:
-            if entry.group != previous:
-                lines.append('\n' + entry.heading)
-                previous = entry.group
+            for level, heading in entry.headings_since(previous):
+                lines.append(('\n' if level in ('round', 'turn') else '') + heading)
+            previous = entry
             lines.append(f'[{entry.timestamp} +{entry.elapsed_seconds:.3f}s] [{entry.category}] {entry.text}')
             if entry.details:
                 lines.append('  ' + entry.details.replace('\n', '\n  '))

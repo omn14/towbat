@@ -148,9 +148,10 @@ class BattleLogView:
         self.displayed = entries
         self.text.setText(self.hud.log_text(entries, details=self.details))
         height = self.text.textNode.getHeight() * self.SCALE if entries else 0
+        text_bottom = self.text.textNode.getBottom() * self.SCALE if entries else 0
         self.max_scroll = max(0, height - (self.TOP - self.BOTTOM))
         self.scroll = min(self.scroll, self.max_scroll)
-        self.text.setPos(-self.width + .05, self.BOTTOM + height - self.scroll)
+        self.text.setPos(-self.width + .05, self.BOTTOM - text_bottom - self.scroll)
         self.text.setScissor(self.panel, Point3(-self.width + .04, 0, self.BOTTOM),
                             Point3(self.width - .07, 0, self.TOP))
         first = entries[0].sequence if entries else 0

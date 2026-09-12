@@ -76,6 +76,13 @@ def _register_properties():
             tp = TextProperties()
             tp.setTextColor(*colour)
             tpm.setProperties(name, tp)
+    for name, scale, colour in (('log_round', 1.25, T.INK),
+                                ('log_turn', 1.08, _PHASE_ON_COLOUR)):
+        if not tpm.hasProperties(name):
+            properties = TextProperties()
+            properties.setTextColor(*colour)
+            properties.setTextScale(scale)
+            tpm.setProperties(name, properties)
 
 
 def _markup(prop: str, text: str) -> str:
@@ -1111,9 +1118,12 @@ class HUD(DirectObject):
         lines = []
         previous = None
         for entry in entries:
-            if entry.group != previous:
-                lines.append(_markup('log_info', entry.heading))
-                previous = entry.group
+            for level, heading in entry.headings_since(previous):
+                if lines and level in ('round', 'turn'):
+                    lines.append('')
+                prop = {'round': 'log_round', 'turn': 'log_turn', 'context': 'log_info'}[level]
+                lines.append(_markup(prop, heading))
+            previous = entry
             prop = _CATEGORY_COLOURS[entry.category][0]
             lines.append(_markup(prop, f"\u2022 {entry.text}"))
             if details and entry.details:
@@ -1134,6 +1144,8 @@ class HUD(DirectObject):
         # every later redraw, so the first real line would be the one to fail.
         raw = self._log_text.textNode.getHeight() if entries else 0.0
         height = raw * self.LOG_SCALE if math.isfinite(raw) else 0.0
+        raw_bottom = self._log_text.textNode.getBottom() if entries else 0.0
+        text_bottom = raw_bottom * self.LOG_SCALE if math.isfinite(raw_bottom) else 0.0
         top = self.LOG_TOP_V if self._vertical else self.LOG_TOP
         bottom = self.LOG_BOTTOM_V if self._vertical else self.LOG_BOTTOM
         # Overflow is scrolled through rather than clamped away: clamping put
@@ -1141,7 +1153,7 @@ class HUD(DirectObject):
         self._log_max_scroll = max(0.0, height - (top - bottom))
         self._log_scroll = min(self._log_scroll, self._log_max_scroll)
         self._log_text.setPos(self._log_x,
-                              bottom + height - self._log_scroll)
+                              bottom - text_bottom - self._log_scroll)
         self._clip_log(bottom, top)
 
     def _clip_log(self, bottom, top):
