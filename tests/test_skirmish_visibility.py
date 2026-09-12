@@ -86,6 +86,48 @@ def test_empty_target_and_completely_screened_target():
     assert not model_can_see(observer, [(0, 4, 0.5, 0.5, 0)], [(0, 0, 4, 1, 0)])
 
 
+@pytest.mark.parametrize('angle', [0, 37, 90])
+@pytest.mark.parametrize('gap,visible', [(0, False), (0.0001, True)])
+def test_narrow_gap_between_terrain_rims(angle, gap, visible):
+    from psychology import _box_corners
+    observer, target, left, right = rotated([
+        (0.173, -6, 0.5, 0.5, 0), (0, 4, 1, 0.5, 0),
+        (-1 + 0.173 - gap / 2, 0, 1, 0.5, 0),
+        (1 + 0.173 + gap / 2, 0, 1, 0.5, 0)], angle)
+    terrain = []
+    for box in (left, right):
+        corners = list(_box_corners(*box))
+        terrain.append(SimpleNamespace(
+            center=Point3(*box[:2], 0), width=3, height=3,
+            blocks_line_of_sight=True, contains=lambda point: False,
+            sight_edges=tuple(zip(corners, corners[1:] + corners[:1]))))
+    assert model_can_see(observer, [target], terrain=terrain) is visible
+
+
+@pytest.mark.parametrize('terrain_type', ['hill', 'forest'])
+@pytest.mark.parametrize('source,destination,visible', [
+    ((-33.0767555, -14.3452377), (-26.907898, 1.5614164), True),
+    ((-22, -24), (-22, -6), False),
+    ((-22, -15), (-22, -6), True),
+    ((-22, -24), (-22, -15), True),
+    ((-22, -28), (-22, -24), True),
+])
+def test_shaped_terrain_blocks_its_footprint_not_empty_corners(
+        scene, terrain_type, source, destination, visible):
+    app, member, enemy = column_scenario(scene)
+    feature = app.terrain_manager.add_terrain(terrain_type, Point3(-22, -15, 0), 20, 13)
+    observer = (*source, 30 / 25.4, 50 / 25.4, 0)
+    target = (*destination, 12.5 / 25.4, 25 / 25.4, 180)
+    try:
+        assert feature.sight_edges
+        assert model_can_see(observer, [target], terrain=[feature]) is visible
+        with patch('skirmish_visibility.model_base_boxes', side_effect=lambda unit:
+                   [observer] if unit is member else [target] if unit is enemy else []):
+            assert charge_visibility(app, member, enemy).models == (visible,)
+    finally:
+        app.terrain_manager.remove_terrain(feature)
+
+
 @pytest.mark.parametrize('ai', [False, True])
 def test_declaration_checks_original_position_before_choices_or_dice(scene, ai):
     app, member, enemy = column_scenario(scene)

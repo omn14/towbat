@@ -2227,6 +2227,26 @@ army-agnostic and would benefit every faction.
       without mutation; Stand & Shoot casualties do not revoke valid declarations,
       and pursuit is exempt. Verification: 804 tests and 82 subtests, including
       43 visibility tests and inspected allowed/blocked panels at both resolutions.
+      Terrain-rim correction (pp. 103, 271, Beyond the Crest): formed chargers
+      and Skirmishers now test hill/forest rim segments instead of their full
+      bounding rectangles. Reuse the terrain's existing rendered-rim grid;
+      angular intervals still detect narrow exposed edges and reject touching
+      blocker seams. Terrain occupied by either endpoint retains the existing
+      see-onto/not-through convention. Refusals now distinguish no target in the
+      front arc from sight blocked by terrain/models; declaration outcome logs
+      retain the reason, without adding noisy cursor-query logs.
+      Reproduced the saved Skycutter approach beside the southern hill: its
+      empty bounding-box corner incorrectly hid all five in-arc Horsemen.
+      The complete save now accepts a 14.53-inch route to model 3, maximum 19,
+      with all seven terrain pieces retained and the save hash unchanged.
+      Verification: 59 visibility and 51 formed-charge tests pass in isolated
+      1024 MiB services, including real hills/forests, genuine obstruction,
+      terrain behind a target, see-onto cases and rotated narrow gaps. Inspected
+      the saved-game offscreen cursor preview. Full suite not rerun.
+      LEFTOVER: sight remains planar, not sculpt/eye-height visibility; curved
+      terrain uses the existing rim-grid approximation. Other terrain keeps
+      rectangular footprints, and this does not change route obstacle geometry
+      or general shooting visibility.
       Defender frontage correction (pp. 145, 187): replaced the charging-width
       cap with actual front-base contact, including corners. One charging file
       can now face three equal-base defending files when each model can reach

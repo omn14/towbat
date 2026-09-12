@@ -714,6 +714,7 @@ class TerrainPiece:
         self._hf = None                # surface height function (forest/hill)
         self._field = None             # footprint field (forest/hill rim test)
         self._field_edge = 0.0
+        self._sight_edges = None
 
         self._create_visual()
         # Water and field-shaped pieces read as natural shapes; a rectangle
@@ -910,6 +911,7 @@ class TerrainPiece:
 
         def add_contour(iso, color):
             ls.setColor(*color)
+            edges = []
             for j in range(N):
                 for i in range(N):
                     corners = [
@@ -929,8 +931,11 @@ class TerrainPiece:
                     for s in range(0, len(pts) - 1, 2):
                         ls.moveTo(pts[s][0], pts[s][1], z)
                         ls.drawTo(pts[s + 1][0], pts[s + 1][1], z)
+                        edges.append(tuple((point[0] - self.center.x, point[1] - self.center.y)
+                                           for point in pts[s:s + 2]))
+            return tuple(edges)
 
-        add_contour(f_edge, (1.0, 0.0, 1.0, 1.0))   # rim = collision boundary
+        self._sight_edges = add_contour(f_edge, (1.0, 0.0, 1.0, 1.0))
         add_contour(f_top, (1.0, 1.0, 0.0, 1.0))     # plateau / flat-top edge
 
         self.debug_np = render.attachNewNode(ls.create())
@@ -1282,6 +1287,18 @@ class TerrainPiece:
         self.game.world.attachRigidBody(body)
 
     # ── Queries ───────────────────────────────────────────────────────
+
+    @property
+    def sight_edges(self):
+        """World-space rim segments, or None for rectangular terrain (p. 271).
+
+        Beyond the Crest blocks sight through the hill itself, not through
+        empty corners of its bounding rectangle. Reuse the rendered rim grid.
+        """
+        if self._sight_edges is None:
+            return None
+        return tuple(tuple((self.center.x + point[0], self.center.y + point[1])
+                           for point in edge) for edge in self._sight_edges)
 
     def contains(self, pos) -> bool:
         """Return *True* if world-space *pos* lies inside this piece.

@@ -298,17 +298,16 @@ def preview_charge(game, unit, target, origin=None, facing=None):
     visible = []
     for index, destination in enumerate(targets):
         for source_index, observer in enumerate(boxes):
-            terrain = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                       for piece in pieces if piece.blocks_line_of_sight
-                       and not piece.contains(Point3(*observer[:2], 0))
-                       and not piece.contains(Point3(*destination[:2], 0))]
             if model_can_see(observer, [destination],
                              [*boxes[:source_index], *boxes[source_index + 1:], *others,
-                              *targets[:index], *targets[index + 1:], *terrain], facing=observer[4]):
+                              *targets[:index], *targets[index + 1:]],
+                             facing=observer[4], terrain=pieces):
                 visible.append(index)
                 break
     if not visible:
-        result.error = 'No visible Skirmisher in the front arc'
+        in_arc = any(model_can_see(observer, targets, facing=observer[4]) for observer in boxes)
+        result.error = ('Line of sight to Skirmishers is blocked by terrain or models' if in_arc
+                        else 'No Skirmisher in the front arc')
         return result
     nearest = min(visible, key=lambda index: (min(obb_distance(box, targets[index]) for box in boxes), index))
     obstacles = [*others, *((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)

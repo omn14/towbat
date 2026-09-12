@@ -51,19 +51,55 @@ def _ray_entry(origin, direction, box):
     return near
 
 
-def model_can_see(observer, targets, blockers=(), facing=None):
+def _ray_segment_entry(origin, direction, edge):
+    first, last = edge
+    segment = (last[0] - first[0], last[1] - first[1])
+    offset = (first[0] - origin[0], first[1] - origin[1])
+    denominator = direction[0] * segment[1] - direction[1] * segment[0]
+    offset_cross = offset[0] * direction[1] - offset[1] * direction[0]
+    if abs(denominator) < 1e-12:
+        if abs(offset_cross) > 1e-12:
+            return None
+        distances = [(point[0] - origin[0]) * direction[0]
+                     + (point[1] - origin[1]) * direction[1] for point in edge]
+        return max(0.0, min(distances)) if max(distances) >= 0 else None
+    distance = (offset[0] * segment[1] - offset[1] * segment[0]) / denominator
+    fraction = offset_cross / denominator
+    return distance if distance >= 0 and 0 <= fraction <= 1 else None
+
+
+def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     """Sight from a base centre to any exposed target edge, not a centre ray.
 
-    Between successive vertex angles, disjoint opaque rectangles keep their
+    Between successive vertex angles, disjoint opaque footprints keep their
     front-to-back order. Testing those open angular intervals detects even a
     narrow slit without allowing sight along the seam of touching bases.
-    This is an XY base abstraction, not sculpt/eye-height visibility (p. 103).
+    Terrain uses its rim, with rectangular fallback, and the engine's
+    see-onto/not-through convention (p. 271). This is an XY base abstraction,
+    not sculpt/eye-height visibility (p. 103).
     """
     if not targets:
         return False
+    if terrain and len(targets) > 1:
+        return any(model_can_see(observer, [target], blockers, facing, terrain=terrain)
+                   for target in targets)
     origin = observer[:2]
     reach = max(hypot(corner[0] - origin[0], corner[1] - origin[1])
                 for target in targets for corner in _box_corners(*target))
+    blockers = list(blockers)
+    edges = []
+    for piece in terrain:
+        if (not piece.blocks_line_of_sight
+                or piece.contains(Point3(*origin, 0))
+                or piece.contains(Point3(*targets[0][:2], 0))
+                or hypot(piece.center.x - origin[0], piece.center.y - origin[1])
+                - hypot(piece.width / 2, piece.height / 2) > reach):
+            continue
+        outline = getattr(piece, 'sight_edges', None)
+        if outline is None:
+            blockers.append((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0))
+        else:
+            edges.extend(outline)
     blockers = [box for box in blockers
                 if hypot(box[0] - origin[0], box[1] - origin[1]) - hypot(box[2], box[3]) <= reach]
 
@@ -78,8 +114,10 @@ def model_can_see(observer, targets, blockers=(), facing=None):
         distance = min((hit for hit in hits if hit is not None), default=None)
         if distance is None:
             return False
-        return all((hit := _ray_entry(origin, direction, box)) is None or hit > distance + EPSILON
-                   for box in blockers)
+        return (all((hit := _ray_entry(origin, direction, box)) is None or hit > distance + EPSILON
+                for box in blockers)
+            and all((hit := _ray_segment_entry(origin, direction, edge)) is None
+                or hit > distance + EPSILON for edge in edges))
 
     for target in targets:
         length = hypot(target[0] - origin[0], target[1] - origin[1])
@@ -87,8 +125,9 @@ def model_can_see(observer, targets, blockers=(), facing=None):
             return True
         if clear(((target[0] - origin[0]) / length, (target[1] - origin[1]) / length)):
             return True
-    angles = sorted({atan2(corner[1] - origin[1], corner[0] - origin[0]) % tau
-                     for box in [*targets, *blockers] for corner in _box_corners(*box)})
+    corners = [corner for box in [*targets, *blockers] for corner in _box_corners(*box)]
+    corners.extend(point for edge in edges for point in edge)
+    angles = sorted({atan2(corner[1] - origin[1], corner[0] - origin[0]) % tau for corner in corners})
     if facing is not None:
         angles = sorted({*angles, radians(facing + 45) % tau, radians(facing + 135) % tau})
     for first, last in zip(angles, angles[1:] + [angles[0] + tau]):
@@ -105,7 +144,7 @@ def charge_visibility(game, unit, target, from_pos=None, from_hpr=None):
 
     Friendly models also block sight; Skirmishers have a 360-degree vision arc
     (pp. 103, 184). Terrain retains the engine's see-onto/not-through convention,
-    using conservative rectangles. No state, physics bodies or dice are changed.
+    using the shaped rim. No state, physics bodies or dice are changed.
     """
     observers = model_base_boxes(unit)
     if from_pos is not None:
@@ -129,11 +168,7 @@ def charge_visibility(game, unit, target, from_pos=None, from_hpr=None):
         own = observers[:index] + observers[index + 1:]
         seen = False
         for destination in targets:
-            terrain_boxes = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                             for piece in terrain if piece.blocks_line_of_sight
-                             and not piece.contains(Point3(*observer[:2], 0))
-                             and not piece.contains(Point3(*destination[:2], 0))]
-            if model_can_see(observer, [destination], [*own, *blockers, *terrain_boxes]):
+            if model_can_see(observer, [destination], [*own, *blockers], terrain=terrain):
                 seen = True
                 break
         visible.append(seen)

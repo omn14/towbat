@@ -139,6 +139,41 @@ def test_targets_outside_formed_front_arc_are_refused(scene, position):
     assert preview.route is None and 'front arc' in preview.error
 
 
+def test_charge_sight_passes_beside_actual_hill_outline(scene):
+    """Saved Skycutter approach clears the hill, not its AABB (pp. 103, 271)."""
+    app, attacker, defender = approach_scene(scene)
+    attacker.bodyNP.setPos(-33.0767555, -14.3452377, 0)
+    defender.bodyNP.setPos(-25.3236465, 2.8456688, 0)
+    defender.bodyNP.setH(180)
+    hill = app.terrain_manager.add_terrain('hill', Point3(-22, -15, 0), 20, 13)
+    observer = (-33.0767555, -14.3452377, 30 / 25.4, 50 / 25.4, 0)
+    destination = (-26.907898, 1.5614164, 12.5 / 25.4, 25 / 25.4, 180)
+    with patch('formed_skirmish_charge.starting_boxes', return_value=[observer]), \
+            patch('formed_skirmish_charge.model_base_boxes',
+                  side_effect=lambda unit: [destination] if unit is defender else []), \
+            patch('formed_skirmish_charge.route_allowance', return_value=10), \
+            patch.object(app.movement, 'movementAllowance', return_value=10):
+        try:
+            assert app.terrain_manager.los_block_point(
+                Point3(*observer[:2], 0), Point3(*destination[:2], 0)) is None
+            preview = preview_charge(app, attacker, defender)
+            assert preview.error is None
+            assert preview.route.target_index == 0
+        finally:
+            app.terrain_manager.remove_terrain(hill)
+
+
+def test_hill_obstruction_reports_blocked_sight_not_front_arc(scene):
+    app, attacker, defender = approach_scene(scene)
+    hill = app.terrain_manager.add_terrain('hill', Point3(0, -4, 0), 20, 4)
+    try:
+        preview = preview_charge(app, attacker, defender)
+        assert preview.route is None
+        assert preview.error == 'Line of sight to Skirmishers is blocked by terrain or models'
+    finally:
+        app.terrain_manager.remove_terrain(hill)
+
+
 def test_blocked_declaration_restores_movement_before_choices(scene):
     app, attacker, defender = approach_scene(scene)
     defender.bodyNP.setY(25)
