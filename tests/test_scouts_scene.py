@@ -290,6 +290,132 @@ def test_landmark_grant_reload_and_next_turn_expiry(scene, tmp_path, property_na
         load_game_state(app, str(baseline))
 
 
+@pytest.mark.parametrize('winner,choice,first', [(1, 'Take second turn', 2), (2, 'Take second turn', 1),
+                                               (2, 'Take first turn', 2)])
+def test_battle_march_first_turn_choice_is_separate_and_saved(scene, tmp_path, winner, choice, first):
+    import asyncio
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle, choose_first_turn
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    rolls = [2, 2, 6, 1] if winner == 1 else [2, 2, 1, 6]
+    try:
+        with patch('battle_setup.random.randint', side_effect=rolls), \
+                patch.object(app, 'aiControls', return_value=False), \
+                patch.object(app, 'makeChoiceNew', AsyncMock(return_value=choice)):
+            asyncio.run(choose_first_turn(app))
+        assert app.fsm.state == 'StrategyPhase'
+        assert app.roundCounter.current_player == first
+        assert app.roundCounter.currentRoundPlayer == [0, 0]
+        assert app.roundCounter.max_rounds == 5
+        assert app.battle_setup['first_turn']['winner'] == winner
+        saved = tmp_path / 'first-turn.json'
+        save_game_state(app, str(saved))
+        with patch('battle_setup.random.randint', side_effect=AssertionError('load must not reroll')):
+            load_game_state(app, str(saved))
+        assert app.roundCounter.current_player == first
+        assert app.battle_setup['first_turn']['player'] == first
+    finally:
+        load_game_state(app, str(baseline))
+
+
+def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_path):
+    import asyncio
+    from direct.task import Task
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle, choose_first_turn
+    from tests.test_shieldwall_scene import combat_tasks
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    pending = tmp_path / 'pending-first-turn.json'
+
+    async def save_choice(*args, **kwargs):
+        assert save_game_state(app, str(pending)) == str(pending)
+        return 'Take first turn'
+
+    async def finish_pending():
+        for unused in range(20):
+            await Task.pause(.1)
+            if app.fsm.state == 'StrategyPhase':
+                break
+        assert app.fsm.state == 'StrategyPhase'
+
+    try:
+        with patch('battle_setup.random.randint', side_effect=[6, 1]), \
+                patch.object(app, 'aiControls', return_value=False), \
+                patch.object(app, 'makeChoiceNew', side_effect=save_choice):
+            asyncio.run(choose_first_turn(app))
+        assert app.roundCounter.current_player == 1
+        with combat_tasks(app) as run, \
+                patch('battle_setup.random.randint', side_effect=AssertionError('pending choice rerolled')), \
+                patch.object(app, 'aiControls', return_value=False), \
+                patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Take second turn')):
+            load_game_state(app, str(pending))
+            run(finish_pending())
+        assert app.roundCounter.current_player == 2
+        assert app.battle_setup['first_turn']['rolls'] == [[6, 1]]
+    finally:
+        load_game_state(app, str(baseline))
+
+
+@pytest.mark.parametrize('first', [1, 2])
+def test_battle_march_five_rounds_score_queued_boundaries_once(scene, tmp_path, first):
+    from direct.task import Task
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from tests.test_shieldwall_scene import combat_tasks
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['objectives']['layout'] = 'two_troves'
+    setup = resolve_setup(config, 12)
+    setup['first_turn'] = {'rolls': [[6, 1]], 'winner': 1, 'player': first}
+    restore_battle(app, {'config': config, 'setup': setup})
+    unit = next(member for member in app.units if member.unitName == 'Normal Rangers')
+    unit.bodyNP.setPos(0, -7.5, 0)
+    app.fsm.request('CombatPhase')
+    app.roundCounter.request('PlayerOne' if first == 1 else 'PlayerTwo')
+
+    async def advance():
+        app.fsm.request('StrategyPhase')
+        app.fsm.request('StrategyPhase')
+        assert app.fsm.state == 'CombatPhase' and app.battleMarchBoundaryBusy
+        for unused in range(20):
+            await Task.pause(.1)
+            if not app.battleMarchBoundaryBusy:
+                break
+        assert not app.battleMarchBoundaryBusy
+
+    try:
+        with patch('spell_effects.end_turn') as expiry, patch('rallying_cry.begin_command'):
+            for turn in range(10):
+                if turn:
+                    app.fsm.request('CombatPhase')
+                with combat_tasks(app) as run:
+                    run(advance())
+                assert len(app.battle_scored_turns) == turn + 1
+                assert len(app.battle_awards) == turn + 1
+                assert app.fsm.state == ('BattleEnded' if turn == 9 else 'StrategyPhase')
+                if turn == 4:
+                    saved = tmp_path / f'rounds-first-{first}.json'
+                    save_game_state(app, str(saved))
+                    load_game_state(app, str(saved))
+            assert expiry.call_count == 10
+        assert app.roundCounter.currentRoundPlayer == [5, 5]
+        assert app.battleResult['scores'] == [100, 0]
+        saved = tmp_path / f'ended-first-{first}.json'
+        save_game_state(app, str(saved))
+        load_game_state(app, str(saved))
+        assert len(app.battle_awards) == 10
+        assert app.roundCounter.finished
+    finally:
+        load_game_state(app, str(baseline))
+
+
 @pytest.mark.parametrize('layout', ['three_troves', 'landmark'])
 def test_objective_markers_and_hud_render_both_orientations(scene, layout):
     from panda3d.core import OrthographicLens, PNMImage

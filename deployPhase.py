@@ -492,6 +492,11 @@ def _record_deployment(game, held, scouting):
 
 def refresh_deployment(game):
     """Refresh controls after a placement or reload without rolling again."""
+    if (getattr(game, 'battle_setup', None) or {}).get('first_turn'):
+        game.ignore('mouse1')
+        if not getattr(game, 'restoringBattle', False):
+            game.fsm.request('StrategyPhase')
+        return
     if getattr(game, 'deploymentStage', None) == 'vanguard':
         from vanguard import refresh_vanguard
         refresh_vanguard(game)

@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from random import Random
+import random
 import re
 
 from battle_config import (ConfigError, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
@@ -37,7 +38,8 @@ def resolve_setup(config, seed):
 
 def validate_setup(config, setup):
     config = validate_config(config)
-    _keys(setup, 'version seed rolls deployment_map mirror player_zones objective_layout landmark_property', 'setup')
+    _keys(setup, 'version seed rolls deployment_map mirror player_zones objective_layout landmark_property'
+          + (' first_turn' if 'first_turn' in setup else ''), 'setup')
     if type(setup['version']) is not int or setup['version'] != 1:
         raise ConfigError('setup.version: only version 1 is supported')
     _number(setup['seed'], 'setup.seed', 0, 2 ** 53 - 1, integer=True)
@@ -71,7 +73,63 @@ def validate_setup(config, setup):
             raise ConfigError(f'setup.{name}: does not match the saved configuration and dice')
     if setup['mirror'] != (config['deployment']['mirror'] and setup['deployment_map'] in MIRRORABLE_MAPS):
         raise ConfigError('setup.mirror: does not match the saved configuration')
+    if 'first_turn' in setup:
+        record = setup['first_turn']
+        _keys(record, 'rolls winner player', 'setup.first_turn')
+        if not isinstance(record['rolls'], list):
+            raise ConfigError('setup.first_turn.rolls: expected a list')
+        winner = None
+        for pair in record['rolls']:
+            if winner is not None or not isinstance(pair, list) or len(pair) != 2:
+                raise ConfigError('setup.first_turn.rolls: expected ties followed by one deciding roll')
+            for value in pair:
+                _number(value, 'setup.first_turn.rolls', 1, 6, integer=True)
+            if pair[0] != pair[1]:
+                winner = 1 if pair[0] > pair[1] else 2
+        if record['winner'] != winner or isinstance(record['winner'], bool):
+            raise ConfigError('setup.first_turn.winner: does not match recorded dice')
+        if record['player'] is not None:
+            _number(record['player'], 'setup.first_turn.player', 1, 2, integer=True)
+            if winner is None:
+                raise ConfigError('setup.first_turn.player: cannot choose before the roll-off')
     return deepcopy(setup)
+
+
+async def choose_first_turn(game):
+    """Separate roll-off; the winner chooses first or second (Companion p. 27)."""
+    from panda3d.core import Point3
+    from rules_log import dice_roll, rule_log
+    game.battleMarchSetupBusy = True
+    game.magicBusy = True
+    try:
+        record = game.battle_setup.setdefault('first_turn', {'rolls': [], 'winner': None, 'player': None})
+        while record['winner'] is None:
+            pair = [random.randint(1, 6), random.randint(1, 6)]
+            record['rolls'].append(pair)
+            dice_roll(pair)
+            if pair[0] == pair[1]:
+                rule_log('Battle March first turn', 'setup', f'P1={pair[0]}, P2={pair[1]} tied; reroll')
+            else:
+                record['winner'] = 1 if pair[0] > pair[1] else 2
+                rule_log('Battle March first turn', 'setup',
+                         f'P1={pair[0]}, P2={pair[1]} -> Player {record["winner"]} chooses; no first-finished bonus')
+        if record['player'] is None:
+            winner = record['winner']
+            units = game.player1Units if winner == 1 else game.player2Units
+            owner = next(unit for unit in units if getattr(unit, 'hostUnit', None) is None)
+            choice = 'Take first turn' if game.aiControls(owner) else await game.makeChoiceNew(
+                ['Take first turn', 'Take second turn'], Point3(0, 0, 10), owner=owner,
+                prompt=f'Player {winner}: first-turn choice')
+            if choice not in ('Take first turn', 'Take second turn'):
+                raise ValueError('Invalid first-turn choice')
+            record['player'] = winner if choice == 'Take first turn' else 3 - winner
+            rule_log('Battle March first turn', 'setup',
+                     f'Player {winner} chooses {choice.lower()}; Player {record["player"]} starts')
+        game.magicBusy = False
+        game.fsm.request('StrategyPhase')
+    finally:
+        game.battleMarchSetupBusy = False
+        game.magicBusy = False
 
 
 def saved_battle(game):
@@ -161,6 +219,8 @@ def restore_battle(game, record):
     game.battle_objectives = record['runtime']['objectives'] if record else []
     game.battle_awards = record['runtime']['awards'] if record else []
     game.battle_scored_turns = record['runtime']['scored_turns'] if record else []
+    if record and hasattr(game, 'roundCounter'):
+        game.roundCounter.max_rounds = record['config']['game']['rounds']
     game.battlefield = (Battlefield(record['config']['battlefield']['width'],
                                    record['config']['battlefield']['depth'])
                         if record else STANDARD_BATTLEFIELD)

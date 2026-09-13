@@ -37,6 +37,16 @@ class GamePhaseFSM(FSM):
         through nextPhase(), so hooking the transition is the only way the
         HUD sees all of them.
         """
+        if (self.state == 'DeployPhase' and request == 'StrategyPhase'
+                and getattr(self.game, 'battle_config', None)
+                and not getattr(self.game, 'restoringBattle', False)
+                and not self.game.battle_setup.get('first_turn', {}).get('player')):
+            if not getattr(self.game, 'battleMarchSetupBusy', False):
+                from battle_setup import choose_first_turn
+                self.game.battleMarchSetupBusy = True
+                self.game.magicBusy = True
+                self.game.taskMgr.add(choose_first_turn(self.game), 'battleMarchFirstTurn')
+            return
         if (self.state == 'CombatPhase' and request in ('StrategyPhase', 'BattleEnded')
                 and getattr(self.game, 'battle_config', None)
                 and not getattr(self.game, 'restoringBattle', False)
@@ -248,8 +258,8 @@ class GamePhaseFSM(FSM):
         taskMgr.remove('taskLoopPathTowardsMouse')
         base.world.removeRigidBody(self.game.boundary_ghost)
         self.game.boundary_np.removeNode()
-        # Ensure turn starts with player 1 after deployment
-        self.game.roundCounter.request('PlayerOne')
+        first = (getattr(self.game, 'battle_setup', None) or {}).get('first_turn', {}).get('player', 1)
+        self.game.roundCounter.request('PlayerTwo' if first == 2 else 'PlayerOne')
 
     def enterStrategyPhase(self):
         set_log_context(phase='StrategyPhase', combat=None, initiative=None)

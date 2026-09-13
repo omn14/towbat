@@ -10,6 +10,32 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March First Turn and Five-Round Lifecycle: 2026-09-13
+
+General's Companion p. 27. After deployment/Vanguard, Battle March performs a
+separate saved roll-off with ties rerolled and no first-finished bonus. Its winner
+chooses either player to start; standard games retain their existing first turn.
+The configured five-round limit is applied. First-turn dice/winner/player are
+validated on reload, including a save while the winner's choice is pending.
+Pending choices resume after unit reconstruction; loading over an active choice
+is blocked so an old callback cannot mutate the restored battle.
+
+Validation: six focused real-scene tests pass (bounded 768 MiB, run-u271):
+either winner choosing first/second; pending save/reload with dice forbidden;
+and both initial player orders through ten queued scoring boundaries, duplicate
+transition requests, a mid-game reload and a finished-game reload. Both finish
+at [5, 5], exactly ten awards and one spell expiry per player turn. Corrected
+a local save-guard indentation mistake and a nested Deploy-to-Strategy request
+during reconstruction, both caught before commit.
+
+The full Scout module run hit the already-paused HUD selected-unit rebuild NaN
+in an unrelated visual test (20260913-174813-75614). It was not changed or
+declared fixed; the six lifecycle checks passed in isolation. No full-suite claim.
+
+LEFTOVER: startup activation and standard terrain/zone/first-drop setup; Ranger's
+Glass first-turn modifier; optional/narrative/event modules; AI objectives and
+remaining stage-7 gates. The approved seven-stage plan is not complete.
+
 ## Battle March Objective Terrain and HUD: 2026-09-13
 
 General's Companion pp. 24-25. Troves render as numbered round, non-colliding

@@ -60,6 +60,10 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   all-LOS prohibition. Both HUD orientations show control/property/objective VP,
   and battle results include objective award categories. Offscreen visual
   checks cover both objective layouts and both HUD orientations.
+- A separate post-deployment roll-off and winner's first/second choice now
+  determine the starting player. Pending choices can be saved and resumed
+  without dice. Both starting orders have been tested through all ten queued
+  player-turn scoring boundaries, including intermediate and final reloads.
 
 This is not yet a playable Battle March mode. No startup option is exposed.
 The presence of objective, terrain or optional settings does not mean their

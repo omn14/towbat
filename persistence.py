@@ -189,7 +189,11 @@ def save_game_state(game, filename=None):
     if pending(game):
         battle_log('Finish the free pivot before saving a battle.', 'info')
         return None
-    if getattr(game, 'magicBusy', False) is True or getattr(game, 'castingSpell', False) is True:
+    first_turn = (getattr(game, 'battle_setup', None) or {}).get('first_turn', {})
+    saving_first_choice = (getattr(game, 'battleMarchSetupBusy', False)
+                           and first_turn.get('winner') in (1, 2) and first_turn.get('player') is None)
+    if (getattr(game, 'magicBusy', False) is True and not saving_first_choice
+            or getattr(game, 'castingSpell', False) is True):
         battle_log('Finish magic resolution before saving a battle.', 'info')
         return None
     if move_pending(game):
@@ -440,6 +444,9 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    if getattr(game, 'battleMarchSetupBusy', False):
+        battle_log('Finish the Battle March setup choice before loading another battle.', 'info')
+        return
     if getattr(game, 'battleMarchBoundaryBusy', False):
         battle_log('Finish the objective-control choice before loading a battle.', 'info')
         return
@@ -839,7 +846,8 @@ def load_game_state(game, filename):
         from deployPhase import refresh_deployment
         refresh_deployment(game)
         if (game.roundCounter.current_player == 2 and game.AIplayer2.active
-            and game.deploymentStage != 'vanguard'):
+            and game.deploymentStage != 'vanguard'
+            and not (getattr(game, 'battle_setup', None) or {}).get('first_turn')):
             game.AIplayer2.deployUnits()
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
