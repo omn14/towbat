@@ -35,6 +35,19 @@ than guessing missing units or upgrades. Battle March adds its implemented
 objective awards and reduced bonuses; other scenario and Matched Play variants
 remain outside that supported subset.
 
+## Catalogue Data
+
+The separately cloned `Warhammer-The-Old-World/` directory accepts NewRecruit
+catalogue/game-system JSON as well as legacy BattleScribe `.cat`/`.gst` XML.
+Both formats use the same runtime extraction logic. If both formats contain
+the same catalogue ID, JSON takes precedence; malformed files are reported.
+The offline catalogue converter also accepts either format.
+
+Upstream converted to JSON on 26 August 2026. Catalogue updates can also change
+stats, options and restrictions independently of the file format. Reading a
+new rule description does not implement its effects in the battle engine.
+Roster exports and saved-game formats are unchanged by this reader support.
+
 ## Roster Imports
 
 [roster_importer.py](roster_importer.py) converts selected NewRecruit/BattleScribe

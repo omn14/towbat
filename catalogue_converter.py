@@ -1,5 +1,5 @@
 """
-Stage 1 tool: convert BattleScribe catalogues (.cat) into the flat per-unit
+Stage 1 tool: convert XML (.cat) or JSON catalogues into the flat per-unit
 characteristics JSON format used by army_units/<faction>/. It reuses the shared
 parser in battlescribe.py so the offline export and the runtime loader stay in sync.
 
@@ -21,6 +21,8 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CAT = os.path.join(
     REPO_DIR, "Warhammer-The-Old-World", "Orc and Goblin Tribes.cat"
 )
+if os.path.isfile(os.path.splitext(DEFAULT_CAT)[0] + '.json'):
+    DEFAULT_CAT = os.path.splitext(DEFAULT_CAT)[0] + '.json'
 DEFAULT_OUT_DIR = os.path.join(REPO_DIR, "army_units_cat")
 
 
@@ -57,7 +59,7 @@ def convert_catalogue(cat_path: str, out_dir: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("catalogues", nargs="*", default=[DEFAULT_CAT],
-                        help="Paths to .cat files (default: Orc and Goblin Tribes).")
+                        help="Paths to .cat or catalogue .json files (default: Orc and Goblin Tribes).")
     parser.add_argument("--out-dir", default=DEFAULT_OUT_DIR,
                         help="Output directory (default: army_units_cat/).")
     args = parser.parse_args()

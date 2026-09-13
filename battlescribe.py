@@ -1,5 +1,5 @@
 """
-Runtime loader for BattleScribe catalogues (.cat).
+Runtime loader for BattleScribe XML and NewRecruit JSON catalogues.
 
 Parses the catalogues in `Warhammer-The-Old-World/` into an in-memory index so the
 game and list builder can source unit characteristics directly from the official
@@ -14,6 +14,7 @@ safe to import from models.py without creating an import cycle.
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -26,6 +27,56 @@ DEFAULT_CAT_DIR = os.path.join(REPO_DIR, "Warhammer-The-Old-World")
 
 # The BattleScribe schema namespace; ElementTree prefixes every tag with it.
 NS = "{http://www.battlescribe.net/schema/catalogueSchema}"
+
+
+def _catalogue_root(source):
+    """Normalize NewRecruit JSON to the element tree used by the XML readers."""
+    if isinstance(source, ET.Element):
+        return source
+    if not os.fspath(source).lower().endswith('.json'):
+        return ET.parse(source).getroot()
+    try:
+        with open(source, encoding='utf-8') as stream:
+            document = json.load(stream)
+        roots = [key for key in ('catalogue', 'gameSystem') if key in document]
+        if len(roots) != 1 or not isinstance(document[roots[0]], dict):
+            raise ValueError('expected a catalogue or gameSystem object')
+        kind = roots[0]
+        record = document[kind]
+        namespace = '{' + record.get('xmlns',
+            f'http://www.battlescribe.net/schema/{kind}Schema') + '}'
+
+        def scalar(value):
+            if isinstance(value, bool):
+                return 'true' if value else 'false'
+            return str(value)
+
+        def element(tag, values):
+            node = ET.Element(namespace + tag)
+            for key, value in values.items():
+                if value is None or key == 'xmlns':
+                    continue
+                if key == '$text':
+                    node.text = scalar(value)
+                elif key == 'alias' and isinstance(value, list):
+                    for child in value:
+                        ET.SubElement(node, namespace + key).text = scalar(child)
+                elif isinstance(value, list):
+                    container = ET.SubElement(node, namespace + key)
+                    singular = key.removeprefix('shared')
+                    singular = singular[0].lower() + singular[1:]
+                    singular = singular[:-3] + 'y' if singular.endswith('ies') else singular[:-1]
+                    for child in value:
+                        container.append(element(singular, child))
+                elif key in ('description', 'comment', 'readme'):
+                    ET.SubElement(node, namespace + key).text = scalar(value)
+                else:
+                    node.set(key, scalar(value))
+            return node
+
+        return element(kind, record)
+    except (ValueError, TypeError, AttributeError) as error:
+        raise ET.ParseError(f'invalid catalogue JSON: {error}') from error
 
 
 def has_move_and_shoot(rules) -> bool:
@@ -505,14 +556,14 @@ def spell_from_profile(name: str, chars: dict) -> dict:
     }
 
 
-def _spell_lores(cat_path: str) -> dict:
+def _spell_lores(cat_path: str | os.PathLike | ET.Element) -> dict:
     """Map lore name -> list of game spell dicts for one catalogue.
 
     Each Lore of Magic is a shared infoGroup holding its spells; the eight full
     lores hold seven, six numbered and a signature.
     """
     try:
-        root = ET.parse(cat_path).getroot()
+        root = _catalogue_root(cat_path)
     except ET.ParseError:
         return {}
     out: dict = {}
@@ -610,12 +661,12 @@ def _model_parts(model_entry: ET.Element, by_name: dict) -> dict:
     return {"Crew": crew, "Beasts": beasts}
 
 
-def parse_catalogue_full(cat_path: str):
+def parse_catalogue_full(cat_path: str | os.PathLike | ET.Element):
     """Parse one catalogue into (faction, unit_records, profile_records, weapons)."""
-    tree = ET.parse(cat_path)
-    root = tree.getroot()
+    root = _catalogue_root(cat_path)
 
-    faction_name = root.get("name", os.path.splitext(os.path.basename(cat_path))[0])
+    fallback = 'Unknown' if isinstance(cat_path, ET.Element) else os.path.splitext(os.path.basename(cat_path))[0]
+    faction_name = root.get("name", fallback)
     profiles = _index_model_profiles(root)
     org_map = _index_org_categories(root)
     base_by_profile = _index_base_by_profile(root, profiles)
@@ -683,13 +734,13 @@ def parse_catalogue_full(cat_path: str):
     return faction_name, records, profile_records, weapons
 
 
-def parse_weapons(cat_path: str) -> list:
-    """Parse a .cat or .gst file and return its game weapon dicts."""
-    root = ET.parse(cat_path).getroot()
+def parse_weapons(cat_path: str | os.PathLike | ET.Element) -> list:
+    """Parse an XML or JSON catalogue/system and return its game weapon dicts."""
+    root = _catalogue_root(cat_path)
     return _weapon_profiles(root)
 
 
-def _rule_descriptions(cat_path: str) -> dict:
+def _rule_descriptions(cat_path: str | os.PathLike | ET.Element) -> dict:
     """Map Special Rule name -> description text for a catalogue or game system.
 
     Army-specific abilities are defined in the .cat files; the core rulebook
@@ -697,7 +748,7 @@ def _rule_descriptions(cat_path: str) -> dict:
     .gst, which uses a different XML namespace, so match on the local tag.
     """
     try:
-        root = ET.parse(cat_path).getroot()
+        root = _catalogue_root(cat_path)
     except ET.ParseError:
         return {}
     out: dict = {}
@@ -724,7 +775,7 @@ def parse_catalogue(cat_path: str):
 
 
 class Catalogue:
-    """In-memory index of every model in every .cat under a directory."""
+    """In-memory index of XML or JSON catalogues under a directory."""
 
     def __init__(self, cat_dir: str = DEFAULT_CAT_DIR):
         self.cat_dir = cat_dir
@@ -748,23 +799,35 @@ class Catalogue:
         if not os.path.isdir(self.cat_dir):
             print(f"[battlescribe] catalogue directory not found: {self.cat_dir}")
             return
-        for filename in sorted(os.listdir(self.cat_dir)):
+        loaded = set()
+        for filename in sorted(os.listdir(self.cat_dir), key=lambda name: (not name.endswith('.json'), name)):
             path = os.path.join(self.cat_dir, filename)
-            if filename.endswith(".gst"):
+            if not filename.endswith(('.cat', '.gst', '.json')):
+                continue
+            try:
+                root = _catalogue_root(path)
+            except ET.ParseError as exc:
+                print(f"[battlescribe] failed to parse {filename}: {exc}")
+                continue
+            identity = (_tag(root), root.get('id') or os.path.splitext(filename)[0])
+            if identity in loaded:
+                continue
+            loaded.add(identity)
+            if _tag(root) == 'gameSystem':
                 # Game system holds the common (shared) weapons and the core
                 # rulebook's special-rule descriptions.
                 try:
-                    for w in parse_weapons(path):
+                    for w in parse_weapons(root):
                         self.weapons_by_slug.setdefault(slugify(w["name"]), w)
-                    for name, desc in _rule_descriptions(path).items():
+                    for name, desc in _rule_descriptions(root).items():
                         self.rule_desc_by_slug.setdefault(slugify(name), desc)
                 except ET.ParseError as exc:
                     print(f"[battlescribe] failed to parse {filename}: {exc}")
                 continue
-            if not filename.endswith(".cat"):
+            if _tag(root) != 'catalogue':
                 continue
             try:
-                faction_name, records, profile_records, weapons = parse_catalogue_full(path)
+                faction_name, records, profile_records, weapons = parse_catalogue_full(root)
             except ET.ParseError as exc:
                 print(f"[battlescribe] failed to parse {filename}: {exc}")
                 continue
@@ -780,9 +843,9 @@ class Catalogue:
                 self.all_by_slug.setdefault(slugify(record["Model"]), record)
             for w in weapons:
                 self.weapons_by_slug.setdefault(slugify(w["name"]), w)
-            for name, desc in _rule_descriptions(path).items():
+            for name, desc in _rule_descriptions(root).items():
                 self.rule_desc_by_slug.setdefault(slugify(name), desc)
-            for lore, spells in _spell_lores(path).items():
+            for lore, spells in _spell_lores(root).items():
                 self.lores.setdefault(lore, spells)
                 for s in spells:
                     self.spells_by_slug.setdefault(slugify(s["name"]), s)
