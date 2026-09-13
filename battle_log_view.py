@@ -15,7 +15,7 @@ import gui_theme as T
 
 class BattleLogView:
     PAGE_SIZE = 100
-    SCALE = .034
+    SCALE = .038
     TOP = .39
     BOTTOM = -.57
 
@@ -159,8 +159,18 @@ class BattleLogView:
         self.status.setText(f'Events {first}-{last} | {len(self.hud._journal.entries)} retained')
         heading = 'No matching events'
         if entries:
-            heading = entries[0].heading if all(entry.group == entries[0].group for entry in entries) else (
-                'Multiple rounds, phases or combats')
+            first_entry = entries[0]
+            common = []
+            for level, label in first_entry.headings_since():
+                depth = {'round': 1, 'turn': 2, 'phase': 3}.get(level)
+                if depth is None:
+                    continue
+                if not all(entry.group[:depth] == first_entry.group[:depth] for entry in entries):
+                    break
+                common.append(label)
+            heading = ' / '.join(common)
+            if not heading and first_entry.context.get('round') is not None:
+                heading = f'Round {first_entry.context["round"]} to Round {entries[-1].context.get("round", "-")}'
         self.context.setText(heading)
         ratio = self.scroll / self.max_scroll if self.max_scroll else 0
         if not math.isclose(self.scrollbar.getValue(), ratio, abs_tol=1e-6):

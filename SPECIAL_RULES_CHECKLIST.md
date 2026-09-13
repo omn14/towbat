@@ -10,6 +10,30 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle Log Readability: 2026-09-13
+
+Compact log and expanded history now share distinct phase colors and separate
+round, player-turn, phase, combat and Initiative headings. Initiative changes
+and resolution no longer repeat the combat roster; new combats, turns and
+filtered/page slices restore their own context. History text is larger, wrapped
+events and roll details are indented, and the context bar reports the common
+round/turn/phase instead of a generic mixed-context message.
+
+Display-only cleanup folds an exact combat-introduction duplicate into its
+heading. Identical consecutive events with the same context, category, subject
+and details appear once with an explicit event count. Different details never
+merge. Every original event, timestamp and detail remains in the retained journal
+and full TXT/JSON exports and Copy output; rules and dice are unchanged.
+
+Verification: 17 journal tests and the 512 MiB offscreen HUD harness pass,
+including real queued GUI events, full export preservation, repeat counts,
+different-roll separation, filters, paging, frozen scrolling, orientation
+rebuilds and measured top clipping. Inspected 1280x720 history/compact screenshots
+and 720x960 portrait history. Full suite not rerun.
+LEFTOVER: history is still session-only, bounded to 5000 retained events and
+100-event display pages. A page/filter boundary repeats headings for context;
+Copy and Export intentionally retain the uncondensed event trace.
+
 ## Battle Log Follow-up: 2026-09-12
 
 **Round and turn headings:** History now groups events under a larger Round

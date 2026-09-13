@@ -70,17 +70,27 @@ class LogEntry:
             headings.append(('round', f'Round {current[0]}'))
         if current[1] is not None and (before is None or current[:2] != before[:2]):
             headings.append(('turn', f'Player {current[1]} Turn'))
-        if before is None or current != before:
-            parts = [current[2].removesuffix('Phase')] if current[2] else []
-            if current[3]:
-                parts.append(current[3])
-            if current[4] is not None:
-                parts.append(f'I{current[4]}')
-            if parts:
-                headings.append(('context', ' | '.join(parts)))
-            elif not headings:
-                headings.append(('context', 'Battle'))
+        if current[2] and (before is None or current[:3] != before[:3]
+                   or (before[3] and not current[3])):
+            label = {'ReserveMovePhase': 'Reserve Moves', 'BattleEnded': 'Battle Ended'}.get(
+                current[2], current[2].removesuffix('Phase'))
+            headings.append(('phase', label))
+        if current[3] and (before is None or current[:4] != before[:4]):
+            headings.append(('combat', current[3]))
+        if current[4] is not None and (before is None or current != before):
+            headings.append(('initiative', f'Initiative {current[4]}'))
+        elif (before is not None and current[:4] == before[:4]
+              and current[3] and before[4] is not None and current[4] is None):
+            headings.append(('initiative', 'Resolution'))
+        if not headings and (before is None or current[:4] != before[:4]):
+            headings.append(('context', 'Battle'))
         return headings
+
+    @property
+    def repeats_combat_heading(self):
+        combat = self.context.get('combat')
+        return (self.category == 'combat' and bool(combat)
+                and self.text == 'Combat: ' + combat.replace(' vs ', ', '))
 
 
 class BattleJournal:

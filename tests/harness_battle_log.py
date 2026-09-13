@@ -124,6 +124,61 @@ def main(shots='/tmp'):
     _shot(shots, 'headings')
     h.close_history()
     h.clear_log()
+    combat_name = 'Dragon Prince Unit vs Chaos Knight Unit vs Silver Helm Unit'
+    with log_scope(round=4, player=1, phase='MovementPhase', combat=None, initiative=None):
+        h.log('Charge Move: Lothern Skycutter Unit: M10 + charge 4 + Swiftstride 1 -> 15" range', 'combat')
+        h.log('Charge moves complete. Remaining Moves.')
+        h.log('Charge moves complete. Remaining Moves.')
+    with log_scope(phase='ShootingPhase', round=4, player=1, combat=None, initiative=None):
+        h.log('Elven Archer Unit / Elven Archer vs Chaos Warhound Unit: '
+              '2 shots -> 1 hit -> 0 wounds -> 0 saved -> 0 unsaved', 'combat',
+              'Elven Archer Unit', 'Hit rolls [4, 1]; wound roll [2]')
+    with log_scope(phase='CombatPhase', round=4, player=1, combat=combat_name, initiative=None):
+        h.log('Combat: Dragon Prince Unit, Chaos Knight Unit, Silver Helm Unit', 'combat')
+        for initiative, attacker, profile, attacks in (
+                (5, 'Dragon Prince', 'Dragon Prince', 2),
+                (4, 'Dragon Prince', 'Barded Elven Steed', 1),
+                (4, 'Chaos Knight', 'Champion', 2),
+                (3, 'Chaos Knight', 'Chaos Steed', 1)):
+            target = 'Chaos Knight' if attacker == 'Dragon Prince' else 'Dragon Prince'
+            with log_scope(initiative=initiative):
+                h.log(f'{attacker} Unit / {profile} vs {target} Unit: '
+                      f'{attacks} attacks -> 1 hit -> 0 wounds -> 0 saved -> 0 unsaved',
+                      'combat', attacker + ' Unit', 'Hit roll [4]; wound roll [2]')
+        h.log('Combat result: P1 0 - P2 0. Draw.', 'combat', details='Both sides score 0.')
+    from panda3d.core import TextPropertiesManager
+    properties = TextPropertiesManager.getGlobalPtr()
+    colours = [tuple(properties.getProperties(f'log_phase_{phase}').getTextColor())
+               for phase in ('MovementPhase', 'ShootingPhase', 'CombatPhase')]
+    assert len(set(colours)) == 3
+    formatted = h.log_text(h._journal.entries, details=True)
+    assert formatted.count(combat_name) == 1
+    assert '\u2022 Combat: Dragon Prince Unit' not in formatted
+    assert formatted.count('Initiative 4') == 1
+    assert formatted.count('Resolution') == 1
+    assert 'Charge moves complete. Remaining Moves. [2 events]' in formatted
+    assert 'Hit roll [4]; wound roll [2]' in formatted
+    assert h._journal.export().count('Charge moves complete. Remaining Moves.') == 2
+    assert 'Combat: Dragon Prince Unit, Chaos Knight Unit, Silver Helm Unit' in h._journal.export()
+    middle = h.log_text(list(h._journal.entries)[6:7])
+    assert combat_name in middle and 'Initiative 4' in middle
+    assert h.log_text(h._journal.entries) == h._log_text.getText()
+    from dataclasses import replace
+    original = list(h._journal.entries)[5]
+    different_roll = replace(original, sequence=original.sequence + 1, details='Hit roll [6]')
+    separate = h.log_text([original, different_roll], details=True)
+    assert separate.count(original.text) == 2 and '[2 events]' not in separate
+    assert original.details in separate and different_roll.details in separate
+    h.open_history()
+    _pump_events()
+    assert h._history.context.getText() == 'Round 4 / Player 1 Turn'
+    h._history.scroll_lines(10000)
+    _pump_events()
+    assert h._history.text.getPos()[-1] + h._history.text.textNode.getTop() * h._history.SCALE <= h._history.TOP + 1e-5
+    _shot(shots, 'readability')
+    readable_state = h.snapshot()
+    h.close_history()
+    h.clear_log()
     for index in range(220):
         with log_scope(round=3, player=1, phase='CombatPhase', combat='Princes vs Knights', initiative=9):
             h.log(f'Dragon Princes: {index} attacks -> 4 hits -> 1 wound -> 0 slain',
@@ -202,6 +257,21 @@ def main(shots='/tmp'):
     image = PNMImage()
     buffer.getScreenshot(image)
     image.write(os.path.join(shots, 'battle_log_history_portrait.png'))
+    long_state = h.snapshot()
+    h.close_history()
+    h.clear_log()
+    h.restore(readable_state)
+    h.open_history()
+    h._history.scroll_lines(10000)
+    _pump_events()
+    buffer.getScreenshot(image)
+    image.write(os.path.join(shots, 'battle_log_readability_portrait.png'))
+    h.close_history()
+    h.clear_log()
+    h.restore(long_state)
+    h.open_history()
+    history = h._history
+    _pump_events()
     base.graphicsEngine.removeWindow(buffer)
     base.setAspectRatio(1280 / 720)
     h._layout()
@@ -241,6 +311,14 @@ def main(shots='/tmp'):
     asyncio.run(choice.cleanup())
     messages = [entry for entry in h._journal.entries if entry.text == 'Chaos Knights: charge reaction: Hold']
     assert len(messages) == 1 and messages[0].category == 'debug'
+    h.close_history()
+    h.clear_log()
+    h.restore(readable_state)
+    h.show_tab('log')
+    pointer.over(h)
+    h.scroll_log(10000)
+    _pump_events()
+    _shot(shots, 'compact_readability')
     h.destroy()
 
 

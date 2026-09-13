@@ -49,6 +49,17 @@ _PHASE_OFF = 'hud_phase_off'
 _PHASE_ON_COLOUR = (0.52, 0.13, 0.10, 1.0)
 _PHASE_OFF_COLOUR = (0.42, 0.36, 0.26, 0.65)
 
+_LOG_PHASE_COLOURS = {
+    'DeployPhase': (0.32, 0.30, 0.25, 1),
+    'StrategyPhase': (0.17, 0.27, 0.46, 1),
+    'MovementPhase': (0.06, 0.35, 0.32, 1),
+    'ShootingPhase': (0.48, 0.29, 0.04, 1),
+    'CombatPhase': (0.55, 0.12, 0.10, 1),
+    'ReserveMovePhase': (0.24, 0.36, 0.12, 1),
+    'BattleEnded': (0.28, 0.25, 0.36, 1),
+    'Campaign': (0.27, 0.30, 0.22, 1),
+}
+
 # State chips on the regiment page.
 _CHIP_COLOURS = {
     'bad':  ('chip_bad',  (0.62, 0.10, 0.08, 1.0)),
@@ -75,9 +86,15 @@ def _register_properties():
         if not tpm.hasProperties(name):
             tp = TextProperties()
             tp.setTextColor(*colour)
+            if name in {value[0] for value in _CATEGORY_COLOURS.values()}:
+                tp.setIndent(1.0 if name == 'log_detail' else .4)
             tpm.setProperties(name, tp)
-    for name, scale, colour in (('log_round', 1.25, T.INK),
-                                ('log_turn', 1.08, _PHASE_ON_COLOUR)):
+    headings = [('log_round', 1.25, T.INK), ('log_turn', 1.08, T.INK),
+                ('log_engagement', 1.04, T.INK), ('log_initiative', 1.0, (0.40, 0.20, 0.10, 1)),
+                ('log_phase', 1.12, T.INK), ('log_gap', .35, T.INK)]
+    headings.extend((f'log_phase_{phase}', 1.12, colour)
+                    for phase, colour in _LOG_PHASE_COLOURS.items())
+    for name, scale, colour in headings:
         if not tpm.hasProperties(name):
             properties = TextProperties()
             properties.setTextColor(*colour)
@@ -1115,19 +1132,36 @@ class HUD(DirectObject):
 
     @staticmethod
     def log_text(entries, *, details=False):
+        from itertools import groupby
         lines = []
         previous = None
-        for entry in entries:
+        for _, repeated in groupby(entries, key=lambda entry: (
+                entry.group, entry.category, entry.text, entry.subject, entry.details)):
+            run = list(repeated)
+            entry = run[0]
             for level, heading in entry.headings_since(previous):
-                if lines and level in ('round', 'turn'):
+                if lines and level in ('round', 'turn', 'phase', 'combat'):
                     lines.append('')
-                prop = {'round': 'log_round', 'turn': 'log_turn', 'context': 'log_info'}[level]
+                elif (level == 'initiative' and previous is not None
+                      and previous.group[:4] == entry.group[:4]):
+                    lines.append(_markup('log_gap', ' '))
+                prop = {'round': 'log_round', 'turn': 'log_turn', 'context': 'log_info',
+                        'phase': 'log_phase', 'combat': 'log_engagement',
+                        'initiative': 'log_initiative'}[level]
+                if level == 'phase' and entry.context.get('phase') in _LOG_PHASE_COLOURS:
+                    prop = f'log_phase_{entry.context["phase"]}'
+                if level == 'initiative':
+                    heading = '  ' + heading
                 lines.append(_markup(prop, heading))
             previous = entry
             prop = _CATEGORY_COLOURS[entry.category][0]
-            lines.append(_markup(prop, f"\u2022 {entry.text}"))
+            if not entry.repeats_combat_heading or len(run) > 1:
+                text = entry.text
+                if len(run) > 1:
+                    text += f' [{len(run)} events]'
+                lines.append(_markup(prop, f"\u2022 {text}"))
             if details and entry.details:
-                lines.append(_markup('log_detail', '  ' + entry.details))
+                lines.append(_markup('log_detail', entry.details))
         return '\n'.join(lines)
 
     def _redraw_log(self):

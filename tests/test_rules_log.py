@@ -83,15 +83,15 @@ class TestBattleJournal(unittest.TestCase):
         turn = replace(first, sequence=3, context=dict(first.context, player=2))
         next_round = replace(turn, sequence=4, context=dict(turn.context, round=3))
         self.assertEqual(first.headings_since(), [
-            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('context', 'Movement')])
+            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('phase', 'Movement')])
         self.assertEqual(first.headings_since(first), [])
-        self.assertEqual(phase.headings_since(first), [('context', 'Combat')])
+        self.assertEqual(phase.headings_since(first), [('phase', 'Combat')])
         self.assertEqual(turn.headings_since(phase), [
-            ('turn', 'Player 2 Turn'), ('context', 'Movement')])
+            ('turn', 'Player 2 Turn'), ('phase', 'Movement')])
         self.assertEqual(next_round.headings_since(turn), [
-            ('round', 'Round 3'), ('turn', 'Player 2 Turn'), ('context', 'Movement')])
+            ('round', 'Round 3'), ('turn', 'Player 2 Turn'), ('phase', 'Movement')])
         self.assertEqual(phase.headings_since(), [
-            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('context', 'Combat')])
+            ('round', 'Round 2'), ('turn', 'Player 1 Turn'), ('phase', 'Combat')])
         journal = BattleJournal()
         journal.entries.extend([first, phase, turn, next_round])
         text = journal.export()
@@ -100,6 +100,57 @@ class TestBattleJournal(unittest.TestCase):
         self.assertEqual(text.count('Player 2 Turn'), 2)
         self.assertIn('Round 2\n\nPlayer 1 Turn\nMovement', text)
         self.assertNotIn('Round 2 / Player', text)
+
+    def test_combat_heading_survives_initiative_changes_and_keeps_every_event(self):
+        from dataclasses import replace
+        from rules_log import BattleJournal, LogEntry
+        first = LogEntry(1, 'combat', 'Combat: Dragon Princes, Chaos Knights, Silver Helms', '', '',
+                         dict(round=4, player=1, phase='CombatPhase',
+                              combat='Combat 1: Dragon Princes vs Chaos Knights vs Silver Helms'))
+        riders = replace(first, sequence=2, text='Riders: 2 attacks -> 1 hit -> 0 wounds',
+                         details='Hit rolls [3, 1]', context=dict(first.context, initiative=5))
+        mounts = replace(riders, sequence=3, text='Mounts: 1 attack -> 1 hit -> 0 wounds',
+                         details='Hit rolls [6]', context=dict(first.context, initiative=4))
+        result = replace(first, sequence=4, text='Combat result: P1 0 - P2 0. Draw.')
+        self.assertEqual(riders.headings_since(first), [('initiative', 'Initiative 5')])
+        self.assertEqual(mounts.headings_since(riders), [('initiative', 'Initiative 4')])
+        self.assertEqual(result.headings_since(mounts), [('initiative', 'Resolution')])
+        self.assertEqual(mounts.headings_since(), [
+            ('round', 'Round 4'), ('turn', 'Player 1 Turn'), ('phase', 'Combat'),
+            ('combat', first.context['combat']), ('initiative', 'Initiative 4')])
+        journal = BattleJournal()
+        journal.entries.extend([first, riders, mounts, result])
+        self.assertEqual(journal.export().count(first.context['combat']), 1)
+        for entry in journal.entries:
+            self.assertIn(entry.text, journal.export())
+            self.assertIn(entry.details, journal.export())
+        self.assertEqual(len(__import__('json').loads(journal.export(structured=True))), 4)
+
+    def test_only_exact_combat_introductions_repeat_the_heading(self):
+        from dataclasses import replace
+        from rules_log import LogEntry
+        entry = LogEntry(1, 'combat', 'Combat: Princes, Knights, Helms', '', '',
+                         dict(combat='Princes vs Knights vs Helms'))
+        self.assertTrue(entry.repeats_combat_heading)
+        self.assertFalse(replace(entry, text=entry.text + ': choose weapons').repeats_combat_heading)
+        self.assertFalse(replace(entry, context={}).repeats_combat_heading)
+        self.assertFalse(replace(entry, category='warning').repeats_combat_heading)
+
+    def test_new_combat_and_new_turn_restore_their_headings(self):
+        from dataclasses import replace
+        from rules_log import LogEntry
+        first = LogEntry(1, 'combat', 'Attack', '', '',
+                         dict(round=4, player=1, phase='CombatPhase', combat='Princes vs Knights', initiative=4))
+        second = replace(first, sequence=2, context=dict(first.context, combat='Skycutter vs Horsemen'))
+        self.assertEqual(second.headings_since(first), [
+            ('combat', 'Skycutter vs Horsemen'), ('initiative', 'Initiative 4')])
+        next_turn = replace(first, sequence=3, context=dict(first.context, player=2))
+        self.assertEqual(next_turn.headings_since(second), [
+            ('turn', 'Player 2 Turn'), ('phase', 'Combat'),
+            ('combat', 'Princes vs Knights'), ('initiative', 'Initiative 4')])
+        outside = replace(first, context=dict(first.context, combat=None, initiative=None))
+        self.assertEqual(outside.headings_since(first), [('phase', 'Combat')])
+        self.assertEqual(replace(first, context={}).headings_since(first), [('context', 'Battle')])
 
     def test_exported_event_clocks_are_stable_and_monotonic(self):
         from datetime import datetime, timedelta, timezone
