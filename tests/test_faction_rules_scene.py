@@ -2,10 +2,11 @@
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from panda3d.core import CardMaker, NodePath, Point3, getModelPath, loadPrcFileData
+from panda3d.core import CardMaker, GeomVertexReader, NodePath, Point3, getModelPath, loadPrcFileData
 
 from battleFunctions import strike_initiative, ward_save_value
 from characters import join_unit
@@ -75,6 +76,47 @@ def scene(tmp_path_factory):
 
 def members(app):
     return {member.unit.model.name: member for member in app.units}
+
+
+@pytest.mark.parametrize('joined', [False, True])
+@pytest.mark.parametrize('aim_at_unit', [False, True])
+def test_mage_targeting_trajectory_uses_world_positions(scene, request, joined, aim_at_unit):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    request.addfinalizer(lambda: load_game_state(app, baseline))
+    roster = members(app)
+    mage, archers = roster['Mage'], roster['Elven Archer']
+    champion, warriors = roster['Aspiring Champion'], roster['Chaos Warrior']
+    archers.bodyNP.setPos(-20, -15, 2)
+    archers.bodyNP.setH(35)
+    mage.bodyNP.setPos(-20, -20, 2)
+    warriors.bodyNP.setPos(10, 12, 1)
+    warriors.bodyNP.setH(160)
+    champion.bodyNP.setPos(10, 7, 1)
+    if joined:
+        assert join_unit(app, mage, archers)
+        assert join_unit(app, champion, warriors)
+        assert not mage.bodyNP.getPos().almostEqual(mage.bodyNP.getPos(app.render))
+    app.unitToMove = mage
+    app.mousePosOnGround = Point3(4, 8, 0)
+    app.shootingArcPoints = []
+    target = champion if aim_at_unit else None
+    expected = champion.bodyNP.getPos(app.render) if aim_at_unit else app.mousePosOnGround
+    with patch.object(app, 'targetUnderMouse', return_value=target), \
+            patch.object(app, 'checkIfInsidePolygon', return_value=True), \
+            patch.object(app, 'drawProjectileTrajectory', wraps=app.drawProjectileTrajectory) as draw:
+        app.taskShootingTrajectoryDrawLine(SimpleNamespace(cont='cont'))
+    draw.assert_called_once()
+    origin, destination = draw.call_args.args
+    assert origin.almostEqual(mage.bodyNP.getPos(app.render), 1e-5)
+    assert destination.almostEqual(expected, 1e-5)
+    vertices = app.trajectoryLine.node().getGeom(0).getVertexData()
+    reader = GeomVertexReader(vertices, 'vertex')
+    assert reader.getData3f().almostEqual(origin, 1e-5)
+    reader.setRow(vertices.getNumRows() - 1)
+    assert reader.getData3f().almostEqual(destination, 1e-5)
+    app.trajectoryLine.removeNode()
+    app.trajectoryLine = None
 
 
 @pytest.mark.parametrize('character_name,host_name', [('Mage', 'Silver Helm'),

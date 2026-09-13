@@ -10,6 +10,22 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Joined Mage Targeting Visual: 2026-09-13
+
+The spell/shooting trajectory update now reads caster and target positions in
+world space. A joined Mage's parent-relative front-rank offset was previously
+drawn as a world position, putting the curve's start near the board center.
+The visual distance calculation now uses the same world-space endpoints.
+Spell effects, target eligibility and the initial range-sector setup are unchanged.
+
+Verification: 11 faction scene and 34 shooting tests pass, including four
+joined/standalone and ground/unit aiming cases that inspect actual line vertices.
+The saved Mage in the Archers now draws from (-20.01, -15.42), not (0, 0.49).
+Offscreen 1280x720 and 800x600 captures passed endpoint framing and visible-curve
+pixel checks; the source save hash is unchanged. Full suite not rerun.
+LEFTOVER: this corrects trajectory coordinates only; the shared shooting-style
+targeting readout and separate range/line-of-sight rules are unchanged.
+
 ## Battle Log Readability: 2026-09-13
 
 Compact log and expanded history now share distinct phase colors and separate

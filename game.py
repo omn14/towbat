@@ -1407,7 +1407,7 @@ class MyApp(ShowBase):
         # front of it, so the arc alone would not show what is being aimed at.
         target = self.targetUnderMouse()
         if target is not None:
-            aim = target.bodyNP.getPos()
+            aim = target.bodyNP.getPos(self.render)
         elif self.checkIfInsidePolygon(self.mousePosOnGround,
                                        self.coordsToWorld(self.shootingArcPoints)):
             aim = self.mousePosOnGround
@@ -1415,11 +1415,12 @@ class MyApp(ShowBase):
             return task.cont
         weapon = self.unitToMove.unit.model.equipedWeapon or {}
         half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
-        dist = (self.unitToMove.bodyNP.getPos() - aim).length()
+        origin = self.unitToMove.bodyNP.getPos(self.render)
+        dist = (origin - aim).length()
         long_range = bool(half and dist > half)
         color = (1, 0.35, 0.35, 1) if long_range else (0.35, 1, 0.35, 1)
         self.trajectoryLine = self.drawProjectileTrajectory(
-            self.unitToMove.bodyNP.getPos(), aim, color=color)
+            origin, aim, color=color)
         readout = "LONG RANGE  (-1 To Hit)" if long_range else "Short range"
         if target is not None:
             readout = f"{target.unit.name}  —  {readout}"
