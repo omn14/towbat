@@ -3,6 +3,23 @@
 Source: [General's Companion section](https://tow.whfb.app/battle-march),
 reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
 
+## Current Scope: Revised 2026-09-13
+
+This revision supersedes the original requirement to implement all seven stages
+in full. Continue stages 1-4, the active portions of stage 5, and stage 7.
+
+- Stop further magic-item implementation for now. Completing all 20 items is
+  not required. Preserve existing implementations; unfinished item work,
+  including the in-progress scroll changes, is paused rather than completed
+  or reverted. Uncommitted work is not a verified milestone.
+- Tournament features are deferred, including event rotation, two-list
+  selection, event-wide secret-objective pools and tournament-only settings.
+- Stage 6 narrative presets and their unique mechanics are deferred in full.
+- Standalone secret objectives and all three random-happening tables remain
+  in scope, as do Raid & Burn and baggage carts.
+- Stage 7 still requires verification and milestone commits for active work.
+  Deferred features are not completion gates and must not be marked implemented.
+
 ## Approved Stages
 
 1. Preset and validation: versioned configuration, unchanged standard defaults,
@@ -13,13 +30,15 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
    alternating deployment, separate first-turn roll-off and choice.
 4. Playable objectives and scoring: control, temporary landmark effects,
    per-player-turn awards, HUD/AI, idempotent saves, five complete rounds.
-5. Optional modules: Raid & Burn, baggage carts, ten private secret objectives,
-   all three random-happening tables, 20 magic items, tournament options.
-6. Narrative presets: Weisnicht Bridge, Bel-Cedas, Drazgog, Karak Ziflin,
-   Sturdham and Gemelwald, including their unique mechanics.
+5. Active optional modules: Raid & Burn, baggage carts, ten private secret
+  objectives for standalone games, and all three random-happening tables.
+  Further magic-item implementation and tournament options are deferred.
+6. Deferred narrative presets: Weisnicht Bridge, Bel-Cedas, Drazgog,
+  Karak Ziflin, Sturdham and Gemelwald, including their unique mechanics.
 7. Verification and milestones: both sizes, all maps/mirrors, rotated/dispersed
    bases, thresholds, terrain clearance, control ties, expiry, both turn orders,
-   save/reload, offscreen visuals and isolated bounded tests; milestone commits.
+  save/reload, offscreen visuals and isolated bounded tests; milestone commits
+  for the revised active scope, without requiring deferred features.
 
 ## Implemented Foundation
 
@@ -92,17 +111,20 @@ one defender's cart or Guard Duty for both players. Each cart deploys as a singl
 miniature. Non-Combatant restrictions, enemy-zone edge escape, literal final
 bonuses, saved ownership and once-only setup are connected. Escaped carts are
 not destroyed and never earn a separate Dead or Fled award.
-Ten of the twenty Battle March items now have runtime effects: the existing Helm
+The committed magic-item milestone covers ten Battle March items: the existing Helm
 of Courage and Banner of the Bold, plus Ranger's Glass, Warding Talisman, Padded
 Hauberk, Wyrdstone Shard, Banner of Renown, Diestro's Blade, Skirmisher's Blade and
 Thornspitter Stave. Inventory ownership, suppression and single-use state remain
-the source of those effects. The item-module activation gate stays closed until
-the remaining ten items and muster availability checks are implemented.
+the source of those effects. Additional uncommitted item work is paused. The
+current item-module activation gate remains closed; this scope revision does not
+enable unsupported items. Completing the remaining items or enabling the full
+item module is no longer required for the active plan.
 Runtime activation explicitly rejects the agreed time limit and other enabled
 optional modules until their handlers are complete. Standard ordinary
 terrain currently offers hills, woods and impassable buildings. Special features,
 remaining terrain categories, objective-aware strategic AI, private objectives,
-optional modules and narrative scenarios remain work in stages 1 and 3-6.
+and random happenings remain active work in stages 1 and 3-5. Tournament features,
+further magic-item work and stage 6 narrative scenarios are deferred.
 
 ## Source Decisions
 
@@ -112,9 +134,9 @@ optional modules and narrative scenarios remain work in stages 1 and 3-6.
   remains distinct from destruction/Dead or Fled.
 - User confirmed written narrative rules over conflicting illustrations or
   cross-references: Gemelwald village goes in the defender half; the Weisnicht
-  Bridge duel determines first turn.
+  Bridge duel determines first turn. Retained for when stage 6 resumes.
 - Narrative building-size feet/inches typos still need the applicable source
-  verified when implementing those scenarios; do not stretch printed distances.
+  verified if those deferred scenarios resume; do not stretch printed distances.
 
 ## Verification Constraints
 
