@@ -498,6 +498,9 @@ class unitGraphics(FSM):
             #self.model.flattenLight()
     
     def loadFigureModel(self, modelpath):
+        if self.unit is not None and self.unit.model.name == 'Baggage Cart':
+            from battle_secondary import cart_model
+            return cart_model(self.color)
         return loader.loadModel(modelpath)
 
     def _varyModelTones(self):
@@ -553,7 +556,10 @@ class unitGraphics(FSM):
 
     def enterMoved(self):
         self.hasMovedThisTurn=True
-        from battle_secondary import after_move
+        from battle_secondary import after_move, escape_cart
+        if escape_cart(base, self):
+            messenger.send('unit-move-complete')
+            return
         after_move(base, self)
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')

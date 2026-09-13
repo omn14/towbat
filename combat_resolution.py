@@ -549,6 +549,15 @@ class CombatResolver:
 
     async def chargeAndChargeReaction(self, unit, c, oposUnit, orotUnit, task, defender=None,
                                      declaration=None):
+        from battle_secondary import non_combatant
+        if non_combatant(unit):
+            rule_log('Non-Combatant', unit, 'cannot charge; no reaction or charge dice (Companion p. 37)')
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            unit.bodyNP.node().setTransformDirty()
+            unit.isChargingMove = False
+            self.game.autoCharge = self.game.autoHold = False
+            return task.done
         from chaos_gifts import succumbed
         if succumbed(unit):
             rule_skipped('Stupidity', unit, 'cannot charge (p. 178)')
@@ -1015,6 +1024,8 @@ class CombatResolver:
             terning.remove(self.game.world)
         unit.bodyNP.wrtReparentTo(parent)
 
+        from battle_secondary import escape_cart
+        escape_cart(self.game, fleeingUnit, from_pos=fleePos)
         unit.request("Moved")
 
         return
@@ -3135,6 +3146,11 @@ class CombatResolver:
     async def restrainChoice(self, winner, target, move):
         """Restrain & Reform (p. 156) is a Leadership test, not a free choice:
         a unit that elects to hold back and fails must go anyway."""
+        from battle_secondary import non_combatant
+        if non_combatant(winner):
+            rule_log('Non-Combatant', winner, f'cannot {move.replace("_", " ")}; no Restraint test (Companion p. 37)')
+            winner.request('Idle')
+            return 'restrain'
         verb = {'follow_up': 'Follow up', 'overrun': 'Overrun'}.get(move, 'Pursue')
         quarry = f" {target.unit.name}" if target is not None else ""
         if move != 'follow_up' and getattr(winner, 'cannotPursueThisTurn', False):
@@ -3465,6 +3481,8 @@ class CombatResolver:
         # is taken before the tests that might remove it.
         self.fleeTerrainTests(loserUnit, before, after)
         self.perilTests(loserUnit, after - before)
+        from battle_secondary import escape_cart
+        escape_cart(self.game, loserUnit, from_pos=before)
         # The state is set after the move, as it was before the four passes:
         # a unit that Falls Back rallies at the end of it and is not fleeing.
         for opponent in opponents:

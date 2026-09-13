@@ -10,6 +10,41 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Baggage Carts: 2026-09-13
+
+General's Companion pp. 36-37. Enable `baggage_carts` in the secondary objectives
+list. Saved setup offers Attack the Baggage with either defender, or Guard Duty
+with one cart per player. Supplement profiles supply the missing catalogue data:
+one Heavy Chariot, 60 x 100mm base, S4/T5/W4, armour 5+, one Ld6 driver and two
+M6 draft animals. The cart has its own procedural miniature and deploys normally.
+Non-Combatant refuses declared/direct charges and follow-up/pursuit/overrun choices,
+without reaction or Restraint dice, and excludes General/BSB command support.
+
+Full rotated-base contact or a translated sweep across an enemy-zone board edge
+removes the cart as escaped. Ordinary movement and completed Panic, combat
+fallback/break and legacy flee-reaction movement use this distinction. Final
+scoring follows the user's literal ruling: home-board survivor 25 to its owner,
+enemy-zone survivor 50, destroyed cart 25 to its opponent, escaped cart 25 each.
+Carts never contribute a separate Dead or Fled award. Ownership and escape state
+are validated and saved; completed setup does not respawn carts on reload.
+
+Corrections during verification: Heavy Chariot US is 5, not its 4 Wounds; numeric
+base dimensions are required by the profile API. Mirroring is only valid on four
+of the six maps. Psychology's older synthetic fixtures needed model counts for
+the previously implemented Frenzy majority check. Screenshot pixel tests require
+the PNMImage overload rather than the Texture-returning screenshot overload.
+
+Validation: 108 config/geometry cases, 51 setup/objective/cart scene cases,
+124 psychology, 33 charge-declaration, 13 pursuit, 13 VP and one fresh-startup
+case pass in separate bounded processes. Two paused HUD cases remain excluded.
+Desktop and portrait cart screenshots were inspected; projection and visible-pixel
+checks pass. Both owners and all four final outcomes survive reload; actual
+Panic/fallback/break animations and once-only Guard Duty creation are exercised.
+LEFTOVER: exact curved/rotating swept paths beyond the engine's existing movement
+model, scenario-specific two-cart assignment (Bel-Cedas), random cart arrival,
+and objective-aware strategic AI. Other optional modules, all narratives and
+remaining stage-7 gates are still unfinished; no full-suite success is claimed.
+
 ## Battle March Raid & Burn: 2026-09-13
 
 General's Companion p. 36. Optional Raid & Burn is now accepted at activation.
@@ -28,7 +63,7 @@ HUD-rebuild cases were excluded. A real movement-to-destruction case covers all
 four firing paths, casting refusal, pending reload, marker removal, final VP and
 completed reload without a second award. Ordinary scope diagnostics are clean;
 artillery files retain their existing Panda-injected render/taskMgr diagnostics.
-LEFTOVER: baggage carts, all other optional tables/items/private/event modules,
+LEFTOVER: other optional tables/items/private/event modules,
 narratives and remaining stage-7 gates. Full suite is not claimed green.
 
 ## Battle March Scattered Setup: 2026-09-13

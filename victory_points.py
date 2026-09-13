@@ -31,6 +31,8 @@ def register_army(game, units, player):
               if record['player'] != player}
     for unit in units:
         profile = unit.unit.model
+        if getattr(profile, 'name', None) == 'Baggage Cart':
+            continue
         points = getattr(unit.unit, 'roster_metadata', {}).get('points_cost')
         points = float(points) if isinstance(points, (int, float)) and isfinite(points) and points >= 0 else None
         models = getattr(unit, 'startOfBattleModels', unit.unit.nmodels)
@@ -65,6 +67,8 @@ def calculate(game, *, log=False):
             logger(rule, name, f'{reason} -> Player {player} +{points:g} VP ({source_page})')
 
     for identity, record in ledger.items():
+        if identity in {cart['unit'] for cart in getattr(game, 'battle_secondary', {}).get('carts', [])}:
+            continue
         member = live.get(identity)
         absent = member is None or member.unit.nmodels <= 0
         host = (getattr(member, 'hostUnit', None) or member) if member else None
@@ -92,10 +96,12 @@ def calculate(game, *, log=False):
         seen.add(key)
         award(key[2], key[0], 'Trophies of War', scoring['captured_standard'], 'captured enemy unit standard')
     if battle_config:
-        from battle_secondary import all_awards
+        from battle_secondary import all_awards, cart_awards
         for entry in all_awards(game):
             award(entry['player'], entry['unit'], entry['rule'], entry['points'],
                   f'{entry["objective"]}, player-turn {entry["turn"]}: {entry["reason"]}')
+        for entry in cart_awards(game):
+            award(entry['player'], entry['unit'], entry['rule'], entry['points'], entry['reason'])
     complete = bool(ledger) and getattr(game, 'victoryLedgerComplete', False) and not missing
     if complete and battle_config:
         winner, result = battle_march_outcome(scores)

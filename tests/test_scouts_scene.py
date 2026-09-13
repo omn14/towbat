@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pytest
-from panda3d.core import AsyncTaskManager, getModelPath, loadPrcFileData, Vec2
+from panda3d.core import AsyncTaskManager, getModelPath, loadPrcFileData, Vec2, Vec3
 from direct.task.Task import TaskManager
 
 import aiMinimaxIntegration
@@ -413,6 +413,180 @@ def test_battle_march_five_rounds_score_queued_boundaries_once(scene, tmp_path, 
         assert len(app.battle_awards) == 10
         assert app.roundCounter.finished
     finally:
+        load_game_state(app, str(baseline))
+
+
+@pytest.mark.parametrize('outcome', ['home', 'enemy', 'escaped', 'destroyed', 'panic', 'fall_back', 'break'])
+@pytest.mark.parametrize('owner', [1, 2])
+def test_baggage_cart_setup_escape_scoring_and_reload(scene, tmp_path, outcome, owner):
+    import asyncio
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from battle_secondary import prepare_carts, escape_cart
+    from victory_points import calculate
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['deployment']['map'] = 'pitched_battle'
+    config['optional_rules']['secondary_objectives'] = ['baggage_carts']
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    try:
+        with patch.object(app, 'makeChoiceNew', AsyncMock(return_value=f'Attack the Baggage: Player {owner} defends')):
+            asyncio.run(prepare_carts(app))
+        cart = next(unit for unit in app.units if unit.unit.model.name == 'Baggage Cart')
+        assert cart.baseSize == (60, 100)
+        assert cart.unit.model.armor_save == 5
+        assert cart.model.getNumChildren() == 1
+        assert not cart.model.find('**/baggage-cart-figure').isEmpty()
+        cart.isDeployed = True
+        cart.bodyNP.setH(0)
+        direction = 1 if owner == 1 else -1
+        cart.bodyNP.setPos(0, (-11 if outcome == 'home' else 11) * direction, 0)
+        if outcome == 'escaped':
+            cart.bodyNP.setY((15 - cart.modelHeight / 2) * direction)
+            cart.request('Moved')
+            assert cart not in app.units
+            assert app.battle_secondary['carts'][0]['escaped']
+        elif outcome == 'destroyed':
+            app.combat.removeUnitFromPlay(cart)
+        elif outcome in ('panic', 'fall_back', 'break'):
+            from tests.test_shieldwall_scene import combat_tasks
+            from direct.interval.IntervalGlobal import Wait
+            for other in app.units:
+                if other is not cart:
+                    other.bodyNP.setX(18)
+            cart.bodyNP.setPos(0, 10 * direction, 0)
+            async def flee():
+                if outcome == 'panic':
+                    completed = []
+                    app.psychology._start_flee_move(cart, Vec3(0, direction, 0), 14, 'flee', lambda: completed.append(True))
+                    await Wait(2)
+                    assert completed == [True]
+                else:
+                    winner = (app.player2Units if owner == 1 else app.player1Units)[0]
+                    winner.bodyNP.setPos(0, 7 * direction, 0)
+                    cart.isInCombatWith = [winner]
+                    cart.isInCombatFlank = ['front']
+                    winner.isInCombatWith = [cart]
+                    winner.isInCombatFlank = ['front']
+                    with patch.object(app.combat, 'rollMoveDice', AsyncMock(return_value=[6, 6])):
+                        await app.combat.fleeMove(cart, outcome)
+                    assert cart not in winner.isInCombatWith
+                assert cart not in app.units
+                assert app.battle_secondary['carts'][0]['escaped']
+            with combat_tasks(app) as run:
+                run(flee())
+        else:
+            assert not escape_cart(app, cart)
+        expected = {'home': [25, 0], 'enemy': [50, 0], 'destroyed': [0, 25]}.get(outcome, [25, 25])
+        if owner == 2:
+            expected.reverse()
+        assert calculate(app)['scores'] == expected
+        assert not any(row['rule'] == 'Dead or Fled' and row['unit'].startswith('Baggage') for row in calculate(app)['rows'])
+        path = tmp_path / f'cart-{outcome}.json'
+        save_game_state(app, str(path))
+        load_game_state(app, str(path))
+        assert calculate(app)['scores'] == expected
+    finally:
+        load_game_state(app, str(baseline))
+
+
+def test_baggage_cart_guard_duty_setup_is_once_only_after_reload(scene, tmp_path):
+    import asyncio
+    from battle_config import load_config, validate_activation
+    from battle_setup import resolve_setup, restore_battle
+    from battle_secondary import prepare_carts
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['optional_rules']['secondary_objectives'] = ['baggage_carts']
+    assert validate_activation(config) == config
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    try:
+        with patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Guard Duty: both players')) as choice:
+            asyncio.run(prepare_carts(app))
+            asyncio.run(prepare_carts(app))
+        choice.assert_awaited_once()
+        assert [cart['player'] for cart in app.battle_secondary['carts']] == [1, 2]
+        path = tmp_path / 'guard-duty.json'
+        save_game_state(app, str(path))
+        load_game_state(app, str(path))
+        with patch.object(app, 'makeChoiceNew', AsyncMock()) as choice:
+            asyncio.run(prepare_carts(app))
+        choice.assert_not_called()
+        assert sum(unit.unit.model.name == 'Baggage Cart' for unit in app.units) == 2
+        from charge_declarations import queue_charge
+        from tests.test_shieldwall_scene import combat_tasks
+        cart = next(unit for unit in app.player1Units if unit.unit.model.name == 'Baggage Cart')
+        target = app.player2Units[0]
+        position, facing = Vec3(cart.bodyNP.getPos()), Vec3(cart.bodyNP.getHpr())
+        assert queue_charge(app, cart, target, position, facing) is None
+        assert cart.bodyNP.getPos() == position
+        assert app.psychology.leadership_of(cart) == (6, None)
+        with combat_tasks(app) as run, patch.object(app, 'makeChoiceNew', AsyncMock()) as choice:
+            async def restricted_moves():
+                for move in ('follow_up', 'pursue', 'overrun'):
+                    assert await app.combat.restrainChoice(cart, target, move) == 'restrain'
+            run(restricted_moves())
+        choice.assert_not_called()
+    finally:
+        load_game_state(app, str(baseline))
+
+
+@pytest.mark.parametrize('size', [(1280, 720), (720, 960)])
+def test_baggage_cart_miniature_renders_within_view(scene, size):
+    from battle_secondary import cart_model
+    from panda3d.core import (FrameBufferProperties, GraphicsPipe, OrthographicLens,
+                             PNMImage, Point3, WindowProperties)
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    model = cart_model((.2, .75, 1, 1))
+    model.reparentTo(app.render)
+    model.setPos(0, 0, 20)
+    camera, lens = app.camera.getTransform(), app.cam.node().getLens()
+    projection = OrthographicLens()
+    projection.setFilmSize(7 * size[0] / size[1], 7)
+    projection.setNearFar(.1, 1000)
+    app.cam.node().setLens(projection)
+    app.camera.setPos(4, -6, 25)
+    app.camera.lookAt(0, 0, 21)
+    properties = WindowProperties()
+    properties.setSize(*size)
+    framebuffer = FrameBufferProperties()
+    framebuffer.setRgbColor(True)
+    framebuffer.setDepthBits(24)
+    buffer = app.graphicsEngine.makeOutput(app.pipe, 'baggage-cart-test', 0, framebuffer,
+                                          properties, GraphicsPipe.BFRefuseWindow,
+                                          app.win.getGsg(), app.win)
+    assert buffer is not None
+    try:
+        buffer.makeDisplayRegion().setCamera(app.cam)
+        app.eventMgr.doEvents()
+        app.graphicsEngine.renderFrame()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert buffer.getScreenshot(image)
+        assert image.getXSize() == size[0] and image.getYSize() == size[1]
+        assert image.write(str(ROOT / '.pytest_cache' / f'baggage-cart-{size[0]}.png'))
+        lower, upper = model.getTightBounds()
+        for horizontal in (lower.x, upper.x):
+            for vertical in (lower.y, upper.y):
+                for height in (lower.z, upper.z):
+                    screen = Vec2()
+                    assert projection.project(app.cam.getRelativePoint(model.getParent(), Point3(horizontal, vertical, height)), screen)
+                    assert abs(screen.x) < .95 and abs(screen.y) < .95
+        model.hide()
+        app.graphicsEngine.renderFrame()
+        background = PNMImage()
+        assert buffer.getScreenshot(background)
+        pixels = sum((image.getXel(horizontal, vertical) - background.getXel(horizontal, vertical)).length() > .1
+                     for horizontal in range(0, size[0], 4) for vertical in range(0, size[1], 4))
+        assert pixels > 500
+    finally:
+        app.graphicsEngine.removeWindow(buffer)
+        model.removeNode()
+        app.cam.node().setLens(lens)
+        app.camera.setTransform(camera)
         load_game_state(app, str(baseline))
 
 

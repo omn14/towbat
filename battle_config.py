@@ -149,8 +149,6 @@ def validate_activation(record):
     config = validate_config(record)
     unsupported = [f'optional_rules.{name}' for name, value in config['optional_rules'].items()
                    if value and name != 'secondary_objectives']
-    unsupported.extend(f'optional_rules.secondary_objectives.{name}'
-                       for name in config['optional_rules']['secondary_objectives'] if name != 'raid_and_burn')
     if config['game']['time_limit_minutes'] is not None:
         unsupported.append('game.time_limit_minutes')
     if unsupported:

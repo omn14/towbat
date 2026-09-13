@@ -344,6 +344,14 @@ async def resolve_declarations(game):
 
 def queue_charge(game, charger, defender, origin, facing):
     """Reserve a declared charger at its starting pose, not its contact preview (p. 119)."""
+    from battle_secondary import non_combatant
+    if non_combatant(charger):
+        from rules_log import rule_log
+        rule_log('Non-Combatant', charger, 'cannot declare a charge; no reaction or charge dice (Companion p. 37)')
+        charger.bodyNP.setPos(origin)
+        charger.bodyNP.setHpr(facing)
+        charger.bodyNP.node().setTransformDirty()
+        return None
     from chaos_gifts import succumbed
     if succumbed(charger):
         from rules_log import rule_skipped

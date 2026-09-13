@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from battle_config import ConfigError, load_config, validate_config
+from battle_config import ConfigError, DEPLOYMENT_MAPS, load_config, validate_config
 
 
 def test_published_defaults_and_independent_loads():
@@ -513,7 +513,7 @@ def test_activation_rejects_unfinished_optional_handlers():
     from battle_config import validate_activation
     config = load_config()
     assert validate_activation(config) == config
-    config['optional_rules']['secondary_objectives'] = ['raid_and_burn']
+    config['optional_rules']['secondary_objectives'] = ['raid_and_burn', 'baggage_carts']
     assert validate_activation(config) == config
     config['optional_rules']['secret_objectives'] = True
     assert validate_config(config) == config
@@ -614,3 +614,90 @@ def test_raid_and_burn_next_own_start_and_once_only(monkeypatch, failure):
     assert not game.battle_secondary['raid_attempts']
     assert not battle_secondary.raiding(game, unit)
     assert battle_secondary.validate_state(config, game.battle_secondary, [objective]) == game.battle_secondary
+
+
+def test_baggage_cart_published_split_profiles():
+    from models import model
+    cart = model('Baggage Cart', '')
+    assert cart.is_chariot()
+    assert cart.characteristics['Troop Type'] == 'Heavy Chariot'
+    assert cart.characteristics['Base Size'] == '60x100'
+    assert cart.get_base_size() == (60, 100)
+    assert cart.characteristics['S'] == '4'
+    assert cart.characteristics['T'] == '5'
+    assert cart.starting_wounds() == 4
+    assert cart.unit_strength() == 5
+    assert cart.part_count('crew') == 1 and cart.part_count('beasts') == 2
+    assert cart.get_crew().characteristics['WS'] == '2'
+    assert cart.get_crew().characteristics['Ld'] == '6'
+    assert cart.get_beasts().characteristics['M'] == '6'
+    assert cart.armor_save == 5
+    assert cart.characteristics['Ld'] == '6'
+
+
+def test_non_combatant_declines_general_bsb_and_compulsory_charges(monkeypatch):
+    from types import SimpleNamespace
+    from models import model
+    from psychology import PsychologySystem
+    from impetuous import legal_targets
+    from battle_secondary import non_combatant
+    cart = SimpleNamespace(unit=SimpleNamespace(model=model('Baggage Cart', '')))
+    assert non_combatant(cart)
+    system = PsychologySystem(SimpleNamespace())
+    monkeypatch.setattr(system, '_command_source', lambda *args: pytest.fail('cart borrowed command support'))
+    assert system.general_of(cart) is None
+    assert system.battle_standard_of(cart) is None
+    assert system.leadership_of(cart) == (6, None)
+    game = SimpleNamespace(movement=SimpleNamespace(movementParticipants=lambda member: [member]))
+    assert legal_targets(game, cart) == []
+
+
+@pytest.mark.parametrize('width,depth', [(44, 30), (48, 36)])
+@pytest.mark.parametrize('map_name', DEPLOYMENT_MAPS)
+@pytest.mark.parametrize('mirror', [False, True])
+def test_cart_escape_only_enemy_zone_board_edge(width, depth, map_name, mirror):
+    from battle_config import MIRRORABLE_MAPS
+    from battle_secondary import cart_escape_edge
+    from battlefield import Battlefield
+    field = Battlefield(width, depth)
+    if mirror and map_name not in MIRRORABLE_MAPS:
+        with pytest.raises(ValueError, match='no alternate deployment'):
+            field.deployment_zone(map_name, 2, mirror=mirror)
+        return
+    enemy = field.deployment_zone(map_name, 2, mirror=mirror)
+    for horizontal, vertical in field.outline:
+        base = (horizontal, vertical, .4, .8, 37)
+        assert cart_escape_edge(field, enemy, [base]) is enemy.contains_point((horizontal, vertical))
+    assert not cart_escape_edge(field, enemy, [(0, 0, .4, .8, 37)])
+
+
+def test_cart_escape_sweep_cannot_jump_over_qualifying_edge():
+    from battle_secondary import cart_escape_edge
+    from battlefield import Battlefield
+    field = Battlefield(44, 30)
+    enemy = field.deployment_zone('pitched_battle', 2)
+    assert cart_escape_edge(field, enemy, [(0, 25, 1, 2, 0)], [(0, 10, 1, 2, 0)])
+    assert not cart_escape_edge(field, enemy, [(0, -25, 1, 2, 0)], [(0, -10, 1, 2, 0)])
+
+
+@pytest.mark.parametrize('corruption', ['duplicate', 'missing', 'owner', 'escaped', 'disabled'])
+def test_baggage_saved_state_rejects_inconsistent_cart_records(corruption):
+    from battle_secondary import empty_state, validate_state
+    config = load_config()
+    config['optional_rules']['secondary_objectives'] = ['baggage_carts']
+    state = empty_state()
+    state['cart_mode'] = 'both'
+    state['carts'] = [{'unit': f'cart-{player}', 'player': player, 'escaped': False} for player in (1, 2)]
+    assert validate_state(config, state, []) == state
+    if corruption == 'duplicate':
+        state['carts'][1]['unit'] = 'cart-1'
+    elif corruption == 'missing':
+        state['carts'].pop()
+    elif corruption == 'owner':
+        state['carts'][1]['player'] = 1
+    elif corruption == 'escaped':
+        state['carts'][0]['escaped'] = 'yes'
+    else:
+        config['optional_rules']['secondary_objectives'] = []
+    with pytest.raises(ConfigError):
+        validate_state(config, state, [])

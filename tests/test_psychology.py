@@ -124,7 +124,7 @@ class ExemptionTests(unittest.TestCase):
     def _unit(rules=None, state='Idle', tested=False, charging=False, combat=False):
         model = SimpleNamespace(special_rules=rules or [])
         return SimpleNamespace(
-            state=state, unit=SimpleNamespace(model=model, name='U'),
+            state=state, unit=SimpleNamespace(model=model, name='U', nmodels=5),
             panicTestedThisPhase=tested, isChargingMove=charging, isInCombat=combat)
 
     def setUp(self):

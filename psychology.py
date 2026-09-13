@@ -972,6 +972,7 @@ class PsychologySystem:
         unit.hasMovedThisTurn = True
         if outcome == 'flee':
             unit.request("IsFleeing")
+        friendlies = list(self._friendlies_of(unit))
 
         def after_move(task=None):
             unit.updateTextNode()
@@ -982,6 +983,13 @@ class PsychologySystem:
                 if resolver is not None:
                     resolver.fleeTerrainTests(unit, start, final)
                     resolver.perilTests(unit, Vec3(final - start))
+            from battle_secondary import escape_cart
+            if escape_cart(self.game, unit, from_pos=start):
+                for other in passed:
+                    if other in friendlies and not other.bodyNP.isEmpty():
+                        self._panic_queue.append((other, None, "fled through", False))
+                on_done()
+                return
             gone = unit.bodyNP.isEmpty()
             if outcome == 'give_ground':
                 # The unit never lost its nerve, so there is nothing to rally
@@ -1130,6 +1138,9 @@ class PsychologySystem:
 
     def general_of(self, unit):
         """The friendly General whose Command range covers *unit*, else None."""
+        from battle_secondary import non_combatant
+        if non_combatant(unit):
+            return None
         if getattr(unit.unit.model, 'troop_type_rule', lambda name: False)('Undisciplined'):
             return None
         return self._command_source(unit, lambda u: getattr(u, 'isGeneral', False))
@@ -1140,6 +1151,9 @@ class PsychologySystem:
         Hold Your Ground lets those units re-roll failed Panic and Rally tests,
         and re-roll the 2D6 of a Break test (Rulebook p. 203).
         """
+        from battle_secondary import non_combatant
+        if non_combatant(unit):
+            return None
         if getattr(unit.unit.model, 'troop_type_rule', lambda name: False)('Undisciplined'):
             return None
         return self._command_source(unit, is_battle_standard_unit)

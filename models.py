@@ -149,7 +149,8 @@ class model:
         self._base_characteristics = None
 
         # 1. Prefer the BattleScribe catalogue (all factions, official data).
-        catalogue_chars = get_catalogue().characteristics(self.name)
+        from battle_secondary import cart_characteristics
+        catalogue_chars = cart_characteristics(self.name) or get_catalogue().characteristics(self.name)
         if catalogue_chars:
             self.characteristics = catalogue_chars
             self._base_characteristics = copy.deepcopy(catalogue_chars)
@@ -203,6 +204,10 @@ class model:
         self.attack_roll = 0
         self.wound_roll = 0
         self.spells = {}       # name -> spell dict; only Wizards have any
+        if self.name == 'Baggage Cart':
+            self.characteristics['Ld'] = self.get_crew().characteristics['Ld']
+            self._base_characteristics['Ld'] = self.characteristics['Ld']
+            self.set_armour(['Armour Value 5+'])
 
     def reset_characteristics(self):
         if self._base_characteristics is not None:

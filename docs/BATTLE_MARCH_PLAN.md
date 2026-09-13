@@ -86,6 +86,12 @@ loser chooses D3 to scatter; Hit/arrow dice and first-contact movement are saved
 Raid & Burn can be enabled in `optional_rules.secondary_objectives`: actual contact
 during Remaining Moves begins a saved destruction attempt, restricts shooting and
 casting, and awards 30 VP after the next own Start of Turn checks succeed.
+Baggage Carts is also available as `baggage_carts` in that list. Setup chooses
+one defender's cart or Guard Duty for both players. Each cart deploys as a single
+60 x 100mm Heavy Chariot with its published driver/draft profiles and a distinct
+miniature. Non-Combatant restrictions, enemy-zone edge escape, literal final
+bonuses, saved ownership and once-only setup are connected. Escaped carts are
+not destroyed and never earn a separate Dead or Fled award.
 Runtime activation explicitly rejects the agreed time limit and other enabled
 optional modules until their handlers are complete. Standard ordinary
 terrain currently offers hills, woods and impassable buildings. Special features,

@@ -36,6 +36,9 @@ def legal_targets(game, unit):
 
     Marching Column prevents the move, not its declaration (p. 101; FAQ v1.5.3).
     """
+    from battle_secondary import non_combatant
+    if non_combatant(unit):
+        return []
     if (unit.state != 'Idle' or unit.hasMovedThisTurn or unit.moveSpentThisTurn
             or unit.isInCombat or unit.cannotChargeThisTurn or not unit.isDeployed
             or getattr(unit, 'hostUnit', None) is not None

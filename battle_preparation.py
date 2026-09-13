@@ -301,6 +301,8 @@ async def run_preparation(game):
         if preparation['stage'] == 'armies':
             await prepare_armies(game, preparation)
         if preparation['stage'] == 'terrain':
+            from battle_secondary import prepare_carts
+            await prepare_carts(game)
             await prepare_terrain(game, preparation)
         if preparation['stage'] == 'objectives':
             place_objectives(game, preparation)
