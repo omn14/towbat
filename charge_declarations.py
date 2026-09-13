@@ -251,7 +251,7 @@ async def flee_reaction(game, defender, incoming, *, fire_and_flee=False):
     """Flee once from the strongest declared charger, before charge rolls (pp. 120, 133)."""
     from panda3d.core import AsyncFuture, Vec3
     from post_combat import fire_and_flee_roll, flee_roll, flees_from
-    from special_rules import board_edge_distance
+    from battlefield import battlefield_for
     from psychology import unit_strength_total
     from rules_log import rule_log, rule_skipped
 
@@ -262,7 +262,7 @@ async def flee_reaction(game, defender, incoming, *, fire_and_flee=False):
     source = flees_from(candidates)
     position = defender.bodyNP.getPos()
     bonus = await game.combat.swiftstrideChoice(
-        defender, 'flee', distance_to_edge=board_edge_distance(position.x, position.y))
+        defender, 'flee', distance_to_edge=battlefield_for(game).edge_distance(position))
     dice, rolls = await game.combat.rullTerninger(3 if bonus else 2, bonus)
     try:
         distance = (fire_and_flee_roll if fire_and_flee else flee_roll)(rolls)

@@ -6,7 +6,7 @@ from panda3d.bullet import BulletBoxShape, BulletGhostNode
 from panda3d.core import Vec3, BitMask32
 
 from collision_masks import CollisionMask as CM
-from models import BOARD_DEPTH, BOARD_WIDTH
+from battlefield import battlefield_for
 
 
 
@@ -17,17 +17,23 @@ class OutOfBounds:
         print("OutOfBounds initialized")
         self.game = Game
         self.mask = CM.OUT_OF_BOUNDS
+        field = battlefield_for(Game)
         # Walls sit just outside the board, so their inner faces are the edge.
         t = 5
-        self.northBoundry=self.boundry((0,BOARD_DEPTH/2+t,0),Vec3(BOARD_WIDTH/2, t, t))
-        self.southBoundry=self.boundry((0,-BOARD_DEPTH/2-t,0),Vec3(BOARD_WIDTH/2, t, t))
+        self.northBoundry=self.boundry((0,field.depth/2+t,0),Vec3(field.width/2, t, t))
+        self.southBoundry=self.boundry((0,-field.depth/2-t,0),Vec3(field.width/2, t, t))
         # The side walls overrun north and south so the corners are covered.
-        self.westBoundry=self.boundry((-BOARD_WIDTH/2-t,0,0),Vec3(t, BOARD_DEPTH/2+10, t))
-        self.eastBoundry=self.boundry((BOARD_WIDTH/2+t,0,0),Vec3(t, BOARD_DEPTH/2+10, t))
+        self.westBoundry=self.boundry((-field.width/2-t,0,0),Vec3(t, field.depth/2+10, t))
+        self.eastBoundry=self.boundry((field.width/2+t,0,0),Vec3(t, field.depth/2+10, t))
         
         #self.northBoundry=self.boundry((0,48/2-12,11))
 
         #taskMgr.add(self.checkGhost, 'checkGhost',extraArgs=[self.northBoundry], appendTask=True)
+
+    def destroy(self):
+        for boundary in (self.northBoundry, self.southBoundry, self.westBoundry, self.eastBoundry):
+            self.game.world.removeGhost(boundary.node())
+            boundary.removeNode()
 
     def boundry(self, position, shp):
         

@@ -21,6 +21,9 @@ from panda3d.core import Vec2, Vec3, Point3, NodePath, TransformState
 from collision_masks import CollisionMask as CM
 
 
+from battlefield import battlefield_for
+
+
 def _stat_int(characteristics: dict, key: str, default: int = 4) -> int:
     """Safely read a numeric stat from a characteristics dict.
     Returns *default* if the value is missing or non-numeric (e.g. '-')."""
@@ -156,7 +159,6 @@ class CombatResolver:
         from formed_skirmish_charge import route_to_model
         from magic_items import current_turn
         from psychology import _box_corners
-        from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH
 
         from drilled import before_move, marching_column
         preview_position = Vec3(charger.bodyNP.getPos())
@@ -198,8 +200,7 @@ class CombatResolver:
                       and getattr(member, 'hostUnit', None) is None]
             blocked = any(obb_distance(pivoted_box, self.game.psychology._unit_box(member)) <= 0
                           for member in others)
-            blocked = blocked or any(abs(corner[0]) > BOARD_HALF_WIDTH or abs(corner[1]) > BOARD_HALF_DEPTH
-                                     for corner in _box_corners(*pivoted_box))
+            blocked = blocked or not battlefield_for(self.game).contains_box(pivoted_box)
             fraction, _, _ = self.game.movement.sweepTestRot(
                 defender, Vec2(start.x, start.y), turn, mask=CM.TERRAIN_IMPASSABLE, pass_over=False)
             moved = 0.0
@@ -238,7 +239,8 @@ class CombatResolver:
             obstacles = [self.game.psychology._unit_box(member) for member in self.game.units
                          if member not in (charger, defender) and not member.bodyNP.isEmpty()
                          and getattr(member, 'hostUnit', None) is None]
-            route = route_to_model([source], [target], 0, origin, obstacles)
+            route = route_to_model([source], [target], 0, origin, obstacles,
+                                   battlefield=battlefield_for(self.game))
             if route is None:
                 rule_skipped('Counter Charge', charger,
                              'no supported charge route after the defender moved; charge fails (LEFTOVER)')
@@ -478,7 +480,8 @@ class CombatResolver:
             and not (getattr(defender, 'isSkirmisher', False) and not getattr(defender, 'skirmishCombat', False))):
             source = self.game.psychology._unit_box(unit)
             target = self.game.psychology._unit_box(defender)
-            route = route_to_model([source], [target], 0, origin, obstacles)
+            route = route_to_model([source], [target], 0, origin, obstacles,
+                                   battlefield=battlefield_for(self.game))
             if route is None:
                 rule_skipped('Charge Move', unit, 'declared target has no supported clear route; charge spent (LEFTOVER)')
                 finish_charge_attempt(unit)
@@ -500,7 +503,8 @@ class CombatResolver:
             route = None
             if not defender.skirmishCombat and declaration.target_index < len(targets):
                 route = route_to_model(starting_boxes(unit, origin, facing), targets,
-                                       declaration.target_index, origin, obstacles)
+                                       declaration.target_index, origin, obstacles,
+                                       battlefield=battlefield_for(self.game))
             if route is None:
                 rule_skipped('Skirmishers', unit,
                              'reserved Skirmisher target has no clear route after reactions; charge spent')
@@ -835,7 +839,7 @@ class CombatResolver:
         chargeBonus = await self.swiftstrideChargeChoice(unit)
         fleeBonus = await self.swiftstrideChoice(
             fleeingUnit, 'flee',
-            distance_to_edge=board_edge_distance(fleePos.x, fleePos.y))
+            distance_to_edge=battlefield_for(self.game).edge_distance(fleePos))
 
         self.terningerCharge = []
         for i in range(3 if chargeBonus else 2):
@@ -1063,7 +1067,7 @@ class CombatResolver:
         if unit.state == "IsPursuing":
             p = unit.bodyNP.getPos()
             return await self.swiftstrideChoice(
-                unit, 'pursuit', distance_to_edge=board_edge_distance(p.x, p.y))
+                unit, 'pursuit', distance_to_edge=battlefield_for(self.game).edge_distance(p))
         return await self.swiftstrideChoice(unit, 'charge')
 
     def chargeRangeText(self, unit, maxmove):
@@ -1479,7 +1483,8 @@ class CombatResolver:
                          for box in model_base_boxes(other)]
             obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                              for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
-            route = route_to_model(original, model_base_boxes(defender), route.target_index, origin, obstacles)
+            route = route_to_model(original, model_base_boxes(defender), route.target_index, origin, obstacles,
+                                   battlefield=battlefield_for(self.game))
         if route is not None:
             preview.route = route
             self.game.moveArceDistance = route.distance
@@ -3202,7 +3207,7 @@ class CombatResolver:
         await before_move(self.game, winner, 'overrun')
         pos = winner.bodyNP.getPos()
         bonus = await self.swiftstrideChoice(
-            winner, 'pursuit', distance_to_edge=board_edge_distance(pos.x, pos.y))
+            winner, 'pursuit', distance_to_edge=battlefield_for(self.game).edge_distance(pos))
         dice = await self.rollMoveDice(winner, 3 if bonus else 2, bonus)
         rolled = pursuit_roll(dice)
 
@@ -3424,7 +3429,7 @@ class CombatResolver:
         kind = 'flee' if outcome == 'break' else 'fall back'
         spent = getattr(loserUnit, 'fledThisPhase', False)
         bonus = False if spent else await self.swiftstrideChoice(
-            loserUnit, kind, distance_to_edge=board_edge_distance(pos.x, pos.y))
+            loserUnit, kind, distance_to_edge=battlefield_for(self.game).edge_distance(pos))
         dice = await self.rollMoveDice(loserUnit, 3 if bonus else 2, bonus)
         distance = (flee_roll(dice, spent) if outcome == 'break'
                     else fall_back_roll(dice, spent))

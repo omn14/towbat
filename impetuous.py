@@ -71,7 +71,9 @@ def legal_targets(game, unit):
             continue
         obstacles = [*others, *((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                                 for piece in pieces if piece.is_impassable)]
-        route = route_to_model([source], [target_box], 0, origin, obstacles)
+        from battlefield import battlefield_for
+        route = route_to_model([source], [target_box], 0, origin, obstacles,
+                       battlefield=battlefield_for(game))
         if route is not None:
             route_maximum = max_charge_range(route_allowance(game, unit, route), unit_has_swiftstride(unit))
             if route.distance <= route_maximum + 1e-5:

@@ -189,7 +189,9 @@ def save_game_state(game, filename=None):
         filename = f"savegame_{timestamp}.json"
     filename = save_path(filename)
 
+    from battle_setup import saved_battle
     game_state = {
+        'battle_march': saved_battle(game),
         'current_phase': (game.fsm.getCurrentOrNextState()
                           or game.fsm.phases[game.fsm.currentPhaseIndex]),
         'current_phase_index': game.fsm.currentPhaseIndex,
@@ -456,6 +458,14 @@ def load_game_state(game, filename):
         messenger.send('hud-log', [message, 'morale'])
         return
 
+    from battle_config import ConfigError
+    from battle_setup import restore_battle, validate_saved_battle
+    try:
+        saved_setup = validate_saved_battle(game_state.get('battle_march'))
+    except ConfigError as error:
+        battle_log(f'Load failed: {error}', 'info')
+        return
+    restore_battle(game, saved_setup)
     _repair_missing_profiles(game_state['units'])
     from spell_effects import active_spells, end_effect
     for spell in active_spells(game):

@@ -57,6 +57,11 @@ def _get_ai_deploy_position(game, unit):
     based on the chosen army strategy and the opponent's already-deployed
     units.  Prints a short reasoning line to the terminal.
     """
+    if getattr(game, 'battle_setup', None) is not None:
+        from battlefield import deployment_candidate, deployment_heading
+        player = side_of(game, unit)
+        unit.bodyNP.setH(deployment_heading(game, player))
+        return deployment_candidate(game, player, random)
     classifier = UnitTypeClassifier()
     advisor = StrategyAdvisor(classifier)
 
@@ -365,7 +370,10 @@ def taskMoveUnit(game,unit,task):
                         [game.setActiveUnitTask, game.setActiveUnitTaskName])
             return task.done
         if getattr(game, 'deploymentStage', 'ordinary') == 'scouts':
-            pxy = (random.uniform(-34, 34), random.uniform(-22, 22))
+            from battlefield import battlefield_for
+            field = battlefield_for(game)
+            pxy = (random.uniform(-field.width / 2 + 2, field.width / 2 - 2),
+                   random.uniform(-field.depth / 2 + 2, field.depth / 2 - 2))
         else:
             pxy = _get_ai_deploy_position(game, unit)
 
@@ -490,7 +498,8 @@ def refresh_deployment(game):
         return
     player = game.roundCounter.current_player
     scouting = getattr(game, 'deploymentStage', 'ordinary') == 'scouts'
-    game.boundary_np.setCollideMask(BitMask32.allOff() if scouting else BitMask32.bit(11))
+    custom = getattr(game, 'battle_setup', None) is not None
+    game.boundary_np.setCollideMask(BitMask32.allOff() if scouting or custom else BitMask32.bit(11))
     game.boundary_np.setPos(0, (-1 if player == 1 else 1) * 18, 0)
     game.roundCounter.update_round_display()
     game.accept('mouse1', game.setActiveUnit,

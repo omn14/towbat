@@ -110,13 +110,14 @@ def placement_error(game, unit, *, scouting=False, ignore=None, deployment_zone=
     owner = side_of(game, unit, default=None)
     if owner is None:
         return 'Cannot determine the deploying player.'
-    ymin, ymax = (-24.0, -12.0) if owner == 1 else (12.0, 24.0)
+    from battlefield import battlefield_for, deployment_zone_for
+    field = battlefield_for(game)
+    zone = deployment_zone_for(game, owner) if deployment_zone and not scouting else None
     for box in boxes:
-        for x, y in _box_corners(*box):
-            if abs(x) > BOARD_HALF_WIDTH or abs(y) > BOARD_HALF_DEPTH:
-                return 'Every model base must be completely on the battlefield.'
-            if deployment_zone and not scouting and not ymin <= y <= ymax:
-                return 'Every model base must be completely inside its deployment zone.'
+        if not field.contains_box(box):
+            return 'Every model base must be completely on the battlefield.'
+        if zone is not None and not zone.contains_box(box):
+            return 'Every model base must be completely inside its deployment zone.'
 
     if scouting:
         distance, enemy = nearest_enemy(game, unit, boxes)

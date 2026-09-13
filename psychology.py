@@ -911,8 +911,9 @@ class PsychologySystem:
             distance = d1 + d2
         # Panic flees resolve without a prompt, so Swiftstride's optional die is
         # taken on the same policy the AI uses.
+        from battlefield import battlefield_for
         if not spent and outcome != 'give_ground' and unit_has_swiftstride(unit) and should_use_swiftstride(
-                'flee', board_edge_distance(up.x, up.y)):
+            'flee', battlefield_for(self.game).edge_distance(up)):
             bonus = random.randint(1, 6)
             distance += bonus
             print(f"[Panic] {unit.unit.name} adds Swiftstride +{bonus} to its "

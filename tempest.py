@@ -15,10 +15,11 @@ class TempestSpell(PillarOfFireSpell):
     spell_type = 'Magical Vortex'
 
     def canTarget(self, point):
-        from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH, model_base_boxes
+        from scouts import model_base_boxes
+        from battlefield import battlefield_for
         if not super().canTarget(point):
             return False
-        if abs(point.x) + 1.5 > BOARD_HALF_WIDTH or abs(point.y) + 1.5 > BOARD_HALF_DEPTH:
+        if not battlefield_for(self.game).contains_box((point.x, point.y, 1.5, 1.5, 0)):
             rule_skipped(self.name, self.caster, '3-inch template must fit on the battlefield')
             return False
         if any(circle_distance(point, box) <= 1.5 + 1e-6

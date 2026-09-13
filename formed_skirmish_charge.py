@@ -6,7 +6,8 @@ import math
 from panda3d.core import Point3, Vec2
 
 from psychology import _box_corners, obb_distance
-from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH, model_base_boxes
+from scouts import model_base_boxes
+from battlefield import STANDARD_BATTLEFIELD, battlefield_for
 from skirmish import EPSILON, swept_base_overlaps
 from skirmish_charge import plan_skirmish_defence, supported_skirmish_defender
 from skirmish_visibility import model_can_see
@@ -97,7 +98,7 @@ class ChargeRoute:
         return self.boxes_at(self.distance)
 
 
-def route_to_model(boxes, targets, target_index, origin, obstacles=()):
+def route_to_model(boxes, targets, target_index, origin, obstacles=(), *, battlefield=STANDARD_BATTLEFIELD):
     """One front-corner wheel and straight approach to the selected model (p. 186)."""
     body = footprint(boxes)
     heading = body[4]
@@ -149,7 +150,7 @@ def route_to_model(boxes, targets, target_index, origin, obstacles=()):
 
     direct = routes(0)
     for route in direct:
-        if path_error(route, targets, obstacles) is None:
+        if path_error(route, targets, obstacles, battlefield=battlefield) is None:
             return route
     remaining = max(0, (target[0] - body[0]) * forward[0] +
                     (target[1] - body[1]) * forward[1] - body[3] - math.hypot(target[2], target[3]))
@@ -159,12 +160,12 @@ def route_to_model(boxes, targets, target_index, origin, obstacles=()):
                for obstacle in [*obstacles, *targets]):
             break
         for route in routes(lead):
-            if path_error(route, targets, obstacles) is None:
+            if path_error(route, targets, obstacles, battlefield=battlefield) is None:
                 return route
     return None
 
 
-def path_error(route, targets, obstacles):
+def path_error(route, targets, obstacles, *, battlefield=STANDARD_BATTLEFIELD):
     """Conservative wheel sweeps; exact SAT for the straight segments."""
     stops = [0, route.lead]
     steps = max(1, math.ceil(abs(route.wheel) / 0.5))
@@ -173,8 +174,7 @@ def path_error(route, targets, obstacles):
     before = footprint(route.boxes_at(0))
     for distance in stops[1:]:
         after = footprint(route.boxes_at(distance))
-        if any(abs(corner[0]) > BOARD_HALF_WIDTH + EPSILON or
-               abs(corner[1]) > BOARD_HALF_DEPTH + EPSILON for corner in _box_corners(*after)):
+        if not battlefield.contains_box(after, EPSILON):
             return 'Charge would leave the battlefield'
         change = abs(math.radians(after[4] - before[4]))
         padding = math.hypot(before[2], before[3]) * change
@@ -312,7 +312,7 @@ def preview_charge(game, unit, target, origin=None, facing=None):
     nearest = min(visible, key=lambda index: (min(obb_distance(box, targets[index]) for box in boxes), index))
     obstacles = [*others, *((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                             for piece in pieces if piece.is_impassable)]
-    result.route = route_to_model(boxes, targets, nearest, origin, obstacles)
+    result.route = route_to_model(boxes, targets, nearest, origin, obstacles, battlefield=battlefield_for(game))
     if result.route is None:
         result.error = f'No clear one-wheel route to closest visible model {nearest + 1}'
     else:

@@ -856,16 +856,14 @@ class MovementSystem:
         collision = self.game.checkUnitContactSmall(unit) is not None
         if drilled:
             from psychology import _box_corners, obb_distance
-            from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH
+            from battlefield import battlefield_for
             box = self.game.psychology._unit_box(unit)
             inset = (*box[:2], max(0, box[2] - .001), max(0, box[3] - .001), box[4])
             collision = any(obb_distance(inset, self.game.psychology._unit_box(member)) <= 0
                             for member in self.game.units if member is not unit
                             and not member.bodyNP.isEmpty()
                             and getattr(member, 'hostUnit', None) is None)
-            collision = collision or any(abs(corner[0]) > BOARD_HALF_WIDTH
-                                         or abs(corner[1]) > BOARD_HALF_DEPTH
-                                         for corner in _box_corners(*box))
+            collision = collision or not battlefield_for(self.game).contains_box(box)
             collision = collision or any(
                 obb_distance(inset, (piece.center.x, piece.center.y,
                                     piece.width / 2, piece.height / 2, 0)) <= 0

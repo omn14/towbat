@@ -8,7 +8,8 @@ from panda3d.core import LineSegs, Point3, Vec2
 from characters import side_of, slay_character
 from psychology import _box_corners, obb_distance
 from rules_log import rule_log, rule_skipped
-from scouts import BOARD_HALF_DEPTH, BOARD_HALF_WIDTH, model_base_boxes
+from scouts import model_base_boxes
+from battlefield import battlefield_for
 from skirmish import EPSILON, coherency_error, swept_base_overlaps
 from skirmish_visibility import ChargeVisibility, charge_visibility
 from terrain_system import dangerous_terrain_wounds
@@ -140,8 +141,7 @@ def preview_move(game, unit, positions=None, destination=None):
     if longest > remaining + 1e-4:
         error = error or f'Longest model move {longest:.2f}" exceeds remaining {remaining:.2f}"'
     for index, (before, after, features) in enumerate(zip(original, boxes, terrain)):
-        if any(abs(corner[0]) > BOARD_HALF_WIDTH + EPSILON or
-               abs(corner[1]) > BOARD_HALF_DEPTH + EPSILON for corner in _box_corners(*after)):
+        if not battlefield_for(game).contains_box(after, EPSILON):
             error = error or f'Model {index + 1} would leave the battlefield'
         for piece in features:
             if piece.is_impassable and (not (flying or ethereal) or obb_distance(

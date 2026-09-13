@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "ruleset": "battle_march_generals_companion",
+  "source": {
+    "url": "https://tow.whfb.app/battle-march/playing-battle-march",
+    "publication": "Battle March: General's Companion",
+    "reviewed": "2026-09-13"
+  },
+  "points_limit": 500,
+  "battlefield": {
+    "width": 44,
+    "depth": 30,
+    "show_boundary": true,
+    "show_deployment": true
+  },
+  "deployment": {
+    "map": "random",
+    "mirror": false,
+    "method": "alternating",
+    "first_turn": "roll_off_choice"
+  },
+  "terrain": {
+    "method": "alternating",
+    "feature_count": 4,
+    "recommended_max_span": 12,
+    "centre_clearance": 12,
+    "opponent_feature_clearance": 12,
+    "objective_clearance": 3
+  },
+  "objectives": {
+    "layout": "random",
+    "trove_base_mm": 40,
+    "landmark_base_mm": 100,
+    "control_distance": 3,
+    "minimum_unit_strength": 5,
+    "landmark_property": "random"
+  },
+  "game": {
+    "rounds": 5,
+    "time_limit_minutes": null
+  },
+  "scoring": {
+    "trove_per_player_turn": 10,
+    "landmark_per_player_turn": 25,
+    "general": 50,
+    "captured_standard": 25,
+    "battle_standard_bearer": 25
+  },
+  "army": {
+    "minimum_units": 2,
+    "maximum_unit_strength": 20,
+    "maximum_character_fraction": 0.25,
+    "maximum_core_fraction": 0.35,
+    "maximum_special_fraction": 0.30,
+    "maximum_rare_mercenary_fraction": 0.25,
+    "restricted_options_allowance": 1
+  },
+  "optional_rules": {
+    "secondary_objectives": [],
+    "secret_objectives": false,
+    "random_happenings": [],
+    "battle_march_magic_items": false
+  }
+}

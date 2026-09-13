@@ -10,6 +10,30 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Foundation: 2026-09-13
+
+General's Companion pp. 23-27, checked against tow.whfb.app on 2026-09-13.
+Added a strict versioned JSON preset, independent resolved setup records, all
+six deployment maps and four mirrored variants. Printed 7.5/11/18/22-inch
+measurements remain fixed at both supported sizes. Full rotated model bases,
+including circle-edge intersections, determine legal deployment. Playable
+bounds now feed Scout deployment, AI candidates, physical boundary walls,
+charge routing, Counter Charge pivots, Drilled redress, loose movement, Tempest
+placement and flee/pursuit edge decisions. The visual table remains 72 x 48.
+Overlay lines come from the same zone geometry. Save/load retains the config,
+resolved map/layout/property dice and side assignment without rolling again;
+legacy saves restore standard bounds and remove Battle March overlays.
+
+Verification: 46 config/geometry tests; 34 Scout and 13 Scout scene tests;
+33 charge declaration and 13 pursuit scene tests pass in isolated 512 MiB
+services. Corrected an edge-only circle regression fixture during development.
+LEFTOVER: no game-start selector yet; this foundation does not provide a
+complete Battle March game. Army validation, terrain/objective setup, first
+turn choice, objective control/effects/scoring, AI objectives, optional rules,
+event play and narrative presets remain to be implemented and verified.
+Offscreen pixel checks and the broader movement regression gate are pending.
+Full suite has not been rerun. See docs/BATTLE_MARCH_PLAN.md for remaining stages.
+
 ## Mixed Combat Departure Links: 2026-09-13
 
 Corrected a one-sided combat relationship after Break & Flee or Fall Back in
