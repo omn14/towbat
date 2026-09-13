@@ -11,6 +11,7 @@ from battlefield import STANDARD_BATTLEFIELD, battlefield_for
 from skirmish import EPSILON, swept_base_overlaps
 from skirmish_charge import plan_skirmish_defence, supported_skirmish_defender
 from skirmish_visibility import model_can_see
+from terrain_system import terrain_obstacle
 
 
 def rotate(point, pivot, angle):
@@ -233,7 +234,7 @@ def route_features(game, route, travel=None):
     paths = route_base_paths(route, travel)
     found = []
     for piece in pieces:
-        obstacle = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+        obstacle = terrain_obstacle(piece)
         if any(swept_base_overlaps(before, after, obstacle) for path in paths for before, after in path):
             found.append(piece)
     return found
@@ -310,7 +311,7 @@ def preview_charge(game, unit, target, origin=None, facing=None):
                         else 'No Skirmisher in the front arc')
         return result
     nearest = min(visible, key=lambda index: (min(obb_distance(box, targets[index]) for box in boxes), index))
-    obstacles = [*others, *((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+    obstacles = [*others, *(terrain_obstacle(piece)
                             for piece in pieces if piece.is_impassable)]
     result.route = route_to_model(boxes, targets, nearest, origin, obstacles, battlefield=battlefield_for(game))
     if result.route is None:

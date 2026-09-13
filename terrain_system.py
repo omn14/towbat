@@ -64,6 +64,8 @@ TERRAIN_CATEGORIES = {
 }
 
 TERRAIN_RULES = {
+    'landmark': {'going': 'impassable', 'blocks_line_of_sight': True},
+    'treasure_trove': {'going': 'open', 'blocks_line_of_sight': False},
     'forest': {
         'going': 'difficult',
         'blocks_line_of_sight': True,
@@ -104,6 +106,7 @@ _TERRAIN_COLORS = {
 }
 
 _TERRAIN_COLLISION_MASK = {
+    'landmark': CM.TERRAIN_IMPASSABLE,
     'forest': BitMask32.bit(20),
     'hill':   BitMask32.bit(21),
     'river':  BitMask32.bit(22),
@@ -128,11 +131,11 @@ _TERRAIN_TYPE_ID = {'forest': 0, 'hill': 1, 'river': 2, 'marsh': 3,
 _WATER_TYPES = {'river', 'marsh'}
 
 # Pieces that build their own coloured geometry and want no terrain shader.
-_BUILT_TYPES = {'house', 'pillar_of_fire'}
+_BUILT_TYPES = {'house', 'pillar_of_fire', 'landmark', 'treasure_trove'}
 
 # Conjured pieces: a rules region drawn as a marker, with no body to collide
 # with and no box outline to misrepresent its shape.
-_ETHEREAL_TYPES = {'pillar_of_fire'}
+_ETHEREAL_TYPES = {'pillar_of_fire', 'treasure_trove'}
 
 # Small lift so raised terrain doesn't z-fight the ground plane.
 _HILL_LIFT = 0.02
@@ -684,6 +687,14 @@ def _fbm2(x, y, seed, octaves=4):
 
 # ── TerrainPiece ──────────────────────────────────────────────────────────────
 
+def terrain_obstacle(piece):
+    """Preserve circular landmark bases in movement checks (Companion p. 25)."""
+    from psychology import CircularObstacle
+    if getattr(piece, 'terrain_type', None) == 'landmark':
+        return CircularObstacle((piece.center.x, piece.center.y), piece.width / 2)
+    return (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+
+
 class TerrainPiece:
     """A single rectangular terrain feature on the battlefield."""
 
@@ -721,7 +732,7 @@ class TerrainPiece:
         # outline would misrepresent them.
         self.outline = None
         if (self.terrain_type not in _WATER_TYPES
-                and self.terrain_type not in ('hill', 'forest')
+            and self.terrain_type not in ('hill', 'forest', 'landmark')
                 and self.terrain_type not in _ETHEREAL_TYPES):
             self._create_outline()
         #self._create_collision()
@@ -733,7 +744,9 @@ class TerrainPiece:
             self._create_trees()
 
     def _create_visual(self):
-        if self.terrain_type == 'river':
+        if self.terrain_type in ('landmark', 'treasure_trove'):
+            self._create_objective_visual()
+        elif self.terrain_type == 'river':
             self._create_river_visual()
         elif self.terrain_type in _WATER_TYPES:
             self._create_water_visual()
@@ -755,6 +768,44 @@ class TerrainPiece:
             self._create_mesh_visual()
         if self.terrain_type not in _BUILT_TYPES:
             self._apply_shader()
+
+    def _create_objective_visual(self):
+        """Round objective bases, with an impassable landmark (Companion p. 25)."""
+        radius = self.width / 2
+        segments = 128
+        ring = [(radius * math.cos(2 * math.pi * index / segments),
+                 radius * math.sin(2 * math.pi * index / segments)) for index in range(segments)]
+        self._field = lambda horizontal, vertical: 1 - horizontal ** 2 - vertical ** 2
+        self._field_edge = 0
+        self._sight_edges = tuple(zip(ring, ring[1:] + ring[:1]))
+        data = GeomVertexData('objective', GeomVertexFormat.getV3c4(), Geom.UHStatic)
+        vertex, color = GeomVertexWriter(data, 'vertex'), GeomVertexWriter(data, 'color')
+        triangles = GeomTriangles(Geom.UHStatic)
+        landmark = self.terrain_type == 'landmark'
+        layers = [(radius, .03, .16, (0.8, 0.78, 0.70, 1) if landmark else (1, 1, 1, 1))]
+        if landmark:
+            layers.append((radius * .27, .16, 3.4, (.65, .7, .72, 1)))
+        for layer_radius, bottom, top, tint in layers:
+            for index in range(segments):
+                angle = 2 * math.pi * index / segments
+                next_angle = 2 * math.pi * (index + 1) / segments
+                first = (layer_radius * math.cos(angle), layer_radius * math.sin(angle))
+                second = (layer_radius * math.cos(next_angle), layer_radius * math.sin(next_angle))
+                start = vertex.getWriteRow()
+                for position in ((0, 0, top), (*first, top), (*second, top),
+                                 (*first, bottom), (*second, bottom)):
+                    vertex.addData3(*position)
+                    color.addData4(*tint)
+                for indices in ((0, 1, 2), (1, 3, 4), (1, 4, 2)):
+                    triangles.addVertices(*(start + offset for offset in indices))
+        geometry = Geom(data)
+        geometry.addPrimitive(triangles)
+        node = GeomNode('battle-march-objective')
+        node.addGeom(geometry)
+        self.visual = self.game.render.attachNewNode(node)
+        self.visual.setPos(self.center)
+        self.visual.setLightOff()
+        self.visual.setTwoSided(True)
 
     def _create_house_visual(self):
         """A medieval timber-framed house filling the piece's footprint."""
@@ -1483,6 +1534,19 @@ class TerrainManager:
         dx = to_pos.x - from_pos.x
         dy = to_pos.y - from_pos.y
         length = math.hypot(dx, dy)
+        from skirmish_visibility import _ray_circle_entry
+        landmark_hits = []
+        for piece in self.terrain_pieces:
+            if piece.terrain_type == 'landmark':
+                direction = (dx / length, dy / length) if length else (1, 0)
+                hit = _ray_circle_entry((from_pos.x, from_pos.y), direction,
+                                       (piece.center.x, piece.center.y), piece.width / 2)
+                if hit is not None and hit <= length:
+                    landmark_hits.append(hit)
+        if landmark_hits:
+            distance = min(landmark_hits)
+            fraction = distance / length if length else 0
+            return Point3(from_pos.x + dx * fraction, from_pos.y + dy * fraction, 0)
         steps = max(int(length / 0.5), 2)   # sample every ~0.5 world-units
 
         # A wood/hill the shooter occupies doesn't block its own line of sight.
@@ -1595,7 +1659,7 @@ class TerrainManager:
 
     def load_records(self, records):
         for entry in records:
-            self.add_terrain(
+            piece = self.add_terrain(
                 entry['type'],
                 Point3(*entry['center']),
                 entry['width'],
@@ -1603,6 +1667,8 @@ class TerrainManager:
                 entry.get('going'),
                 linear_obstacle=entry.get('linear_obstacle', False),
             )
+            if entry.get('objective_id'):
+                piece.objective_id = entry['objective_id']
 
     def to_records(self, exclude=()):
         return [
@@ -1613,6 +1679,7 @@ class TerrainManager:
                     'height': t.height,
                     'going': t.going,
                     **({'linear_obstacle': True} if t.linear_obstacle else {}),
+                    **({'objective_id': t.objective_id} if getattr(t, 'objective_id', None) else {}),
                 }
                 for t in self.terrain_pieces if t not in exclude
             ]

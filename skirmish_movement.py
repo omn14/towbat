@@ -12,7 +12,7 @@ from scouts import model_base_boxes
 from battlefield import battlefield_for
 from skirmish import EPSILON, coherency_error, swept_base_overlaps
 from skirmish_visibility import ChargeVisibility, charge_visibility
-from terrain_system import dangerous_terrain_wounds
+from terrain_system import dangerous_terrain_wounds, terrain_obstacle
 from toHitAndToWound import stat_value
 
 
@@ -122,7 +122,7 @@ def preview_move(game, unit, positions=None, destination=None):
     pieces = getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])
     terrain = [[piece for piece in pieces if swept_base_overlaps(
         after if flying else before, after,
-        (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0))]
+        terrain_obstacle(piece))]
         for before, after in zip(original, boxes)]
     from tempest import tempest_features
     terrain = [tempest_features(game, unit, before, after, features, base_paths=[(before, after)])
@@ -145,7 +145,7 @@ def preview_move(game, unit, positions=None, destination=None):
             error = error or f'Model {index + 1} would leave the battlefield'
         for piece in features:
             if piece.is_impassable and (not (flying or ethereal) or obb_distance(
-                    after, (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)) <= EPSILON):
+                    after, terrain_obstacle(piece)) <= EPSILON):
                 error = error or f'Model {index + 1} is blocked by impassable terrain'
         for other in game.units:
             if (other is unit or getattr(other, 'hostUnit', None) is not None

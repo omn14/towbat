@@ -276,6 +276,7 @@ def declaration_route(game, unit, target, maximum):
     from scouts import model_base_boxes
     from skirmish import swept_base_overlaps
     from skirmish_visibility import charge_visibility
+    from terrain_system import terrain_obstacle
     from special_rules import max_charge_range, unit_has_swiftstride, unit_is_ethereal
     if not charge_visibility(game, unit, target).allowed:
         return None
@@ -313,7 +314,7 @@ def declaration_route(game, unit, target, maximum):
             if any(swept_base_overlaps(path_start, after, obstacle) for obstacle in others):
                 return None
             for piece in pieces:
-                obstacle = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                obstacle = terrain_obstacle(piece)
                 if swept_base_overlaps(path_start, after, obstacle):
                     if piece.is_impassable and (not ethereal or obb_distance(after, obstacle) <= EPSILON):
                         return None

@@ -10,6 +10,37 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Objective Terrain and HUD: 2026-09-13
+
+General's Companion pp. 24-25. Troves render as numbered round, non-colliding
+tokens; landmarks have a 100mm round base, collision mesh and visible column.
+Saved terrain IDs are reconciled on setup/reload/scoring without duplicate
+pieces. Player colors and contested/destroyed state follow the control records.
+
+Circular obstacles now retain exact base distance and translating-base sweeps
+in deployment, formed and loose charges, ordinary loose movement, Drilled
+reshaping and Ethereal landing. Landmark LOS uses exact ray/circle intersections
+and tangent angular intervals in shared sight, shooting, redirection and shared
+spell targeting, plus the live terrain aiming-ray query. Landmark shooting
+uses individual sight even without Skirmishers, so hill elevation cannot bypass
+the all-LOS prohibition. Other terrain retains its existing query policies.
+
+Both HUD orientations show objective VP, control/contested state and landmark
+property, retained across orientation rebuilds. Battle results include objective
+categories. Offscreen screenshots revealed tiny horizontal text and cyan tint
+turning a gold token green; larger separate score lines and neutral token
+geometry corrected those issues. Numbered-marker pixels and text bounds pass.
+
+Validation: 67 config/geometry, 23 real deployment/objective/HUD, 59 visibility,
+51 formed charge, 34 Drilled/Impetuous, 33 charge declaration, 13 victory-points
+and 9 High Magic tests passed in sequential bounded runs. Latest visual run
+20260913-174504-74698 peaked at 441.4 MiB; both orientations inspected. The
+visibility module peaked at 1017.6 MiB under its 1024 MiB cap. No full-suite run.
+
+LEFTOVER: complete standard setup and startup activation; objective-aware AI;
+private/optional/narrative modules; both-order final-round and interruption
+recovery tests; portrait visual checks. This does not complete stages 3-7.
+
 ## Battle March Objective Lifecycle and Frenzy: 2026-09-13
 
 General's Companion pp. 25, 27; amended Rulebook p. 170; Matched Play Guide

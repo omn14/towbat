@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import random
 import math
+from dataclasses import dataclass
 
 from panda3d.core import Vec3, Point3
 from direct.interval.LerpInterval import LerpPosInterval
@@ -75,9 +76,21 @@ def _poly_edge_dist(a, b):
     return best
 
 
+@dataclass(frozen=True)
+class CircularObstacle:
+    center: tuple
+    radius: float
+
+
 def obb_distance(box_a, box_b) -> float:
     """Closest distance between two oriented footprint boxes (0 if overlapping).
     Each box is (cx, cy, half_width, half_depth, heading_degrees)."""
+    if isinstance(box_a, CircularObstacle) or isinstance(box_b, CircularObstacle):
+        from spell_templates import circle_distance
+        if isinstance(box_a, CircularObstacle) and isinstance(box_b, CircularObstacle):
+            return max(0, math.dist(box_a.center, box_b.center) - box_a.radius - box_b.radius)
+        circle, box = (box_a, box_b) if isinstance(box_a, CircularObstacle) else (box_b, box_a)
+        return max(0, circle_distance(circle.center, box) - circle.radius)
     a = _box_corners(*box_a)
     b = _box_corners(*box_b)
     if _polys_overlap(a, b):

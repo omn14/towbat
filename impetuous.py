@@ -14,6 +14,7 @@ from scouts import model_base_boxes, scout_charge_blocked
 from skirmish_visibility import model_can_see
 from special_rules import max_charge_range, unit_has_swiftstride
 from vanguard import vanguard_charge_blocked
+from terrain_system import terrain_obstacle
 
 
 def has_impetuous(unit):
@@ -68,12 +69,9 @@ def legal_targets(game, unit):
                   and member.isDeployed and not member.bodyNP.isEmpty()
                   and getattr(member, 'hostUnit', None) is None
                   for box in model_base_boxes(member)]
-        opaque = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                  for piece in pieces if piece.blocks_line_of_sight
-                  and not piece.contains(origin) and not piece.contains(target.bodyNP.getPos())]
-        if not model_can_see(source, [target_box], [*others, *opaque], facing=source[4]):
+        if not model_can_see(source, [target_box], others, facing=source[4], terrain=pieces):
             continue
-        obstacles = [*others, *((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+        obstacles = [*others, *(terrain_obstacle(piece)
                                 for piece in pieces if piece.is_impassable)]
         from battlefield import battlefield_for
         route = route_to_model([source], [target_box], 0, origin, obstacles,

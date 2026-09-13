@@ -806,6 +806,8 @@ def load_game_state(game, filename):
         game.terrain_manager.clear()
         game.terrain_manager.load_records(game_state['terrain'])
     load_spells(game, game_state.get('spells_in_play'), unit_map)
+    from battle_objectives import sync_markers
+    sync_markers(game)
     # Restore after phase entry and rebuilding units; neither may re-roll or
     # advance a half-finished Scout deployment. Older saves deployed normally.
     game.deploymentStage = game_state.get('deployment_stage', 'ordinary')

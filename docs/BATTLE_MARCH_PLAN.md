@@ -55,6 +55,11 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   Supported loose form-ups use the same planner as actual charge moves.
 - Battle March uses 50/25/25 General/standard/BSB bonuses and most VP wins.
   Standard-game scoring is unchanged.
+- Numbered trove tokens and circular landmark terrain now render and restore.
+  Shared movement and sight checks retain the landmark's round footprint and
+  all-LOS prohibition. Both HUD orientations show control/property/objective VP,
+  and battle results include objective award categories. Offscreen visual
+  checks cover both objective layouts and both HUD orientations.
 
 This is not yet a playable Battle March mode. No startup option is exposed.
 The presence of objective, terrain or optional settings does not mean their

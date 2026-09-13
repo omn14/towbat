@@ -468,12 +468,13 @@ class CombatResolver:
         from scouts import model_base_boxes
         from special_rules import unit_is_ethereal
         from chariot_terrain import linear_impassable
+        from terrain_system import terrain_obstacle
         flying = unit.unit.model.is_flying()
         obstacles = [] if flying else [box for member in self.game.units if member not in (unit, defender)
                      and not member.bodyNP.isEmpty() and member.isDeployed
                      and getattr(member, 'hostUnit', None) is None for box in model_base_boxes(member)]
         if not flying and not unit_is_ethereal(unit):
-            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+            obstacles.extend(terrain_obstacle(piece)
                              for piece in self.game.terrain_manager.terrain_pieces
                              if piece.is_impassable or linear_impassable(piece, unit))
         if (not (getattr(unit, 'isSkirmisher', False) and not getattr(unit, 'skirmishCombat', False))
@@ -1481,7 +1482,8 @@ class CombatResolver:
             obstacles = [box for other in self.game.units if other not in (unit, defender)
                          and other.isDeployed and getattr(other, 'hostUnit', None) is None
                          for box in model_base_boxes(other)]
-            obstacles.extend((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+            from terrain_system import terrain_obstacle
+            obstacles.extend(terrain_obstacle(piece)
                              for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
             route = route_to_model(original, model_base_boxes(defender), route.target_index, origin, obstacles,
                                    battlefield=battlefield_for(self.game))

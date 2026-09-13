@@ -53,13 +53,10 @@ def redirect_targets(game, entry):
         for index, source in enumerate(sources):
             visible = []
             for destination in destinations:
-                terrain = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                           for piece in game.terrain_manager.terrain_pieces if piece.blocks_line_of_sight
-                           and not piece.contains(Point3(*source[:2], 0))
-                           and not piece.contains(Point3(*destination[:2], 0))]
                 visible.append(model_can_see(source, [destination],
-                               [*sources[:index], *sources[index + 1:], *blockers, *terrain],
-                               facing=None if dispersed else source[4]))
+                               [*sources[:index], *sources[index + 1:], *blockers],
+                               facing=None if dispersed else source[4],
+                               terrain=game.terrain_manager.terrain_pieces))
             seen.append(any(visible))
         if (sum(seen) * 2 > len(seen)) if dispersed else any(seen):
             result.append(target)

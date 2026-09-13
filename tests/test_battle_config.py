@@ -482,3 +482,28 @@ def test_landmark_grants_expire_without_removing_permanent_sources(property_name
     refresh_landmark_grants(game, [], '2:1:0')
     assert profile.special_rules == [permanent]
     assert permanent['frenzy_lost']
+
+
+def test_round_landmark_base_distance_and_swept_contact():
+    from psychology import CircularObstacle, obb_distance
+    from skirmish import swept_base_overlaps
+    obstacle = CircularObstacle((0, 0), 2)
+    corner = (1.9, 1.9, .1, .1, 0)
+    assert obb_distance(corner, obstacle) > .5
+    assert not swept_base_overlaps(corner, (3, 1.9, .1, .1, 0), obstacle)
+    assert obb_distance((2.1, 0, .1, .1, 0), obstacle) == pytest.approx(0)
+    assert swept_base_overlaps((-4, 0, .1, .1, 0), (4, 0, .1, .1, 0), obstacle)
+
+
+def test_landmark_sight_blocks_circle_not_empty_corners():
+    from types import SimpleNamespace
+    from panda3d.core import Point3
+    from skirmish_visibility import model_can_see
+    from shooting_geometry import model_shot
+    piece = SimpleNamespace(terrain_type='landmark', center=Point3(0, 0, 0), width=4)
+    observer = (-5, 0, .05, .05, 0)
+    target = (5, 0, .05, .05, 0)
+    assert not model_can_see(observer, [target], terrain=[piece])
+    assert model_shot(observer, [target], [], 24, terrain=[piece])[2] == 'no line of sight'
+    assert model_can_see((-4, 7, .05, .05, 0), [(7, -4, .05, .05, 0)], terrain=[piece])
+    assert not model_can_see((-4, 6.7, .01, .01, 0), [(6.7, -4, .01, .01, 0)], terrain=[piece])

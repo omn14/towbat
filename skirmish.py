@@ -136,6 +136,10 @@ def targeted_replacement(boxes, victim, eligible):
 
 def swept_base_overlaps(start, end, obstacle):
     """SAT for a translated base's swept convex polygon against an OBB."""
+    from psychology import CircularObstacle
+    if isinstance(obstacle, CircularObstacle):
+        from spell_templates import swept_circle_distance
+        return swept_circle_distance(obstacle.center, start, end) <= obstacle.radius + EPSILON
     start_corners = _box_corners(*start)
     end_corners = _box_corners(*end)
     obstacle_corners = _box_corners(*obstacle)

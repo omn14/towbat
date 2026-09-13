@@ -1,7 +1,7 @@
 """Planar per-model charge sight (Rulebook pp. 103, 184, 186; FAQ v1.5.3)."""
 
 from dataclasses import dataclass
-from math import atan2, cos, hypot, radians, sin, tau
+from math import asin, atan2, cos, hypot, radians, sin, sqrt, tau
 
 from panda3d.core import Point3
 
@@ -68,6 +68,16 @@ def _ray_segment_entry(origin, direction, edge):
     return distance if distance >= 0 and 0 <= fraction <= 1 else None
 
 
+def _ray_circle_entry(origin, direction, center, radius):
+    offset = (origin[0] - center[0], origin[1] - center[1])
+    projection = offset[0] * direction[0] + offset[1] * direction[1]
+    discriminant = projection ** 2 - (offset[0] ** 2 + offset[1] ** 2 - radius ** 2)
+    if discriminant < 0:
+        return None
+    near, far = -projection - sqrt(discriminant), -projection + sqrt(discriminant)
+    return max(0, near) if far >= 0 else None
+
+
 def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     """Sight from a base centre to any exposed target edge, not a centre ray.
 
@@ -88,7 +98,11 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
                 for target in targets for corner in _box_corners(*target))
     blockers = list(blockers)
     edges = []
+    circles = []
     for piece in terrain:
+        if getattr(piece, 'terrain_type', None) == 'landmark':
+            circles.append(((piece.center.x, piece.center.y), piece.width / 2))
+            continue
         if (not piece.blocks_line_of_sight
                 or piece.contains(Point3(*origin, 0))
                 or piece.contains(Point3(*targets[0][:2], 0))
@@ -117,7 +131,9 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
         return (all((hit := _ray_entry(origin, direction, box)) is None or hit > distance + EPSILON
                 for box in blockers)
             and all((hit := _ray_segment_entry(origin, direction, edge)) is None
-                or hit > distance + EPSILON for edge in edges))
+                or hit > distance + EPSILON for edge in edges)
+            and all((hit := _ray_circle_entry(origin, direction, center, radius)) is None
+                or hit > distance + EPSILON for center, radius in circles))
 
     for target in targets:
         length = hypot(target[0] - origin[0], target[1] - origin[1])
@@ -128,6 +144,13 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     corners = [corner for box in [*targets, *blockers] for corner in _box_corners(*box)]
     corners.extend(point for edge in edges for point in edge)
     angles = sorted({atan2(corner[1] - origin[1], corner[0] - origin[0]) % tau for corner in corners})
+    for center, radius in circles:
+        separation = hypot(center[0] - origin[0], center[1] - origin[1])
+        if separation <= radius:
+            return False
+        direction = atan2(center[1] - origin[1], center[0] - origin[0])
+        half_angle = asin(radius / separation)
+        angles = sorted({*angles, (direction - half_angle) % tau, (direction + half_angle) % tau})
     if facing is not None:
         angles = sorted({*angles, radians(facing + 45) % tau, radians(facing + 135) % tau})
     for first, last in zip(angles, angles[1:] + [angles[0] + tau]):

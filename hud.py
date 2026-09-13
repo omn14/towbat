@@ -224,6 +224,7 @@ class HUD(DirectObject):
         self._tabs = {}
         self._turn_state = None
         self._dice_state = []
+        self._objective_state = ([], [])
 
         font = T.get_font()
         self._font = font
@@ -390,6 +391,7 @@ class HUD(DirectObject):
         self._log_w = log_w
         self._log_text['wordwrap'] = (log_w - 0.04) / self.LOG_SCALE
         self._fit_phase()
+        self._fit_objectives()
         self._redraw_log()
         if self._history is not None:
             self._history.layout()
@@ -549,10 +551,8 @@ class HUD(DirectObject):
     def _build_objectives(self, font):
         anchor = self._section('objectives')
         self._heading(anchor, 'objectives', 'OBJECTIVES')
-        # No objectives system in the engine yet, so the panel reserves the
-        # space rather than inventing a readout.
-        self._place(self._slot(anchor, 0.20, 0.30, centred=True),
-                    'objectives', 0.5, 0.210)
+        self._objectives_text = self._label(anchor, 'objectives', .06, .30,
+                                            .022, T.INK, text='No objectives')
 
     def _build_end(self, font, z, scale):
         anchor = self._section('end', page=False)
@@ -751,10 +751,12 @@ class HUD(DirectObject):
         self._tab_panels['log'] = [self._log_text, button]
         self._log_anchor = anchor
         self._bind_log_wheel()
-        for key, z in (('rules', -0.230), ('objectives', -0.230)):
-            slot = self._slot(anchor, 0.22, 0.22, centred=True)
-            self._place(slot, 'tabs', 0.5, z)
-            self._tab_panels[key] = [slot]
+        slot = self._slot(anchor, 0.22, 0.22, centred=True)
+        self._place(slot, 'tabs', 0.5, -.230)
+        self._tab_panels['rules'] = [slot]
+        self._objectives_text = self._label(anchor, 'tabs', .06, -.075,
+                                            .022, T.INK, text='No objectives')
+        self._tab_panels['objectives'] = [self._objectives_text]
         self.show_tab('log')
 
     def _build_controls_v(self, font):
@@ -975,6 +977,32 @@ class HUD(DirectObject):
         self._turn.setText(f"PLAYER {player}")
         self._round.setText(f"Round {round_no} / {max_rounds}")
 
+    def set_objectives(self, objectives, awards):
+        from copy import deepcopy
+        self._objective_state = deepcopy((objectives, awards))
+        totals = [sum(entry['points'] for entry in awards if entry['player'] == player) for player in (1, 2)]
+        lines = [f'P1 {totals[0]:g} VP', f'P2 {totals[1]:g} VP'] if objectives else ['No objectives']
+        properties = {'magic_resistance': 'MR (-2)', 'frenzy': 'Frenzy', 'stubborn': 'Stubborn'}
+        for index, objective in enumerate(objectives, 1):
+            state = ('Destroyed' if objective['destroyed'] else 'Contested' if objective['contested'] else
+                     f'P{objective["player"]}' if objective['player'] else 'Unclaimed')
+            lines.append(f'{index} {"Landmark" if objective["kind"] == "landmark" else "Trove"}: {state}')
+            if objective['kind'] == 'landmark':
+                lines.append(properties.get(objective['property'], ''))
+        self._objectives_text.setText('\n'.join(lines))
+        self._fit_objectives()
+
+    def _fit_objectives(self):
+        if not hasattr(self, '_objectives_text'):
+            return
+        section = 'tabs' if self._vertical else 'objectives'
+        total = 2 if self._vertical else 2 * base.getAspectRatio()
+        width = self._section_width(section, total) * .88
+        node = self._objectives_text.textNode
+        height = .28 if self._vertical else .24
+        scale = min(.030, width / max(.001, node.getWidth()), height / max(.001, node.getHeight()))
+        self._objectives_text.setScale(scale)
+
     def set_battle_result(self, result):
         previous = getattr(self, '_battle_result_panel', None)
         if previous is not None:
@@ -994,9 +1022,12 @@ class HUD(DirectObject):
         for player, horizontal in ((1, .18), (2, .66)):
             T.styled_text(f'Player {player}', parent=panel, pos=(horizontal, .29), scale=.042,
                           fg=T.INK, shadow=None, align=TextNode.ARight)
-        for index, rule in enumerate(('Dead or Fled', 'The King is Dead', 'Trophies of War', 'Total VP')):
-            vertical = .16 - index * .13
-            T.styled_text(rule, parent=panel, pos=(-.72, vertical), scale=.042, fg=T.INK, shadow=None)
+        rules = list(dict.fromkeys(['Dead or Fled', 'The King is Dead', 'Trophies of War',
+                                    *(row['rule'] for row in result['rows']), 'Total VP']))
+        spacing = min(.13, .43 / max(1, len(rules) - 1))
+        for index, rule in enumerate(rules):
+            vertical = .16 - index * spacing
+            T.styled_text(rule, parent=panel, pos=(-.72, vertical), scale=min(.042, spacing / 2), fg=T.INK, shadow=None)
             for player, horizontal in ((1, .18), (2, .66)):
                 value = result['scores'][player - 1] if rule == 'Total VP' else sum(
                     row['points'] for row in result['rows'] if row['player'] == player and row['rule'] == rule)
@@ -1224,6 +1255,7 @@ class HUD(DirectObject):
                 'phase': self._active_phase,
                 'turn': self._turn_state,
                 'dice': self._dice_state,
+                'objectives': self._objective_state,
                 'collapsed': self._collapsed}
 
     def restore(self, state):
@@ -1236,6 +1268,7 @@ class HUD(DirectObject):
         if state.get('turn'):
             self.set_turn(*state['turn'])
         self.set_dice(state.get('dice') or [])
+        self.set_objectives(*state.get('objectives', ([], [])))
         if state.get('collapsed') and self._vertical:
             self.toggle_collapse()
 

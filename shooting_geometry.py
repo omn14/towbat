@@ -45,11 +45,7 @@ def model_shot(observer, targets, blockers, reach, *, facing=None, sight_origin=
     source = observer if sight_origin is None else sight_origin
     seen = []
     for target in targets:
-        terrain_boxes = [(piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
-                         for piece in terrain if piece.blocks_line_of_sight
-                         and not piece.contains(Point3(*source[:2], 0))
-                         and not piece.contains(Point3(*target[:2], 0))]
-        if model_can_see(source, [target], [*blockers, *terrain_boxes], facing=facing):
+        if model_can_see(source, [target], blockers, facing=facing, terrain=terrain):
             seen.append(obb_distance(observer, target))
     if not seen:
         return None, False, 'no line of sight'
@@ -80,6 +76,9 @@ def enemy_fire_modifier(target, *, log=False):
 
 
 def uses_individual_shooting(game, unit, target):
+    if any(getattr(piece, 'terrain_type', None) == 'landmark'
+           for piece in getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])):
+        return True
     if is_skirmish_unit(unit) or is_skirmish_unit(target):
         return True
     return any(is_skirmish_unit(member) and member.isDeployed and member.unit.nmodels > 0

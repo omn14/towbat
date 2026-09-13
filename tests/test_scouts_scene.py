@@ -266,6 +266,19 @@ def test_landmark_grant_reload_and_next_turn_expiry(scene, tmp_path, property_na
         save_game_state(app, str(saved))
         load_game_state(app, str(saved))
         assert len(grants()) == 1
+        pieces = [piece for piece in app.terrain_manager.terrain_pieces if getattr(piece, 'objective_id', None)]
+        assert len(pieces) == 1
+        landmark = pieces[0]
+        from panda3d.core import Point3
+        assert landmark.is_impassable and landmark.blocks_line_of_sight
+        assert landmark.contains(Point3(0, 0, 0))
+        assert not landmark.contains(Point3(1.8, 1.8, 0))
+        assert landmark.ghost_np is not None
+        assert '25 VP' in app.hud._objectives_text.getText()
+        assert 'Landmark: P1' in app.hud._objectives_text.getText()
+        assert len(app.hud.snapshot()['objectives'][0]) == 1
+        assert app.terrain_manager.los_block_point(Point3(-6, 0, 20), Point3(6, 0, 20)) is not None
+        assert app.terrain_manager.los_block_point(Point3(-4, 7, 20), Point3(7, -4, 20)) is None
         if property_name == 'frenzy':
             assert grants()[0]['frenzy_lost']
         assert score_turn(app) == []
@@ -274,6 +287,60 @@ def test_landmark_grant_reload_and_next_turn_expiry(scene, tmp_path, property_na
         assert score_turn(app) == []
         assert grants() == []
     finally:
+        load_game_state(app, str(baseline))
+
+
+@pytest.mark.parametrize('layout', ['three_troves', 'landmark'])
+def test_objective_markers_and_hud_render_both_orientations(scene, layout):
+    from panda3d.core import OrthographicLens, PNMImage
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from battle_objectives import score_turn
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['objectives'].update(layout=layout, landmark_property='magic_resistance')
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    unit = next(member for member in app.units if member.unitName == 'Normal Rangers')
+    unit.bodyNP.setPos(0, -3.5, 0)
+    old_lens = app.cam.node().getLens()
+    old_camera = app.camera.getTransform()
+    original_orientation = app.hud.orientation
+    try:
+        score_turn(app)
+        lens = OrthographicLens()
+        lens.setFilmSize(80, 45)
+        app.cam.node().setLens(lens)
+        app.camera.setPos(0, 0, 100)
+        app.camera.lookAt(0, 0, 0)
+        with patch.object(game_module, 'save_setting'):
+            for unused in range(2):
+                if app.hud._vertical:
+                    app.hud.show_tab('objectives')
+                app.hud._layout()
+                app.eventMgr.doEvents()
+                app.graphicsEngine.renderFrame()
+                app.graphicsEngine.renderFrame()
+                text = app.hud._objectives_text
+                scale = text.getScale()[0]
+                section = 'tabs' if app.hud._vertical else 'objectives'
+                total = 2 if app.hud._vertical else 2 * app.getAspectRatio()
+                assert text.textNode.getWidth() * scale <= app.hud._section_width(section, total) * .9
+                image = PNMImage()
+                assert app.win.getScreenshot(image)
+                cyan_pixels = sum(image.getXel(horizontal, vertical).x < .4
+                                  and image.getXel(horizontal, vertical).y > .55
+                                  and image.getXel(horizontal, vertical).z > .7
+                                  for horizontal in range(605, 675) for vertical in range(325, 395))
+                assert cyan_pixels > 100
+                assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_{layout}_{app.hud.orientation}.png'))
+                app.toggleHudLayout()
+    finally:
+        with patch.object(game_module, 'save_setting'):
+            if app.hud.orientation != original_orientation:
+                app.toggleHudLayout()
+        app.cam.node().setLens(old_lens)
+        app.camera.setTransform(old_camera)
         load_game_state(app, str(baseline))
 
 

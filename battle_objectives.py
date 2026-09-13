@@ -18,6 +18,54 @@ from spell_templates import circle_distance
 TOLERANCE = 1e-5
 
 
+def sync_markers(game):
+    """Reconcile derived marker terrain without rerolls or duplicate pieces."""
+    from panda3d.core import Point3, TextNode
+    hud = getattr(game, 'hud', None)
+    if hud is not None:
+        hud.set_objectives(getattr(game, 'battle_objectives', []), getattr(game, 'battle_awards', []))
+    manager = getattr(game, 'terrain_manager', None)
+    if manager is None:
+        return
+    existing = {}
+    for piece in list(manager.terrain_pieces):
+        identity = getattr(piece, 'objective_id', None)
+        if identity is not None:
+            if identity in existing:
+                manager.remove_terrain(piece)
+            else:
+                existing[identity] = piece
+    for objective in getattr(game, 'battle_objectives', []):
+        if objective['destroyed']:
+            continue
+        kind = 'landmark' if objective['kind'] == 'landmark' else 'treasure_trove'
+        piece = existing.pop(objective['id'], None)
+        center = Point3(*objective['center'], 0)
+        if piece is not None and (piece.terrain_type != kind or piece.center != center
+                                  or piece.width != objective['diameter']):
+            manager.remove_terrain(piece)
+            piece = None
+        if piece is None:
+            piece = manager.add_terrain(kind, center, objective['diameter'], objective['diameter'])
+            piece.objective_id = objective['id']
+        color = ((1, .6, .2, 1) if objective['contested'] else
+                 (.3, .85, 1, 1) if objective['player'] == 1 else
+                 (1, .35, .3, 1) if objective['player'] == 2 else
+                 (1, .76, .15, 1) if kind == 'treasure_trove' else (1, 1, 1, 1))
+        piece.visual.setColorScale(*color)
+        if piece.visual.find('objective-number').isEmpty():
+            label = TextNode('objective-number')
+            label.setText(objective['id'].removeprefix('objective-'))
+            label.setAlign(TextNode.ACenter)
+            label.setTextColor(.05, .05, .05, 1)
+            node = piece.visual.attachNewNode(label)
+            node.setP(-90)
+            node.setScale(.65 if kind == 'landmark' else .6)
+            node.setPos(0, -.22, 3.42 if kind == 'landmark' else .18)
+    for piece in existing.values():
+        manager.remove_terrain(piece)
+
+
 def landmark_profiles(unit):
     pending = [unit.unit.model, *getattr(unit.unit, 'command_models', {}).values()]
     joined = getattr(unit, 'joinedCharacter', None)
@@ -184,6 +232,7 @@ def score_turn(game, choices=None):
     game.battle_objectives = results
     game.battle_awards = [*getattr(game, 'battle_awards', []), *awards]
     game.battle_scored_turns = [*scored, key]
+    sync_markers(game)
     return awards
 
 

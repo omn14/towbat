@@ -325,11 +325,9 @@ def visible_spell_target(game, caster, target):
                 if getattr(member, 'hostUnit', None) is None and member.isDeployed
                 for box in model_base_boxes(member)
                 if box != observer and box not in targets]
-    for piece in getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', []):
-        if piece.blocks_line_of_sight and not piece.contains(Point3(*observer[:2], 0)):
-            blockers.append((piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0))
+    terrain = getattr(getattr(game, 'terrain_manager', None), 'terrain_pieces', [])
     facing = None if caster.unit.model.has_all_round_vision() else observer[4]
-    return model_can_see(observer, targets, blockers, facing=facing)
+    return model_can_see(observer, targets, blockers, facing=facing, terrain=terrain)
 
 
 class VaulsUnmakingSpell(Spell):

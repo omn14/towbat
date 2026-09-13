@@ -857,6 +857,7 @@ class MovementSystem:
         if drilled:
             from psychology import _box_corners, obb_distance
             from battlefield import battlefield_for
+            from terrain_system import terrain_obstacle
             box = self.game.psychology._unit_box(unit)
             inset = (*box[:2], max(0, box[2] - .001), max(0, box[3] - .001), box[4])
             collision = any(obb_distance(inset, self.game.psychology._unit_box(member)) <= 0
@@ -865,8 +866,7 @@ class MovementSystem:
                             and getattr(member, 'hostUnit', None) is None)
             collision = collision or not battlefield_for(self.game).contains_box(box)
             collision = collision or any(
-                obb_distance(inset, (piece.center.x, piece.center.y,
-                                    piece.width / 2, piece.height / 2, 0)) <= 0
+                obb_distance(inset, terrain_obstacle(piece)) <= 0
                 for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
             if any(math.hypot(after[0] - before[0], after[1] - before[1]) > 2 * M + .001
                    for before, after in zip(before_boxes, model_base_boxes(unit))):
@@ -1279,11 +1279,11 @@ class MovementSystem:
         """Ethereal may cross, but not finish in impassable terrain (p. 167)."""
         from psychology import obb_distance
         from special_rules import unit_is_ethereal
+        from terrain_system import terrain_obstacle
         if not unit_is_ethereal(unit):
             return False
         box = self.game.psychology._unit_box(unit)
-        return any(obb_distance(box, (piece.center.x, piece.center.y,
-                                     piece.width / 2, piece.height / 2, 0)) <= 0
+        return any(obb_distance(box, terrain_obstacle(piece)) <= 0
                    for piece in self.game.terrain_manager.terrain_pieces if piece.is_impassable)
 
     def _destOnUnit(self, unit, endp) -> bool:

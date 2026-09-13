@@ -177,3 +177,5 @@ def restore_battle(game, record):
     elif overlay is not None:
         overlay.removeNode()
         game.battlefield_overlay = None
+    from battle_objectives import sync_markers
+    sync_markers(game)
