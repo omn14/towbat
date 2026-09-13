@@ -11,6 +11,96 @@ from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
 
 
+@pytest.mark.parametrize('fall_back_first', [True, False])
+@pytest.mark.parametrize('departure', ['fall_back', 'break'])
+def test_follow_up_drops_separated_opponent_from_both_combat_lists(
+        scene, tmp_path, fall_back_first, departure):
+    """Mixed Break results only retain actual Follow Up contact (pp. 154-156)."""
+    from direct.interval.IntervalGlobal import Sequence
+    from combat_contacts import engaged_units
+    from persistence import load_game_state, save_game_state
+    from psychology import obb_distance
+    app, baseline = scene
+    load_game_state(app, baseline)
+    app.fsm.request('CombatPhase')
+    app.attackSequence = Sequence()
+    roster = members(app)
+    warriors, princes, helms = (roster[name] for name in ('Chaos Warrior', 'Dragon Prince', 'Silver Helm'))
+    for index, other in enumerate(app.units):
+        other.bodyNP.setPos(35, 15 + index * 4, 0)
+    warriors.bodyNP.setPos(0, 0, 0)
+    warriors.bodyNP.setH(180)
+    princes.bodyNP.setPos(-(helms.unitWidth + .1) / 2,
+                          -(warriors.unitHeight + princes.unitHeight) / 2, 0)
+    helms.bodyNP.setPos((princes.unitWidth + .1) / 2,
+                       -(warriors.unitHeight + helms.unitHeight) / 2, 0)
+    for loser in (princes, helms):
+        loser.bodyNP.setH(0)
+        loser.isInCombatWith = [warriors]
+        loser.isInCombatFlank = ['front']
+        loser.fledThisPhase = False
+    warriors.isInCombatWith = [princes, helms]
+    warriors.isInCombatFlank = ['left', 'front']
+    for unit in (warriors, princes, helms):
+        unit.request('InCombat')
+        unit.isInCombat = True
+    outcomes = [(princes, departure), (helms, 'give_ground')]
+    if not fall_back_first:
+        outcomes.reverse()
+    responses = [dict(winner=warriors, target=helms, action='follow_up')]
+    with combat_tasks(app) as run, \
+            patch.object(app, 'resolvingCombat', True), \
+            patch.object(app.combat, 'swiftstrideChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rollMoveDice', AsyncMock(return_value=[1, 2])):
+        run(app.combat.loserMovePass(outcomes, responses))
+        run(app.combat.pursuitPass(outcomes, responses))
+    box = app.psychology._unit_box
+    assert obb_distance(box(warriors), box(princes)) > .1
+    assert obb_distance(box(warriors), box(helms)) < .01
+    assert warriors.isInCombatWith == [helms]
+    assert warriors.isInCombatFlank == ['front']
+    assert helms.isInCombatWith == [warriors]
+    assert helms.isInCombat and warriors.isInCombat
+    assert princes.isInCombatWith == princes.isInCombatFlank == []
+    assert not princes.isInCombat
+    assert princes.state == ('Moved' if departure == 'fall_back' else 'IsFleeing')
+    assert set(engaged_units(warriors, helms)) == {warriors, helms}
+    checkpoint = save_game_state(app, str(tmp_path / 'after-follow-up.json'))
+    load_game_state(app, checkpoint)
+    assert warriors.isInCombatWith == [helms]
+    assert warriors.isInCombatFlank == ['front']
+    assert princes.isInCombatWith == [] and not princes.isInCombat
+    assert set(engaged_units(warriors, helms)) == {warriors, helms}
+
+
+def test_pursuit_reestablishes_links_only_after_catching_fallen_back_quarry(scene):
+    app, winner, target, origin, facing, contact = declared_charge(scene)
+    app.fsm.request('CombatPhase')
+    winner.bodyNP.setPos(0, -(winner.unitHeight + target.unitHeight) / 2, 0)
+    winner.bodyNP.setH(0)
+    target.bodyNP.setPos(0, 0, 0)
+    target.bodyNP.setH(180)
+    target.fledThisPhase = False
+    for unit, enemy in ((winner, target), (target, winner)):
+        unit.request('InCombat')
+        unit.isInCombatWith = [enemy]
+        unit.isInCombatFlank = ['front']
+    responses = [dict(winner=winner, target=target, action='pursue')]
+    with combat_tasks(app) as run, \
+            patch.object(app, 'resolvingCombat', True), \
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Keep formation')), \
+            patch.object(app.combat, 'swiftstrideChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rollMoveDice', AsyncMock(return_value=[1, 2])), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))):
+        run(app.combat.loserMovePass([(target, 'fall_back')], responses))
+        assert target.isInCombatWith == winner.isInCombatWith == []
+        run(app.combat.pursuitPass([(target, 'fall_back')], responses))
+    assert winner.isInCombatWith == [target]
+    assert target.isInCombatWith == [winner]
+    assert winner.isInCombat and target.isInCombat
+    assert len(winner.isInCombatFlank) == len(target.isInCombatFlank) == 1
+
+
 @pytest.mark.parametrize('advance', [0, 3])
 def test_pursuit_waits_for_movement_and_reform_completion(scene, advance):
     app, winner, target, origin, facing, contact = declared_charge(scene)

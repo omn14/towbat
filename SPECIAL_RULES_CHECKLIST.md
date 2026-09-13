@@ -10,6 +10,26 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Mixed Combat Departure Links: 2026-09-13
+
+Corrected a one-sided combat relationship after Break & Flee or Fall Back in
+Good Order (Rulebook pp. 154, 156-157). The departing unit's state transition
+cleared its own opponent list, but a winner following up a different loser still
+listed the departed unit. Completed flee/fall-back movement now removes that
+reciprocal entry and its matching flank, preserving the winner's other combat.
+One rule report names the former opponents and actual displacement; pursuit must
+make contact again to restore the relationship. Follow Up movement is unchanged.
+
+Verification: 13 pursuit scene, 13 Shieldwall scene and 55 post-combat tests pass
+in sequential 512 MiB services. New cases reproduce Warriors following Helms while
+Princes depart, for both loser processing orders and both Break/Fall Back results,
+and check actual separation/contact, retained flank, save/reload and next-combat
+membership. A real successful pursuit restores exactly one reciprocal link.
+The initial test timeout was missing attack-sequence setup; final tests use real
+Panda3D movement intervals without the temporary animation override.
+LEFTOVER: no migration of stale links already stored in older saves or live games.
+The inspected quicksave predates the reported Warriors combat. Full suite not rerun.
+
 ## Pursuit Summary Reports: 2026-09-13
 
 Completed pursuit moves now publish one Summary-visible combat event naming the

@@ -3410,10 +3410,12 @@ class CombatResolver:
 
     async def fleeMove(self, loserUnit, outcome):
         """Break or Fall Back: away from the single strongest winner, at a
-        distance the outcome decides."""
+        distance the outcome decides; old combat links end on departure (p. 154).
+        """
         winner = self.fleesFrom(loserUnit)
         if winner is None:
             return
+        opponents = list(loserUnit.isInCombatWith)
         pos = loserUnit.bodyNP.getPos()
         wpos = winner.bodyNP.getPos()
         dx, dy = flee_direction((pos.x, pos.y), (wpos.x, wpos.y))
@@ -3448,6 +3450,17 @@ class CombatResolver:
         self.perilTests(loserUnit, after - before)
         # The state is set after the move, as it was before the four passes:
         # a unit that Falls Back rallies at the end of it and is not fleeing.
+        for opponent in opponents:
+            retained = [(enemy, flank) for enemy, flank in
+                        zip(opponent.isInCombatWith, opponent.isInCombatFlank)
+                        if enemy is not loserUnit]
+            opponent.isInCombatWith = [enemy for enemy, _ in retained]
+            opponent.isInCombatFlank = [flank for _, flank in retained]
+        if opponents:
+            rule_log('Break & Flee' if outcome == 'break' else 'Fall Back in Good Order', loserUnit,
+                     f'moved {(after - before).length():.2f}"; leaves combat with '
+                     + ', '.join(opponent.unit.name for opponent in opponents)
+                     + '; any pursuit must make contact again (pp. 154, 156-157)')
         if not loserUnit.bodyNP.isEmpty():
             loserUnit.request("IsFleeing" if outcome == 'break' else "Moved")
 
