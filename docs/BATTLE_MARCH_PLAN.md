@@ -125,11 +125,13 @@ one defender's cart or Guard Duty for both players. Each cart deploys as a singl
 miniature. Non-Combatant restrictions, enemy-zone edge escape, literal final
 bonuses, saved ownership and once-only setup are connected. Escaped carts are
 not destroyed and never earn a separate Dead or Fled award.
-The committed magic-item milestone covers ten Battle March items: the existing Helm
+The committed magic-item milestones cover thirteen Battle March items: the existing Helm
 of Courage and Banner of the Bold, plus Ranger's Glass, Warding Talisman, Padded
 Hauberk, Wyrdstone Shard, Banner of Renown, Diestro's Blade, Skirmisher's Blade and
-Thornspitter Stave. Inventory ownership, suppression and single-use state remain
-the source of those effects. Additional uncommitted item work is paused. The
+Thornspitter Stave, followed by Shadowed Mantle, the All-Seeing Eye of Numas and
+Trailblazer's Hatchet on the user's request to finish the pending cover/combat work.
+Inventory ownership, suppression and single-use state remain the source of those
+effects. Additional uncommitted scroll work is paused. The
 current item-module activation gate remains closed; this scope revision does not
 enable unsupported items. Completing the remaining items or enabling the full
 item module is no longer required for the active plan.
@@ -139,6 +141,28 @@ terrain currently offers hills, woods and impassable buildings. Special features
 remaining terrain categories, objective-aware strategic AI, private objectives,
 and random happenings remain active work in stages 1 and 3-5. Tournament features,
 further magic-item work and stage 6 narrative scenarios are deferred.
+
+## Catalogue And Cover Follow-Up: 2026-09-13
+
+The external catalogue pull at 21:58 changed the data from XML to JSON, causing
+the old reader to load zero models, weapons and spells. Dual-format loading now
+normalizes both formats through the same extraction logic, prefers JSON for a
+duplicate catalogue ID, and reports malformed inputs. The converter accepts both.
+Ten format regressions and 224 weapon/spell/rule/roster/command/startup checks pass
+against the current data. These checks do not certify all upstream rule changes.
+
+Partial/full cover is now derived per firing model from the existing XY sight
+geometry and reaches real shooting, crew profiles, reports and Multiple Shots
+choices. Exactly half is partial; cover levels never stack. The Eye ignores woods
+for its bearer's shooting sight and waives only their cover penalties. Mantle
+screening and Hatchet's saved, once-per-game unit grant retain ownership and
+suppression checks. Flaming weapon/model sources respect the magic-weapon
+exception and prohibit Regeneration only for Flammable targets.
+
+LEFTOVER: cover uses projected base silhouettes and the existing see-onto terrain
+convention, not sculpt/eye heights, foliage inside woods or non-sight-blocking
+low obstacles. Further items, including the paused scroll work, stay deferred;
+the complete item module remains gated. No full-suite success is claimed.
 
 ## Current Terrain-Clearance Increment: 2026-09-13
 

@@ -113,6 +113,8 @@ async def start_and_command(game):
         rule_log('Stupidity', member, f'2D6={rolled} vs Ld {leadership}: '
                  + ('failed; no movement/shooting/casting/dispelling, Hold only until next Start of Turn'
                     if member.stupidityFailed else 'passed; acts normally'))
+    from magic_items import activate_start_items
+    await activate_start_items(game)
     for member in owned:
         if not has_rule(member, 'Gaze of the Gods'):
             continue
@@ -133,8 +135,10 @@ def begin_turn(game):
         return
     owned = [member for member in game.units
              if side_of(game, member, None) == game.roundCounter.current_player]
+    from magic_items import EffectKind, effects_for
     if not any(has_rule(member, 'Gaze of the Gods') or subject_to_stupidity(member)
-               or getattr(member, 'gazeState', {}).get('temporary') for member in owned):
+               or getattr(member, 'gazeState', {}).get('temporary')
+               or effects_for(member, EffectKind.START_RULE, context='Start of Turn') for member in owned):
         return
     if getattr(game, 'chaosCommandTurn', None) == current_turn(game):
         return

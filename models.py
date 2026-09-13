@@ -599,6 +599,9 @@ class model:
     def is_move_through_cover(self) -> bool:
         """The model's own or shared split-profile rule, never a joined character's
         (Rulebook pp. 174, 192, 194, 204)."""
+        from magic_items import EffectKind, profile_effects
+        if any(entry.effect.value == 'Move Through Cover' for entry in profile_effects(self, EffectKind.RULE)):
+            return True
         if any(isinstance(rule, dict) and rule.get('move_through_cover')
                for rule in self.special_rules):
             return True

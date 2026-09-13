@@ -10,6 +10,32 @@ from shooting_geometry import enemy_fire_modifier, model_shot, shooting_solution
 from tests.test_skirmish_scene import restore, scene as scene
 
 
+@pytest.mark.parametrize('blocker,expected', [
+    ((3, 5, 1, .5, 0), 1), ((1, 5, 1, .5, 0), .5), ((0, 5, 1, .5, 0), 0)])
+def test_cover_fraction_uses_existing_silhouette_geometry(blocker, expected):
+    from skirmish_visibility import model_can_see, model_visible_fraction
+    observer, target = (0, 0, .5, .5, 0), (0, 10, 1, 1, 0)
+    fraction = model_visible_fraction(observer, target, [blocker])
+    assert fraction == pytest.approx(expected)
+    assert model_can_see(observer, [target], [blocker]) is (expected > 0)
+
+
+@pytest.mark.parametrize('blocked,total,expected', [(0, 3, 0), (1, 3, 1), (2, 4, 1), (2, 3, 2)])
+def test_unit_cover_counts_obscured_models_not_average_area(blocked, total, expected):
+    from shooting_geometry import target_cover
+    fractions = [.9] * blocked + [1] * (total - blocked)
+    with patch('shooting_geometry.model_visible_fraction', side_effect=fractions):
+        cover, detail = target_cover((0, 0, .5, .5, 0), [(0, 10, .5, .5, 0)] * total)
+    assert cover == expected and f'{blocked}/{total}' in detail
+
+
+@pytest.mark.parametrize('fraction,expected', [(1, 0), (.75, 1), (.5, 1), (.49, 2)])
+def test_lone_target_cover_half_boundary(fraction, expected):
+    from shooting_geometry import target_cover
+    with patch('shooting_geometry.model_visible_fraction', return_value=fraction):
+        assert target_cover((0, 0, .5, .5, 0), [(0, 10, .5, .5, 0)])[0] == expected
+
+
 @pytest.mark.parametrize('distance,expected', [(5, (False, None)), (10, (True, None)),
                                                (11, (True, 'out of range'))])
 def test_range_is_base_to_base_per_model(distance, expected):
@@ -104,6 +130,80 @@ def shooting_scene(scene):
     app.roundCounter.current_player = 1
     app.world.doPhysics(1 / 60)
     return app, shooter, target
+
+
+@pytest.mark.parametrize('cover,width', [(1, .4), (2, 1.0)])
+@pytest.mark.parametrize('eye', [False, True])
+def test_live_cover_changes_hit_rolls_and_eye_only_waives_cover(scene, capsys, cover, width, eye):
+    from battleFunctions import _ranged_tohit_report, simulate_battle
+    from magic_items import install_inventory
+    app, shooter, target = shooting_scene(scene)
+    blocker = next(member for member in app.units if member not in (shooter, target))
+    blocker.isDeployed = True
+    shooter.unit.nmodels = 1
+    target.unit.nmodels = 3
+    profile = shooter.unit.model
+    profile.characteristics['BS'] = '3'
+    profile._base_characteristics['BS'] = '3'
+    profile.equipedWeapon['ranged_range'] = 30
+    shooter.unit.roster_metadata = {'roster_selections': [
+        {'ref': 'cover-bearer', 'name': profile.name, 'type': 'model'}]}
+    install_inventory(shooter, [{'name': 'The All-Seeing Eye of Numas', 'category': 'Enchanted Items',
+        'selection_ref': 'cover-bearer/eye', 'owner_ref': 'cover-bearer'}] if eye else [])
+
+    def boxes(member):
+        if member is shooter:
+            return [(0, 0, .4, .4, 0)]
+        if member is target:
+            return [(offset, 10, .5, .5, 0) for offset in (-2, 0, 2)]
+        return [(0, 5, width, .5, 0)]
+
+    rolls = []
+    def volley(unit, defender, **kwargs):
+        result = simulate_battle(unit, defender, **kwargs)
+        rolls.append((_ranged_tohit_report(unit.model), result))
+        return result
+
+    with patch('shooting_geometry.model_base_boxes', side_effect=boxes), \
+            patch('game.simulate_battle', side_effect=volley), \
+            patch('battleFunctions.random.randint', return_value=4), \
+            patch.object(app.taskMgr, 'add', side_effect=lambda coroutine: coroutine.close()), \
+            patch.object(app, 'shootingAnimation', AsyncMock()), patch.object(app, 'printBattleResults'):
+        geometry = shooting_solution(app, shooter, target)
+        assert len(geometry.eligible) == 1 and geometry.eligible[0].cover == cover
+        asyncio.run(app.shootAt(shooter, target))
+        report, result = rolls[-1]
+        assert report['target'] == 4 + (0 if eye else cover)
+        assert result[:2] == (1, int(eye))
+        output = capsys.readouterr().out
+        assert 'Cover' in output and 'target models obscured' in output
+        if eye:
+            assert f'cover modifier -{cover} -> 0' in output
+        blocker.isDeployed = False
+        shooter.hasAttackedThisTurn = False
+        asyncio.run(app.shootAt(shooter, target))
+        assert rolls[-1][0]['target'] == 4 and rolls[-1][1][:2] == (1, 1)
+        assert not profile.partial_cover and not profile.full_cover
+
+
+def test_chariot_crew_receive_cover_flags_without_stacking():
+    from combat_profiles import crew_shooting_unit
+    from models import model
+    from toHitAndToWound import ranged_hit_requirement
+    profile = model('Lothern Skycutter', '')
+    profile.give_weapon('Asrai Longbow')
+    profile.equip_weapon('Asrai Longbow')
+    profile.get_crew().give_weapon('Asrai Longbow')
+    group = SimpleNamespace(model=profile, nmodels=1, files=1, ranks=1)
+    profile.full_cover = profile.partial_cover = True
+    shooters, _ = crew_shooting_unit(group, 1)
+    assert shooters.model is profile.get_crew()
+    assert shooters.model.full_cover and shooters.model.partial_cover
+    baseline = ranged_hit_requirement(shooters.model)[0]
+    assert ranged_hit_requirement(shooters.model, partial_cover=True, full_cover=True)[0] == baseline + 2
+    profile.partial_cover = profile.full_cover = False
+    crew_shooting_unit(group, 1)
+    assert not shooters.model.full_cover and not shooters.model.partial_cover
 
 
 def test_real_volley_uses_preview_counts_and_individual_ranges(scene, capsys):

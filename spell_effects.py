@@ -80,6 +80,8 @@ def start_turn(game):
 
 
 def end_turn(game):
+    from magic_items import end_item_turn
+    end_item_turn(game)
     for spell in list(game.fsm.endOfTurnSpells):
         state = getattr(spell, 'lifecycle', None)
         if state:

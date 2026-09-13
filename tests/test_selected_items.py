@@ -250,6 +250,157 @@ def test_thornspitter_two_profiles_share_ownership_and_use_normal_shooting():
     assert not any(weapon.get('item_source') for weapon in profile.weapons.values())
 
 
+@pytest.mark.parametrize('distance,count,fleeing,protected', [
+    (6, 5, False, True), (6.01, 5, False, False), (4, 4, False, False), (4, 5, True, False)])
+def test_shadowed_mantle_screening_boundary_and_cast_attempt(distance, count, fleeing, protected):
+    from magic_items import item_target_protected
+    from spell_system import Spell
+    bearer, friend, attacker = live_member('Hidden'), live_member('Screen', count), live_member('Enemy')
+    item = install_inventory(bearer, [{'name': 'Shadowed Mantle', 'category': 'Magic Armour',
+                                     'selection_ref': 'bearer/mantle', 'owner_ref': 'bearer'}])[0]
+    bearer.unit.model.set_armour([])
+    assert bearer.unit.model.effective_armour_save() == 6
+    friend.isDeployed = True
+    friend.state = 'IsFleeing' if fleeing else 'Idle'
+    game = SimpleNamespace(units=[bearer, friend, attacker], player1Units=[bearer, friend],
+                           player2Units=[attacker], battle_config=None)
+    for member in game.units:
+        member.game = game
+    def boxes(member):
+        return [(distance + 1 if member is friend else 0, 0, .5, .5, 0)]
+    spell = Spell('Test missile', 7, game=game, caster=attacker)
+    spell._attempt = AsyncMock(return_value=False)
+    with patch('scouts.model_base_boxes', side_effect=boxes):
+        assert item_target_protected(game, attacker, bearer) is protected
+        assert not item_target_protected(game, friend, bearer)
+        asyncio.run(spell.spellFunction(bearer))
+        assert spell._attempt.await_count == int(not protected)
+        if protected:
+            from bombardment import Bombardment
+            from shooting_geometry import shooting_solution, uses_individual_shooting
+            assert uses_individual_shooting(game, attacker, bearer)
+            with patch('shooting_geometry.model_base_boxes', side_effect=boxes):
+                solution = shooting_solution(game, attacker, bearer)
+            assert not solution.eligible and 'denied by Shadowed Mantle' in solution.detail()
+            asyncio.run(Bombardment.fire(SimpleNamespace(game=game), attacker, bearer))
+        disable_item(bearer, item, 'Test suppression')
+        assert not item_target_protected(game, attacker, bearer)
+
+
+@pytest.mark.parametrize('terrain_type,visible', [('forest', True), ('hill', False), ('house', False)])
+def test_eye_of_numas_only_ignores_woods_for_its_bearers_shooting(terrain_type, visible, capsys):
+    from panda3d.core import Point3
+    from shooting_geometry import report_item_sight, shooting_solution
+    from toHitAndToWound import ranged_hit_requirement
+    bearer, target = live_member('Seer'), live_member('Enemy')
+    profile = bearer.unit.model
+    item = install_inventory(bearer, [{'name': 'The All-Seeing Eye of Numas', 'category': 'Enchanted Items',
+                                     'selection_ref': 'bearer/eye', 'owner_ref': 'bearer'}])[0]
+    profile.give_weapon('Shortbow')
+    profile.equip_weapon('Shortbow')
+    profile.characteristics['BS'] = '3'
+    assert ranged_hit_requirement(profile, full_cover=True) == (4, None)
+    assert ranged_hit_requirement(profile, partial_cover=True, long_range=True) == (5, None)
+    assert ranged_hit_requirement(target.unit.model, full_cover=True)[0] > ranged_hit_requirement(target.unit.model)[0]
+    wall = SimpleNamespace(center=Point3(0, 4, 0), width=20, height=.5, blocks_line_of_sight=True,
+                           terrain_type=terrain_type, contains=lambda point: abs(point.x) <= 10 and abs(point.y - 4) <= .25)
+    game = SimpleNamespace(units=[bearer, target], terrain_manager=SimpleNamespace(terrain_pieces=[wall]),
+                           movement=SimpleNamespace(hillUnderUnit=lambda member: None, entirelyOnHill=lambda member: False))
+    for member in game.units:
+        member.game = game
+        member.isDeployed = True
+    with patch('shooting_geometry.model_base_boxes', side_effect=lambda member: [(0, 0 if member is bearer else 8, .5, .5, 0)]):
+        solution = shooting_solution(game, bearer, target)
+        assert bool(solution.eligible) is visible
+        assert sum(record.wood_sight for record in solution.models) == int(visible)
+        report_item_sight(solution)
+        if visible:
+            assert '1/1 firing models gain line of sight' in capsys.readouterr().out
+        disable_item(bearer, item, 'Test suppression')
+        assert not shooting_solution(game, bearer, target).eligible
+    assert ranged_hit_requirement(profile, full_cover=True) == (6, None)
+
+
+@pytest.mark.parametrize('accept', [False, True])
+def test_trailblazer_saved_unit_grant_expires_without_native_rule_loss(accept):
+    from chaos_gifts import start_and_command
+    from magic_items import activate_start_items, end_item_turn, restore_inventory, save_inventory
+    from persistence import _restore_profile_state, _save_profile_state
+    bearer, host = live_member('Guide'), live_member('Warriors', 10)
+    item = install_inventory(bearer, [{'name': "Trailblazer's Hatchet", 'category': 'Magic Weapons',
+                                     'selection_ref': 'bearer/hatchet', 'owner_ref': 'bearer'}])[0]
+    bearer.hostUnit = host
+    host.joinedCharacter = bearer
+    game = SimpleNamespace(units=[host, bearer], player1Units=[host], player2Units=[],
+                           roundCounter=SimpleNamespace(current_player=1, currentRoundPlayer=[1, 0]),
+                           aiControls=lambda member: False,
+                           makeChoiceNew=AsyncMock(return_value='Reveal path' if accept else 'Keep use'))
+    for member in game.units:
+        member.game = game
+        member.bodyNP = SimpleNamespace(isEmpty=lambda: False)
+    assert bearer.unit.model.is_move_through_cover()
+    assert not host.unit.model.is_move_through_cover()
+    asyncio.run(start_and_command(game))
+    assert game.chaosCommandTurn == [1, 1]
+    assert host.unit.model.is_move_through_cover() is accept
+    assert bool(item.uses.get('path')) is accept
+    saved = _save_profile_state(host.unit.model)
+    restore_inventory(bearer, save_inventory(bearer))
+    for _ in range(2):
+        _restore_profile_state(host.unit.model, saved)
+        asyncio.run(activate_start_items(game))
+        assert host.unit.model.is_move_through_cover() is accept
+        assert sum(bool(rule.get('item_rule_source')) for rule in host.unit.model.special_rules) == int(accept)
+    assert game.makeChoiceNew.await_count == 1
+    host.unit.model.special_rules.append({'name': 'Native cover', 'move_through_cover': True})
+    end_item_turn(game)
+    assert host.unit.model.is_move_through_cover() and bearer.unit.model.is_move_through_cover()
+    assert not any(rule.get('item_rule_source') for rule in host.unit.model.special_rules)
+
+
+@pytest.mark.parametrize('name,category', [("Trailblazer's Hatchet", 'Magic Weapons'), ('Shadowed Mantle', 'Magic Armour')])
+def test_infantry_only_item_does_not_grant_cavalry_effects(name, category):
+    from magic_items import bearer_unavailable
+    bearer = live_member('Mounted hero')
+    bearer.unit.model.characteristics['Troop Type'] = 'Heavy Cavalry'
+    item = install_inventory(bearer, [{'name': name, 'category': category,
+                                     'selection_ref': 'bearer/item', 'owner_ref': 'bearer'}])[0]
+    assert 'infantry bearer' in bearer_unavailable(bearer, item)
+    assert not bearer.unit.model.is_move_through_cover()
+    assert not any(weapon.get('item_source') for weapon in bearer.unit.model.weapons.values())
+
+
+@pytest.mark.parametrize('flammable', [False, True])
+@pytest.mark.parametrize('source', ['hatchet', 'native', 'native_magic'])
+def test_flaming_wounds_respect_source_and_flammable_regeneration(flammable, source, capsys):
+    from battleFunctions import simulate_battle
+    from special_rules import apply_rule_keywords
+    bearer, target = live_member('Guide'), live_member('Regenerator')
+    if source == 'hatchet':
+        weapon = "Trailblazer's Hatchet"
+    else:
+        apply_rule_keywords(bearer.unit.model, ['Flaming Attacks'], replace=True)
+        weapon = "Diestro's Blade" if source == 'native_magic' else 'Hand Weapon'
+    if source != 'native':
+        install_inventory(bearer, [{'name': weapon, 'category': 'Magic Weapons',
+                                   'selection_ref': 'bearer/weapon', 'owner_ref': 'bearer'}])
+    bearer.unit.model.equip_weapon(weapon)
+    target.unit.model.set_armour([])
+    apply_rule_keywords(target.unit.model, ['Regeneration (2+)'] + (['Flammable'] if flammable else []), replace=True)
+    for member in (bearer, target):
+        member.unit.ranks = 1
+    with patch('battleFunctions.random.randint', return_value=6) as dice:
+        attacks, hits, wounds, saves, unsaved = simulate_battle(bearer.unit, target.unit, False)
+    assert (attacks, hits, wounds) == (1, 1, 1)
+    prohibited = flammable and source != 'native_magic'
+    assert saves == int(not prohibited) and unsaved == int(prohibited)
+    assert dice.call_count == (3 if prohibited else 4)
+    output = capsys.readouterr().out
+    assert 'Flaming Attacks' in output
+    if source == 'native_magic':
+        assert 'does not transfer to magic weapon' in output
+
+
 def test_helm_armour_changes_real_saves_not_baseline_and_passive_survives_use():
     from battleFunctions import resolve_magic_hits
     from magic_items import spend_ability

@@ -122,6 +122,8 @@ def _save_profile_state(profile):
         'profile_parts': parts,
         'profile_landmark_grants': [copy.deepcopy(rule) for rule in profile.special_rules
                        if isinstance(rule, dict) and rule.get('battle_march_source')],
+        'profile_item_grants': [copy.deepcopy(rule) for rule in profile.special_rules
+                   if isinstance(rule, dict) and rule.get('item_rule_source')],
         'profile_frenzy_lost': any(rule.get('frenzy_lost') and not rule.get('battle_march_source')
                       for rule in profile.special_rules if isinstance(rule, dict)),
     }
@@ -130,12 +132,13 @@ def _save_profile_state(profile):
 def _restore_profile_state(profile, data):
     """Legacy saves have one authoritative profile; new saves retain both copies."""
     profile.special_rules = [rule for rule in profile.special_rules
-                             if not (isinstance(rule, dict) and rule.get('battle_march_source'))]
+                             if not (isinstance(rule, dict) and (rule.get('battle_march_source') or rule.get('item_rule_source')))]
     apply_rule_keywords(profile, data['characteristics'].get('Special Rules', []), replace=True)
     profile.characteristics = copy.deepcopy(data['characteristics'])
     profile._base_characteristics = copy.deepcopy(
         data.get('base_characteristics') or data['characteristics'])
     profile.special_rules.extend(copy.deepcopy(data.get('profile_landmark_grants', [])))
+    profile.special_rules.extend(copy.deepcopy(data.get('profile_item_grants', [])))
     if data.get('profile_frenzy_lost', False):
         for rule in profile.special_rules:
             if isinstance(rule, dict) and (rule.get('frenzy') or rule.get('name', '').casefold() == 'frenzy'):

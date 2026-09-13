@@ -103,6 +103,9 @@ class Bombardment:
     # ─── Fire sequence ──────────────────────────────────────────────
 
     async def fire(self, unit, target):
+        from magic_items import item_target_protected
+        if item_target_protected(self.game, unit, target, log=True):
+            return
         from battle_secondary import shooting_blocked
         if shooting_blocked(self.game, unit):
             return

@@ -29,6 +29,10 @@ class EffectKind(StrEnum):
     COMBAT_RESULT = 'combat_result'
     WEAPON = 'weapon_profile'
     INITIATIVE = 'initiative_modifier'
+    TARGET_PROTECTION = 'target_protection'
+    SHOOTING_SIGHT = 'shooting_sight'
+    IGNORE_COVER = 'ignore_cover'
+    START_RULE = 'start_turn_rule'
 
 
 class Scope(StrEnum):
@@ -150,6 +154,21 @@ REGISTRY = ItemRegistry((
                    "Battle March: General's Companion p. 46",
                    effects=(ItemEffect('combat', EffectKind.WEAPON, 'thornspitter_combat'),
                             ItemEffect('ranged', EffectKind.WEAPON, 'thornspitter_ranged'))),
+    ItemDefinition('shadowed_mantle', 'Shadowed Mantle', 'Magic Armour',
+                   "Battle March: General's Companion p. 47; Rulebook p. 206",
+                   effects=(ItemEffect('light_armour', EffectKind.BODY_ARMOUR, 6),
+                            ItemEffect('concealment', EffectKind.TARGET_PROTECTION, 6))),
+    ItemDefinition('all_seeing_eye_of_numas', 'The All-Seeing Eye of Numas', 'Enchanted Items',
+                   "Battle March: General's Companion p. 48",
+                   effects=(ItemEffect('woods', EffectKind.SHOOTING_SIGHT, 'forest'),
+                            ItemEffect('cover', EffectKind.IGNORE_COVER, True)),
+                   aliases=('All-Seeing Eye of Numas',)),
+    ItemDefinition('trailblazers_hatchet', "Trailblazer's Hatchet", 'Magic Weapons',
+                   "Battle March: General's Companion p. 46",
+                   effects=(ItemEffect('weapon', EffectKind.WEAPON, 'trailblazers_hatchet'),
+                            ItemEffect('cover', EffectKind.RULE, 'Move Through Cover'),
+                            ItemEffect('path', EffectKind.START_RULE, 'Move Through Cover', ability='path')),
+                   abilities=(ItemAbility('path', 'Start of Turn'),)),
 ))
 
 
@@ -167,6 +186,9 @@ ITEM_WEAPONS = {
                           'ranged_strength': 4, 'ranged_AP': 0, 'ranged_shots': 1, 'ponderous': True,
                           'magical': True, 'magic_item': True,
                           'special_rules': ['Armour Bane (1)', 'Magical Attacks', 'Ponderous']},
+        'trailblazers_hatchet': {'name': "Trailblazer's Hatchet", 'tag': 'combat', 'strength_bonus': 1,
+                                                        'ap_penetration': 1, 'magical': True, 'magic_item': True, 'flaming_attacks': True,
+                                                        'special_rules': ['Flaming Attacks', 'Magical Attacks', 'Move Through Cover']},
 }
 
 
@@ -237,6 +259,17 @@ def restore_inventory(member, records):
     bind_inventory(member)
 
 
+def item_profiles(member):
+    group = getattr(member, 'unit', member)
+    profiles = [group.model] + list(getattr(group, 'command_models', {}).values())
+    for profile in list(profiles):
+        for tag in ('mount', 'crew', 'beasts'):
+            part = getattr(profile, f'get_{tag}')()
+            if part is not None and not any(existing is part for existing in profiles):
+                profiles.append(part)
+    return profiles
+
+
 def bind_inventory(member):
     """Profiles keep a non-owning link; item bonuses never enter saved base stats."""
     group = getattr(member, 'unit', member)
@@ -247,11 +280,7 @@ def bind_inventory(member):
         reference = weakref.ref(member)
     except TypeError:
         reference = lambda: member
-    profiles = [model] + list(getattr(group, 'command_models', {}).values())
-    for tag in ('mount', 'crew', 'beasts'):
-        part = getattr(model, f'get_{tag}')()
-        if part is not None:
-            profiles.append(part)
+    profiles = item_profiles(member)
     for profile in profiles:
         profile._magic_item_member = reference
     refresh_item_weapons(member, profiles)
@@ -287,6 +316,110 @@ def refresh_item_weapons(member, profiles):
             profile.equipedWeapon = profile.weapons.get(slot)
             if profile.equipedWeapon is not None:
                 profile.special_rules.append(profile.equipedWeapon)
+
+
+async def activate_start_items(game):
+    """Trailblazer's once-only unit grant lasts this player's turn (Companion p. 46)."""
+    from characters import side_of
+    from panda3d.core import Vec3
+    from troop_types import is_infantry
+    turn = current_turn(game)
+    if turn is None:
+        return
+    for member in list(game.units):
+        if side_of(game, member, None) != turn[0]:
+            continue
+        for entry in effects_for(member, EffectKind.START_RULE, context='Start of Turn'):
+            item = entry.item
+            if item.uses.get('start_offer', {}).get('turn') == turn:
+                continue
+            if not is_infantry(entry.bearer.profile.characteristics.get('Troop Type')):
+                rule_skipped(item.name, member, 'requires an infantry bearer; no unit grant')
+                continue
+            use = game.aiControls(member)
+            if not use:
+                answer = await game.makeChoiceNew(['Reveal path', 'Keep use'], Vec3(0, 0, 10), owner=member,
+                                                  prompt=f'{member.unit.name}: Trailblazer\'s Hatchet?',
+                                                  detail='Move Through Cover for the unit until this turn ends; once per game')
+                use = answer == 'Reveal path'
+            item.uses['start_offer'] = {'turn': list(turn)}
+            if not activate_ability(game, member, item, 'path', 'Start of Turn', confirmed=use):
+                continue
+            host = getattr(member, 'hostUnit', None) or member
+            recipients = [host]
+            joined = getattr(host, 'joinedCharacter', None)
+            if joined is not None:
+                recipients.append(joined)
+            for recipient in recipients:
+                for profile in item_profiles(recipient):
+                    profile.special_rules.append({'name': item.name, 'move_through_cover': True,
+                                                  'item_rule_source': item.instance_id, 'item_rule_turn': list(turn)})
+            count = sum(recipient.unit.nmodels for recipient in recipients)
+            rule_log(item.name, host, f'{count} models gain Move Through Cover until the end of player '
+                     f'{turn[0]} turn {turn[1]}; single use spent')
+
+
+def end_item_turn(game):
+    """Remove activated item grants without removing native rules (Companion p. 46)."""
+    for member in game.units:
+        removed = {}
+        for profile in item_profiles(member):
+            for rule in profile.special_rules:
+                if isinstance(rule, dict) and rule.get('item_rule_source'):
+                    removed[rule['item_rule_source']] = rule['name']
+            profile.special_rules[:] = [rule for rule in profile.special_rules
+                                        if not (isinstance(rule, dict) and rule.get('item_rule_source'))]
+        for name in removed.values():
+            rule_log(name, member, 'end of turn: temporary Move Through Cover removed; native rules retained')
+
+
+def report_item_cover(profile, shots):
+    """Report once per volley, never inside the hit-dice loop (Companion p. 48)."""
+    penalty = 2 if getattr(profile, 'full_cover', False) else int(bool(getattr(profile, 'partial_cover', False)))
+    for entry in profile_effects(profile, EffectKind.IGNORE_COVER):
+        if penalty:
+            rule_log(entry.item.name, entry.bearer.carrier, f'{shots} shots: cover modifier -{penalty} -> 0 To Hit')
+        else:
+            rule_skipped(entry.item.name, entry.bearer.carrier, f'{shots} shots: no full or partial cover modifier to ignore')
+
+
+def item_target_protected(game, attacker, target, *, log=False):
+    """Shadowed Mantle extends lone-character screening to 6 inches (pp. 47, 206)."""
+    if game is None or attacker is None or not hasattr(target, 'unit'):
+        return False
+    entries = effects_for(target, EffectKind.TARGET_PROTECTION)
+    if not entries:
+        return False
+    from characters import side_of
+    from psychology import obb_distance
+    from scouts import model_base_boxes
+    from troop_types import is_infantry
+    side = side_of(game, target, None)
+    if side is None or side_of(game, attacker, None) in (None, side):
+        return False
+    if (target.unit.nmodels != 1 or getattr(target, 'hostUnit', None) is not None
+            or not is_infantry(target.unit.model.characteristics.get('Troop Type'))):
+        return False
+    boxes = model_base_boxes(target)
+    for friend in game.units:
+        if (friend is target or side_of(game, friend, None) != side or friend.unit.nmodels < 5
+                or getattr(friend, 'hostUnit', None) is not None
+                or not getattr(friend, 'isDeployed', False) or getattr(friend, 'state', None) == 'IsFleeing'
+                or not is_infantry(friend.unit.model.characteristics.get('Troop Type'))):
+            continue
+        distance = min((obb_distance(own, other) for own in boxes for other in model_base_boxes(friend)),
+                       default=float('inf'))
+        for entry in entries:
+            if distance <= float(entry.effect.value) + 1e-6:
+                if log:
+                    rule_log(entry.item.name, target, f'{friend.unit.nmodels} friendly infantry in {friend.unit.name} '
+                             f'at {distance:.2f}" <= {entry.effect.value}": enemy targeting prohibited even when closest')
+                return True
+    if log:
+        for entry in entries:
+            rule_skipped(entry.item.name, target, f'no non-fleeing friendly unit of 5+ infantry within '
+                         f'{entry.effect.value}"; no targeting protection')
+    return False
 
 
 def item_armour_save(profile, base_save, *, log=False):
@@ -477,6 +610,11 @@ def bearer_unavailable(member, item, *, game=None, allow_retired=False):
     bearer = resolve_bearer(member, item)
     if bearer is None:
         return 'roster owner cannot be resolved'
+    definition = REGISTRY.resolve(item.source)
+    if definition is not None and definition.key in ('trailblazers_hatchet', 'shadowed_mantle'):
+        from troop_types import is_infantry
+        if not is_infantry(bearer.profile.characteristics.get('Troop Type')):
+            return 'item requires an infantry bearer (Companion pp. 46-47)'
     if not allow_retired and getattr(member, 'retiredFromCombat', False):
         return 'bearer retired from combat'
     if bearer.command is not None:

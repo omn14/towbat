@@ -77,6 +77,8 @@ def _ranged_tohit_report(model):
         multiple_shots=getattr(model, 'firing_multiple', False),
         target_skirmisher=getattr(model, 'target_skirmisher', False),
         stand_and_shoot=getattr(model, 'stand_and_shoot', False),
+        partial_cover=getattr(model, 'partial_cover', False),
+        full_cover=getattr(model, 'full_cover', False),
     )
     req = ranged_hit_requirement(model, **applied)
     if req is None:
@@ -85,7 +87,8 @@ def _ranged_tohit_report(model):
     w = getattr(model, 'equipedWeapon', None) or {}
     labels = {'moved': 'moved', 'long_range': 'long range',
               'multiple_shots': 'multiple shots',
-              'target_skirmisher': 'skirmisher target', 'stand_and_shoot': 'stand & shoot'}
+              'target_skirmisher': 'skirmisher target', 'stand_and_shoot': 'stand & shoot',
+              'partial_cover': 'partial cover', 'full_cover': 'full cover'}
     mods = []
     for key, on in applied.items():
         if not on:
@@ -289,7 +292,14 @@ def simulate_attack(model1,model2):
             model1.ithilmar_rerolled = bool(ithilmar and not hatred)
     else:
         def shoot():
-            return to_hit_ranged(model1,long_range=getattr(model1,'at_long_range',False),multiple_shots=getattr(model1,'firing_multiple',False),target_skirmisher=getattr(model1,'target_skirmisher',False),moved=getattr(model1,'moved_this_turn',False),stand_and_shoot=getattr(model1,'stand_and_shoot',False))
+            return to_hit_ranged(
+                model1, long_range=getattr(model1, 'at_long_range', False),
+                multiple_shots=getattr(model1, 'firing_multiple', False),
+                target_skirmisher=getattr(model1, 'target_skirmisher', False),
+                moved=getattr(model1, 'moved_this_turn', False),
+                stand_and_shoot=getattr(model1, 'stand_and_shoot', False),
+                partial_cover=getattr(model1, 'partial_cover', False),
+                full_cover=getattr(model1, 'full_cover', False))
         hit = shoot()
         # Curse of Arrow Attraction: a natural 1 To Hit may be re-rolled.
         if not hit and model1.attack_roll == 1 and getattr(model2, 'arrow_attraction', False):
@@ -892,6 +902,15 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     defender_save = (unit2.model.effective_armour_save()
                      if unit1.model.equipedWeapon.get('tag') == 'ranged'
                      else unit2.model.melee_armour_save())
+    weapon = unit1.model.equipedWeapon or {}
+    flaming = bool(weapon.get('flaming_attacks') or 'flaming attacks' in
+                   [str(rule).casefold() for rule in weapon.get('special_rules', [])])
+    native_flaming = any(rule.get('flaming_attacks') or rule.get('name', '').casefold() == 'flaming attacks'
+                         for rule in unit1.model.special_rules if isinstance(rule, dict))
+    if not (weapon.get('magical') or weapon.get('magic_item')):
+        flaming = flaming or native_flaming
+    flammable = any(rule.get('flammable') or rule.get('name', '').casefold() == 'flammable'
+                    for rule in unit2.model.special_rules if isinstance(rule, dict))
     # Reported once for the exchange, not once per save roll.
     if unit2.model.parry_applies():
         rule_log('Parry', unit2, f"hand weapon and shield: armour "
@@ -932,7 +951,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                 save_targets[target] = save_targets.get(target, 0) + 1
             if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
-                           slaying_blow=bool(struck), ward_rolls=ward_rolls, armour_modifiers=armour_modifiers):
+                           slaying_blow=bool(struck), ward_rolls=ward_rolls, armour_modifiers=armour_modifiers,
+                           allow_regeneration=not (flaming and flammable)):
                 saves_made += 1
                 total_wounds -= 1
             elif struck:
@@ -960,6 +980,19 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             rule_skipped('Ethereal', unit2, f'{attacks1} attacks by {unit1.name}: {cause} (p. 167)')
     report_ap_armour(unit2.model, armour_modifiers)
     report_ward_saves(unit2, suffered_wounds, ward_rolls)
+    if flaming:
+        regeneration = any(rule.get('regen') for rule in unit2.model.special_rules if isinstance(rule, dict))
+        report = rule_log if flammable and regeneration and total_wounds else rule_skipped
+        report('Flaming Attacks', unit1, f'{weapon.get("name", "weapon")}: {suffered_wounds} wounds against '
+               f'{unit2.name}; ' + ('target is not Flammable; Regeneration remains permitted (p. 169)' if not flammable else
+                                   'target has no Regeneration save to prohibit (p. 169)' if not regeneration else
+                                   f'Flammable prohibits Regeneration for {total_wounds} wounds remaining after other saves (p. 169)'))
+    elif native_flaming:
+        rule_skipped('Flaming Attacks', unit1,
+                     f'model rule does not transfer to magic weapon {weapon.get("name", "weapon")} (p. 169)')
+    if unit1.model.equipedWeapon.get('tag') == 'ranged':
+        from magic_items import report_item_cover
+        report_item_cover(unit1.model, attacks1)
     _report_too_tough_to_wound(
         unit2, total_hits, stat_value(unit1.model.characteristics.get('S')),
         wound_target)

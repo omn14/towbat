@@ -102,10 +102,12 @@ def ranged_hit_requirement(model1, moved=False, long_range=False,
         penalty += 1
     if stand_and_shoot and 'stand_and_shoot' not in ignore:
         penalty += 1
-    if partial_cover:
-        penalty += 1
-    if full_cover:
+    from magic_items import EffectKind, profile_effects
+    ignore_cover = bool(profile_effects(model1, EffectKind.IGNORE_COVER))
+    if full_cover and not ignore_cover:
         penalty += 2
+    elif partial_cover and not ignore_cover:
+        penalty += 1
     if multiple_shots and 'multiple_shots' not in ignore:
         penalty += 1
     # Enemy fire at a unit of US1 Skirmishers suffers -1 To Hit (not ignorable).

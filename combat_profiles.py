@@ -122,7 +122,7 @@ def crew_shooting_unit(group, firing_models=None):
     if crew is None or crew.weapon_slot(weapon.get('name', '')) is None:
         return group, firing_models
     crew.equip_weapon(weapon['name'])
-    for flag in ('at_long_range', 'target_skirmisher', 'moved_this_turn'):
+    for flag in ('at_long_range', 'target_skirmisher', 'moved_this_turn', 'partial_cover', 'full_cover'):
         setattr(crew, flag, getattr(group.model, flag, False))
     count = group.model.part_count('crew')
     shooters = SimpleNamespace(name=crew.name, model=crew, nmodels=group.nmodels * count,

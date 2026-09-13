@@ -190,6 +190,9 @@ class Spell:
             return
         if self.targets_self or str(self.spell_range).casefold() == 'self':
             target = self.caster or target
+        from magic_items import item_target_protected
+        if item_target_protected(self.game, self.caster, target, log=True):
+            return
         if not self.canTarget(target):
             return
         self.target = target

@@ -1990,6 +1990,10 @@ class MyApp(ShowBase):
         caster = getattr(self.fsm, 'castingUnit', self.unitToMove)
         if spell.targets_self or str(spell.spell_range).casefold() == 'self':
             target = caster
+        from magic_items import item_target_protected
+        if item_target_protected(self, caster, target, log=True):
+            self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
+            return
         if not spell.canTarget(target):
             self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell', 'StrategyPhase'))
             return
@@ -2092,6 +2096,9 @@ class MyApp(ShowBase):
 
     async def _shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
                        distance=None, *, target_boxes=None):
+        from magic_items import item_target_protected
+        if not stand_and_shoot and item_target_protected(self, attackerUnit, defenderUnit, log=True):
+            return
         from battle_secondary import shooting_blocked
         if shooting_blocked(self, attackerUnit):
             return
@@ -2115,6 +2122,10 @@ class MyApp(ShowBase):
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
+        for member in (attackerUnit, getattr(attackerUnit, 'joinedCharacter', None)):
+            if member is not None:
+                member.unit.model.partial_cover = False
+                member.unit.model.full_cover = False
         from shooting_geometry import enemy_fire_modifier, shooting_solution, uses_individual_shooting
         individual = uses_individual_shooting(self, attackerUnit, defenderUnit)
         geometry = None
@@ -2128,14 +2139,16 @@ class MyApp(ShowBase):
                     or defenderUnit.isInCombat or defenderUnit.unit.nmodels <= 0
                     or (not stand_and_shoot and (attackerUnit.hasAttackedThisTurn
                                                 or getattr(attackerUnit, 'chargedThisTurn', False)))):
-                rule_skipped('Skirmishers', attackerUnit, 'shooting refused: unit or target is not eligible (p. 137)')
+                rule_skipped('Shooting', attackerUnit, 'shooting refused: unit or target is not eligible (p. 137)')
                 return
             geometry = shooting_solution(self, attackerUnit, defenderUnit,
                                          stand_and_shoot=stand_and_shoot, target_boxes=target_boxes)
             if not geometry.eligible:
-                rule_skipped('Skirmishers', attackerUnit, f'{geometry.detail()} -> no volley; shooting retained (p. 185)')
+                rule_skipped('Shooting', attackerUnit, f'{geometry.detail()} -> no volley; shooting retained (p. 137)')
                 return
-            rule_log('Skirmishers', attackerUnit, f'{geometry.detail()} (pp. 137, 185)')
+            rule_log('Shooting', attackerUnit, f'{geometry.detail()} (pp. 137, 139)')
+            from shooting_geometry import report_item_sight
+            report_item_sight(geometry)
         # Long range (beyond half the weapon's range) imposes -1 To Hit.
         _half = weapon.get('ranged_range', 0) * WORLD_UNITS_PER_INCH / 2
         # A charge reaction is measured from where the charge was declared: by
@@ -2220,9 +2233,9 @@ class MyApp(ShowBase):
                 own = [model for model in geometry.eligible if model.unit is attackerUnit]
                 if own:
                     p_single = sum(ranged_hit_chance(attacker.model, multiple_shots=False,
-                                   **{**_mods, 'long_range': model.long_range}) for model in own) / len(own)
+                                   **{**_mods, 'long_range': model.long_range, **model.cover_modifiers}) for model in own) / len(own)
                     p_multi = sum(ranged_hit_chance(attacker.model, multiple_shots=True,
-                                  **{**_mods, 'long_range': model.long_range}) for model in own) / len(own)
+                                  **{**_mods, 'long_range': model.long_range, **model.cover_modifiers}) for model in own) / len(own)
             exp_shots = attacker.model.expected_ranged_shots(True)
             shots_label = weapon.get('ranged_shots_dice') or weapon.get('ranged_shots')
             multi_label = f"Multiple Shots ({shots_label})"
@@ -2282,13 +2295,20 @@ class MyApp(ShowBase):
             total_wounds = 0
             groups = {}
             for shooter in geometry.eligible:
-                key = (shooter.unit, shooter.long_range)
+                key = (shooter.unit, shooter.long_range, shooter.cover)
                 groups[key] = groups.get(key, 0) + 1
-            for (member, long_range), count in groups.items():
+            for (member, long_range, cover), count in groups.items():
                 profile = member.unit.model
                 profile.at_long_range = long_range
                 profile.target_skirmisher = attacker.model.target_skirmisher
                 profile.moved_this_turn = _moved
+                profile.partial_cover = cover == 1
+                profile.full_cover = cover == 2
+                details = sorted({shooter.cover_detail for shooter in geometry.eligible
+                                  if shooter.unit is member and shooter.long_range == long_range and shooter.cover == cover})
+                report = rule_log if cover else rule_skipped
+                report('Cover', member, f'{count} firing models: {"; ".join(details)} -> '
+                       f'{("none", "partial (-1 To Hit)", "full (-2 To Hit)")[cover]} before item exemptions (p. 139)')
                 from combat_profiles import crew_shooting_unit
                 shooting_unit, firing_count = crew_shooting_unit(member.unit, count)
                 result = simulate_battle(shooting_unit, defender, charge=False,

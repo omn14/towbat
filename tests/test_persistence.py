@@ -39,7 +39,7 @@ def _model():
         name='Battle Wizard',
         characteristics={'M': '4', 'W': '1', 'Points': 90},
         armor_save=7, armour=[], charging=False, weapons={}, spells={},
-        equipedWeapon=None,
+        equipedWeapon=None, special_rules=[],
         wizard_level=lambda default=0: 2,
         is_mounted=lambda: False,
         get_mount=lambda: None,

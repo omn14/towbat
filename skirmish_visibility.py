@@ -79,6 +79,15 @@ def _ray_circle_entry(origin, direction, center, radius):
 
 
 def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
+    return _model_sight(observer, targets, blockers, facing, terrain=terrain)
+
+
+def model_visible_fraction(observer, target, blockers=(), *, terrain=()):
+    """Exposed angular fraction of one XY base silhouette for cover (p. 139)."""
+    return _model_sight(observer, [target], blockers, terrain=terrain, measure=True)
+
+
+def _model_sight(observer, targets, blockers=(), facing=None, *, terrain=(), measure=False):
     """Sight from a base centre to any exposed target edge, not a centre ray.
 
     Between successive vertex angles, disjoint opaque footprints keep their
@@ -89,7 +98,7 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     not sculpt/eye-height visibility (p. 103).
     """
     if not targets:
-        return False
+        return 0.0 if measure else False
     if terrain and len(targets) > 1:
         return any(model_can_see(observer, [target], blockers, facing, terrain=terrain)
                    for target in targets)
@@ -138,8 +147,8 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     for target in targets:
         length = hypot(target[0] - origin[0], target[1] - origin[1])
         if length <= EPSILON:
-            return True
-        if clear(((target[0] - origin[0]) / length, (target[1] - origin[1]) / length)):
+            return 1.0 if measure else True
+        if not measure and clear(((target[0] - origin[0]) / length, (target[1] - origin[1]) / length)):
             return True
     corners = [corner for box in [*targets, *blockers] for corner in _box_corners(*box)]
     corners.extend(point for edge in edges for point in edge)
@@ -147,19 +156,26 @@ def model_can_see(observer, targets, blockers=(), facing=None, *, terrain=()):
     for center, radius in circles:
         separation = hypot(center[0] - origin[0], center[1] - origin[1])
         if separation <= radius:
-            return False
+            return 0.0 if measure else False
         direction = atan2(center[1] - origin[1], center[0] - origin[0])
         half_angle = asin(radius / separation)
         angles = sorted({*angles, (direction - half_angle) % tau, (direction + half_angle) % tau})
     if facing is not None:
         angles = sorted({*angles, radians(facing + 45) % tau, radians(facing + 135) % tau})
+    total_angle = visible_angle = 0.0
     for first, last in zip(angles, angles[1:] + [angles[0] + tau]):
         if last - first <= 1e-10:
             continue
         middle = (first + last) / 2
-        if clear((cos(middle), sin(middle))):
+        direction = (cos(middle), sin(middle))
+        if measure:
+            if any(_ray_entry(origin, direction, target) is not None for target in targets):
+                total_angle += last - first
+                if clear(direction):
+                    visible_angle += last - first
+        elif clear(direction):
             return True
-    return False
+    return visible_angle / total_angle if measure and total_angle else 0.0 if measure else False
 
 
 def charge_visibility(game, unit, target, from_pos=None, from_hpr=None):

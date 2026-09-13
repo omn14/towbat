@@ -10,6 +10,50 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Cover And Three Pending Items: 2026-09-13
+
+Rulebook pp. 138-139, 169, 206; General's Companion pp. 46-48. Per-shooter cover
+now measures obstruction using the existing XY footprint visibility: up to half
+is partial (-1); more than half is full (-2). Units count obscured target bases;
+lone targets use exposed angular silhouette. Half/full penalties never stack.
+Shots are grouped by bearer, range and cover, including Multiple Shots odds and
+chariot crew propagation. Reports carry obscured counts/fractions and applied or
+waived modifiers. A later clear volley resets the previous cover flags.
+
+All-Seeing Eye of Numas ignores woods only for the bearer's shooting sight and
+waives that profile's cover penalties; other terrain/models still block sight.
+Shadowed Mantle grants infantry-only light armour and extends lone-character
+screening to six inches even when closest, retaining the five-model, non-fleeing,
+friendly-infantry requirements. Shooting, bombardment and targeted spell paths
+share the ownership-aware gate. Trailblazer's Hatchet grants its infantry bearer
+the published magical S+1/AP-1 Flaming weapon and Move Through Cover; its optional
+once-per-game Start of Turn grant reaches the unit/attached profiles, survives
+repeated reloads, and expires without removing native rules.
+
+Flaming Attacks only prohibit Regeneration against Flammable targets. Weapon
+sources work normally; a model's own Flaming rule does not transfer to a magic
+weapon. Positive and skipped reports are emitted after resolution, not per die.
+
+Corrections: the initial 16 selected-item failures came from an upstream XML-to-JSON
+catalogue update, not broken item fixtures. Once JSON loaded, all 38 existing cases
+passed unchanged. Live cover tests exposed missing geometry-to-roll flags. Their
+controlled BS must also be set in the baseline restored by combat, and crew tests
+must use a real catalogue weapon. Persistence's older test stub needed the real
+profile's special_rules list; no runtime save workaround was added.
+
+Validation: 50 shooting checks include real dice, Eye immunity, clear-shot reset,
+crew propagation and rendered readouts. The 42-case selected-item module passes
+(41 cases in this commit's scope; the paused scroll case stays uncommitted).
+Visibility 59, formed charge 51, inventory 17, live lifecycle 28, persistence 34,
+Move Through Cover 22 and Stand & Shoot 21 pass in sequential bounded services.
+The catalogue change separately passes ten format and 224 integration checks.
+
+LEFTOVER: cover retains the engine's planar, see-onto terrain abstraction. Sculpt
+heights, foliage cover inside woods and low non-sight-blocking obstacles are not
+implemented. Further items/scrolls remain paused and the complete Battle March
+item-module gate stays closed. No full suite, HUD NaN fix or narrative work is
+included. Local armies, presets and saved games are not part of these commits.
+
 ## Battle March Native Configuration Screen: 2026-09-13
 
 `--battle-config [PATH]` now opens a themed DirectGUI editor in the game's Panda3D
