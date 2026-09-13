@@ -10,6 +10,39 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Conflict-Aware Terrain Clearance: 2026-09-13
+
+General's Companion pp. 24-25. Fixed objective placement now finds the smallest
+legal translation for each feature around its fixed neighbours and within the
+playable board, instead of rejecting the first obstructed candidate. Shapely
+convex decomposition preserves concave footprints and holes in the collision
+regions. Circumscribed circular buffers do not undercut objective clearance.
+Already legal terrain stays put; zero-width/height translation regions retain
+valid line/point solutions for features spanning a board dimension. All proposed
+moves are validated before accepted records or rendered terrain change. Logs
+report moved distances, unchanged clearance or failure without a partial commit.
+
+Corrections during verification: the initial live fixture violated the 12-inch
+centre exclusion, so it now places legally and scatters six inches toward the
+trove. Preview geometry must be explicitly translated; its logical centre remains
+at the origin while its visual follows the mouse. Exact-fit board bounds must not
+be represented by an empty degenerate polygon.
+
+Validation: 120 config/geometry/controller cases pass in a bounded 512 MiB service,
+including blocked alternatives on both sizes, rotated concavities/holes, multiple
+blockers/objectives, exact thresholds, impossible placement and atomic logging.
+Four added live cases pass for buildings/hills on 44 x 30 and 48 x 36, including
+two reloads with relocation/dice forbidden, offscreen projection/pixel checks and
+inspected screenshots. Latest 768 MiB scene run: 57 passed, one existing HUD
+layout NaN failure; no HUD fix or full-suite success is claimed. Syntax and editor
+diagnostics are clean. This terrain-clearance milestone does not complete stage 7.
+
+LEFTOVER: this is per-feature minimum translation with neighbours fixed, not a
+global multi-feature optimization; sequential layouts may still need revision.
+River footprints, remaining terrain categories, special terrain and other active
+Battle March stages remain unfinished. Magic-item expansion, tournaments and
+narrative scenarios stay deferred under the revised plan.
+
 ## Battle March Magic Items, First Ten: 2026-09-13
 
 General's Companion pp. 46-48. Existing Helm of Courage and Banner of the Bold

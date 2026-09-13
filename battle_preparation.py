@@ -266,21 +266,38 @@ def place_objectives(game, preparation):
     shapes = [footprint(piece) for piece in pieces]
     records = deepcopy(state['placed'])
     clearance = game.battle_config['terrain']['objective_clearance']
+    objectives = [objective for objective in game.battle_objectives if not objective.get('destroyed')]
     for index, shape in enumerate(shapes):
-        shift = objective_clearance_shift(game.battlefield, shape, game.battle_objectives, clearance)
+        neighbours = [other for other_index, other in enumerate(shapes) if index != other_index]
+        try:
+            shift = objective_clearance_shift(game.battlefield, shape, objectives,
+                                              clearance, obstacles=neighbours)
+        except ConfigError as error:
+            rule_skipped('Objective clearance', records[index]['type'],
+                         f'feature {index + 1}: {error}; all accepted terrain unchanged')
+            raise
         shifted = translate(shape, *shift)
         if any(shifted.intersects(other) for other_index, other in enumerate(shapes) if index != other_index):
             raise ConfigError(f'Objective clearance would overlap terrain {index + 1}; revise terrain placement')
         if any(shifted.distance(Point(*objective['center'])) < objective['diameter'] / 2 + clearance - 1e-5
-               for objective in game.battle_objectives):
+               for objective in objectives):
             raise ConfigError('Objective clearance could not be achieved; revise terrain placement')
         shapes[index] = shifted
         records[index]['center'][0] += shift[0]
         records[index]['center'][1] += shift[1]
-    for original, moved in zip(state['placed'], records):
+    for original, moved, shape in zip(state['placed'], records, shapes):
         if original['center'] != moved['center']:
+            distance = math.hypot(moved['center'][0] - original['center'][0],
+                                  moved['center'][1] - original['center'][1])
             rule_log('Objective clearance', moved['type'], f'{original["center"][:2]} -> {moved["center"][:2]}; '
-                     f'minimum displacement for {clearance:g}" clearance')
+                     f'{distance:.3f}" minimum displacement for {clearance:g}" clearance; '
+                     f'{len(shapes) - 1} other features held fixed')
+        else:
+            gaps = [shape.distance(Point(*objective['center'])) - objective['diameter'] / 2
+                    for objective in objectives]
+            reason = (f'nearest objective {min(gaps):.3f}" away; requires {clearance:g}"'
+                      if gaps else 'no active objectives')
+            rule_skipped('Objective clearance', moved['type'], f'{reason}; no movement')
     state['placed'] = records
     rebuild_terrain(game, records)
     preparation['stage'] = 'zones'

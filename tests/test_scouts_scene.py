@@ -733,6 +733,117 @@ def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, f
         load_game_state(app, str(baseline))
 
 
+@pytest.mark.parametrize('width,depth', [(44, 30), (48, 36)])
+@pytest.mark.parametrize('kind', ['Building', 'Hill'])
+def test_objective_clearance_avoids_terrain_and_reloads_once(scene, tmp_path, width, depth, kind):
+    from copy import deepcopy
+    from panda3d.core import OrthographicLens, PNMImage, Point2, Point3
+    from shapely.affinity import translate
+    from shapely.geometry import Point, Polygon
+    from battle_config import load_config
+    from battle_preparation import run_preparation
+    from battle_setup import prepare_new_battle, saved_battle
+    from battle_setup_ui import TerrainPlacement
+    from battle_terrain import footprint, objective_clearance_shift
+    from tests.test_shieldwall_scene import combat_tasks
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    for unit in app.units:
+        unit.isDeployed = False
+    app.deploymentStage = 'ordinary'
+    app.terrain_manager.clear()
+    config = load_config()
+    config['battlefield'].update(width=width, depth=depth)
+    config['terrain'].update(feature_count=2, method='scattered')
+    config['objectives']['layout'] = 'two_troves'
+    prepare_new_battle(app, config, 12)
+    placements = iter([(3, -13.5, 2, 2), (6, -13, 2, 4)])
+    selected = iter([kind, 'Building', 'Building', 'Building'])
+    original = []
+    camera, lens = app.camera.getTransform(), app.cam.node().getLens()
+
+    async def place(editor, owner):
+        horizontal, vertical, breadth, length = next(placements)
+        editor.resize(breadth, length)
+        editor.set_position(Point3(horizontal, vertical, 0))
+        editor.commit()
+        try:
+            assert not editor.report['errors']
+            original.append(translate(editor.geometry, horizontal, vertical))
+            return editor.future.result()
+        finally:
+            editor.preview.destroy()
+
+    async def answer(options, position, **kwargs):
+        return next(selected) if 'Building' in options else options[0]
+
+    failures = []
+
+    async def prepare():
+        try:
+            await run_preparation(app)
+        except Exception as error:
+            failures.append(error)
+
+    try:
+        with patch.object(app, 'makeChoiceNew', side_effect=answer), \
+                patch.object(TerrainPlacement, 'choose', place), \
+                patch('battle_preparation.random.randint', side_effect=[6, 1, 3, 3, 3, 3, 3, 3, 3, 2, 5]), \
+                patch('battle_preparation.random.uniform', return_value=3.141592653589793 / 2), \
+                combat_tasks(app) as run:
+            run(prepare())
+        if failures:
+            raise failures[0]
+        assert app.battle_setup['preparation']['stage'] == 'complete', app.battleMarchSetupError
+        original = [translate(shape, 0, 6) for shape in original]
+        initial = objective_clearance_shift(app.battlefield, original[0], app.battle_objectives, 3)
+        assert translate(original[0], *initial).intersects(original[1])
+        shapes = [footprint(piece) for piece in app.terrain_manager.terrain_pieces[:2]]
+        assert not shapes[0].intersects(shapes[1])
+        assert shapes[1].equals(original[1])
+        assert all(Polygon(app.battlefield.outline).covers(shape) for shape in shapes)
+        for shape in shapes:
+            for objective in app.battle_objectives:
+                assert shape.distance(Point(*objective['center'])) >= objective['diameter'] / 2 + 3 - 1e-5
+        expected = deepcopy(saved_battle(app))
+        target = tmp_path / 'clearance-complete.json'
+        assert save_game_state(app, str(target))
+        for unused in range(2):
+            with patch('battle_preparation.objective_clearance_shift', side_effect=AssertionError('moved twice')), \
+                    patch('battle_preparation.random.randint', side_effect=AssertionError('rerolled setup')):
+                load_game_state(app, str(target))
+            assert saved_battle(app) == expected
+            restored = [footprint(piece) for piece in app.terrain_manager.terrain_pieces[:2]]
+            assert all(before.hausdorff_distance(after) < 1e-5 for before, after in zip(shapes, restored))
+        top_down = OrthographicLens()
+        top_down.setFilmSize(width + 4, depth + 4)
+        app.cam.node().setLens(top_down)
+        app.camera.setPos(0, 0, 100)
+        app.camera.lookAt(0, 0, 0)
+        app.aspect2d.hide()
+        app.graphicsEngine.renderFrame()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert app.win.getScreenshot(image)
+        for piece in app.terrain_manager.terrain_pieces[:2]:
+            projected = Point2()
+            assert top_down.project(app.cam.getRelativePoint(app.render, piece.center), projected)
+            assert abs(projected.x) < .9 and abs(projected.y) < .9
+            horizontal = int((projected.x + 1) * image.getXSize() / 2)
+            vertical = int((1 - projected.y) * image.getYSize() / 2)
+            colors = {tuple(image.getXel(horizontal + offset_x, vertical + offset_y))
+                      for offset_x in range(-12, 13, 3) for offset_y in range(-12, 13, 3)}
+            assert len(colors) > 3
+        assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_clearance_{kind}_{width}x{depth}.png'))
+    finally:
+        app.aspect2d.show()
+        app.cam.node().setLens(lens)
+        app.camera.setTransform(camera)
+        app.battleMarchSetupBusy = False
+        app.magicBusy = False
+        load_game_state(app, str(baseline))
+
+
 def test_terrain_placement_controls_render_and_cancel(scene):
     from direct.task import Task
     from panda3d.core import PNMImage

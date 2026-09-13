@@ -4,11 +4,11 @@ Scattering follows Dawn of the Storm Dragon p. 23. Calculations are read-only;
 the setup controller commits accepted positions through TerrainManager.
 """
 
-from math import hypot
+from math import cos, hypot, pi
 
-from shapely import set_precision
+from shapely import constrained_delaunay_triangles, set_precision
 from shapely.affinity import scale, translate
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import LineString, MultiPoint, Point, Polygon, box
 from shapely.ops import nearest_points, polygonize, unary_union
 
 from battle_config import ConfigError
@@ -105,25 +105,62 @@ def scatter_distance(field, geometry, obstacles, direction, distance):
     return lower
 
 
-def objective_clearance_shift(field, geometry, objectives, clearance):
-    """Shortest translation clearing all fixed marker bases without leaving the board.
+def _convex_parts(geometry):
+    if geometry.equals(geometry.convex_hull):
+        return [geometry]
+    return list(constrained_delaunay_triangles(geometry).geoms)
 
-    Reflecting the terrain gives the forbidden translation region around each
-    round marker. Its boundary supplies the minimum displacement, including when
-    the marker is inside the terrain. Other terrain must be revalidated afterward.
+
+def _collision_translations(reflected, obstacle):
+    """Minkowski sums of convex parts preserve concave gaps and polygon holes."""
+    fixed_parts = _convex_parts(obstacle)
+    return unary_union([
+        MultiPoint([(first[0] + second[0], first[1] + second[1])
+                    for first in moving.exterior.coords[:-1]
+                    for second in fixed.exterior.coords[:-1]]).convex_hull
+        for moving in _convex_parts(reflected)
+        for fixed in fixed_parts
+    ]).buffer(TOLERANCE, join_style='mitre')
+
+
+def objective_clearance_shift(field, geometry, objectives, clearance, *, obstacles=()):
+    """Smallest legal translation for fixed objectives (Companion pp. 24-25).
+
+    Reflected footprints describe forbidden translations. Nearest points in the
+    remaining region give the minimum displacement while neighbours stay fixed.
+    Circular buffers are circumscribed so their chords never undercut clearance.
     """
+    objectives = [objective for objective in objectives if not objective.get('destroyed')]
+    obstacles = list(obstacles)
+    if (Polygon(field.outline).covers(geometry)
+            and all(geometry.distance(Point(*objective['center'])) >= objective['diameter'] / 2 + clearance
+                    for objective in objectives)
+            and not any(geometry.intersects(obstacle) for obstacle in obstacles)):
+        return (0.0, 0.0)
     reflected = scale(geometry, xfact=-1, yfact=-1, origin=(0, 0))
     forbidden = unary_union([
         translate(reflected, *objective['center']).buffer(
-            objective['diameter'] / 2 + clearance + TOLERANCE, quad_segs=128)
-        for objective in objectives if not objective.get('destroyed')])
+            (objective['diameter'] / 2 + clearance + TOLERANCE) / cos(pi / 2048),
+            quad_segs=512)
+        for objective in objectives])
     origin = Point(0, 0)
-    if not forbidden.contains(origin):
-        return (0.0, 0.0)
     min_x, min_y, max_x, max_y = geometry.bounds
-    allowed = box(-field.width / 2 - min_x, -field.depth / 2 - min_y,
-                  field.width / 2 - max_x, field.depth / 2 - max_y).difference(forbidden)
-    if allowed.is_empty:
-        raise ConfigError('No on-board terrain position clears the fixed objectives; choose a smaller feature')
-    nearest = nearest_points(origin, allowed)[1]
-    return (nearest.x, nearest.y)
+    if max_x - min_x > field.width or max_y - min_y > field.depth:
+        raise ConfigError('Terrain is larger than the playable battlefield; choose a smaller feature')
+    left, right = -field.width / 2 - min_x, field.width / 2 - max_x
+    bottom, top = -field.depth / 2 - min_y, field.depth / 2 - max_y
+    allowed = MultiPoint([(left, bottom), (left, top), (right, bottom),
+                          (right, top)]).convex_hull.difference(forbidden)
+    remaining = list(obstacles)
+    while not allowed.is_empty:
+        nearest = nearest_points(origin, allowed)[1]
+        moved = translate(geometry, nearest.x, nearest.y)
+        collisions = [obstacle for obstacle in remaining if moved.intersects(obstacle)]
+        if not collisions:
+            return (nearest.x, nearest.y)
+        allowed = allowed.difference(unary_union([
+            _collision_translations(reflected, obstacle) for obstacle in collisions]))
+        remaining = [obstacle for obstacle in remaining
+                     if not any(obstacle is collision for collision in collisions)]
+    raise ConfigError('No on-board terrain position clears the fixed objectives and neighbouring terrain; '
+                      'choose a smaller feature or revise terrain placement')

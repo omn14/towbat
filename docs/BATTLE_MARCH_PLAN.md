@@ -61,7 +61,10 @@ in full. Continue stages 1-4, the active portions of stage 5, and stage 7.
   centre/opponent spacing, recommendation warnings, first-contact scatter,
   and minimum terrain translation clearing fixed objectives. Ordinary terrain
   selection and mouse-driven dimension/position previews are connected; river
-  footprints and general conflict-aware minimum relocation remain pending.
+  footprints and coordinated multi-feature relocation remain pending. Per-feature
+  clearance now searches around fixed neighbours instead of rejecting an obstructed
+  shortest move. Concave footprints, holes and board edges constrain the search;
+  accepted positions are committed only after all features can be cleared.
 - Offscreen 44 x 30 and 48 x 36 captures verify colored overlays and removal
   of the legacy rectangle. Real-scene saves restore geometry without RNG.
 - Objective control now uses actual bases, joined Unit Strength, distance/US
@@ -125,6 +128,31 @@ terrain currently offers hills, woods and impassable buildings. Special features
 remaining terrain categories, objective-aware strategic AI, private objectives,
 and random happenings remain active work in stages 1 and 3-5. Tournament features,
 further magic-item work and stage 6 narrative scenarios are deferred.
+
+## Current Terrain-Clearance Increment: 2026-09-13
+
+General's Companion pp. 24-25: objective placement now finds the shortest legal
+translation for each feature with its neighbours held fixed. Existing valid
+clearance stays unchanged, including exact boundary distances. Circular clearance
+regions use a conservative polygon approximation; the search does not substitute
+convex hulls for concave terrain. Movement, no-move and impossible-placement logs
+report the deciding distances or reason. Failed searches leave accepted setup
+records and rendered terrain unchanged.
+
+Verification: 120 configuration/geometry/controller tests pass in a 512 MiB
+isolated service. Four added real-scene cases pass for buildings/hills on both
+board sizes: legal placement, six-inch scatter, obstructed relocation, completed
+setup and two reloads without further movement or dice. Offscreen screenshots
+and terrain projection/pixel checks pass. The scene module's latest run has
+57 passes and one failure in the previously recorded HUD layout NaN assertion;
+that paused investigation remains untouched. This terrain-clearance milestone
+does not complete stage 7; no full-suite pass is claimed.
+
+LEFTOVER: jointly relocating several features to obtain a globally minimal layout
+is not solved; the sequential fixed-neighbour search can still require revision.
+River footprints, remaining terrain categories, special features, objective-aware
+AI, standalone private objectives and random happenings remain active work.
+The deferred item, event and narrative scope is unchanged.
 
 ## Source Decisions
 

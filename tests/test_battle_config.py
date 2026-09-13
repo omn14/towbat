@@ -323,6 +323,152 @@ def test_minimum_terrain_shift_clears_fixed_objective():
     assert objective['center'] == [0, 0]
 
 
+@pytest.mark.parametrize('width,depth', [(44, 30), (48, 36)])
+def test_minimum_terrain_shift_avoids_neighbouring_feature(width, depth):
+    from math import hypot, sqrt
+    from shapely.affinity import translate
+    from shapely.geometry import Point, box
+    from battlefield import Battlefield
+    from battle_terrain import objective_clearance_shift
+    terrain = box(2, -1, 4, 1)
+    obstacle = box(5, -2, 7, 2)
+    objective = {'center': [0, 0], 'diameter': 2}
+    shift = objective_clearance_shift(Battlefield(width, depth), terrain,
+                                      [objective], 3, obstacles=[obstacle])
+    moved = translate(terrain, *shift)
+    assert not moved.intersects(obstacle)
+    assert moved.distance(Point(0, 0)) >= 4 - 1e-5
+    assert hypot(*shift) == pytest.approx(sqrt((sqrt(12) - 2) ** 2 + 9), abs=1e-4)
+
+
+def test_minimum_shift_preserves_concave_neighbour_gap():
+    from math import hypot, sqrt
+    from shapely.affinity import translate
+    from shapely.geometry import Point, Polygon, box
+    from battlefield import Battlefield
+    from battle_terrain import objective_clearance_shift
+    terrain = box(2, -1, 4, 1)
+    obstacle = Polygon([(5, -15), (9, -15), (9, 8), (5, 8),
+                        (5, 5), (7, 5), (7, 2), (5, 2)])
+    shift = objective_clearance_shift(Battlefield(44, 30), terrain,
+                                      [{'center': [0, 0], 'diameter': 2}], 3,
+                                      obstacles=[obstacle])
+    moved = translate(terrain, *shift)
+    assert not moved.intersects(obstacle)
+    assert moved.intersects(obstacle.convex_hull)
+    assert moved.distance(Point(0, 0)) >= 4
+    assert shift[1] == pytest.approx(3, abs=1e-4)
+    assert hypot(*shift) == pytest.approx(sqrt((sqrt(12) - 2) ** 2 + 9), abs=1e-4)
+
+
+@pytest.mark.parametrize('angle', [0, 37])
+@pytest.mark.parametrize('holed', [False, True])
+def test_collision_translations_match_rotated_nonconvex_footprints(angle, holed):
+    from shapely.affinity import rotate, scale, translate
+    from shapely.geometry import Point, Polygon, box
+    from battle_terrain import _collision_translations
+    moving = box(-2, -2, 2, 2).difference(box(-1, -1, 1, 1)) if holed else Polygon([
+        (-2, -2), (2, -2), (2, -1), (-1, -1), (-1, 2), (-2, 2)])
+    moving = rotate(moving, angle, origin=(0, 0))
+    fixed = Polygon([(1, 0), (3, 0), (3, 3), (2, 3), (2, 1), (1, 1)])
+    forbidden = _collision_translations(scale(moving, -1, -1, origin=(0, 0)), fixed)
+    for horizontal in range(-6, 7):
+        for vertical in range(-6, 7):
+            shift = (horizontal + 0.17, vertical + 0.23)
+            assert forbidden.covers(Point(*shift)) == translate(moving, *shift).intersects(fixed)
+
+
+def test_minimum_shift_checks_multiple_blockers_and_fixed_objectives():
+    from shapely.affinity import translate
+    from shapely.geometry import Point, Polygon, box
+    from battlefield import Battlefield
+    from battle_terrain import objective_clearance_shift
+    field = Battlefield(44, 30)
+    terrain = box(2, -1, 4, 1)
+    obstacles = [box(5, -2, 7, 2), box(2, 2, 4, 8), box(2, -8, 4, -2)]
+    objectives = [{'center': [0, 0], 'diameter': 2}, {'center': [0, 7.5], 'diameter': 2}]
+    original = [obstacle.wkt for obstacle in obstacles]
+    shift = objective_clearance_shift(field, terrain, objectives, 3, obstacles=obstacles)
+    moved = translate(terrain, *shift)
+    assert all(not moved.intersects(obstacle) for obstacle in obstacles)
+    assert all(moved.distance(Point(*objective['center'])) >= 4 for objective in objectives)
+    assert Polygon(field.outline).covers(moved)
+    assert original == [obstacle.wkt for obstacle in obstacles]
+
+
+def test_minimum_shift_handles_exact_clearance_board_limits_and_no_solution():
+    from shapely.affinity import translate
+    from shapely.geometry import Polygon, box
+    from battlefield import Battlefield
+    from battle_terrain import objective_clearance_shift
+    field = Battlefield(44, 30)
+    objective = {'center': [0, 0], 'diameter': 2}
+    assert objective_clearance_shift(field, box(4, -1, 6, 1), [objective], 3) == (0, 0)
+    assert objective_clearance_shift(field, box(-22, -15, 22, 15), [], 3) == (0, 0)
+    assert objective_clearance_shift(field, box(-1, -1, 1, 1),
+                                      [dict(objective, destroyed=True)], 3) == (0, 0)
+    spanning = box(2, -15, 4, 15)
+    shift = objective_clearance_shift(field, spanning, [objective], 3)
+    assert shift == pytest.approx((2, 0), abs=1e-5)
+    assert Polygon(field.outline).covers(translate(spanning, *shift))
+    with pytest.raises(ConfigError, match='No on-board terrain position'):
+        objective_clearance_shift(field, box(2, -1, 4, 1), [objective], 3,
+                                  obstacles=[box(-22, -15, 22, 15)])
+    with pytest.raises(ConfigError, match='larger than'):
+        objective_clearance_shift(field, box(-23, -1, 23, 1), [], 3)
+
+
+@pytest.mark.parametrize('blocked', [False, True])
+def test_objective_setup_clearance_commits_atomically_and_logs(monkeypatch, capsys, blocked):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from shapely.geometry import box
+    from battlefield import Battlefield
+    import battle_preparation
+    if blocked:
+        shapes = [box(2, -14, 4, -12), box(-18, -10, 18, 10)]
+        centers = [[3, -13, 0], [0, 0, 0]]
+        objectives = [{'center': [0, -12], 'diameter': 2}, {'center': [0, 0], 'diameter': 2}]
+    else:
+        shapes = [box(2, -1, 4, 1), box(5, -2, 7, 2)]
+        centers = [[3, 0, 0], [6, 0, 0]]
+        objectives = [{'center': [0, 0], 'diameter': 2}]
+    preparation = {'stage': 'objectives', 'terrain': {
+        'placed': [{'type': 'house', 'center': center} for center in centers]}}
+    original = deepcopy(preparation)
+    game = SimpleNamespace(battlefield=Battlefield(44, 30),
+                           battle_config={'terrain': {'objective_clearance': 3}},
+                           terrain_manager=SimpleNamespace(terrain_pieces=shapes),
+                           battle_objectives=objectives)
+    rebuild, markers, overlay = Mock(), Mock(), Mock()
+    monkeypatch.setattr(battle_preparation, 'footprint', lambda shape: shape)
+    monkeypatch.setattr(battle_preparation, 'rebuild_terrain', rebuild)
+    monkeypatch.setattr('battle_objectives.sync_markers', markers)
+    monkeypatch.setattr('battlefield.draw_battlefield', overlay)
+    if blocked:
+        with pytest.raises(ConfigError, match='No on-board terrain position'):
+            battle_preparation.place_objectives(game, preparation)
+        assert preparation == original
+        rebuild.assert_not_called()
+        markers.assert_not_called()
+        overlay.assert_not_called()
+        output = capsys.readouterr().out
+        assert 'all accepted terrain unchanged' in output
+        assert 'minimum displacement' not in output
+    else:
+        battle_preparation.place_objectives(game, preparation)
+        assert preparation['stage'] == 'zones'
+        assert preparation['terrain']['placed'][0]['center'] != centers[0]
+        assert preparation['terrain']['placed'][1]['center'] == centers[1]
+        rebuild.assert_called_once_with(game, preparation['terrain']['placed'])
+        markers.assert_called_once_with(game)
+        overlay.assert_called_once_with(game)
+        output = capsys.readouterr().out
+        assert 'minimum displacement for 3" clearance; 1 other features held fixed' in output
+        assert 'nearest objective 4.000" away; requires 3"; no movement' in output
+
+
 def test_objective_control_ties_and_explicit_one_object_choice():
     from battle_objectives import required_choices, resolve_control
     first = {'unit': 'alpha', 'name': 'Alpha', 'player': 1, 'distance': 3, 'strength': 5, 'reason': None}
