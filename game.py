@@ -365,9 +365,10 @@ class MyApp(ShowBase):
 
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
         #self.p1army="strategy_armies/orc_and_goblin_horde.json"
-        self.p1army="strategy_armies/my_army_he.json"
+        #self.p1army="strategy_armies/my_army_he.json"
+        self.p1army="my_army1.json"
         self.load_player1_army(self.p1army)
-        self.load_player2_army("strategy_armies/my_arm_chaosy.json")
+        self.load_player2_army("my_army2.json")
 
 
         self.unitToMove=self.player1Units[0]
@@ -1214,11 +1215,13 @@ class MyApp(ShowBase):
         cast = getattr(unit, 'spellsCastThisTurn', [])
         spent = getattr(unit, 'cannotCastThisTurn', False)
         bound_phases = getattr(unit, 'boundSpellPhases', [])
+        from magic_items import casting_spellbook
+        spellbook = casting_spellbook(unit)
         def available(name, spell):
             if spell.get('bound'):
                 from magic_items import item_spell_available
                 return not spent and phase not in bound_phases and item_spell_available(unit, spell)
-            return m.is_wizard() and may_attempt(cast, name, level, spent)
+            return m.is_wizard() and may_attempt(cast, spell.get('name', name), level, spent)
 
         def combat_legal(spell):
             from battle_secondary import spell_allowed
@@ -1236,12 +1239,12 @@ class MyApp(ShowBase):
         marched = (getattr(unit, 'marchedThisTurn', False)
                or getattr(host, 'marchedThisTurn', False))
         barred = MARCH_BARRED_SPELLS
-        names = [name for name, spell in m.spells.items()
+        names = [name for name, spell in spellbook.items()
                  if spell.get('phase') == phase
                  and available(name, spell) and combat_legal(spell)
                  and not (marched and spell.get('type') in barred)]
         if marched:
-            lost = [n for n, s in m.spells.items()
+            lost = [n for n, s in spellbook.items()
                     if s.get('phase') == phase and s.get('type') in barred
                     and available(n, s)]
             if lost:
@@ -1315,8 +1318,10 @@ class MyApp(ShowBase):
         _cast = getattr(self.unitToMove, 'spellsCastThisTurn', [])
         _spent = getattr(self.unitToMove, 'cannotCastThisTurn', False)
         spellChoices = self.castableSpells(self.unitToMove)
+        from magic_items import casting_spellbook
+        spellbook = casting_spellbook(self.unitToMove)
         # A spell the catalogue knows the wording of but the engine does not.
-        spellClasses = [_wizard.spells[n].get('class') or spell_class(_wizard.spells[n].get('name', n))
+        spellClasses = [spellbook[n].get('class') or spell_class(spellbook[n].get('name', n))
                         or CatalogueSpell for n in spellChoices]
         if not spellChoices:
             if _spent:
@@ -1335,7 +1340,7 @@ class MyApp(ShowBase):
         spellchoice = await taskMgr.add(
             self.makeChoiceNew(spellChoices, Vec3(-20,0,10), cancellable=True,
                                descriptions=self.spellDescriptions(_wizard,
-                                                                   spellChoices),
+                                                                   spellChoices, spellbook),
                                owner=self.unitToMove,
                                prompt=f"{_wizard.name}: cast which spell?"))
 
@@ -1346,7 +1351,7 @@ class MyApp(ShowBase):
                                      "StrategyPhase"))
             return task.done
         index = spellChoices.index(spellchoice)
-        self.fsm.activeSpell = self.unitToMove.unit.model.spells.get(spellchoice)
+        self.fsm.activeSpell = spellbook.get(spellchoice)
         self.fsm.spellClassToCast = spellClasses[index]
         self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(
             self.fsm.activeSpell.get('name', spellchoice), self.fsm.activeSpell.get('casting_value') or 12,
@@ -1358,6 +1363,7 @@ class MyApp(ShowBase):
             power_level=self.fsm.activeSpell.get('power_level', 0),
             spell_range=self.fsm.activeSpell.get('range'))
         self.fsm.spellInstanceToCast.selection_key = spellchoice
+        self.fsm.spellInstanceToCast.scroll_item_id = self.fsm.activeSpell.get('scroll_item_id')
         self.fsm.castingUnit = self.unitToMove
         self.debugTextInfo.setText(
             spell_readout(spellchoice, self.fsm.activeSpell))
@@ -1864,9 +1870,10 @@ class MyApp(ShowBase):
                         finally:
                             self.castingSpell = False
 
-    def spellDescriptions(self, wizard, names) -> dict:
+    def spellDescriptions(self, wizard, names, spellbook=None) -> dict:
         """name -> readout, for the spell-selection menu."""
-        return {n: spell_readout(n, wizard.spells.get(n)) for n in names}
+        records = wizard.spells if spellbook is None else spellbook
+        return {n: spell_readout(n, records.get(n)) for n in names}
 
     SELECTION_STATS = ('M', 'WS', 'BS', 'S', 'T', 'W', 'I', 'A', 'Ld')
 
@@ -2006,7 +2013,7 @@ class MyApp(ShowBase):
         if spell.bound:
             caster.boundSpellPhases = [*getattr(caster, 'boundSpellPhases', []), self.castingPhase()]
         else:
-            caster.spellsCastThisTurn.append(key)
+            caster.spellsCastThisTurn.append(spell.name)
         await spell.spellFunction(target)
         if getattr(spell, 'no_more_spells', False):
             caster.cannotCastThisTurn = True
