@@ -158,8 +158,11 @@ class CombatContactSnapshot:
         support = part.role in ('main', 'champion', 'character') and profile.fights_in_extra_rank(charged=charged)
         movement_profile = joined.unit.model if part.role == 'character' and joined is not None else host.unit.model
         movement = movement_profile.get_movement()
+        from frenzy import attack_bonus
+        frenzy_bonus = attack_bonus(part)
         characteristic = attack_characteristic(profile, charged=charged,
-                                               inches=float(getattr(host, 'chargeDistance', 0) or 0))
+                               inches=float(getattr(host, 'chargeDistance', 0) or 0),
+                               frenzy_bonus=frenzy_bonus)
         count = part.count
         if part.role == 'main':
             indices = [index for index in range(initial) if index not in champion_indices]
@@ -208,6 +211,8 @@ class CombatContactSnapshot:
         logger = rule_log if total else rule_skipped
         bonuses = {rule['name']: rule['extra_attacks'] for rule in profile.special_rules
                    if isinstance(rule, dict) and rule.get('extra_attacks')}
+        if frenzy_bonus:
+            bonuses['Frenzy'] = frenzy_bonus
         attack_detail = f'A{profile.characteristics.get("A")} -> A{characteristic}'
         if bonuses:
             attack_detail += ' (' + ', '.join(f'{name} +{value}' for name, value in bonuses.items()) + ')'

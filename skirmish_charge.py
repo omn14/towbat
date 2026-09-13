@@ -269,6 +269,68 @@ def supported_formed_target(attacker, defender):
             and getattr(defender, 'joinedCharacter', None) is None)
 
 
+def declaration_route(game, unit, target, maximum):
+    """Validate the same individual form-up used by charge moves (pp. 186-187)."""
+    from types import SimpleNamespace
+    from battlefield import battlefield_for
+    from scouts import model_base_boxes
+    from skirmish import swept_base_overlaps
+    from skirmish_visibility import charge_visibility
+    from special_rules import max_charge_range, unit_has_swiftstride, unit_is_ethereal
+    if not charge_visibility(game, unit, target).allowed:
+        return None
+    sources, targets = model_base_boxes(unit), model_base_boxes(target)
+    origin = unit.bodyNP.getPos(game.render)
+    try:
+        if supported_pair(unit, target):
+            formation = plan_skirmish_charge(sources, targets, maximum,
+                                             game.movement.movementAllowance(target))
+        elif supported_formed_target(unit, target):
+            formation = plan_formed_charge(sources, targets, maximum, origin)
+        else:
+            return None
+    except ValueError:
+        return None
+    if formation is None:
+        return None
+    pieces = game.terrain_manager.terrain_pieces
+    others = [box for member in game.units if member not in (unit, target)
+              and member.isDeployed and not member.bodyNP.isEmpty()
+              and getattr(member, 'hostUnit', None) is None for box in model_base_boxes(member)]
+    crossed = []
+    participants = [(unit, sources, formation.attacker)]
+    if formation.defender is not None:
+        participants.append((target, targets, formation.defender))
+    for member, boxes, rank in participants:
+        flying = member.unit.model.is_flying()
+        ethereal = unit_is_ethereal(member)
+        for index, position in zip(rank.order, rank.positions):
+            before = boxes[index]
+            after = (*position, before[2], before[3], rank.heading)
+            if not battlefield_for(game).contains_box(after, EPSILON):
+                return None
+            path_start = after if flying else before
+            if any(swept_base_overlaps(path_start, after, obstacle) for obstacle in others):
+                return None
+            for piece in pieces:
+                obstacle = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
+                if swept_base_overlaps(path_start, after, obstacle):
+                    if piece.is_impassable and (not ethereal or obb_distance(after, obstacle) <= EPSILON):
+                        return None
+                    if member is unit and piece not in crossed:
+                        crossed.append(piece)
+    allowance = game.movement.movementAllowance(unit, features=crossed)
+    if formation.distance > max_charge_range(allowance, unit_has_swiftstride(unit)) + EPSILON:
+        return None
+    first = formation.first_attacker
+    slot = formation.attacker.order.index(first)
+    anchor = formation.attacker.positions[slot]
+    destination = (origin.x + anchor[0] - sources[first][0],
+                   origin.y + anchor[1] - sources[first][1], origin.z)
+    return SimpleNamespace(destination=destination, heading=unit.bodyNP.getH(), wheel=0,
+                           distance=formation.distance)
+
+
 def apply_fighting_rank(game, unit, formation):
     """Keep planned model identities and contact while resizing the body (pp. 186-187)."""
     from panda3d.core import Point3

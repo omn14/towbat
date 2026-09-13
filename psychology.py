@@ -762,6 +762,10 @@ class PsychologySystem:
             return "engaged in combat"
         if getattr(unit, 'state', None) == 'IsFleeing':
             return "already fleeing"
+        from frenzy import counts, majority
+        if majority(unit):
+            frenzied, total = counts(unit)
+            return f'Frenzy: {frenzied}/{total} models automatically pass Panic'
         for r in unit.unit.model.special_rules:
             if not isinstance(r, dict):
                 continue

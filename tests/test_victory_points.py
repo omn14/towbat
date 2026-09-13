@@ -32,3 +32,24 @@ def test_models_with_wounds_based_strength_use_remaining_wounds():
 ])
 def test_winning_margin_precedes_crushing_victory(scores, expected):
     assert outcome(scores) == expected
+
+
+def test_battle_march_most_points_and_reduced_bonuses():
+    from types import SimpleNamespace
+    from battle_config import load_config
+    from victory_points import battle_march_outcome, calculate
+    assert battle_march_outcome([10, 0]) == (1, 'Victory')
+    assert battle_march_outcome([25, 25]) == (None, 'Draw')
+    assert battle_march_outcome([100, 101]) == (2, 'Victory')
+    game = SimpleNamespace(battle_config=load_config(), units=[], victoryLedgerComplete=True,
+        victoryRoster={'general': {'player': 2, 'name': 'General', 'points': 100, 'strength': 1,
+                                  'wounds': 2, 'general': True, 'bsb': False},
+                       'bsb': {'player': 2, 'name': 'BSB', 'points': 75, 'strength': 1,
+                               'wounds': 2, 'general': False, 'bsb': True}},
+        capturedStandards=[{'unit': 'Standard', 'captured_by': 1}],
+        battle_awards=[{'player': 2, 'unit': 'Guard', 'points': 10, 'rule': 'Treasure Troves',
+                        'objective': 'objective-1', 'turn': '1:0:0', 'reason': 'US 5, touching'}])
+    result = calculate(game)
+    assert result['scores'] == [275, 10]
+    assert result['winner'] == 1
+    assert result['rows'][-1]['rule'] == 'Treasure Troves'

@@ -678,7 +678,7 @@ def firing_rank_count(files: int, nmodels: int, extra_ranks: int = 0,
     return firing
 
 
-def attack_characteristic(model, *, charged=False, inches=0) -> int:
+def attack_characteristic(model, *, charged=False, inches: float = 0, frenzy_bonus: int = 0) -> int:
     """Read temporary Extra Attacks without rewriting the profile (pp. 96, 168)."""
     bonuses = {}
     for rule in model.special_rules:
@@ -686,12 +686,14 @@ def attack_characteristic(model, *, charged=False, inches=0) -> int:
             name = rule['name']
             bonuses[name] = max(bonuses.get(name, 0), rule['extra_attacks'])
     baseline = stat_value(model.characteristics.get('A'))
+    if frenzy_bonus:
+        bonuses['Frenzy'] = frenzy_bonus
     if charged and inches >= 3 and any(rule.get('furious_charge') for rule in model.special_rules):
         bonuses['Furious Charge'] = 1
     return baseline + min(sum(bonuses.values()), max(0, 10 - baseline))
 
 
-def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance=0) -> int:
+def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance: float = 0, frenzy_bonus: int = 0) -> int:
     """Attacks a unit makes in one round of combat.
 
     A model in base contact attacks with its full Attacks characteristic; a
@@ -720,7 +722,7 @@ def melee_attacks(unit, charge: bool, casualties: int = 0, *, charge_distance=0)
     if isinstance(attack_count, int):
         return max(0, attack_count)
     m = unit.model
-    A = attack_characteristic(m, charged=charge, inches=charge_distance)
+    A = attack_characteristic(m, charged=charge, inches=charge_distance, frenzy_bonus=frenzy_bonus)
     files = max(0, unit.files)
     spare = max(0, unit.nmodels)
     fallen = max(0, casualties)

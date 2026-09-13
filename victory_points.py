@@ -50,6 +50,10 @@ def calculate(game, *, log=False):
     """Score each original regiment/character once, including removed models (p. 286)."""
     from rules_log import rule_log, rule_skipped
     ledger = getattr(game, 'victoryRoster', {})
+    battle_config = getattr(game, 'battle_config', None)
+    scoring = battle_config['scoring'] if battle_config else {
+        'general': 100, 'battle_standard_bearer': 50, 'captured_standard': 50}
+    source_page = "General's Companion p. 27" if battle_config else 'p. 286'
     live = {unit.unitName: unit for unit in game.units if not unit.bodyNP.isEmpty()}
     scores, rows, missing = [0, 0], [], []
 
@@ -58,7 +62,7 @@ def calculate(game, *, log=False):
         scores[player - 1] += points
         if log:
             logger = rule_log if points else rule_skipped
-            logger(rule, name, f'{reason} -> Player {player} +{points:g} VP (p. 286)')
+            logger(rule, name, f'{reason} -> Player {player} +{points:g} VP ({source_page})')
 
     for identity, record in ledger.items():
         member = live.get(identity)
@@ -75,10 +79,10 @@ def calculate(game, *, log=False):
                                         record['wounds'], wounds, fleeing=fleeing, absent=absent)
             award(player, record['name'], 'Dead or Fled', points, reason)
         if record['general']:
-            award(player, record['name'], 'The King is Dead', 100 if absent or fleeing else 0,
+            award(player, record['name'], 'The King is Dead', scoring['general'] if absent or fleeing else 0,
                   'General destroyed/offboard/fleeing' if absent or fleeing else 'General still stands')
         if record['bsb']:
-            award(player, record['name'], 'Trophies of War', 50 if absent or fleeing else 0,
+            award(player, record['name'], 'Trophies of War', scoring['battle_standard_bearer'] if absent or fleeing else 0,
                   'Battle Standard Bearer destroyed/offboard/fleeing' if absent or fleeing else 'Battle Standard Bearer still stands')
     seen = set()
     for trophy in getattr(game, 'capturedStandards', []):
@@ -86,8 +90,22 @@ def calculate(game, *, log=False):
         if key in seen or key[2] not in (1, 2):
             continue
         seen.add(key)
-        award(key[2], key[0], 'Trophies of War', 50, 'captured enemy unit standard')
+        award(key[2], key[0], 'Trophies of War', scoring['captured_standard'], 'captured enemy unit standard')
+    if battle_config:
+        for entry in getattr(game, 'battle_awards', []):
+            award(entry['player'], entry['unit'], entry['rule'], entry['points'],
+                  f'{entry["objective"]}, player-turn {entry["turn"]}: {entry["reason"]}')
     complete = bool(ledger) and getattr(game, 'victoryLedgerComplete', False) and not missing
-    winner, result = outcome(scores) if complete else (None, 'Incomplete scoring data')
+    if complete and battle_config:
+        winner, result = battle_march_outcome(scores)
+    else:
+        winner, result = outcome(scores) if complete else (None, 'Incomplete scoring data')
     return {'scores': scores, 'winner': winner, 'outcome': result, 'rows': rows,
             'complete': complete, 'missing_costs': missing}
+
+
+def battle_march_outcome(scores):
+    """Most VP wins (General's Companion p. 27), unlike the core 100-VP margin."""
+    if scores[0] == scores[1]:
+        return None, 'Draw'
+    return (1 if scores[0] > scores[1] else 2), 'Victory'

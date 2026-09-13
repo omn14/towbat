@@ -160,6 +160,123 @@ def test_battle_march_geometry_reload_and_offscreen_lines(scene, tmp_path, width
         load_game_state(app, str(baseline))
 
 
+def test_battle_march_turn_awards_survive_real_reload(scene, tmp_path):
+    import asyncio
+    from battle_config import load_config
+    from battle_objectives import finish_player_turn
+    from battle_setup import resolve_setup, restore_battle
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['objectives']['layout'] = 'two_troves'
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    try:
+        unit = next(member for member in app.units if member.unitName == 'Normal Rangers')
+        unit.bodyNP.setPos(0, -7.5, 0)
+        app.fsm.request('CombatPhase')
+        app.roundCounter.enterPlayerTwo()
+        with patch('spell_effects.end_turn') as expiry:
+            asyncio.run(finish_player_turn(app.fsm, 'StrategyPhase'))
+        expiry.assert_called_once_with(app)
+        assert app.battle_awards[0]['player'] == 1
+        assert app.battle_awards[0]['points'] == 10
+        assert app.battle_scored_turns == ['2:0:0']
+        assert app.roundCounter.currentRoundPlayer == [0, 1]
+        saved = tmp_path / 'scored-turn.json'
+        save_game_state(app, str(saved))
+        load_game_state(app, str(saved))
+        assert len(app.battle_awards) == 1
+        assert app.battle_scored_turns == ['2:0:0']
+    finally:
+        load_game_state(app, str(baseline))
+
+
+def test_frenzy_loss_and_follow_up_survive_reload(scene, tmp_path):
+    from frenzy import has_frenzy, lose_frenzy
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    unit = next(member for member in app.units if member.unitName == 'Normal Rangers')
+    names = list(unit.unit.model.characteristics.get('Special Rules', []))
+    app.applyDataRules(unit.unit.model, [*names, 'Frenzy'], replace=True)
+    assert has_frenzy(unit.unit.model)
+    lose_frenzy(unit)
+    unit.frenzyFollowUpThisTurn = True
+    path = tmp_path / 'frenzy-loss.json'
+    try:
+        save_game_state(app, str(path))
+        load_game_state(app, str(path))
+        assert not has_frenzy(unit.unit.model)
+        assert unit.frenzyFollowUpThisTurn
+        assert not unit.frenzyFollowUpNextTurn
+    finally:
+        load_game_state(app, str(baseline))
+
+
+def test_frenzy_compulsory_charge_has_no_leadership_test(scene):
+    import asyncio
+    from impetuous import complete_declarations, legal_targets
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    attacker = next(member for member in app.units if member.unitName == 'Normal Rangers')
+    target = next(member for member in app.units if member.unitName == 'Warriors')
+    try:
+        attacker.unit.model.special_rules.append({'name': 'Frenzy'})
+        attacker.bodyNP.setPos(0, -5, 0)
+        target.bodyNP.setPos(0, 3, 0)
+        app.fsm.request('MovementPhase')
+        app.roundCounter.enterPlayerOne()
+        attacker.request('Idle')
+        attacker.bodyNP.setH(0)
+        attacker.hasMovedThisTurn = False
+        attacker.moveSpentThisTurn = 0
+        attacker.cannotChargeThisTurn = False
+        assert any(candidate[0] is target for candidate in legal_targets(app, attacker))
+        with patch.object(app, 'rollLeadershipDice', AsyncMock(side_effect=AssertionError('Frenzy cannot test to avoid charging'))):
+            asyncio.run(complete_declarations(app))
+        assert len(app.chargeDeclarations) == 1
+        assert app.chargeDeclarations[0].charger is attacker
+        assert app.chargeDeclarations[0].defender is target
+        assert app.chargeDeclarations[0].compulsory
+    finally:
+        load_game_state(app, str(baseline))
+
+
+@pytest.mark.parametrize('property_name', ['magic_resistance', 'frenzy', 'stubborn'])
+def test_landmark_grant_reload_and_next_turn_expiry(scene, tmp_path, property_name):
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from battle_objectives import score_turn
+    from frenzy import lose_frenzy
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['objectives'].update(layout='landmark', landmark_property=property_name)
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    unit = next(member for member in app.units if member.unitName == 'Normal Rangers')
+    unit.bodyNP.setPos(0, -3.5, 0)
+    try:
+        assert score_turn(app)[0]['points'] == 25
+        grants = lambda: [rule for rule in unit.unit.model.special_rules
+                          if rule.get('battle_march_source')]
+        assert len(grants()) == 1
+        if property_name == 'frenzy':
+            lose_frenzy(unit)
+            assert grants()[0]['frenzy_lost']
+        saved = tmp_path / f'landmark-{property_name}.json'
+        save_game_state(app, str(saved))
+        load_game_state(app, str(saved))
+        assert len(grants()) == 1
+        if property_name == 'frenzy':
+            assert grants()[0]['frenzy_lost']
+        assert score_turn(app) == []
+        unit.bodyNP.setPos(0, -12, 0)
+        app.roundCounter.enterPlayerTwo()
+        assert score_turn(app) == []
+        assert grants() == []
+    finally:
+        load_game_state(app, str(baseline))
+
+
 def test_scout_charge_restriction_survives_strategy_and_reload_then_expires_per_owner(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, str(baseline))

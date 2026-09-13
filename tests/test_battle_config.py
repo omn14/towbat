@@ -321,3 +321,164 @@ def test_minimum_terrain_shift_clears_fixed_objective():
     assert shift[0] == pytest.approx(2, abs=1e-5) and shift[1] == pytest.approx(0)
     assert translate(terrain, *shift).distance(Point(0, 0)) >= 4
     assert objective['center'] == [0, 0]
+
+
+def test_objective_control_ties_and_explicit_one_object_choice():
+    from battle_objectives import required_choices, resolve_control
+    first = {'unit': 'alpha', 'name': 'Alpha', 'player': 1, 'distance': 3, 'strength': 5, 'reason': None}
+    second = dict(first, unit='beta', name='Beta', player=2)
+    snapshots = [{'objective': {'id': 'first'}, 'contenders': [first, second]}]
+    assert resolve_control(snapshots, {})[0]['contested']
+    second['strength'] = 6
+    assert resolve_control(snapshots, {})[0]['controller'] == 'beta'
+    second['distance'] = 3.01
+    assert resolve_control(snapshots, {})[0]['controller'] == 'alpha'
+    snapshots.append({'objective': {'id': 'second'}, 'contenders': [first]})
+    assert required_choices(snapshots) == {'alpha': ['first', 'second']}
+    with pytest.raises(ValueError, match='choose one objective'):
+        resolve_control(snapshots, {})
+    results = resolve_control(snapshots, {'alpha': 'second'})
+    assert [result['controller'] for result in results] == ['beta', 'alpha']
+    second['distance'] = 2
+    assert required_choices(snapshots) == {}
+    with pytest.raises(ValueError, match='only resolve multiple'):
+        resolve_control(snapshots, {'alpha': 'first'})
+
+
+def test_objective_awards_both_sides_once_per_player_turn(monkeypatch):
+    from types import SimpleNamespace
+    import battle_objectives
+    config = load_config()
+    objectives = [{'id': 'first', 'kind': 'trove'},
+                  {'id': 'second', 'kind': 'landmark', 'property': 'stubborn'}]
+    units = [SimpleNamespace(unitName=f'unit-{player}',
+                             unit=SimpleNamespace(name=f'Unit {player}',
+                                                  model=SimpleNamespace(special_rules=[])))
+             for player in (1, 2)]
+    game = SimpleNamespace(battle_config=config, battle_objectives=objectives, units=units,
+                           roundCounter=SimpleNamespace(current_player=2, currentRoundPlayer=[0, 0]))
+    snapshots = [{'objective': objective, 'contenders': [
+        {'unit': f'unit-{player}', 'name': f'Unit {player}', 'player': player,
+         'distance': 0, 'strength': 5, 'reason': None}]} for player, objective in enumerate(objectives, 1)]
+    monkeypatch.setattr(battle_objectives, 'control_snapshot', lambda game: snapshots)
+    awards = battle_objectives.score_turn(game)
+    assert [(entry['player'], entry['points']) for entry in awards] == [(1, 10), (2, 25)]
+    assert battle_objectives.score_turn(game) == []
+    assert len(game.battle_awards) == 2
+    assert len(units[1].unit.model.special_rules) == 1
+    game.roundCounter.currentRoundPlayer[1] = 1
+    game.roundCounter.current_player = 1
+    assert len(battle_objectives.score_turn(game)) == 2
+    assert len(units[1].unit.model.special_rules) == 1
+
+
+def test_objective_real_base_distance_and_joined_strength(monkeypatch):
+    from types import SimpleNamespace
+    import battle_objectives
+    profile = SimpleNamespace(unit_strength=lambda: 1, special_rules=[])
+    hero = SimpleNamespace(unit=SimpleNamespace(model=profile, nmodels=1), hostUnit=None)
+    unit = SimpleNamespace(unit=SimpleNamespace(model=profile, nmodels=4, name='Guard'),
+                           unitName='guard', joinedCharacter=hero, state='InCombat', isDeployed=True)
+    hero.hostUnit = unit
+    objective = {'id': 'first', 'kind': 'trove', 'center': [0, 0], 'diameter': 2}
+    game = SimpleNamespace(battle_config=load_config(), units=[unit, hero], battle_objectives=[objective])
+    monkeypatch.setattr(battle_objectives, 'model_base_boxes', lambda unit: [(4.5, 0, .5, .5, 0)])
+    monkeypatch.setattr(battle_objectives, 'side_of', lambda *args, **kwargs: 1)
+    contenders = battle_objectives.control_snapshot(game)[0]['contenders']
+    assert len(contenders) == 1
+    assert contenders[0]['distance'] == 3 and contenders[0]['strength'] == 5
+    assert contenders[0]['reason'] is None
+    unit.state = 'IsFleeing'
+    assert battle_objectives.control_snapshot(game)[0]['contenders'][0]['reason'] == 'fleeing'
+    unit.state = 'Idle'
+    profile.special_rules = [{'name': 'Stupidity'}]
+    unit.stupidityFailed = True
+    assert battle_objectives.control_snapshot(game)[0]['contenders'][0]['reason'] == 'succumbed to Stupidity'
+
+
+def test_persisted_objective_awards_reject_double_scoring():
+    from battle_setup import resolve_setup, validate_saved_battle
+    config = load_config()
+    record = validate_saved_battle({'config': config, 'setup': resolve_setup(config, 4)})
+    runtime = record['runtime']
+    runtime['scored_turns'] = ['2:0:0']
+    award = {'turn': '2:0:0', 'objective': 'objective-1', 'player': 1, 'unit': 'guard',
+             'points': 10, 'rule': 'Treasure Troves', 'reason': 'US 5 at 1 inch'}
+    runtime['awards'] = [award]
+    assert validate_saved_battle(record) == record
+    runtime['awards'].append(dict(award))
+    with pytest.raises(ConfigError, match='duplicate or unknown'):
+        validate_saved_battle(record)
+
+
+def test_frenzy_majority_joined_character_and_loss():
+    from types import SimpleNamespace
+    from frenzy import counts, lose_frenzy, majority
+    from fear import immune, cannot_flee
+    from psychology import PsychologySystem
+    permanent = {'name': 'Frenzy'}
+    unrelated = {'name': 'Stubborn', 'stubborn': True}
+    host = SimpleNamespace(unit=SimpleNamespace(name='Guard', nmodels=5,
+        model=SimpleNamespace(name='Guard', special_rules=[unrelated])), state='Idle')
+    hero = SimpleNamespace(unit=SimpleNamespace(name='Hero', nmodels=1,
+        model=SimpleNamespace(name='Hero', special_rules=[permanent])))
+    host.joinedCharacter = hero
+    assert counts(host) == (1, 6) and not majority(host)
+    assert not immune(host)
+    host.unit.model.special_rules.append({'name': 'Frenzy', 'frenzy': True})
+    assert majority(host) and immune(host) and cannot_flee(host)
+    assert '6/6' in PsychologySystem(None).panic_exempt_reason(host)
+    import asyncio
+    from fear import test_fear
+    assert asyncio.run(test_fear(None, host, [], 'charge'))
+    lose_frenzy(host)
+    assert not majority(host) and not immune(host)
+    assert permanent['frenzy_lost']
+    assert host.unit.model.special_rules[0] is unrelated
+
+
+def test_frenzy_attacks_respect_turn_and_split_profile():
+    from types import SimpleNamespace
+    from frenzy import attack_bonus
+    from battleFunctions import attack_characteristic
+    rider = SimpleNamespace(special_rules=[{'name': 'Frenzy'}], characteristics={'A': '2', 'Troop Type': 'Heavy cavalry'})
+    mount = SimpleNamespace(special_rules=[], characteristics={'A': '1', 'Troop Type': 'War beasts'})
+    rider.get_mount = lambda: mount
+    host = SimpleNamespace(unit=SimpleNamespace(model=rider), chargedThisTurn=True)
+    main = SimpleNamespace(host=host, role='main', profile=rider)
+    horse = SimpleNamespace(host=host, role='mount', profile=mount)
+    assert attack_bonus(main) == 1 and attack_bonus(horse) == 0
+    assert attack_characteristic(rider, frenzy_bonus=attack_bonus(main)) == 3
+    host.chargedThisTurn = False
+    assert attack_bonus(main) == 0
+    host.frenzyFollowUpThisTurn = True
+    assert attack_bonus(main) == 1
+    mount.characteristics['Troop Type'] = 'Behemoth'
+    assert attack_bonus(main) == 0 and attack_bonus(horse) == 1
+    rider.special_rules[0]['frenzy_lost'] = True
+    assert attack_bonus(horse) == 0
+
+
+@pytest.mark.parametrize('property_name', ['magic_resistance', 'frenzy', 'stubborn'])
+def test_landmark_grants_expire_without_removing_permanent_sources(property_name):
+    from types import SimpleNamespace
+    from battle_objectives import refresh_landmark_grants
+    from frenzy import has_frenzy, lose_frenzy
+    permanent = {'name': 'Frenzy', 'frenzy': True}
+    profile = SimpleNamespace(name='Guard', special_rules=[permanent])
+    unit = SimpleNamespace(unitName='guard', unit=SimpleNamespace(name='Guard', model=profile))
+    game = SimpleNamespace(units=[unit])
+    objective = {'id': 'landmark', 'kind': 'landmark', 'controller': 'guard', 'property': property_name}
+    lose_frenzy(unit)
+    refresh_landmark_grants(game, [objective], '1:0:0')
+    assert permanent['frenzy_lost']
+    assert len(profile.special_rules) == 2
+    grant = profile.special_rules[-1]
+    assert grant['battle_march_source'] == 'landmark'
+    if property_name == 'frenzy':
+        assert has_frenzy(profile)
+        lose_frenzy(unit)
+        assert not has_frenzy(profile)
+    refresh_landmark_grants(game, [], '2:1:0')
+    assert profile.special_rules == [permanent]
+    assert permanent['frenzy_lost']

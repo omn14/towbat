@@ -10,6 +10,44 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Objective Lifecycle and Frenzy: 2026-09-13
+
+General's Companion pp. 25, 27; amended Rulebook p. 170; Matched Play Guide
+FAQ v1.5.3. Control uses actual bases and joined US, excludes fleeing/Stupidity,
+resolves distance then US then contested, and asks for a choice only when a unit
+would control several objects. The real Combat-to-next-turn boundary expires
+spells once and commits both players' awards once. Runtime saves preserve
+markers, controllers and a validated award ledger. Battle March's reduced
+bonuses and most-VP result do not alter standard scoring.
+
+Landmark grants have their own source tags and last until the next player-turn
+end. Expiry never removes permanent MR/Frenzy/Stubborn sources. Reload initially
+duplicated non-catalogue grants retained by profile reconstruction; explicitly
+clearing only those tags before restoration fixed all three property cases.
+
+Frenzy: majority automatic Fear/Panic/Terror and no Flee/Restraint; any model
+requires a legal charge without Leadership. Conditional +1 A uses charge or
+previous-turn actual follow-up, obeys cavalry/chariot/monster exclusions and
+the 10-A cap. Defeated models lose Frenzy immediately, including joined and
+split profiles. Loss, temporary lost sources and follow-up flags persist.
+Compulsory loose charges now use existing individual form-up, sight, swept
+obstacles and full-base board validation. The initial Ranger test exposed the
+previous Skirmisher skip rather than a formed-unit route failure.
+
+Validation: 65 config/control tests and 21 real Scout/setup/lifecycle tests
+pass in isolated 768 MiB services (20260913-173526-71333, peak 412.7 MiB).
+Also passed: 34 Drilled/Impetuous, 19 combat contact, 13 pursuit sequence,
+13 victory-points and 9 High Magic tests during this milestone. No full-suite
+claim. Every changed outcome logs its deciding numbers or effect/source.
+
+LEFTOVER: objective markers/landmark terrain and LOS integration, HUD/AI,
+complete setup/first-turn flow, both-order final-round checks and optional/
+narrative modules. Joined-character loose form-ups remain unsupported by the
+underlying charge planner; no claim of complete Frenzy for those pairings.
+Interrupted asynchronous boundary recovery beyond the committed scoring key
+still needs verification. Real defeat/follow-up/forced-restraint integrations
+have regression coverage but need explicit Frenzy-specific scene assertions.
+
 ## Battle March Setup Geometry: 2026-09-13
 
 Added non-mutating mustering reports for paid points, per-selection category

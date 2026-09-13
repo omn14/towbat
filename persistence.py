@@ -120,15 +120,26 @@ def _save_profile_state(profile):
         'base_characteristics': copy.deepcopy(
             getattr(profile, '_base_characteristics', None) or profile.characteristics),
         'profile_parts': parts,
+        'profile_landmark_grants': [copy.deepcopy(rule) for rule in profile.special_rules
+                       if isinstance(rule, dict) and rule.get('battle_march_source')],
+        'profile_frenzy_lost': any(rule.get('frenzy_lost') and not rule.get('battle_march_source')
+                      for rule in profile.special_rules if isinstance(rule, dict)),
     }
 
 
 def _restore_profile_state(profile, data):
     """Legacy saves have one authoritative profile; new saves retain both copies."""
+    profile.special_rules = [rule for rule in profile.special_rules
+                             if not (isinstance(rule, dict) and rule.get('battle_march_source'))]
     apply_rule_keywords(profile, data['characteristics'].get('Special Rules', []), replace=True)
     profile.characteristics = copy.deepcopy(data['characteristics'])
     profile._base_characteristics = copy.deepcopy(
         data.get('base_characteristics') or data['characteristics'])
+    profile.special_rules.extend(copy.deepcopy(data.get('profile_landmark_grants', [])))
+    if data.get('profile_frenzy_lost', False):
+        for rule in profile.special_rules:
+            if isinstance(rule, dict) and (rule.get('frenzy') or rule.get('name', '').casefold() == 'frenzy'):
+                rule['frenzy_lost'] = True
     if 'profile_weapons' in data:
         profile.special_rules = [rule for rule in profile.special_rules if rule is not profile.equipedWeapon]
         profile.equipedWeapon = None
@@ -169,6 +180,9 @@ def save_game_state(game, filename=None):
     Returns:
         The filename that was written.
     """
+    if getattr(game, 'battleMarchBoundaryBusy', False):
+        battle_log('Finish the objective-control choice before saving a battle.', 'info')
+        return None
     from charge_declarations import save_declarations
     from drilled import move_pending
     from free_pivot import pending
@@ -285,6 +299,8 @@ def save_game_state(game, filename=None):
             'firstChargeDisruptedBy': list(getattr(unit, 'firstChargeDisruptedBy', [])),
             'firstChargeDisruptedNextTurnBy': list(getattr(unit, 'firstChargeDisruptedNextTurnBy', [])),
             'countsAsChargedNextTurn': getattr(unit, 'countsAsChargedNextTurn', False),
+            'frenzyFollowUpThisTurn': getattr(unit, 'frenzyFollowUpThisTurn', False),
+            'frenzyFollowUpNextTurn': getattr(unit, 'frenzyFollowUpNextTurn', False),
             'chargeDistance': getattr(unit, 'chargeDistance', 0.0),
             'cannotChargeThisTurn': getattr(unit, 'cannotChargeThisTurn', False),
             'cannotPursueThisTurn': getattr(unit, 'cannotPursueThisTurn', False),
@@ -424,6 +440,9 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    if getattr(game, 'battleMarchBoundaryBusy', False):
+        battle_log('Finish the objective-control choice before loading a battle.', 'info')
+        return
     from drilled import move_pending
     from free_pivot import pending
     if pending(game):
@@ -641,6 +660,8 @@ def load_game_state(game, filename):
             if has_first_charge(unit):
                 rule_skipped('First Charge', unit, 'legacy save has no charge history; benefit treated as spent')
         unit.countsAsChargedNextTurn = unit_data.get('countsAsChargedNextTurn', False)
+        unit.frenzyFollowUpThisTurn = unit_data.get('frenzyFollowUpThisTurn', False)
+        unit.frenzyFollowUpNextTurn = unit_data.get('frenzyFollowUpNextTurn', False)
         unit.chargeDistance = unit_data.get('chargeDistance', 0.0)
         unit.cannotChargeThisTurn = unit_data.get('cannotChargeThisTurn', False)
         unit.cannotPursueThisTurn = unit_data.get('cannotPursueThisTurn', False)

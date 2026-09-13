@@ -50,6 +50,10 @@ def legal_targets(game, unit):
         if not target.isDeployed or target.bodyNP.isEmpty() or target.unit.nmodels <= 0:
             continue
         if unit.isSkirmisher:
+            from skirmish_charge import declaration_route
+            route = declaration_route(game, unit, target, maximum)
+            if route is not None:
+                result.append((target, route, None))
             continue
         target_box = game.psychology._unit_box(target)
         target_boxes = model_base_boxes(target) if target.isSkirmisher else [target_box]
@@ -84,54 +88,57 @@ def legal_targets(game, unit):
 async def complete_declarations(game):
     """Test undeclared units before reactions; declared charges already comply (p. 172)."""
     from charge_declarations import ChargeDeclaration
+    from frenzy import counts
     active = game.player1Units if game.roundCounter.current_player == 1 else game.player2Units
     for unit in list(active):
-        if not has_impetuous(unit):
+        frenzied = counts(unit)[0] > 0
+        rule_name = 'Frenzy' if frenzied else 'Impetuous'
+        if not frenzied and not has_impetuous(unit):
             continue
         declared = next((entry for entry in game.chargeDeclarations if entry.charger is unit), None)
         if declared is not None:
-            rule_skipped('Impetuous', unit,
+            rule_skipped(rule_name, unit,
                          f'already declared a charge at {declared.defender.unit.name}; no Leadership test')
             continue
-        if unit.isSkirmisher:
-            rule_skipped('Impetuous', unit, 'LEFTOVER: compulsory loose-formation charge selection is not supported')
-            continue
-        battle_log(f'{unit.unit.name}: Impetuous target search started', 'debug', subject=unit)
+        battle_log(f'{unit.unit.name}: {rule_name} target search started', 'debug', subject=unit)
         started = monotonic()
         targets = legal_targets(game, unit)
         elapsed = monotonic() - started
-        battle_log(f'{unit.unit.name}: Impetuous target search finished: '
+        battle_log(f'{unit.unit.name}: {rule_name} target search finished: '
                    f'{len(targets)} legal targets in {elapsed:.3f}s', 'debug', subject=unit)
         if not targets:
-            rule_skipped('Impetuous', unit, 'no legal charge target; no Leadership test or compulsory charge')
+            rule_skipped(rule_name, unit, 'no legal charge target; no Leadership test or compulsory charge')
             continue
-        from warband import leadership_for_test
-        leadership, general = leadership_for_test(game.psychology, unit, 'Impetuous')
-        joined = active_character(unit)
-        if joined is not None:
-            leadership = max(leadership, int(joined.unit.model.characteristics.get('Ld', leadership)))
-        dice = await game.rollLeadershipDice()
-        dice = await reroll_leadership(game, unit, 'Impetuous', dice, leadership, game.rollLeadershipDice)
-        passed = leadership_passed(sum(dice), leadership)
-        outcome = 'PASS; may act normally' if passed else 'FAIL; must declare a charge'
-        general_detail = f' (Inspiring Presence: {general.unit.name})' if general else ''
-        rule_log('Impetuous', unit,
-             f'2D6={sum(dice)} vs Ld {leadership}{general_detail} -> {outcome}')
-        if passed:
-            continue
+        if not frenzied:
+            from warband import leadership_for_test
+            leadership, general = leadership_for_test(game.psychology, unit, 'Impetuous')
+            joined = active_character(unit)
+            if joined is not None:
+                leadership = max(leadership, int(joined.unit.model.characteristics.get('Ld', leadership)))
+            dice = await game.rollLeadershipDice()
+            dice = await reroll_leadership(game, unit, 'Impetuous', dice, leadership, game.rollLeadershipDice)
+            passed = leadership_passed(sum(dice), leadership)
+            outcome = 'PASS; may act normally' if passed else 'FAIL; must declare a charge'
+            general_detail = f' (Inspiring Presence: {general.unit.name})' if general else ''
+            rule_log('Impetuous', unit,
+                 f'2D6={sum(dice)} vs Ld {leadership}{general_detail} -> {outcome}')
+            if passed:
+                continue
+        else:
+            rule_log('Frenzy', unit, f'{counts(unit)[0]} Frenzied model(s), {len(targets)} legal targets; must charge without a Leadership test')
         selected = targets[0]
         if len(targets) > 1 and not game.aiControls(unit):
             options = {f'{index}: {target.unit.name} ({route.distance:.2f}")': (target, route, target_index)
                        for index, (target, route, target_index) in enumerate(targets, 1)}
             label = await game.makeChoiceNew(list(options), Vec3(-20, 0, 10), owner=unit,
-                                            prompt=f'{unit.unit.name}: compulsory Impetuous charge')
+                                            prompt=f'{unit.unit.name}: compulsory {rule_name} charge')
             selected = options.get(label, selected)
         target, route, target_index = selected
         mode = compulsory_mode(game, unit)
         for member in game.movement.movementParticipants(unit):
             member.unit.model.flight_mode = mode
         if unit.unit.model.can_fly():
-            rule_log('Fly', unit, f'compulsory Impetuous charge uses {mode}: '
+            rule_log('Fly', unit, f'compulsory {rule_name} charge uses {mode}: '
                      f'greatest available M{game.movement.movementAllowance(unit):g} (FAQ v1.5.3)')
         facing = tuple(unit.bodyNP.getHpr())
         entry = ChargeDeclaration(unit, target, tuple(unit.bodyNP.getPos()), facing,
@@ -142,5 +149,5 @@ async def complete_declarations(game):
         unit.hasMovedThisTurn = True
         unit.marchedThisTurn = unit.wouldMarch = False
         game.chargeDeclarations.append(entry)
-        rule_log('Impetuous', unit, f'compulsory charge at {target.unit.name}: '
+        rule_log(rule_name, unit, f'compulsory charge at {target.unit.name}: '
                  f'{route.distance:.2f}" including wheel; added before charge reactions')

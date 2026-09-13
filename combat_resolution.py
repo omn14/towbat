@@ -2936,6 +2936,9 @@ class CombatResolver:
         # declares and names its quarry, then the losers move, and only then do
         # the pursuits run. Interleaving them gave the wrong answer as soon as a
         # combat had two losing units.
+        from frenzy import lose_frenzy
+        for loser in loserUnits:
+            lose_frenzy(loser)
         outcomes = await self.breakTestPass(loserUnits, diff)
         responses = await self.declarePass(outcomes)
         await self.loserMovePass(outcomes, responses)
@@ -3141,6 +3144,11 @@ class CombatResolver:
                      f"Restraint test")
             winner.request("Idle")
             return 'restrain'
+        from frenzy import counts, majority
+        if majority(winner):
+            frenzied, total = counts(winner)
+            rule_log('Frenzy', winner, f'{frenzied}/{total} models Frenzied; cannot choose Restraint, must {verb.lower()}{quarry}')
+            return move
         if self.game.aiControls(winner):
             chosen = move
         else:
@@ -3382,6 +3390,8 @@ class CombatResolver:
             await self.game.attackSequence2
             for unit, origin in origins:
                 if not unit.bodyNP.isEmpty():
+                    if unit is not loserUnit and (unit.bodyNP.getPos() - origin).length() > 1e-6:
+                        unit.frenzyFollowUpNextTurn = True
                     with nullcontext() if unit is loserUnit else grounded(unit):
                         self.game.movement.dangerousTerrainTests(unit, origin, unit.bodyNP.getPos())
 

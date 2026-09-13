@@ -44,21 +44,33 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   river footprints and other-feature relocation conflicts are pending.
 - Offscreen 44 x 30 and 48 x 36 captures verify colored overlays and removal
   of the legacy rectangle. Real-scene saves restore geometry without RNG.
+- Objective control now uses actual bases, joined Unit Strength, distance/US
+  tie-breaks and explicit choices only for multiple controlled objectives.
+  Both players score at each player-turn end; the saved ledger prevents repeats.
+- Landmark MR(-2), Frenzy and Stubborn grants expire at the next player-turn
+  end, preserve permanent sources and survive reload, including lost Frenzy.
+- Frenzy now has majority psychology/no-Flee/no-Restraint checks, loss on a
+  defeated combat round, conditional attacks with split-profile exclusions,
+  follow-up turn tracking and compulsory declarations without Leadership.
+  Supported loose form-ups use the same planner as actual charge moves.
+- Battle March uses 50/25/25 General/standard/BSB bonuses and most VP wins.
+  Standard-game scoring is unchanged.
 
 This is not yet a playable Battle March mode. No startup option is exposed.
 The presence of objective, terrain or optional settings does not mean their
 effects are implemented. These are remaining work in stages 1 and 3-6.
 
-## Source Questions
+## Source Decisions
 
-- Battle March's most-VP wording versus the linked core 100-VP victory margin.
-- Whether escaped carts also award the opponent the "otherwise" 25 VP.
-- Feet/inches typos on narrative feature sizes.
-- Weisnicht Bridge's incorrect first-turn cross-reference.
-- Gemelwald village text/diagram disagreement about the designated half.
-
-Resolve these from the supplement or errata before implementing the affected
-mechanics. Do not silently invent scenario rules or stretch printed distances.
+- Follow Battle March's explicit most-VP wording, not the core 100-VP margin.
+- User confirmed literal cart scoring: an escaped cart earns its owner the
+  25 VP escape bonus and its opponent the 25 VP "otherwise" award. Escape
+  remains distinct from destruction/Dead or Fled.
+- User confirmed written narrative rules over conflicting illustrations or
+  cross-references: Gemelwald village goes in the defender half; the Weisnicht
+  Bridge duel determines first turn.
+- Narrative building-size feet/inches typos still need the applicable source
+  verified when implementing those scenarios; do not stretch printed distances.
 
 ## Verification Constraints
 

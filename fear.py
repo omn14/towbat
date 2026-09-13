@@ -30,6 +30,9 @@ def identity(unit):
 
 
 def immune(unit):
+    from frenzy import majority
+    if majority(unit):
+        return True
     count = unit.unit.nmodels
     protected = count if has_rule(unit.unit.model, 'Immune to Psychology') else 0
     joined = getattr(unit, 'joinedCharacter', None)
@@ -94,6 +97,11 @@ async def terror_test(game, unit, charger):
 
 
 async def test_fear(game, unit, enemies, context):
+    from frenzy import counts
+    frenzied, total = counts(unit)
+    if frenzied > total / 2:
+        rule_log('Frenzy', unit, f'{context}: {frenzied}/{total} Frenzied models -> automatically passes Fear (p. 170)')
+        return True
     own = strength(unit)
     threats = [enemy for enemy in enemies if feared_strength(unit, enemy) > own]
     if not threats:

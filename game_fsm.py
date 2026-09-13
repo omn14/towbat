@@ -37,6 +37,16 @@ class GamePhaseFSM(FSM):
         through nextPhase(), so hooking the transition is the only way the
         HUD sees all of them.
         """
+        if (self.state == 'CombatPhase' and request in ('StrategyPhase', 'BattleEnded')
+                and getattr(self.game, 'battle_config', None)
+                and not getattr(self.game, 'restoringBattle', False)
+                and not getattr(self, '_battle_march_boundary_ready', False)):
+            if not getattr(self.game, 'battleMarchBoundaryBusy', False):
+                from battle_objectives import finish_player_turn
+                self.game.battleMarchBoundaryBusy = True
+                self.game.magicBusy = True
+                self.game.taskMgr.add(finish_player_turn(self, request, args), 'battleMarchTurnEnd')
+            return
         if (self.state == 'CombatPhase' and request == 'StrategyPhase'
                 and not getattr(self.game, 'restoringBattle', False)
                 and getattr(getattr(self.game, 'roundCounter', None), 'final_turn', False)):
@@ -430,8 +440,9 @@ class GamePhaseFSM(FSM):
         if getattr(self, '_spell_origin', None) == 'CombatPhase':
             return
         from spell_effects import end_phase, end_turn
-        end_phase(self.game, 'CombatPhase')
-        end_turn(self.game)
+        if not getattr(self, '_battle_march_boundary_ready', False):
+            end_phase(self.game, 'CombatPhase')
+            end_turn(self.game)
         from first_charge import expire_first_charge
         for unit in self.game.units:
             expire_first_charge(unit)
@@ -442,6 +453,8 @@ class GamePhaseFSM(FSM):
         for unit in self.game.units:
             # A pursuer that caught a unit which fell back counts as charging in
             # the turn that locked combat is fought, which is the next one.
+            unit.frenzyFollowUpThisTurn = getattr(unit, 'frenzyFollowUpNextTurn', False)
+            unit.frenzyFollowUpNextTurn = False
             unit.chargedThisTurn = unit.countsAsChargedNextTurn
             unit.countsAsChargedNextTurn = False
             unit.wasChargedThisTurn = getattr(unit, 'countsAsChargeTargetNextTurn', False)

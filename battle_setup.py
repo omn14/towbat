@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from random import Random
+import re
 
 from battle_config import (ConfigError, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
                            MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, _boolean,
@@ -78,7 +79,11 @@ def saved_battle(game):
     setup = getattr(game, 'battle_setup', None)
     if config is None and setup is None:
         return None
-    return {'config': validate_config(config), 'setup': validate_setup(config, setup)}
+    record = {'config': validate_config(config), 'setup': validate_setup(config, setup),
+              'runtime': {'objectives': deepcopy(getattr(game, 'battle_objectives', objective_records(config, setup))),
+                          'awards': deepcopy(getattr(game, 'battle_awards', [])),
+                          'scored_turns': list(getattr(game, 'battle_scored_turns', []))}}
+    return validate_saved_battle(record)
 
 
 def objective_records(config, setup):
@@ -94,16 +99,57 @@ def objective_records(config, setup):
     diameter = config['objectives']['landmark_base_mm' if landmark else 'trove_base_mm'] / 25.4
     return [{'id': f'objective-{index + 1}', 'kind': 'landmark' if landmark else 'trove',
              'center': list(point), 'diameter': diameter, 'property': setup['landmark_property'],
-             'controller': None, 'contested': False, 'destroyed': False}
+             'controller': None, 'player': None, 'contested': False, 'destroyed': False}
             for index, point in enumerate(positions[setup['objective_layout']])]
 
 
 def validate_saved_battle(record):
     if record is None:
         return None
-    _keys(record, 'config setup', 'battle_march')
+    _keys(record, 'config setup' + (' runtime' if 'runtime' in record else ''), 'battle_march')
     config = validate_config(record['config'])
-    return {'config': config, 'setup': validate_setup(config, record['setup'])}
+    setup = validate_setup(config, record['setup'])
+    expected = objective_records(config, setup)
+    runtime = record.get('runtime', {'objectives': expected, 'awards': [], 'scored_turns': []})
+    _keys(runtime, 'objectives awards scored_turns', 'battle_march.runtime')
+    if not isinstance(runtime['objectives'], list) or len(runtime['objectives']) != len(expected):
+        raise ConfigError('battle_march.runtime.objectives: expected the resolved marker list')
+    for objective, original in zip(runtime['objectives'], expected):
+        _keys(objective, ' '.join(original), 'battle_march.runtime.objectives')
+        for field in ('id', 'kind', 'center', 'diameter', 'property'):
+            if objective[field] != original[field]:
+                raise ConfigError(f'battle_march.runtime.objectives.{field}: differs from resolved setup')
+        for field in ('contested', 'destroyed'):
+            _boolean(objective[field], f'battle_march.runtime.objectives.{field}')
+        controller = objective['controller']
+        if controller is not None and (not isinstance(controller, str) or not controller):
+            raise ConfigError('battle_march.runtime.objectives.controller: expected a unit ID or null')
+        if controller is None:
+            if objective['player'] is not None:
+                raise ConfigError('battle_march.runtime.objectives.player: uncontrolled objective has no player')
+        else:
+            _number(objective['player'], 'battle_march.runtime.objectives.player', 1, 2, integer=True)
+            if objective['contested'] or objective['destroyed']:
+                raise ConfigError('battle_march.runtime.objectives: contested/destroyed objective cannot have a controller')
+    turns = runtime['scored_turns']
+    if (not isinstance(turns, list) or any(not isinstance(turn, str) or not re.fullmatch(r'[12]:[0-9]+:[0-9]+', turn)
+                                         for turn in turns) or len(turns) != len(set(turns))):
+        raise ConfigError('battle_march.runtime.scored_turns: expected unique player-turn keys')
+    if not isinstance(runtime['awards'], list):
+        raise ConfigError('battle_march.runtime.awards: expected a list')
+    seen = set()
+    for award in runtime['awards']:
+        _keys(award, 'turn objective player unit points rule reason', 'battle_march.runtime.awards')
+        for field in ('turn', 'objective', 'unit', 'rule', 'reason'):
+            if not isinstance(award[field], str) or not award[field]:
+                raise ConfigError(f'battle_march.runtime.awards.{field}: expected non-empty text')
+        _number(award['player'], 'battle_march.runtime.awards.player', 1, 2, integer=True)
+        _number(award['points'], 'battle_march.runtime.awards.points', 0, 10000, integer=True)
+        key = award['turn'], award['objective']
+        if key in seen or award['turn'] not in turns or award['objective'] not in {entry['id'] for entry in expected}:
+            raise ConfigError('battle_march.runtime.awards: duplicate or unknown objective/turn')
+        seen.add(key)
+    return {'config': config, 'setup': setup, 'runtime': deepcopy(runtime)}
 
 
 def restore_battle(game, record):
@@ -112,6 +158,9 @@ def restore_battle(game, record):
     previous_field = getattr(game, 'battlefield', STANDARD_BATTLEFIELD)
     game.battle_config = record['config'] if record else None
     game.battle_setup = record['setup'] if record else None
+    game.battle_objectives = record['runtime']['objectives'] if record else []
+    game.battle_awards = record['runtime']['awards'] if record else []
+    game.battle_scored_turns = record['runtime']['scored_turns'] if record else []
     game.battlefield = (Battlefield(record['config']['battlefield']['width'],
                                    record['config']['battlefield']['depth'])
                         if record else STANDARD_BATTLEFIELD)
