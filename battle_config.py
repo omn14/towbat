@@ -150,8 +150,6 @@ def validate_activation(record):
     unsupported = [f'optional_rules.{name}' for name, value in config['optional_rules'].items() if value]
     if config['game']['time_limit_minutes'] is not None:
         unsupported.append('game.time_limit_minutes')
-    if config['terrain']['method'] == 'scattered':
-        unsupported.append('terrain.method=scattered')
     if unsupported:
         raise ConfigError('Runtime support is not complete for: ' + ', '.join(unsupported))
     return config

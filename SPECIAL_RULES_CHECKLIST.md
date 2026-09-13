@@ -10,6 +10,23 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Scattered Setup: 2026-09-13
+
+Companion p. 24; Dawn of the Storm Dragon p. 23. The terrain roll-off winner
+places every selected feature; the loser selects D3 distinct placed features
+before any scatter is resolved. Each saved 2D6/scatter result moves once, with
+two Hit faces stationary and arrow movement clamped at the first feature/edge
+contact. Empty pools skip unnecessary dice. Saved selections, raw dice, directions,
+travel and endpoints are validated and survive pending/complete setup reloads.
+Scattered setup is now allowed by the activation check.
+
+Validation: four bounded real-scene setup cases pass across both methods and
+zero/two features, with Hit/arrow outcomes, ownership, pending zone choice and
+complete reload. Pure geometry tests already cover first edge/obstacle contact.
+LEFTOVER: special/scenario feature selection and exclusion, remaining terrain
+categories, broader interrupted-scatter and malformed-record coverage; optional
+modules, narratives and the remaining approved verification gates.
+
 ## Battle March Startup and Ordinary Setup: 2026-09-13
 
 General's Companion pp. 23-27; Rulebook p. 268. Explicit `--battle-config [PATH]`

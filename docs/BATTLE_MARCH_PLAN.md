@@ -81,8 +81,10 @@ not committed to saves. Deployment and spell generation wait for setup completio
 Impossible objective-clearance layouts offer a terrain revision or setup pause.
 
 This remains an incremental implementation, not completion of the approved plan.
-Runtime activation explicitly rejects scattered terrain, the agreed time limit,
-and enabled optional modules until their handlers are complete. Standard ordinary
+Scattered placement is also connected: the winner places all features and the
+loser chooses D3 to scatter; Hit/arrow dice and first-contact movement are saved.
+Runtime activation explicitly rejects the agreed time limit and enabled optional
+modules until their handlers are complete. Standard ordinary
 terrain currently offers hills, woods and impassable buildings. Special features,
 remaining terrain categories, objective-aware strategic AI, private objectives,
 optional modules and narrative scenarios remain work in stages 1 and 3-6.

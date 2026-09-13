@@ -1,12 +1,13 @@
 """Resumable pre-deployment setup (General's Companion pp. 23-27; Rulebook p. 268)."""
 
 from copy import deepcopy
+import math
 import random
 
 from panda3d.core import Point3
 
 from battle_config import ConfigError, _choice, _keys, _number, army_report
-from battle_terrain import footprint, objective_clearance_shift
+from battle_terrain import footprint, objective_clearance_shift, scatter_distance
 from rules_log import dice_roll, rule_log, rule_skipped
 
 
@@ -45,7 +46,8 @@ def roll_off(rolls, rule):
 
 
 def validate_terrain_state(config, state):
-    _keys(state, 'selections selection_complete rolls winner placed', 'setup.terrain')
+    _keys(state, 'selections selection_complete rolls winner placed'
+          + (' scatter' if 'scatter' in state else ''), 'setup.terrain')
     _keys(state['selections'], '1 2', 'setup.terrain.selections')
     count = config['terrain']['feature_count']
     for selections in state['selections'].values():
@@ -82,6 +84,45 @@ def validate_terrain_state(config, state):
             _number(value, 'setup.terrain.center', -100, 100)
         if record['center'][2] != 0:
             raise ConfigError('setup.terrain.center: terrain must rest on the table')
+    if 'scatter' in state:
+        scatter = state['scatter']
+        _keys(scatter, 'count_die selected results', 'setup.terrain.scatter')
+        if config['terrain']['method'] != 'scattered':
+            raise ConfigError('setup.terrain.scatter: only available with scattered placement')
+        _number(scatter['count_die'], 'setup.terrain.scatter.count_die', 1, 6, integer=True)
+        selected = scatter['selected']
+        if not isinstance(selected, list) or len(selected) > min((scatter['count_die'] + 1) // 2, len(placed)):
+            raise ConfigError('setup.terrain.scatter.selected: too many features')
+        for index in selected:
+            _number(index, 'setup.terrain.scatter.selected', 0, len(placed) - 1, integer=True)
+        if len(selected) != len(set(selected)):
+            raise ConfigError('setup.terrain.scatter.selected: repeated feature')
+        if not isinstance(scatter['results'], list) or len(scatter['results']) > len(selected):
+            raise ConfigError('setup.terrain.scatter.results: too many results')
+        for index, result in enumerate(scatter['results']):
+            _keys(result, 'feature dice face angle travel origin destination', 'setup.terrain.scatter.result')
+            if type(result['feature']) is not int or result['feature'] != selected[index]:
+                raise ConfigError('setup.terrain.scatter.result: feature differs from selected order')
+            if not isinstance(result['dice'], list) or len(result['dice']) != 2:
+                raise ConfigError('setup.terrain.scatter.dice: expected 2D6')
+            for value in result['dice']:
+                _number(value, 'setup.terrain.scatter.dice', 1, 6, integer=True)
+            _number(result['face'], 'setup.terrain.scatter.face', 1, 6, integer=True)
+            _number(result['travel'], 'setup.terrain.scatter.travel', 0, sum(result['dice']))
+            for field in ('origin', 'destination'):
+                if not isinstance(result[field], list) or len(result[field]) != 3:
+                    raise ConfigError(f'setup.terrain.scatter.{field}: expected three coordinates')
+                for value in result[field]:
+                    _number(value, f'setup.terrain.scatter.{field}', -100, 100)
+            if result['face'] <= 2:
+                if result['angle'] is not None or result['travel'] != 0 or result['origin'] != result['destination']:
+                    raise ConfigError('setup.terrain.scatter: Hit cannot move terrain')
+            else:
+                _number(result['angle'], 'setup.terrain.scatter.angle', 0, math.tau)
+                expected = [result['origin'][0] + math.cos(result['angle']) * result['travel'],
+                            result['origin'][1] + math.sin(result['angle']) * result['travel'], 0]
+                if any(abs(first - second) > 1e-5 for first, second in zip(expected, result['destination'])):
+                    raise ConfigError('setup.terrain.scatter: destination differs from the recorded move')
     return deepcopy(state)
 
 
@@ -150,7 +191,8 @@ async def prepare_terrain(game, preparation):
     rebuild_terrain(game, state['placed'])
     pool = state['selections']['1'] + state['selections']['2']
     while len(state['placed']) < count:
-        player = state['winner'] if len(state['placed']) % 2 == 0 else 3 - state['winner']
+        player = (state['winner'] if game.battle_config['terrain']['method'] == 'scattered'
+                  or len(state['placed']) % 2 == 0 else 3 - state['winner'])
         used = {record['pool_index'] for record in state['placed']}
         options = {f'{index + 1}: {kind}': index for index, kind in enumerate(pool) if index not in used}
         selected = await choose(game, player, list(options), f'place terrain {len(state["placed"]) + 1}/{count}')
@@ -164,7 +206,55 @@ async def prepare_terrain(game, preparation):
         record['pool_index'] = pool_index
         state['placed'].append(record)
         game.terrain_manager.load_records([record])
+    if game.battle_config['terrain']['method'] == 'scattered':
+        await scatter_terrain(game, state)
     preparation['stage'] = 'objectives'
+
+
+async def scatter_terrain(game, state):
+    """Loser selects D3 features, then scatters each once (Storm Dragon p. 23)."""
+    from dice import SCATTER_FACES
+    if not state['placed']:
+        rule_skipped('Scattered terrain', 'setup', '0 placed features; no D3 or scatter required')
+        return
+    if 'scatter' not in state:
+        count_die = random.randint(1, 6)
+        state['scatter'] = {'count_die': count_die, 'selected': [], 'results': []}
+        dice_roll([count_die])
+        rule_log('Scattered terrain', 'setup',
+                 f'D6={count_die} -> D3={(count_die + 1) // 2}; {len(state["placed"])} available features')
+    scatter = state['scatter']
+    count = min((scatter['count_die'] + 1) // 2, len(state['placed']))
+    player = 3 - state['winner']
+    while len(scatter['selected']) < count:
+        options = {f'{index + 1}: {record["type"]}': index for index, record in enumerate(state['placed'])
+                   if index not in scatter['selected']}
+        answer = await choose(game, player, list(options), f'scatter feature {len(scatter["selected"]) + 1}/{count}')
+        scatter['selected'].append(options[answer])
+    for index in scatter['selected'][len(scatter['results']):]:
+        record = state['placed'][index]
+        dice = [random.randint(1, 6), random.randint(1, 6)]
+        face = random.randint(1, 6)
+        dice_roll([*dice, face])
+        angle = random.uniform(0, math.tau) if SCATTER_FACES[face] == 'Arrow' else None
+        origin = list(record['center'])
+        travel = 0.0
+        destination = origin[:]
+        if angle is not None:
+            shapes = [footprint(piece) for piece in game.terrain_manager.terrain_pieces]
+            direction = math.cos(angle), math.sin(angle)
+            travel = scatter_distance(game.battlefield, shapes[index],
+                                      [shape for other, shape in enumerate(shapes) if other != index],
+                                      direction, sum(dice))
+            destination = [origin[0] + direction[0] * travel, origin[1] + direction[1] * travel, 0]
+        record['center'] = destination
+        scatter['results'].append({'feature': index, 'dice': dice, 'face': face, 'angle': angle,
+                                   'travel': travel, 'origin': origin, 'destination': destination})
+        rule_log('Scattered terrain', f'Feature {index + 1}',
+                 f'2D6={dice} -> {sum(dice)}", scatter={SCATTER_FACES[face]}; '
+                 f'{travel:.2f}" moved from {origin[:2]} to {destination[:2]}'
+                 + ('; stopped at first contact' if angle is not None and travel < sum(dice) - 1e-5 else ''))
+        rebuild_terrain(game, state['placed'])
 
 
 def place_objectives(game, preparation):
@@ -237,6 +327,7 @@ async def run_preparation(game):
             answer = await choose(game, player, ['Pause setup', 'Revise terrain'], str(error))
             if answer == 'Revise terrain':
                 preparation['terrain']['placed'] = []
+                preparation['terrain'].pop('scatter', None)
                 preparation['stage'] = 'terrain'
                 rebuild_terrain(game, [])
                 retry = True

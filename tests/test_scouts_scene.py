@@ -417,7 +417,8 @@ def test_battle_march_five_rounds_score_queued_boundaries_once(scene, tmp_path, 
 
 
 @pytest.mark.parametrize('feature_count', [0, 2])
-def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, feature_count):
+@pytest.mark.parametrize('method', ['alternating', 'scattered'])
+def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, feature_count, method):
     from direct.task import Task
     from battle_config import load_config
     from battle_setup import prepare_new_battle, saved_battle
@@ -432,6 +433,7 @@ def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, f
     app.terrain_manager.clear()
     config = load_config()
     config['terrain']['feature_count'] = feature_count
+    config['terrain']['method'] = method
     config['objectives']['layout'] = 'three_troves'
     prepare_new_battle(app, config, 12)
     assert not app.terrain_manager.terrain_pieces
@@ -453,14 +455,19 @@ def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, f
         return options[0]
 
     try:
+        scatter_dice = [3, 3, 3, 1, 3, 3, 5] if method == 'scattered' and feature_count else []
         with patch.object(app, 'makeChoiceNew', side_effect=answer), patch.object(TerrainPlacement, 'choose', place), \
-                patch('battle_preparation.random.randint', side_effect=[3, 3, 6, 1, 2, 5]), combat_tasks(app) as run:
+            patch('battle_preparation.random.randint', side_effect=[3, 3, 6, 1, *scatter_dice, 2, 5]), \
+            patch('battle_preparation.random.uniform', return_value=0), combat_tasks(app) as run:
             run(run_preparation(app))
         preparation = app.battle_setup['preparation']
         assert preparation['stage'] == 'complete'
         assert preparation['first_drop'] == 2
         assert preparation['terrain']['winner'] == 1
         assert len(preparation['terrain']['placed']) == feature_count
+        if scatter_dice:
+            assert [entry['player'] for entry in preparation['terrain']['placed']] == [1, 1]
+            assert [entry['travel'] for entry in preparation['terrain']['scatter']['results']] == [0, 6]
         assert app.roundCounter.current_player == 2
         expected = saved_battle(app)
         target = tmp_path / 'setup-complete.json'
