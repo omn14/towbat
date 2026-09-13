@@ -416,6 +416,60 @@ def test_battle_march_five_rounds_score_queued_boundaries_once(scene, tmp_path, 
         load_game_state(app, str(baseline))
 
 
+def test_raid_and_burn_real_movement_reload_and_start_turn(scene, tmp_path):
+    import asyncio
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from battle_secondary import raiding
+    from victory_points import calculate
+    from spell_system import Spell
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['objectives']['layout'] = 'three_troves'
+    config['optional_rules']['secondary_objectives'] = ['raid_and_burn']
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    app.fsm.request('MovementPhase')
+    app.roundCounter.current_player = 1
+    app.chargeStage = 'remaining'
+    unit = app.player1Units[0]
+    enemy = app.player2Units[0]
+    unit.bodyNP.setPos(0, 0, 0)
+    try:
+        unit.request('Moved')
+        assert raiding(app, unit)
+        with patch.object(app, 'movedThisTurn', side_effect=AssertionError('shooting reached dice path')):
+            asyncio.run(app.shootAt(unit, enemy))
+            asyncio.run(app.shootAt(unit, enemy, stand_and_shoot=True))
+        with patch.object(app.cannon, 'cannon_weapon', side_effect=AssertionError('cannon began firing')):
+            asyncio.run(app.cannon.fire(unit, enemy.bodyNP.getPos()))
+        with patch.object(app.bombard, 'bombardment_weapon', side_effect=AssertionError('bombardment began firing')):
+            asyncio.run(app.bombard.fire(unit, enemy))
+        spell = Spell('Forbidden spell', 5, game=app, caster=unit, spell_range=24)
+        with patch.object(spell, '_attempt', side_effect=AssertionError('spell rolled dice')):
+            asyncio.run(spell.spellFunction(enemy))
+        pending = tmp_path / 'raid-pending.json'
+        save_game_state(app, str(pending))
+        load_game_state(app, str(pending))
+        unit = app.player1Units[0]
+        assert raiding(app, unit)
+        app.roundCounter.currentRoundPlayer = [1, 1]
+        app.fsm.request('StrategyPhase')
+        assert not raiding(app, unit)
+        assert len(app.battle_secondary['awards']) == 1
+        assert app.battle_objectives[1]['destroyed']
+        assert len(app.terrain_manager.terrain_pieces) == 2
+        scores = calculate(app)
+        assert scores['scores'][0] == 30
+        completed = tmp_path / 'raid-complete.json'
+        save_game_state(app, str(completed))
+        load_game_state(app, str(completed))
+        assert len(app.battle_secondary['awards']) == 1
+        assert calculate(app)['scores'] == scores['scores']
+    finally:
+        load_game_state(app, str(baseline))
+
+
 @pytest.mark.parametrize('feature_count', [0, 2])
 @pytest.mark.parametrize('method', ['alternating', 'scattered'])
 def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, feature_count, method):

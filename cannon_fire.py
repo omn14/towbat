@@ -100,6 +100,9 @@ class CannonFire:
     # ─── Fire sequence ──────────────────────────────────────────────
 
     async def fire(self, cannonUnit, target):
+        from battle_secondary import shooting_blocked
+        if shooting_blocked(self.game, cannonUnit):
+            return
         weapon = self.cannon_weapon(cannonUnit)
         cannon_pos = cannonUnit.bodyNP.getPos()
 

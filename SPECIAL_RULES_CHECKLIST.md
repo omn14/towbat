@@ -10,6 +10,27 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Raid & Burn: 2026-09-13
+
+General's Companion p. 36. Optional Raid & Burn is now accepted at activation.
+Actual Remaining Moves completion starts destruction on contacting a trove with
+US 5+. Shooting, Stand & Shoot, cannon and bombardment resolution stop before
+dice; the common cast entry and available-spell list restrict raiders (including
+joined casters in their host) to Self/Combat range. At the next own Start of Turn,
+retained contact, US 5+, not fleeing and not engaged destroys the trove for 30 VP.
+Failed attempts log their reason and end; competing attempts end when it burns.
+Markers, HUD and final VP include the destruction. Attempts, resolved starts and
+awards are validated and saved independently of ordinary end-turn control awards.
+
+Validation: 76 pure config/objective cases, 13 VP cases, 9 High Magic cases and
+34 scene regressions pass in sequential bounded processes. Two previously paused
+HUD-rebuild cases were excluded. A real movement-to-destruction case covers all
+four firing paths, casting refusal, pending reload, marker removal, final VP and
+completed reload without a second award. Ordinary scope diagnostics are clean;
+artillery files retain their existing Panda-injected render/taskMgr diagnostics.
+LEFTOVER: baggage carts, all other optional tables/items/private/event modules,
+narratives and remaining stage-7 gates. Full suite is not claimed green.
+
 ## Battle March Scattered Setup: 2026-09-13
 
 Companion p. 24; Dawn of the Storm Dragon p. 23. The terrain roll-off winner

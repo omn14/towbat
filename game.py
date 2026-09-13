@@ -1195,6 +1195,9 @@ class MyApp(ShowBase):
             return m.is_wizard() and may_attempt(cast, name, level, spent)
 
         def combat_legal(spell):
+            from battle_secondary import spell_allowed
+            if not spell_allowed(self, unit, spell.get('range')):
+                return False
             host = getattr(unit, 'hostUnit', None) or unit
             engaged = getattr(host, 'isInCombat', False)
             if spell.get('type') == 'Assailment':
@@ -2063,6 +2066,9 @@ class MyApp(ShowBase):
 
     async def _shootAt(self, attackerUnit, defenderUnit, stand_and_shoot=False,
                        distance=None, *, target_boxes=None):
+        from battle_secondary import shooting_blocked
+        if shooting_blocked(self, attackerUnit):
+            return
         from chaos_gifts import succumbed
         if succumbed(attackerUnit):
             rule_skipped('Stupidity', attackerUnit, 'cannot shoot (p. 178)')

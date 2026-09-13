@@ -92,7 +92,8 @@ def calculate(game, *, log=False):
         seen.add(key)
         award(key[2], key[0], 'Trophies of War', scoring['captured_standard'], 'captured enemy unit standard')
     if battle_config:
-        for entry in getattr(game, 'battle_awards', []):
+        from battle_secondary import all_awards
+        for entry in all_awards(game):
             award(entry['player'], entry['unit'], entry['rule'], entry['points'],
                   f'{entry["objective"]}, player-turn {entry["turn"]}: {entry["reason"]}')
     complete = bool(ledger) and getattr(game, 'victoryLedgerComplete', False) and not missing

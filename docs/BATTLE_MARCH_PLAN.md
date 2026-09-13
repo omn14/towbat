@@ -83,8 +83,11 @@ Impossible objective-clearance layouts offer a terrain revision or setup pause.
 This remains an incremental implementation, not completion of the approved plan.
 Scattered placement is also connected: the winner places all features and the
 loser chooses D3 to scatter; Hit/arrow dice and first-contact movement are saved.
-Runtime activation explicitly rejects the agreed time limit and enabled optional
-modules until their handlers are complete. Standard ordinary
+Raid & Burn can be enabled in `optional_rules.secondary_objectives`: actual contact
+during Remaining Moves begins a saved destruction attempt, restricts shooting and
+casting, and awards 30 VP after the next own Start of Turn checks succeed.
+Runtime activation explicitly rejects the agreed time limit and other enabled
+optional modules until their handlers are complete. Standard ordinary
 terrain currently offers hills, woods and impassable buildings. Special features,
 remaining terrain categories, objective-aware strategic AI, private objectives,
 optional modules and narrative scenarios remain work in stages 1 and 3-6.

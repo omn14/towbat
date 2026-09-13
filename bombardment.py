@@ -103,6 +103,9 @@ class Bombardment:
     # ─── Fire sequence ──────────────────────────────────────────────
 
     async def fire(self, unit, target):
+        from battle_secondary import shooting_blocked
+        if shooting_blocked(self.game, unit):
+            return
         weapon = self.bombardment_weapon(unit)
         min_r = weapon.get('ranged_range_min', 0)
         max_r = weapon.get('ranged_range', 0)

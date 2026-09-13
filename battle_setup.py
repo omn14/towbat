@@ -190,6 +190,8 @@ def saved_battle(game):
               'runtime': {'objectives': deepcopy(getattr(game, 'battle_objectives', objective_records(config, setup))),
                           'awards': deepcopy(getattr(game, 'battle_awards', [])),
                           'scored_turns': list(getattr(game, 'battle_scored_turns', []))}}
+    from battle_secondary import empty_state
+    record['runtime']['secondary'] = deepcopy(getattr(game, 'battle_secondary', empty_state()))
     return validate_saved_battle(record)
 
 
@@ -218,7 +220,7 @@ def validate_saved_battle(record):
     setup = validate_setup(config, record['setup'])
     expected = objective_records(config, setup)
     runtime = record.get('runtime', {'objectives': expected, 'awards': [], 'scored_turns': []})
-    _keys(runtime, 'objectives awards scored_turns', 'battle_march.runtime')
+    _keys(runtime, 'objectives awards scored_turns' + (' secondary' if 'secondary' in runtime else ''), 'battle_march.runtime')
     if not isinstance(runtime['objectives'], list) or len(runtime['objectives']) != len(expected):
         raise ConfigError('battle_march.runtime.objectives: expected the resolved marker list')
     for objective, original in zip(runtime['objectives'], expected):
@@ -256,7 +258,10 @@ def validate_saved_battle(record):
         if key in seen or award['turn'] not in turns or award['objective'] not in {entry['id'] for entry in expected}:
             raise ConfigError('battle_march.runtime.awards: duplicate or unknown objective/turn')
         seen.add(key)
-    return {'config': config, 'setup': setup, 'runtime': deepcopy(runtime)}
+    from battle_secondary import empty_state, validate_state
+    runtime = deepcopy(runtime)
+    runtime['secondary'] = validate_state(config, runtime.get('secondary', empty_state()), runtime['objectives'])
+    return {'config': config, 'setup': setup, 'runtime': runtime}
 
 
 def restore_battle(game, record):
@@ -268,6 +273,8 @@ def restore_battle(game, record):
     game.battle_objectives = record['runtime']['objectives'] if record else []
     game.battle_awards = record['runtime']['awards'] if record else []
     game.battle_scored_turns = record['runtime']['scored_turns'] if record else []
+    from battle_secondary import empty_state
+    game.battle_secondary = record['runtime']['secondary'] if record else empty_state()
     if record and hasattr(game, 'roundCounter'):
         game.roundCounter.max_rounds = record['config']['game']['rounds']
     game.battlefield = (Battlefield(record['config']['battlefield']['width'],

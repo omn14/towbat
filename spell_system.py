@@ -184,6 +184,10 @@ class Spell:
         engine used to resolve the effect first and undo it afterwards, which
         showed the player damage that was then taken back.
         """
+        from battle_secondary import spell_allowed
+        if self.game is not None and self.caster is not None and not spell_allowed(
+                self.game, self.caster, 'Self' if self.targets_self else self.spell_range, log=True):
+            return
         if self.targets_self or str(self.spell_range).casefold() == 'self':
             target = self.caster or target
         if not self.canTarget(target):

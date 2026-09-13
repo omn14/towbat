@@ -284,6 +284,8 @@ class GamePhaseFSM(FSM):
         if getattr(self, '_resuming_spell', False):
             return
         # Start of Turn: a Magical Vortex drifts before anything else happens.
+        from battle_secondary import start_turn as secondary_start_turn
+        secondary_start_turn(self.game)
         from spell_effects import start_turn
         start_turn(self.game)
         for spell in list(getattr(self.game, 'remainsInPlay', [])):

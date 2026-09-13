@@ -26,7 +26,8 @@ def sync_markers(game):
                   else getattr(game, 'battle_objectives', []))
     hud = getattr(game, 'hud', None)
     if hud is not None:
-        hud.set_objectives(objectives, getattr(game, 'battle_awards', []))
+        from battle_secondary import all_awards
+        hud.set_objectives(objectives, all_awards(game))
     manager = getattr(game, 'terrain_manager', None)
     if manager is None:
         return

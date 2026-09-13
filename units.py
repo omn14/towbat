@@ -553,6 +553,8 @@ class unitGraphics(FSM):
 
     def enterMoved(self):
         self.hasMovedThisTurn=True
+        from battle_secondary import after_move
+        after_move(base, self)
         if not base.resolvingCombat:
             messenger.send('unit-move-complete')
         else:

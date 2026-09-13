@@ -513,6 +513,8 @@ def test_activation_rejects_unfinished_optional_handlers():
     from battle_config import validate_activation
     config = load_config()
     assert validate_activation(config) == config
+    config['optional_rules']['secondary_objectives'] = ['raid_and_burn']
+    assert validate_activation(config) == config
     config['optional_rules']['secret_objectives'] = True
     assert validate_config(config) == config
     with pytest.raises(ConfigError, match='optional_rules.secret_objectives'):
@@ -564,3 +566,51 @@ def test_startup_preset_is_explicit_and_validated_before_window_creation():
         with pytest.raises(SystemExit) as error:
             startup_options(arguments)
         assert error.value.code == 2
+
+
+@pytest.mark.parametrize('failure', [None, 'contact', 'strength', 'combat', 'fleeing'])
+def test_raid_and_burn_next_own_start_and_once_only(monkeypatch, failure):
+    from types import SimpleNamespace
+    import battle_secondary
+    import battle_objectives
+    config = load_config()
+    config['optional_rules']['secondary_objectives'] = ['raid_and_burn']
+    unit = SimpleNamespace(unitName='raiders', unit=SimpleNamespace(nmodels=5, name='Raiders'),
+                           state='Moved', isInCombat=False, hostUnit=None)
+    objective = {'id': 'objective-1', 'kind': 'trove', 'center': [0, 0], 'diameter': 2,
+                 'destroyed': False, 'controller': None, 'player': None, 'contested': False}
+    game = SimpleNamespace(battle_config=config, battle_objectives=[objective], units=[unit],
+                           fsm=SimpleNamespace(state='MovementPhase'), chargeStage='remaining',
+                           roundCounter=SimpleNamespace(current_player=1, currentRoundPlayer=[0, 0]))
+    monkeypatch.setattr(battle_secondary, 'side_of', lambda *args: 1)
+    monkeypatch.setattr(battle_secondary, 'unit_strength_total', lambda member: member.unit.nmodels)
+    monkeypatch.setattr(battle_secondary, 'in_contact', lambda *args: True)
+    monkeypatch.setattr(battle_objectives, 'sync_markers', lambda game: None)
+    battle_secondary.after_move(game, unit)
+    battle_secondary.after_move(game, unit)
+    assert len(game.battle_secondary['raid_attempts']) == 1
+    assert battle_secondary.shooting_blocked(game, unit)
+    assert not battle_secondary.spell_allowed(game, unit, 24)
+    assert battle_secondary.spell_allowed(game, unit, 'Combat')
+    assert battle_secondary.spell_allowed(game, unit, 'Self')
+    game.roundCounter.current_player = 2
+    game.roundCounter.currentRoundPlayer = [1, 0]
+    battle_secondary.start_turn(game)
+    assert not objective['destroyed']
+    if failure == 'contact':
+        monkeypatch.setattr(battle_secondary, 'in_contact', lambda *args: False)
+    elif failure == 'strength':
+        unit.unit.nmodels = 4
+    elif failure == 'combat':
+        unit.isInCombat = True
+    elif failure == 'fleeing':
+        unit.state = 'IsFleeing'
+    game.roundCounter.current_player = 1
+    game.roundCounter.currentRoundPlayer = [1, 1]
+    battle_secondary.start_turn(game)
+    battle_secondary.start_turn(game)
+    assert objective['destroyed'] is (failure is None)
+    assert len(game.battle_secondary['awards']) == (1 if failure is None else 0)
+    assert not game.battle_secondary['raid_attempts']
+    assert not battle_secondary.raiding(game, unit)
+    assert battle_secondary.validate_state(config, game.battle_secondary, [objective]) == game.battle_secondary
