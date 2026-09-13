@@ -81,6 +81,23 @@ def saved_battle(game):
     return {'config': validate_config(config), 'setup': validate_setup(config, setup)}
 
 
+def objective_records(config, setup):
+    """Published marker centres and base sizes (General's Companion pp. 24-25).
+
+    Two troves lie 7.5 inches north/south of centre; three lie on the east/west
+    centreline at -11, 0 and +11. These offsets do not scale with the table.
+    """
+    setup = validate_setup(config, setup)
+    landmark = setup['objective_layout'] == 'landmark'
+    positions = {'two_troves': ((0, -7.5), (0, 7.5)),
+                 'three_troves': ((-11, 0), (0, 0), (11, 0)), 'landmark': ((0, 0),)}
+    diameter = config['objectives']['landmark_base_mm' if landmark else 'trove_base_mm'] / 25.4
+    return [{'id': f'objective-{index + 1}', 'kind': 'landmark' if landmark else 'trove',
+             'center': list(point), 'diameter': diameter, 'property': setup['landmark_property'],
+             'controller': None, 'contested': False, 'destroyed': False}
+            for index, point in enumerate(positions[setup['objective_layout']])]
+
+
 def validate_saved_battle(record):
     if record is None:
         return None
@@ -98,6 +115,9 @@ def restore_battle(game, record):
     game.battlefield = (Battlefield(record['config']['battlefield']['width'],
                                    record['config']['battlefield']['depth'])
                         if record else STANDARD_BATTLEFIELD)
+    legacy_line = getattr(game, 'deploymentLine', None)
+    if legacy_line is not None:
+        legacy_line.hide() if record else legacy_line.show()
     if previous_field != game.battlefield and hasattr(game, 'boundries'):
         from ClassOutOfBounds import OutOfBounds
         game.boundries.destroy()

@@ -161,3 +161,69 @@ def load_config(path=DEFAULT_PRESET):
         except json.JSONDecodeError as error:
             raise ConfigError(f'{path}: {error}') from error
     return validate_config(record)
+
+
+def army_report(config, units, *, restricted_options=None, composition_verified=False):
+    """Report mustering limits without mutating armies (General's Companion p. 23).
+
+    Imported selections do not contain evaluated faction composition constraints.
+    Callers must supply a verified restricted-option list, including upgrades,
+    rather than assuming absence from an export means there are no restrictions.
+    """
+    from troop_types import normalise
+    config = validate_config(config)
+    limits, budget = config['army'], config['points_limit']
+    violations, unverified = [], []
+    total, qualifying, generals = 0, 0, 0
+    fractions = {'characters': 'maximum_character_fraction', 'core': 'maximum_core_fraction',
+                 'special': 'maximum_special_fraction', 'rare': 'maximum_rare_mercenary_fraction',
+                 'mercenaries': 'maximum_rare_mercenary_fraction', 'mercenary': 'maximum_rare_mercenary_fraction'}
+    members, seen = list(units), set()
+    for member in members:
+        joined = getattr(member, 'joinedCharacter', None)
+        if joined is not None and all(joined is not entry for entry in members):
+            members.append(joined)
+    for member in members:
+        if id(member) in seen:
+            continue
+        seen.add(id(member))
+        group, name = member.unit, member.unit.name
+        metadata = getattr(group, 'roster_metadata', {})
+        profile = group.model
+        category = str(metadata.get('category') or profile.characteristics.get('Category') or '').lower()
+        character = category == 'characters'
+        troop_type = normalise(profile.characteristics.get('Troop Type'))
+        qualifying += int(not character and troop_type not in ('swarms', 'war beasts'))
+        generals += int(character and getattr(member, 'isGeneral', False))
+        if not troop_type:
+            unverified.append(f'{name}: missing troop type for minimum-unit eligibility')
+        points = metadata.get('points_cost')
+        if isinstance(points, bool) or not isinstance(points, (int, float)) or not isfinite(points) or points < 0:
+            unverified.append(f'{name}: missing or invalid paid points')
+        else:
+            total += points
+            if category in fractions:
+                maximum = budget * limits[fractions[category]]
+                if points > maximum:
+                    violations.append(f'{name}: {points:g} points exceeds the {category} single-selection cap {maximum:g}')
+            else:
+                unverified.append(f'{name}: unknown army category {category!r}')
+        count = getattr(member, 'startOfBattleModels', group.nmodels)
+        strength = count * profile.unit_strength()
+        if strength > limits['maximum_unit_strength']:
+            violations.append(f'{name}: starting Unit Strength {strength:g} exceeds {limits["maximum_unit_strength"]}')
+    if total > budget:
+        violations.append(f'Army: {total:g} points exceeds the agreed {budget}-point limit')
+    if qualifying < limits['minimum_units']:
+        violations.append(f'Army: {qualifying} qualifying units; at least {limits["minimum_units"]} required')
+    if generals != 1:
+        violations.append(f'Army: requires one designated General, found {generals}')
+    if restricted_options is None:
+        unverified.append('Per-1,000 restricted options: evaluated selected units, characters and upgrades required')
+    elif len(restricted_options) > limits['restricted_options_allowance']:
+        violations.append(f'Army: {len(restricted_options)} per-1,000 restricted options exceeds '
+                          f'{limits["restricted_options_allowance"]}: {", ".join(restricted_options)}')
+    if not composition_verified:
+        unverified.append('Normal faction composition must still be verified against the selected army list')
+    return {'points': total, 'qualifying_units': qualifying, 'violations': violations,
+            'unverified': unverified, 'valid': not violations and not unverified}

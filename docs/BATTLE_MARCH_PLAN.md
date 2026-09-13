@@ -32,6 +32,18 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   remains 72 x 48. Units and terrain are not scaled.
 - Runtime placement and boundary consumers use per-game geometry; standard
   games retain legacy defaults. Overlay lines and AI candidates use those zones.
+- Mustering reports check available paid-point/category/starting-strength data;
+  absent evaluated faction composition and restricted-option metadata is
+  explicitly unverified. Imported roster category is preserved.
+- Objective records use the verified diagrams: two at (0, +/-7.5), three at
+  (-11, 0), (0, 0), (11, 0), or a central landmark. The earlier planning
+  summary's horizontal two-trove description was incorrect.
+- Shapely-backed terrain calculations cover rendered natural-feature rims,
+  centre/opponent spacing, recommendation warnings, first-contact scatter,
+  and minimum terrain translation clearing fixed objectives. UI integration,
+  river footprints and other-feature relocation conflicts are pending.
+- Offscreen 44 x 30 and 48 x 36 captures verify colored overlays and removal
+  of the legacy rectangle. Real-scene saves restore geometry without RNG.
 
 This is not yet a playable Battle March mode. No startup option is exposed.
 The presence of objective, terrain or optional settings does not mean their

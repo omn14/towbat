@@ -240,3 +240,84 @@ def test_setup_rejects_tampered_rolls_and_duplicate_zones(monkeypatch):
     setup = resolve_setup(config, 3)
     monkeypatch.setattr('battle_setup.Random', lambda *args: pytest.fail('load rolled setup dice'))
     assert validate_setup(config, setup) == setup
+
+
+def test_army_report_checks_per_selection_limits_and_exclusions():
+    from types import SimpleNamespace
+    from battle_config import army_report
+
+    def member(name, category, points, count=1, strength=1, troop='Regular infantry', general=False):
+        profile = SimpleNamespace(characteristics={'Category': category, 'Troop Type': troop},
+                                  unit_strength=lambda: strength)
+        return SimpleNamespace(unit=SimpleNamespace(name=name, model=profile, nmodels=count,
+                               roster_metadata={'points_cost': points}), isGeneral=general)
+
+    general = member('General', 'Characters', 125, general=True)
+    core = member('Core', 'Core', 175, count=20)
+    machine = member('Machine', 'Special', 100, troop='War machine', strength=3)
+    units = [general, core, machine]
+    report = army_report(load_config(), units, restricted_options=['Machine'], composition_verified=True)
+    assert report['valid'] and report['qualifying_units'] == 2 and report['points'] == 400
+    general.unit.roster_metadata['points_cost'] = 126
+    core.unit.nmodels = 21
+    machine.unit.model.characteristics['Troop Type'] = 'War beasts'
+    report = army_report(load_config(), units, restricted_options=['Machine', 'Core upgrade'], composition_verified=True)
+    assert not report['valid']
+    assert len(report['violations']) == 4
+    assert any('125' in reason for reason in report['violations'])
+    assert any('Unit Strength 21' in reason for reason in report['violations'])
+    assert report['qualifying_units'] == 1
+
+
+def test_army_report_does_not_claim_missing_metadata_is_valid():
+    from battle_config import army_report
+    report = army_report(load_config(), [])
+    assert len(report['unverified']) == 2
+    assert not report['valid']
+
+
+@pytest.mark.parametrize('width,depth', [(44, 30), (48, 36)])
+@pytest.mark.parametrize('layout,positions', [
+    ('two_troves', [[0, -7.5], [0, 7.5]]),
+    ('three_troves', [[-11, 0], [0, 0], [11, 0]]),
+    ('landmark', [[0, 0]]),
+])
+def test_objective_markers_follow_published_diagrams(width, depth, layout, positions):
+    from battle_setup import objective_records, resolve_setup
+    config = load_config()
+    config['battlefield'].update(width=width, depth=depth)
+    config['objectives']['layout'] = layout
+    records = objective_records(config, resolve_setup(config, 5))
+    assert [record['center'] for record in records] == positions
+    assert all(record['diameter'] == (100 if layout == 'landmark' else 40) / 25.4 for record in records)
+    assert all(record['controller'] is None and not record['destroyed'] for record in records)
+
+
+def test_terrain_spacing_recommendations_and_first_scatter_contact():
+    from shapely.geometry import box
+    from battlefield import Battlefield
+    from battle_terrain import placement_report, scatter_distance
+    field, config = Battlefield(44, 30), load_config()
+    terrain = box(-21, -14, -17, -10)
+    assert not placement_report(field, config, terrain, [], 1)['errors']
+    assert placement_report(field, config, box(-2, -2, 2, 2), [], 1)['errors']
+    assert placement_report(field, config, terrain, [(box(-15, -14, -13, -10), 2)], 1)['errors']
+    assert not placement_report(field, config, terrain, [(box(-15, -14, -13, -10), 1)], 1)['errors']
+    wide = placement_report(field, config, box(-21, -14, -8, -12), [], 1)
+    assert wide['warnings']
+    assert scatter_distance(field, terrain, [], (-1, 0), 12) == pytest.approx(1)
+    obstacle = box(-10, -14, -9, -10)
+    assert scatter_distance(field, terrain, [obstacle], (1, 0), 20) == pytest.approx(7)
+
+
+def test_minimum_terrain_shift_clears_fixed_objective():
+    from shapely.geometry import Point, box
+    from shapely.affinity import translate
+    from battlefield import Battlefield
+    from battle_terrain import objective_clearance_shift
+    objective = {'center': [0, 0], 'diameter': 2}
+    terrain = box(2, -1, 4, 1)
+    shift = objective_clearance_shift(Battlefield(44, 30), terrain, [objective], 3)
+    assert shift[0] == pytest.approx(2, abs=1e-5) and shift[1] == pytest.approx(0)
+    assert translate(terrain, *shift).distance(Point(0, 0)) >= 4
+    assert objective['center'] == [0, 0]

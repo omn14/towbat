@@ -10,6 +10,35 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Setup Geometry: 2026-09-13
+
+Added non-mutating mustering reports for paid points, per-selection category
+caps, starting Unit Strength, General designation and minimum qualifying units
+(Companion p. 23). War machines count; swarms/war beasts do not. Imported
+category metadata is retained. Missing evaluated faction/restricted-option
+constraints are explicitly unverified rather than silently accepted.
+
+Objective records follow the actual p. 24 diagrams: two troves at (0, +/-7.5),
+three at (-11, 0), (0, 0), (11, 0), or a central landmark. Corrected the earlier
+planning summary's mistaken two-trove horizontal layout after loading the image.
+Marker diameters are 40/100 mm, unchanged across battlefield sizes.
+
+Added Shapely-backed terrain calculations using rendered natural-feature rims:
+centre/opponent spacing, recommendation-only span warnings, continuous scatter
+stopping at first contact, and minimum translation clearing fixed objective
+bases without leaving the board (Rulebook p. 268; Companion pp. 24-25; Dawn of
+the Storm Dragon p. 23). These calculations do not yet drive setup UI.
+
+Verification: 56 config/geometry tests, 13 item/ownership tests and 15 Scout
+scene tests pass. Real shaped hills, physics edges, save/reload without RNG,
+legacy fallback and colored overlay pixels verified at 44 x 30 and 48 x 36.
+Removed the obsolete rectangular deployment overlay when the custom map is
+active. A further 51 formed-charge, 82 loose-formation scene and 34
+Drilled/Impetuous tests pass in sequential 1024 MiB services.
+LEFTOVER: setup UI, normal faction composition evaluation, objective gameplay,
+terrain river footprints, multi-feature relocation conflicts and all optional/
+narrative handlers remain. No full-suite pass is claimed.
+
 ## Battle March Foundation: 2026-09-13
 
 General's Companion pp. 23-27, checked against tow.whfb.app on 2026-09-13.

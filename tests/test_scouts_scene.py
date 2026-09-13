@@ -104,6 +104,62 @@ def test_reload_mid_scouts_restores_order_and_choices_without_reroll(scene, tmp_
     assert app.fsm.state == 'DeployPhase'
 
 
+@pytest.mark.parametrize('width,depth', [(44, 30), (48, 36)])
+def test_battle_march_geometry_reload_and_offscreen_lines(scene, tmp_path, width, depth):
+    from panda3d.core import OrthographicLens, PNMImage, Point3
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from battle_terrain import footprint
+    from shapely.geometry import box
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    config['battlefield'].update(width=width, depth=depth)
+    config['deployment'].update(map='close_encounter', mirror=True)
+    setup = resolve_setup(config, 14)
+    setup['player_zones'] = {'1': 2, '2': 1}
+    saved = tmp_path / 'battle-march.json'
+    lens, camera_transform = app.cam.node().getLens(), app.camera.getTransform()
+    try:
+        restore_battle(app, {'config': config, 'setup': setup})
+        hill = app.terrain_manager.add_terrain('hill', Point3(-16, -10, 0), 6, 4)
+        actual = footprint(hill)
+        assert actual.area > 1
+        assert actual.area < box(-19, -12, -13, -8).area
+        save_game_state(app, str(saved))
+        load_game_state(app, str(baseline))
+        with patch('battle_setup.Random', side_effect=AssertionError('setup rerolled during load')):
+            load_game_state(app, str(saved))
+        assert app.battlefield.width == width and app.battlefield.depth == depth
+        assert app.battle_setup == setup
+        assert app.deploymentLine.isHidden()
+        assert app.boundries.eastBoundry.getX() == width / 2 + 5
+        assert app.boundary_np.getCollideMask().isZero()
+        top_down = OrthographicLens()
+        top_down.setFilmSize(80, 45)
+        app.cam.node().setLens(top_down)
+        app.camera.setPos(0, 0, 100)
+        app.camera.lookAt(0, 0, 0)
+        app.aspect2d.hide()
+        app.graphicsEngine.renderFrame()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert app.win.getScreenshot(image)
+        cyan = red = 0
+        for horizontal in range(image.getXSize()):
+            for vertical in range(image.getYSize()):
+                color = image.getXel(horizontal, vertical)
+                cyan += color.y > .65 and color.z > .8 and color.x < .3
+                red += color.x > .8 and .2 < color.y < .5 and color.z < .4
+        assert cyan > 100 and red > 100
+        assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_{width}x{depth}.png'))
+    finally:
+        app.cam.node().setLens(lens)
+        app.camera.setTransform(camera_transform)
+        app.aspect2d.show()
+        load_game_state(app, str(baseline))
+
+
 def test_scout_charge_restriction_survives_strategy_and_reload_then_expires_per_owner(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, str(baseline))
