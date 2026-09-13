@@ -90,9 +90,20 @@ in full. Continue stages 1-4, the active portions of stage 5, and stage 7.
 
 ## Starting The Current Implementation
 
-Run `python game.py --battle-config` for the default preset, or pass a JSON path
-after `--battle-config`. An optional `--battle-seed 19` fixes setup-map/objective
-dice. Normal startup without these flags retains the existing armies and terrain.
+Run `python game.py --battle-config` to open the native Panda3D configuration
+screen with the default preset, or pass an existing JSON path after
+`--battle-config`. Battle, Terrain, Objectives, Scoring, Muster and Modules tabs
+edit the preset. The file field selects the load/save path; Load reads that file,
+Save Config writes it without starting, and Start Game validates and saves it
+before initializing the battle in the same window. Exit does not save edits.
+
+An optional `--battle-seed 19` prepopulates the editable setup seed. An empty seed
+uses a new random value when starting; this launch-only value is not written into
+the versioned config schema. No armies, battle terrain or deployment tasks are
+created until Start Game. Invalid entries and write failures leave the editor
+open. Unsupported modules can be inspected and disabled in loaded presets but
+cannot start a battle. Normal startup without `--battle-config` retains the
+existing armies and terrain and bypasses this screen.
 
 Setup reports army violations and unverified composition without rewriting units.
 Players acknowledge their reports, select a shared terrain pool, roll off and
@@ -153,6 +164,29 @@ is not solved; the sequential fixed-neighbour search can still require revision.
 River footprints, remaining terrain categories, special features, objective-aware
 AI, standalone private objectives and random happenings remain active work.
 The deferred item, event and narrative scope is unchanged.
+
+## Native Configuration Screen: 2026-09-13
+
+The launcher uses DirectGUI and the existing game theme inside the game's single
+ShowBase instance, not Qt or a separate process. Typed numeric fields, enum menus,
+checkboxes and scrolling tabs cover configurable preset values while preserving
+source metadata and fixed schema fields. Saves use validated atomic replacement;
+opening, resizing and cancelling do not rewrite files. Ordinary startup and
+direct programmatic battle construction retain their existing behavior.
+
+Verification: 15 native editor tests, one real startup handoff and 120 existing
+configuration tests pass in isolated bounded services. The startup test edits
+board dimensions, rounds and seed through the GUI, dispatches the Start Game
+button event, verifies the saved JSON, reuses the same window and completes
+pre-deployment setup. Desktop 1280 x 720, 800 x 600 and portrait 720 x 960 captures,
+full-screen coverage, control/label bounds, popup sizing and event handling pass.
+Invalid edits, unsupported modules, failed atomic writes, reload and duplicate
+Start events are covered. The actual preset and user armies were not modified.
+
+LEFTOVER: this is a configuration editor, not an implementation of the remaining
+terrain, AI, private-objective or random-happening rules. The seed remains a
+launch setting; saved battles retain their resolved setup as before. No roster
+selection UI is added and no full-suite or paused HUD fix is claimed.
 
 ## Source Decisions
 

@@ -175,20 +175,43 @@ def load_config(path=DEFAULT_PRESET):
     return validate_config(record)
 
 
+def save_config(path, record):
+    """Replace a preset atomically only after schema validation succeeds."""
+    import os
+    from tempfile import NamedTemporaryFile
+    config = validate_config(record)
+    destination = Path(path).expanduser().resolve()
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode='w', encoding='utf-8', dir=destination.parent,
+                                prefix=f'.{destination.name}.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(config, stream, indent=2)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return config
+
+
 def startup_options(arguments=None):
     """Parse explicit opt-in without changing ordinary game startup."""
     import argparse
     parser = argparse.ArgumentParser(description='Warhammer: The Old World battle engine')
     parser.add_argument('--battle-config', nargs='?', const=str(DEFAULT_PRESET), metavar='PATH',
-                        help='start Battle March using the default preset or a JSON file')
+                        help='open Battle March configuration using the default preset or a JSON file')
     parser.add_argument('--battle-seed', type=int, help='repeatable Battle March setup seed')
     parser.add_argument('--debug', action='store_true', help='enable developer tools')
     options = parser.parse_args(arguments)
     if options.battle_seed is not None and options.battle_config is None:
         parser.error('--battle-seed requires --battle-config')
+    options.battle_config_path = options.battle_config
     try:
         if options.battle_config is not None:
-            options.battle_config = validate_activation(load_config(options.battle_config))
+            options.battle_config = load_config(options.battle_config)
         if options.battle_seed is not None:
             _number(options.battle_seed, 'battle_seed', 0, 2 ** 53 - 1, integer=True)
     except (ConfigError, OSError) as error:

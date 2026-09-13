@@ -135,15 +135,41 @@ class MyApp(ShowBase):
 
     # ─── Initialization ──────────────────────────────────────────────────────
 
-    def __init__(self, *, battle_config=None, battle_seed=None):
+    def __init__(self, *, battle_config=None, battle_seed=None,
+                 configure_battle=False, battle_config_path=None):
         if battle_config is not None:
-            from battle_config import _number, validate_activation
-            battle_config = validate_activation(battle_config)
-            from secrets import randbits
-            battle_seed = randbits(53) if battle_seed is None else battle_seed
-            _number(battle_seed, 'battle_seed', 0, 2 ** 53 - 1, integer=True)
+            from battle_config import _number, validate_activation, validate_config
+            battle_config = (validate_config(battle_config) if configure_battle
+                             else validate_activation(battle_config))
+            if battle_seed is not None:
+                _number(battle_seed, 'battle_seed', 0, 2 ** 53 - 1, integer=True)
         super().__init__()
         self.setBackgroundColor(0, 0, 0, 1)
+        self.battle_config_screen = None
+        if configure_battle and battle_config is not None:
+            from battle_config_ui import BattleConfigScreen
+            self.disableMouse()
+            self.battle_config_screen = BattleConfigScreen(
+                self, battle_config, battle_config_path, battle_seed, self._start_configured_battle)
+            return
+        self._initialize_battle(battle_config, battle_seed)
+
+    def destroy(self):
+        screen = getattr(self, 'battle_config_screen', None)
+        if screen is not None:
+            screen.destroy()
+            self.battle_config_screen = None
+        super().destroy()
+
+    def _start_configured_battle(self, config, seed):
+        self.battle_config_screen.destroy()
+        self.battle_config_screen = None
+        self._initialize_battle(config, seed)
+
+    def _initialize_battle(self, battle_config=None, battle_seed=None):
+        if battle_config is not None and battle_seed is None:
+            from secrets import randbits
+            battle_seed = randbits(53)
 
         # Enable PStats profiling
         if PROFILING:
@@ -3338,5 +3364,7 @@ class MyApp(ShowBase):
 if __name__ == '__main__':
     from battle_config import startup_options
     options = startup_options()
-    app = MyApp(battle_config=options.battle_config, battle_seed=options.battle_seed)
+    app = MyApp(battle_config=options.battle_config, battle_seed=options.battle_seed,
+                configure_battle=options.battle_config is not None,
+                battle_config_path=options.battle_config_path)
     app.run()

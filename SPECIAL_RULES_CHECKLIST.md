@@ -10,6 +10,41 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Native Configuration Screen: 2026-09-13
+
+`--battle-config [PATH]` now opens a themed DirectGUI editor in the game's Panda3D
+window, holding army/terrain construction and deployment until Start Game. Six
+scrolling tabs edit typed preset values, enum choices, toggles, scoring and muster
+percentages. Source metadata and fixed schema values are preserved. Load reads
+the entered path; Save Config uses validated atomic replacement; Start Game
+requires runtime support, saves, destroys the editor and initializes the existing
+ShowBase instance with the chosen config and optional launch seed. Ordinary and
+programmatic startup remain unchanged. Exit and failed validation/write attempts
+do not modify the preset or initialize a battle. Unsupported loaded flags can be
+disabled but their incomplete effects are not enabled by this screen.
+
+Corrections during verification: native dropdown defaults expanded outside the
+form and used unscaled popup text; all popup/hover states now share bounded widget
+scaling. Popups live outside the scrolling clip. A dark vellum texture obscured
+labels and was replaced by the existing light parchment. Panda's portrait
+aspect2d convention requires compensating the editor root scale. The filename
+entry frame resizes with its input width, and numeric display preserves large
+integer seeds and fractional board dimensions without rounding.
+
+Validation: 15 editor, one real startup and 120 config tests pass in sequential
+768 MiB services (peak 418.4 MiB). Actual Start Game events save edited 48 x 36,
+six-round settings and seed 23, reuse the window and complete setup. Three
+offscreen sizes cover control/label bounds, scrolling, popups and nonblank pixels;
+desktop and portrait screenshots were inspected. Atomic write failure, invalid
+values, unsupported options, reload, cancellation and repeated Start are covered.
+Pylance confirms all 13 constructor call sites are compatible. No user preset,
+army/save data, paused item code or paused HUD investigation was changed.
+
+LEFTOVER: remaining Battle March mechanics and full-suite verification are not
+completed by a settings screen. No roster picker, tournament options or resumed
+magic-item/narrative work is included. Launch seed is not stored in preset JSON;
+resolved battle setup remains saved by the existing persistence path.
+
 ## Battle March Conflict-Aware Terrain Clearance: 2026-09-13
 
 General's Companion pp. 24-25. Fixed objective placement now finds the smallest

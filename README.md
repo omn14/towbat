@@ -1,5 +1,25 @@
 # towbat
 
+## Battle March Configuration
+
+```bash
+source .venv/bin/activate
+python game.py --battle-config
+```
+
+This opens a native configuration screen in the Panda3D game window. Edit the
+battle, terrain, objectives, scoring, muster limits and supported optional rules.
+**Save Config** writes the JSON path shown at the top; **Start Game** validates,
+saves and starts the battle in the same window. **Load** reads another preset
+from that field, and **Exit** leaves without saving edits.
+
+Pass an existing preset with `--battle-config path/to/preset.json`. The optional
+`--battle-seed 19` prepopulates the setup seed; leaving it blank generates a new
+seed on Start Game. This seed is a launch setting, not a preset field. Unsupported
+rule modules remain unavailable. Starting without `--battle-config` bypasses the
+editor and retains ordinary startup. Current scope and verification are recorded
+in [docs/BATTLE_MARCH_PLAN.md](docs/BATTLE_MARCH_PLAN.md).
+
 ## Battle Results
 
 Both players receive their final configured turn before the battle ends. The
@@ -11,8 +31,9 @@ log retains the per-unit calculation; **Battle Result** reopens the panel.
 
 Ended battles can be saved and reloaded without advancing another turn. Old
 saves lacking the original scoring ledger report incomplete scoring data rather
-than guessing missing units or upgrades. Scenario objectives, special-feature
-bonuses and alternate Matched Play/Battle March scoring are not implemented.
+than guessing missing units or upgrades. Battle March adds its implemented
+objective awards and reduced bonuses; other scenario and Matched Play variants
+remain outside that supported subset.
 
 ## Roster Imports
 
