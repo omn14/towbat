@@ -6,6 +6,7 @@ the setup controller commits accepted positions through TerrainManager.
 
 from math import hypot
 
+from shapely import set_precision
 from shapely.affinity import scale, translate
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import nearest_points, polygonize, unary_union
@@ -20,7 +21,8 @@ def footprint(piece):
     """Use the rendered natural-feature rim, not its bounding rectangle."""
     edges = piece.sight_edges
     if edges is not None:
-        geometry = unary_union(list(polygonize([LineString(edge) for edge in edges])))
+        lines = [set_precision(LineString(edge), TOLERANCE / 100) for edge in edges]
+        geometry = unary_union(list(polygonize(lines)))
         if geometry.is_empty or not geometry.is_valid:
             raise ConfigError(f'{piece.terrain_type}: terrain outline is not a closed valid polygon')
         return geometry

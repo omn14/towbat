@@ -10,6 +10,34 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Startup and Ordinary Setup: 2026-09-13
+
+General's Companion pp. 23-27; Rulebook p. 268. Explicit `--battle-config [PATH]`
+startup preserves standard defaults and user army paths. Unsupported options fail
+before window creation. Non-mutating army reports distinguish violations from
+unverified faction/restricted-option data. Both players acknowledge the reports.
+Shared hill/wood/building selections, placement roll-off, alternating ownership,
+actual-footprint previews, editable dimensions, fixed objectives, opponent zone
+choice and a separate first-drop roll-off now form a persisted setup sequence.
+Unit deployment and spell generation are held until completion. Objectives/maps
+are hidden until their setup step. Interrupted zone choice and accepted terrain
+reload without repeating the terrain roll-off. Failed clearance offers revision.
+
+Validation: 71 config/geometry tests and four focused real-scene preparation/UI
+cases pass in bounded services. Zero/two terrain cases check ordering, complete
+reload and pending-choice resume. GUI checks dispatch events, edit dimensions,
+render a screenshot and cancel. A separate fresh-process startup test passes at
+410.5 MiB, including the late-created legacy rectangle being hidden. Pylance
+confirms all 11 existing constructor callers remain compatible. Fixed generated
+contour endpoint noise that prevented small hills
+from polygonizing, missing offscreen pointer handling and dark-on-dark panel text.
+
+LEFTOVER: scattered setup, special/other terrain categories and full minimum-shift
+conflict resolution; portrait visual gates; strict
+faction composition evaluation, strategic AI objectives; optional/narrative/event
+modules and remaining stage-7 verification. Full suite not run. The paused HUD
+selected-unit NaN and user startup armies/layout probe remain untouched.
+
 ## Battle March First Turn and Five-Round Lifecycle: 2026-09-13
 
 General's Companion p. 27. After deployment/Vanguard, Battle March performs a

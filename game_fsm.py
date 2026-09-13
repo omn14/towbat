@@ -37,6 +37,12 @@ class GamePhaseFSM(FSM):
         through nextPhase(), so hooking the transition is the only way the
         HUD sees all of them.
         """
+        preparation = (getattr(self.game, 'battle_setup', None) or {}).get('preparation')
+        if (self.state == 'DeployPhase' and request == 'StrategyPhase' and preparation
+                and preparation['stage'] != 'complete' and not getattr(self.game, 'restoringBattle', False)):
+            from battle_preparation import begin_preparation
+            begin_preparation(self.game)
+            return
         if (self.state == 'DeployPhase' and request == 'StrategyPhase'
                 and getattr(self.game, 'battle_config', None)
                 and not getattr(self.game, 'restoringBattle', False)
@@ -118,6 +124,9 @@ class GamePhaseFSM(FSM):
             battle_log('Confirm or cancel the formation move first.', 'info')
             return
         if self.state == 'DeployPhase':
+            from battle_preparation import begin_preparation
+            if begin_preparation(self.game):
+                return
             from spell_generation import begin_spell_generation, pending_wizards
             if pending_wizards(self.game):
                 begin_spell_generation(self.game)

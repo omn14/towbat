@@ -144,6 +144,19 @@ def validate_config(record):
     return deepcopy(record)
 
 
+def validate_activation(record):
+    """Reject configured features until their complete runtime handlers are available."""
+    config = validate_config(record)
+    unsupported = [f'optional_rules.{name}' for name, value in config['optional_rules'].items() if value]
+    if config['game']['time_limit_minutes'] is not None:
+        unsupported.append('game.time_limit_minutes')
+    if config['terrain']['method'] == 'scattered':
+        unsupported.append('terrain.method=scattered')
+    if unsupported:
+        raise ConfigError('Runtime support is not complete for: ' + ', '.join(unsupported))
+    return config
+
+
 def _unique_object(pairs):
     record = {}
     for key, value in pairs:
@@ -161,6 +174,27 @@ def load_config(path=DEFAULT_PRESET):
         except json.JSONDecodeError as error:
             raise ConfigError(f'{path}: {error}') from error
     return validate_config(record)
+
+
+def startup_options(arguments=None):
+    """Parse explicit opt-in without changing ordinary game startup."""
+    import argparse
+    parser = argparse.ArgumentParser(description='Warhammer: The Old World battle engine')
+    parser.add_argument('--battle-config', nargs='?', const=str(DEFAULT_PRESET), metavar='PATH',
+                        help='start Battle March using the default preset or a JSON file')
+    parser.add_argument('--battle-seed', type=int, help='repeatable Battle March setup seed')
+    parser.add_argument('--debug', action='store_true', help='enable developer tools')
+    options = parser.parse_args(arguments)
+    if options.battle_seed is not None and options.battle_config is None:
+        parser.error('--battle-seed requires --battle-config')
+    try:
+        if options.battle_config is not None:
+            options.battle_config = validate_activation(load_config(options.battle_config))
+        if options.battle_seed is not None:
+            _number(options.battle_seed, 'battle_seed', 0, 2 ** 53 - 1, integer=True)
+    except (ConfigError, OSError) as error:
+        parser.error(str(error))
+    return options
 
 
 def army_report(config, units, *, restricted_options=None, composition_verified=False):

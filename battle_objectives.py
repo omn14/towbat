@@ -21,9 +21,12 @@ TOLERANCE = 1e-5
 def sync_markers(game):
     """Reconcile derived marker terrain without rerolls or duplicate pieces."""
     from panda3d.core import Point3, TextNode
+    preparation = (getattr(game, 'battle_setup', None) or {}).get('preparation', {})
+    objectives = ([] if preparation.get('stage') in ('armies', 'terrain', 'objectives')
+                  else getattr(game, 'battle_objectives', []))
     hud = getattr(game, 'hud', None)
     if hud is not None:
-        hud.set_objectives(getattr(game, 'battle_objectives', []), getattr(game, 'battle_awards', []))
+        hud.set_objectives(objectives, getattr(game, 'battle_awards', []))
     manager = getattr(game, 'terrain_manager', None)
     if manager is None:
         return
@@ -35,7 +38,7 @@ def sync_markers(game):
                 manager.remove_terrain(piece)
             else:
                 existing[identity] = piece
-    for objective in getattr(game, 'battle_objectives', []):
+    for objective in objectives:
         if objective['destroyed']:
             continue
         kind = 'landmark' if objective['kind'] == 'landmark' else 'treasure_trove'

@@ -40,8 +40,9 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   summary's horizontal two-trove description was incorrect.
 - Shapely-backed terrain calculations cover rendered natural-feature rims,
   centre/opponent spacing, recommendation warnings, first-contact scatter,
-  and minimum terrain translation clearing fixed objectives. UI integration,
-  river footprints and other-feature relocation conflicts are pending.
+  and minimum terrain translation clearing fixed objectives. Ordinary terrain
+  selection and mouse-driven dimension/position previews are connected; river
+  footprints and general conflict-aware minimum relocation remain pending.
 - Offscreen 44 x 30 and 48 x 36 captures verify colored overlays and removal
   of the legacy rectangle. Real-scene saves restore geometry without RNG.
 - Objective control now uses actual bases, joined Unit Strength, distance/US
@@ -65,9 +66,26 @@ reviewed 2026-09-13. This is not the older Settra's Fury ruleset.
   without dice. Both starting orders have been tested through all ten queued
   player-turn scoring boundaries, including intermediate and final reloads.
 
-This is not yet a playable Battle March mode. No startup option is exposed.
-The presence of objective, terrain or optional settings does not mean their
-effects are implemented. These are remaining work in stages 1 and 3-6.
+## Starting The Current Implementation
+
+Run `python game.py --battle-config` for the default preset, or pass a JSON path
+after `--battle-config`. An optional `--battle-seed 19` fixes setup-map/objective
+dice. Normal startup without these flags retains the existing armies and terrain.
+
+Setup reports army violations and unverified composition without rewriting units.
+Players acknowledge their reports, select a shared terrain pool, roll off and
+alternate terrain placement, then choose zones and independently roll first drop.
+Accepted footprints, ownership, pool choices and dice survive saves. Pending zone
+choices resume after reload without repeating terrain dice. Preview-only edits are
+not committed to saves. Deployment and spell generation wait for setup completion.
+Impossible objective-clearance layouts offer a terrain revision or setup pause.
+
+This remains an incremental implementation, not completion of the approved plan.
+Runtime activation explicitly rejects scattered terrain, the agreed time limit,
+and enabled optional modules until their handlers are complete. Standard ordinary
+terrain currently offers hills, woods and impassable buildings. Special features,
+remaining terrain categories, objective-aware strategic AI, private objectives,
+optional modules and narrative scenarios remain work in stages 1 and 3-6.
 
 ## Source Decisions
 

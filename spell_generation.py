@@ -199,6 +199,9 @@ async def prepare_spellbooks(game):
 
 def begin_spell_generation(game):
     """Schedule before deployment, or resume saved choices after restoration."""
+    preparation = (getattr(game, 'battle_setup', None) or {}).get('preparation')
+    if preparation and preparation['stage'] != 'complete':
+        return
     if getattr(game, 'restoringBattle', False) is True or getattr(game, 'spellGenerationBusy', False) is True:
         return
     if not pending_wizards(game):

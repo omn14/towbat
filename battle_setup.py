@@ -7,7 +7,7 @@ import re
 
 from battle_config import (ConfigError, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
                            MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, _boolean,
-                           _choice, _keys, _number, validate_config)
+                           _choice, _keys, _number, validate_activation, validate_config)
 from battlefield import Battlefield, STANDARD_BATTLEFIELD, draw_battlefield
 
 
@@ -39,7 +39,8 @@ def resolve_setup(config, seed):
 def validate_setup(config, setup):
     config = validate_config(config)
     _keys(setup, 'version seed rolls deployment_map mirror player_zones objective_layout landmark_property'
-          + (' first_turn' if 'first_turn' in setup else ''), 'setup')
+          + (' first_turn' if 'first_turn' in setup else '')
+          + (' preparation' if 'preparation' in setup else ''), 'setup')
     if type(setup['version']) is not int or setup['version'] != 1:
         raise ConfigError('setup.version: only version 1 is supported')
     _number(setup['seed'], 'setup.seed', 0, 2 ** 53 - 1, integer=True)
@@ -92,7 +93,55 @@ def validate_setup(config, setup):
             _number(record['player'], 'setup.first_turn.player', 1, 2, integer=True)
             if winner is None:
                 raise ConfigError('setup.first_turn.player: cannot choose before the roll-off')
+    if 'preparation' in setup:
+        preparation = setup['preparation']
+        _keys(preparation, 'stage army_acknowledged map_player first_drop_rolls first_drop'
+              + (' terrain' if 'terrain' in preparation else ''), 'setup.preparation')
+        _choice(preparation['stage'], ('armies', 'terrain', 'objectives', 'zones', 'first_drop', 'complete'),
+                'setup.preparation.stage')
+        if (not isinstance(preparation['army_acknowledged'], list)
+                or any(type(player) is not int or player not in (1, 2) for player in preparation['army_acknowledged'])
+                or len(preparation['army_acknowledged']) != len(set(preparation['army_acknowledged']))):
+            raise ConfigError('setup.preparation.army_acknowledged: expected unique player numbers')
+        _number(preparation['map_player'], 'setup.preparation.map_player', 1, 2, integer=True)
+        if not isinstance(preparation['first_drop_rolls'], list):
+            raise ConfigError('setup.preparation.first_drop_rolls: expected a list')
+        winner = None
+        for pair in preparation['first_drop_rolls']:
+            if winner is not None or not isinstance(pair, list) or len(pair) != 2:
+                raise ConfigError('setup.preparation.first_drop_rolls: expected ties then a deciding roll')
+            for value in pair:
+                _number(value, 'setup.preparation.first_drop_rolls', 1, 6, integer=True)
+            if pair[0] != pair[1]:
+                winner = 1 if pair[0] > pair[1] else 2
+        if type(preparation['first_drop']) is bool or preparation['first_drop'] != winner:
+            raise ConfigError('setup.preparation.first_drop: does not match recorded dice')
+        if preparation['stage'] == 'complete' and (winner is None or len(preparation['army_acknowledged']) != 2):
+            raise ConfigError('setup.preparation: complete setup requires both army reports and a first drop')
+        if 'terrain' in preparation:
+            from battle_preparation import validate_terrain_state
+            validate_terrain_state(config, preparation['terrain'])
+            if (preparation['stage'] in ('objectives', 'zones', 'first_drop', 'complete')
+                    and len(preparation['terrain']['placed']) != config['terrain']['feature_count']):
+                raise ConfigError('setup.preparation: terrain placement is incomplete')
+        if preparation['stage'] != 'armies' and len(preparation['army_acknowledged']) != 2:
+            raise ConfigError('setup.preparation: both army reports must be acknowledged')
     return deepcopy(setup)
+
+
+def prepare_new_battle(game, config, seed):
+    """Initialize a new setup without rewriting armies or scaling the visual table."""
+    config = validate_activation(config)
+    if any(getattr(unit, 'isDeployed', False) for unit in game.units):
+        raise ConfigError('Battle March setup must start before any unit is deployed')
+    setup = resolve_setup(config, seed)
+    setup['preparation'] = {'stage': 'armies', 'army_acknowledged': [], 'map_player': 1,
+                            'first_drop_rolls': [], 'first_drop': None}
+    from battle_preparation import new_terrain_state
+    setup['preparation']['terrain'] = new_terrain_state()
+    game.terrain_manager.clear()
+    restore_battle(game, {'config': config, 'setup': setup})
+    return game.battle_setup
 
 
 async def choose_first_turn(game):

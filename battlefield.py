@@ -166,7 +166,8 @@ def draw_battlefield(game):
 
     if settings.get('show_boundary', True):
         line('playable-boundary', battlefield_for(game).outline, (1, 1, 1, 1))
-    if settings.get('show_deployment', True):
+    preparation = (getattr(game, 'battle_setup', None) or {}).get('preparation', {})
+    if settings.get('show_deployment', True) and preparation.get('stage') not in ('armies', 'terrain', 'objectives'):
         for player, color in ((1, (.15, .85, 1, 1)), (2, (1, .35, .25, 1))):
             line(f'deployment-player-{player}', deployment_zone_for(game, player).outline, color)
     return root

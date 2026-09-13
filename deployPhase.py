@@ -492,6 +492,9 @@ def _record_deployment(game, held, scouting):
 
 def refresh_deployment(game):
     """Refresh controls after a placement or reload without rolling again."""
+    from battle_preparation import begin_preparation
+    if begin_preparation(game):
+        return
     if (getattr(game, 'battle_setup', None) or {}).get('first_turn'):
         game.ignore('mouse1')
         if not getattr(game, 'restoringBattle', False):

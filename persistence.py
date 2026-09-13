@@ -192,7 +192,10 @@ def save_game_state(game, filename=None):
     first_turn = (getattr(game, 'battle_setup', None) or {}).get('first_turn', {})
     saving_first_choice = (getattr(game, 'battleMarchSetupBusy', False)
                            and first_turn.get('winner') in (1, 2) and first_turn.get('player') is None)
-    if (getattr(game, 'magicBusy', False) is True and not saving_first_choice
+    preparation = (getattr(game, 'battle_setup', None) or {}).get('preparation')
+    saving_preparation = (getattr(game, 'battleMarchSetupBusy', False) and preparation
+                          and preparation['stage'] != 'complete')
+    if (getattr(game, 'magicBusy', False) is True and not (saving_first_choice or saving_preparation)
             or getattr(game, 'castingSpell', False) is True):
         battle_log('Finish magic resolution before saving a battle.', 'info')
         return None
@@ -847,6 +850,7 @@ def load_game_state(game, filename):
         refresh_deployment(game)
         if (game.roundCounter.current_player == 2 and game.AIplayer2.active
             and game.deploymentStage != 'vanguard'
+            and not getattr(game, 'battleMarchSetupBusy', False)
             and not (getattr(game, 'battle_setup', None) or {}).get('first_turn')):
             game.AIplayer2.deployUnits()
 

@@ -135,7 +135,13 @@ class MyApp(ShowBase):
 
     # ─── Initialization ──────────────────────────────────────────────────────
 
-    def __init__(self):
+    def __init__(self, *, battle_config=None, battle_seed=None):
+        if battle_config is not None:
+            from battle_config import _number, validate_activation
+            battle_config = validate_activation(battle_config)
+            from secrets import randbits
+            battle_seed = randbits(53) if battle_seed is None else battle_seed
+            _number(battle_seed, 'battle_seed', 0, 2 ** 53 - 1, integer=True)
         super().__init__()
         self.setBackgroundColor(0, 0, 0, 1)
 
@@ -245,7 +251,9 @@ class MyApp(ShowBase):
         # ── Terrain ───────────────────────────────────────────────────────
         self.terrain_manager = TerrainManager(self)
         terrain_map = "maps/sample_terrain.json"
-        if os.path.exists(terrain_map):
+        if battle_config is not None:
+            pass
+        elif os.path.exists(terrain_map):
             self.terrain_manager.load_from_json(terrain_map)
         else:
             # Fallback layout if the map file is missing.
@@ -349,7 +357,7 @@ class MyApp(ShowBase):
         # The bar posts an intent; the FSM owns the turn sequence. Bound
         # through a lambda because the FSM is built after the HUD.
         self.accept('hud-end-phase', lambda: self.fsm.nextPhase())
-        self.roundCounter = RoundCounter(self,16)
+        self.roundCounter = RoundCounter(self, battle_config['game']['rounds'] if battle_config else 16)
 
         self.boundries = OutOfBounds(self)
         """ self.AIplayer2 = ClassAI(self, self.player2Units, self.player1Units)
@@ -403,9 +411,14 @@ class MyApp(ShowBase):
         # psychology and the rest do not exist yet.
         self.accept('hud-phase', self.refreshSelectedUnit)
 
+        if battle_config is not None:
+            from battle_setup import prepare_new_battle
+            prepare_new_battle(self, battle_config, battle_seed)
         self.fsm.request("DeployPhase")
 
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
+        if battle_config is not None:
+            self.deploymentLine.hide()
 
         #self.z2= loader.loadModel("models/zup-axis")
         #self.z2.reparentTo(render)
@@ -3317,5 +3330,7 @@ class MyApp(ShowBase):
 # Guarded so the module can be imported to build the scene offscreen and
 # screenshot it, which is the only way to check anything visual here.
 if __name__ == '__main__':
-    app = MyApp()
+    from battle_config import startup_options
+    options = startup_options()
+    app = MyApp(battle_config=options.battle_config, battle_seed=options.battle_seed)
     app.run()

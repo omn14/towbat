@@ -507,3 +507,60 @@ def test_landmark_sight_blocks_circle_not_empty_corners():
     assert model_shot(observer, [target], [], 24, terrain=[piece])[2] == 'no line of sight'
     assert model_can_see((-4, 7, .05, .05, 0), [(7, -4, .05, .05, 0)], terrain=[piece])
     assert not model_can_see((-4, 6.7, .01, .01, 0), [(6.7, -4, .01, .01, 0)], terrain=[piece])
+
+
+def test_activation_rejects_unfinished_optional_handlers():
+    from battle_config import validate_activation
+    config = load_config()
+    assert validate_activation(config) == config
+    config['optional_rules']['secret_objectives'] = True
+    assert validate_config(config) == config
+    with pytest.raises(ConfigError, match='optional_rules.secret_objectives'):
+        validate_activation(config)
+    config['optional_rules']['secret_objectives'] = False
+    config['game']['time_limit_minutes'] = 120
+    with pytest.raises(ConfigError, match='game.time_limit_minutes'):
+        validate_activation(config)
+
+
+def test_preparation_state_requires_recorded_first_drop_and_army_reports():
+    from battle_setup import resolve_setup, validate_setup
+    config = load_config()
+    setup = resolve_setup(config, 12)
+    preparation = {'stage': 'armies', 'army_acknowledged': [], 'map_player': 1,
+                   'first_drop_rolls': [], 'first_drop': None}
+    setup['preparation'] = preparation
+    assert validate_setup(config, setup) == setup
+    preparation.update(stage='complete', army_acknowledged=[1, 2], first_drop=2,
+                       first_drop_rolls=[[3, 3], [1, 5]])
+    assert validate_setup(config, setup) == setup
+    preparation['first_drop'] = 1
+    with pytest.raises(ConfigError, match='first_drop'):
+        validate_setup(config, setup)
+
+
+def test_terrain_preparation_records_validate_pool_ownership_and_rolls():
+    from battle_preparation import new_terrain_state, validate_terrain_state
+    config = load_config()
+    state = new_terrain_state()
+    assert validate_terrain_state(config, state) == state
+    state.update(selections={'1': ['hill'], '2': ['house']}, selection_complete=[1, 2],
+                 rolls=[[1, 1], [2, 6]], winner=2,
+                 placed=[{'type': 'house', 'width': 4, 'height': 4, 'center': [17, -12, 0],
+                          'player': 2, 'pool_index': 1}])
+    assert validate_terrain_state(config, state) == state
+    state['placed'][0]['player'] = 1
+    with pytest.raises(ConfigError, match='player'):
+        validate_terrain_state(config, state)
+
+
+def test_startup_preset_is_explicit_and_validated_before_window_creation():
+    from battle_config import startup_options
+    assert startup_options([]).battle_config is None
+    options = startup_options(['--battle-config', '--battle-seed', '19', '--debug'])
+    assert options.battle_config == load_config()
+    assert options.battle_seed == 19 and options.debug
+    for arguments in (['--battle-seed', '19'], ['--battle-config', '--battle-seed', '-1']):
+        with pytest.raises(SystemExit) as error:
+            startup_options(arguments)
+        assert error.value.code == 2

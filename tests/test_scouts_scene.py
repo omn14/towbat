@@ -416,6 +416,153 @@ def test_battle_march_five_rounds_score_queued_boundaries_once(scene, tmp_path, 
         load_game_state(app, str(baseline))
 
 
+@pytest.mark.parametrize('feature_count', [0, 2])
+def test_battle_march_preparation_deployment_order_and_reload(scene, tmp_path, feature_count):
+    from direct.task import Task
+    from battle_config import load_config
+    from battle_setup import prepare_new_battle, saved_battle
+    from battle_preparation import run_preparation
+    from battle_setup_ui import TerrainPlacement
+    from tests.test_shieldwall_scene import combat_tasks
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    for unit in app.units:
+        unit.isDeployed = False
+    app.deploymentStage = 'ordinary'
+    app.terrain_manager.clear()
+    config = load_config()
+    config['terrain']['feature_count'] = feature_count
+    config['objectives']['layout'] = 'three_troves'
+    prepare_new_battle(app, config, 12)
+    assert not app.terrain_manager.terrain_pieces
+    assert app.battlefield_overlay.find('**/deployment-player-1').isEmpty()
+    positions = iter([[17, -12, 0], [-17, 12, 0]])
+
+    async def place(editor, owner):
+        editor.set_position(editor.position.__class__(*next(positions)))
+        editor.commit()
+        try:
+            return editor.future.result()
+        finally:
+            editor.preview.destroy()
+
+    async def answer(options, position, **kwargs):
+        if options == ['Zone 1', 'Zone 2']:
+            assert save_game_state(app, str(tmp_path / 'setup-pending.json'))
+            return 'Zone 2'
+        return options[0]
+
+    try:
+        with patch.object(app, 'makeChoiceNew', side_effect=answer), patch.object(TerrainPlacement, 'choose', place), \
+                patch('battle_preparation.random.randint', side_effect=[3, 3, 6, 1, 2, 5]), combat_tasks(app) as run:
+            run(run_preparation(app))
+        preparation = app.battle_setup['preparation']
+        assert preparation['stage'] == 'complete'
+        assert preparation['first_drop'] == 2
+        assert preparation['terrain']['winner'] == 1
+        assert len(preparation['terrain']['placed']) == feature_count
+        assert app.roundCounter.current_player == 2
+        expected = saved_battle(app)
+        target = tmp_path / 'setup-complete.json'
+        save_game_state(app, str(target))
+        with patch('battle_preparation.random.randint', side_effect=AssertionError('rerolled setup')):
+            load_game_state(app, str(target))
+        assert saved_battle(app) == expected
+        assert len(app.terrain_manager.terrain_pieces) == feature_count + 3
+        assert app.fsm.state == 'DeployPhase'
+        async def finish_pending():
+            for unused in range(20):
+                await Task.pause(.1)
+                if app.battle_setup['preparation']['stage'] == 'complete':
+                    break
+            assert app.battle_setup['preparation']['stage'] == 'complete'
+
+        with combat_tasks(app) as run, patch.object(app, 'makeChoiceNew', AsyncMock(return_value='Zone 1')), \
+                patch('battle_preparation.random.randint', side_effect=[2, 5]):
+            load_game_state(app, str(tmp_path / 'setup-pending.json'))
+            run(finish_pending())
+        assert app.battle_setup['player_zones'] == {'1': 2, '2': 1}
+        assert app.battle_setup['preparation']['terrain'] == preparation['terrain']
+    finally:
+        app.battleMarchSetupBusy = False
+        app.magicBusy = False
+        load_game_state(app, str(baseline))
+
+
+def test_terrain_placement_controls_render_and_cancel(scene):
+    from direct.task import Task
+    from panda3d.core import PNMImage
+    from battle_setup_ui import TerrainPlacement
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    from tests.test_shieldwall_scene import combat_tasks
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    editor = TerrainPlacement(app, {'type': 'house', 'width': 4, 'height': 4}, [], 1)
+    results = []
+
+    async def choose():
+        results.append(await editor.choose(app.player1Units[0]))
+
+    async def controls():
+        for unused in range(20):
+            await Task.pause(.1)
+            if editor.panel is not None:
+                break
+        assert editor.panel is not None
+        editor.width_entry.enterText('5')
+        editor.height_entry.enterText('3')
+        editor.apply_size()
+        assert editor.specification['width'] == 5
+        app.eventMgr.doEvents()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert app.win.getScreenshot(image)
+        assert image.write(str(ROOT / '.pytest_cache' / 'battle_march_terrain_controls.png'))
+        editor.cancel()
+        await Task.pause(.1)
+        assert results == [None]
+        assert not app.taskMgr.hasTaskNamed('battleMarchTerrainPreview')
+
+    try:
+        with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=False):
+            app.taskMgr.add(choose(), 'testTerrainChoice')
+            run(controls())
+    finally:
+        load_game_state(app, str(baseline))
+
+
+def test_terrain_placement_preview_rejects_centre_and_accepts_legal_footprint(scene):
+    from panda3d.core import Point3
+    from battle_setup_ui import TerrainPlacement
+    from battle_config import load_config
+    from battle_setup import resolve_setup, restore_battle
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    config = load_config()
+    restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    editor = TerrainPlacement(app, {'type': 'house', 'width': 4, 'height': 4}, [], 1)
+    try:
+        editor.commit()
+        assert not editor.future.done()
+        assert editor.report['errors']
+        from battle_config import ConfigError
+        with pytest.raises(ConfigError):
+            editor.resize(float('nan'), 4)
+        editor.resize(5, 3)
+        assert editor.preview.width == 5 and editor.preview.height == 3
+        assert not editor.set_position(Point3(17, -12, 0))['errors']
+        editor.commit()
+        assert editor.future.done()
+        assert editor.future.result()['center'] == [17, -12, 0]
+        assert editor.preview.ghost_np is None
+    finally:
+        editor.preview.destroy()
+        load_game_state(app, str(baseline))
+
+
 @pytest.mark.parametrize('layout', ['three_troves', 'landmark'])
 def test_objective_markers_and_hud_render_both_orientations(scene, layout):
     from panda3d.core import OrthographicLens, PNMImage
