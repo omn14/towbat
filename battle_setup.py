@@ -76,7 +76,25 @@ def validate_setup(config, setup):
         raise ConfigError('setup.mirror: does not match the saved configuration')
     if 'first_turn' in setup:
         record = setup['first_turn']
-        _keys(record, 'rolls winner player', 'setup.first_turn')
+        _keys(record, 'rolls winner player' + (' glass' if 'glass' in record else ''), 'setup.first_turn')
+        bonus = [0, 0]
+        if 'glass' in record:
+            from battle_preparation import roll_winner
+            glass = record['glass']
+            _keys(glass, 'players rolls winner', 'setup.first_turn.glass')
+            if glass['players'] not in ([], [1], [2], [1, 2]) or any(type(player) is not int for player in glass['players']):
+                raise ConfigError('setup.first_turn.glass.players: invalid owners')
+            if glass['players'] and not config['optional_rules']['battle_march_magic_items']:
+                raise ConfigError('setup.first_turn.glass: Battle March items are disabled')
+            authentic = roll_winner(glass['rolls'])
+            if len(glass['players']) < 2:
+                if glass['rolls']:
+                    raise ConfigError('setup.first_turn.glass: authenticity only rolls for two owners')
+                authentic = next(iter(glass['players']), None)
+            if glass['winner'] != authentic or isinstance(glass['winner'], bool) or (glass['players'] and authentic is None):
+                raise ConfigError('setup.first_turn.glass.winner: does not match authenticity dice')
+            if authentic is not None:
+                bonus[authentic - 1] = 1
         if not isinstance(record['rolls'], list):
             raise ConfigError('setup.first_turn.rolls: expected a list')
         winner = None
@@ -85,8 +103,9 @@ def validate_setup(config, setup):
                 raise ConfigError('setup.first_turn.rolls: expected ties followed by one deciding roll')
             for value in pair:
                 _number(value, 'setup.first_turn.rolls', 1, 6, integer=True)
-            if pair[0] != pair[1]:
-                winner = 1 if pair[0] > pair[1] else 2
+            totals = [pair[index] + bonus[index] for index in range(2)]
+            if totals[0] != totals[1]:
+                winner = 1 if totals[0] > totals[1] else 2
         if record['winner'] != winner or isinstance(record['winner'], bool):
             raise ConfigError('setup.first_turn.winner: does not match recorded dice')
         if record['player'] is not None:
@@ -144,6 +163,32 @@ def prepare_new_battle(game, config, seed):
     return game.battle_setup
 
 
+def first_turn_glass(game):
+    """Only one authentic General's Ranger's Glass adds +1 (Companion p. 48)."""
+    from characters import side_of
+    from magic_items import EffectKind, effects_for, report_inactive_effects
+    from battle_preparation import roll_off
+    from rules_log import rule_log, rule_skipped
+    players = []
+    if game.battle_config['optional_rules']['battle_march_magic_items']:
+        for unit in game.units:
+            entries = effects_for(unit, EffectKind.FIRST_TURN)
+            player = side_of(game, unit)
+            if entries and getattr(unit, 'isGeneral', False) and player in (1, 2):
+                players.append(player)
+            elif entries:
+                rule_skipped("The Ranger's Glass", unit, 'bearer is not the General; no first-turn modifier')
+            report_inactive_effects(unit, EffectKind.FIRST_TURN, 'no first-turn modifier')
+    record = {'players': sorted(set(players)), 'rolls': [], 'winner': None}
+    if len(record['players']) == 2:
+        record['winner'] = roll_off(record['rolls'], "Ranger's Glass authenticity")
+        rule_log("The Ranger's Glass", 'setup', f'Player {record["winner"]} has the authentic item; '
+                 f'Player {3 - record["winner"]} has a worthless copy with no +1 bonus')
+    elif players:
+        record['winner'] = players[0]
+    return record
+
+
 async def choose_first_turn(game):
     """Separate roll-off; the winner chooses first or second (Companion p. 27)."""
     from panda3d.core import Point3
@@ -152,16 +197,23 @@ async def choose_first_turn(game):
     game.magicBusy = True
     try:
         record = game.battle_setup.setdefault('first_turn', {'rolls': [], 'winner': None, 'player': None})
+        if 'glass' not in record and not record['rolls']:
+            record['glass'] = first_turn_glass(game)
+        authentic = record.get('glass', {}).get('winner')
         while record['winner'] is None:
             pair = [random.randint(1, 6), random.randint(1, 6)]
             record['rolls'].append(pair)
             dice_roll(pair)
-            if pair[0] == pair[1]:
-                rule_log('Battle March first turn', 'setup', f'P1={pair[0]}, P2={pair[1]} tied; reroll')
+            totals = [pair[index] + (1 if authentic == index + 1 else 0) for index in range(2)]
+            if authentic is not None:
+                rule_log("The Ranger's Glass", 'setup', f'Player {authentic} first-turn die '
+                         f'{pair[authentic - 1]} +1 -> {totals[authentic - 1]}')
+            if totals[0] == totals[1]:
+                rule_log('Battle March first turn', 'setup', f'P1={totals[0]}, P2={totals[1]} tied; reroll')
             else:
-                record['winner'] = 1 if pair[0] > pair[1] else 2
+                record['winner'] = 1 if totals[0] > totals[1] else 2
                 rule_log('Battle March first turn', 'setup',
-                         f'P1={pair[0]}, P2={pair[1]} -> Player {record["winner"]} chooses; no first-finished bonus')
+                         f'P1={totals[0]}, P2={totals[1]} -> Player {record["winner"]} chooses; no first-finished bonus')
         if record['player'] is None:
             winner = record['winner']
             units = game.player1Units if winner == 1 else game.player2Units

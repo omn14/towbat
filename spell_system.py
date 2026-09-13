@@ -261,15 +261,17 @@ class Spell:
         modifier = 0 if skipped else resistance
         from high_magic import drained_casting_value
         required = drained_casting_value(self)
+        from magic_items import magic_roll_bonus
+        item_bonus = 0 if self.bound else await magic_roll_bonus(self.game, self.caster, 'Casting')
         total, values = await self._roll_casting_dice()
         outcome, result = casting_outcome(values, self.wizard_level,
-                  required, modifier,
+              required, modifier + item_bonus,
                           bound=self.bound, power_level=self.power_level)
         from lileaths_blessing import reroll_casting
         values = await reroll_casting(self, values, outcome, result)
         total = sum(values)
         outcome, result = casting_outcome(values, self.wizard_level,
-                  required, modifier,
+                  required, modifier + item_bonus,
                   bound=self.bound, power_level=self.power_level)
         self.casting = result
         self.perfect = outcome == CAST_PERFECT
@@ -277,6 +279,11 @@ class Spell:
         bonus = self.power_level if self.bound else casting_result(0, self.wizard_level)
         kind = f'Bound Power Level {bonus}' if self.bound else f'Level {self.wizard_level}'
         penalty = f" {modifier:+d} (Magic Resistance)" if modifier else ''
+        if item_bonus:
+            penalty += f' +{item_bonus} (Wyrdstone Shard)'
+            report = rule_skipped if outcome in (CAST_PERFECT, CAST_MISCAST) else rule_log
+            report('Wyrdstone Shard', self.caster, f'dice {values}, +{item_bonus}: casting result {result} '
+                   f'vs {required}+ -> {outcome}; natural double 1/6 overrides modifiers')
         print(f"{self.name}: casting roll {values} = {total} "
               f"+ {bonus} ({kind}){penalty} = {result} "
               f"vs {required}+ -> {outcome}")
@@ -291,7 +298,7 @@ class Spell:
             else:
                 rule_log('Magic Resistance', unit,
                          f'{resistance} from {source} (strongest, not cumulative): '
-                         f'{self.name}, dice {total} + bonus {bonus} {modifier:+d} '
+                         f'{self.name}, dice {total} + bonus {bonus} + item {item_bonus} {modifier:+d} '
                          f'= {result} vs {required}+ -> {outcome} (pp. 108, 173)')
         if self.bound:
             rule_log('Bound Spells', self.caster or unit,

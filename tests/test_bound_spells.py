@@ -36,6 +36,7 @@ def carrier(spells=None, level=0):
 
 def app_stub(unit, phase='shooting'):
     game = Mock()
+    game.battle_config = None
     game.magicBusy = False
     game.assailmentWindow = None
     game.castingSpell = False

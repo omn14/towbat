@@ -115,6 +115,24 @@ def live_member(name='Bearer', count=1):
     return bearer
 
 
+@pytest.mark.parametrize('status', ['general', 'ordinary', 'disabled', 'option_off'])
+def test_rangers_glass_requires_enabled_owned_general_item(status):
+    from battle_config import load_config
+    from battle_setup import first_turn_glass
+    config = load_config()
+    config['optional_rules']['battle_march_magic_items'] = status != 'option_off'
+    bearer = live_member('General')
+    bearer.isGeneral = status != 'ordinary'
+    item = install_inventory(bearer, [dict(source(), name="The Ranger's Glass", category='Enchanted Items')])[0]
+    if status == 'disabled':
+        item.disabled_reason = 'Destroyed by Vaul'
+    game = SimpleNamespace(units=[bearer], player1Units=[], player2Units=[bearer], battle_config=config)
+    bearer.game = game
+    record = first_turn_glass(game)
+    assert record == {'players': [2] if status == 'general' else [], 'rolls': [],
+                      'winner': 2 if status == 'general' else None}
+
+
 def test_spent_ability_keeps_passive_effect_without_mutating_baseline(registry):
     from copy import deepcopy
     from magic_items import activate_ability, active_effects, disable_item

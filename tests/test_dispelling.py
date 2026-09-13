@@ -112,3 +112,20 @@ def test_fated_double_one_does_not_roll_miscast_table():
         assert not asyncio.run(attempt(game, spell, caster))
     assert dice.await_count == 1
     damage.assert_not_called()
+
+
+def test_wyrdstone_shard_turns_dispel_tie_into_success_once():
+    from magic_items import install_inventory
+    game, caster, defender, spell = dispel_case(wizard=True, ai=True)
+    game.units = [caster, defender]
+    defender.game = game
+    defender.unit.roster_metadata = {'roster_selections': [{'ref': 'owner', 'type': 'unit'}]}
+    item = install_inventory(defender, [{'name': 'Wyrdstone Shard', 'category': 'Arcane Items',
+                                       'selection_ref': 'owner/shard', 'owner_ref': 'owner'}])[0]
+    async def roll(*args, **kwargs):
+        assert item.uses['shard']['count'] == 1
+        return 7, [3, 4]
+    with patch.object(Spell, '_roll_casting_dice', side_effect=roll):
+        assert asyncio.run(attempt(game, spell, caster))
+        assert not asyncio.run(attempt(game, spell, caster))
+    assert item.uses['shard']['count'] == 1

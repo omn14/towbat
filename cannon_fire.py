@@ -203,16 +203,18 @@ class CannonFire:
         target = wound_target(strength, toughness)
         wounded = saved = casualties = 0
         ward_rolls = []
-        from magic_items import item_armour_save
+        armour_modifiers = []
+        from magic_items import item_armour_save, report_ap_armour
         save = item_armour_save(model, model.armor_save, log=hits > 0)
         for _ in range(hits):
             if random.randint(1, 6) < target:
                 continue  # failed to wound
             wounded += 1
-            if check_saves(model, save, ap, ward_rolls=ward_rolls):
+            if check_saves(model, save, ap, ward_rolls=ward_rolls, armour_modifiers=armour_modifiers):
                 saved += 1
             else:
                 casualties += 1
+        report_ap_armour(model, armour_modifiers)
         report_ward_saves(unit.unit, wounded, ward_rolls)
         present = len(unit.model.getChildren())
         return min(casualties, present), wounded, saved

@@ -2903,6 +2903,15 @@ class CombatResolver:
                     rule_log('Stand & Shoot', u,
                              f"{banked} unsaved wound(s) from the charge "
                              f"reaction count towards this combat (p. 151)")
+        from magic_items import combat_result_bonus
+        scores = [player1_score, player2_score]
+        renown = [0, 0]
+        active = self.game.roundCounter.current_player
+        for player in (active, 3 - active):
+            renown[player - 1] = await combat_result_bonus(
+                self.game, p1_units if player == 1 else p2_units, scores[player - 1], scores[2 - player])
+            scores[player - 1] += renown[player - 1]
+        player1_score, player2_score = scores
         music1, music2 = musician_bonus(p1_units, p2_units, player1_score, player2_score, log=True)
         player1_score += music1
         player2_score += music2
@@ -2916,6 +2925,7 @@ class CombatResolver:
              'Close Order': (close1, close2),
              'Battle Standard': (player1_standard, player2_standard),
              'Standard Bearer': (ordinary1, ordinary2),
+             'Banner of Renown': tuple(renown),
              'Musician': (music1, music2),
              'Massed Infantry': (player1_massed, player2_massed)},
             (player1_score, player2_score), (p1_us, p2_us))

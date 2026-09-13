@@ -10,6 +10,44 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Battle March Magic Items, First Ten: 2026-09-13
+
+General's Companion pp. 46-48. Existing Helm of Courage and Banner of the Bold
+are joined by eight owned effects. Ranger's Glass saves the two-General
+authenticity roll-off and raw first-turn dice, applies the authentic General's
++1, and resumes the pending first/second choice without rerolling. Warding
+Talisman supplies a bearer-only 6+ Ward without replacing a better native Ward.
+Padded Hauberk supplies heavy armour and the AP-zero improvement, capped at 2+;
+the shared melee, magic, Impact Hit, cannon and bombardment save paths report
+the actual modified targets without modifying Regeneration.
+
+Wyrdstone Shard offers a shared single use before ordinary casting or Wizardly
+dispel dice, retaining its bonus through casting rerolls and respecting natural
+miscast/perfect overrides. Banner of Renown offers its single-use point before
+musician tie-breaks, active player first, with a separate combat-result row.
+Diestro's Blade supplies magical AP -1 and Initiative +1, capped at 10.
+Skirmisher's Blade supplies magical AP -1, Extra Attacks (+1), and a single
+failed-wound reroll against the engaged enemy's flank/rear. Thornspitter Stave
+supplies both its S+1 melee and 24-inch S4 Ponderous ranged profiles, with
+Armour Bane (1) and Magical Attacks. Derived weapon profiles share the purchased
+item's ownership, restore equipped mode and disappear together on suppression.
+
+Corrections during verification: Bound-spell fixtures must explicitly declare
+standard-mode configuration instead of synthesizing a Mock config; a dispel
+report indentation error was repaired before integration. New sources do not
+alter saved base characteristics or spend an ability when its choice is declined.
+Validation: 24 selected-item, 17 inventory, 57 weapon, 9 command-scene,
+109 config, 5 first-turn scene, 8 dispelling, 8 Lileath, 20 bound-spell,
+23 Killing Blow, 41 faction, 22 armour and 29 Impact Hit cases pass in isolated
+bounded processes. Pylance confirms all 21 shared-save and 4 bombardment callers
+remain compatible. The shared combat-weapon scene could not start: available
+memory was below its 512 MiB cap plus 256 MiB headroom. No guard was bypassed.
+LEFTOVER: remaining ten items, uniform Battle March-only muster validation,
+full item-module activation, additional live weapon save/reload cases and the
+blocked scene regression. Random-table items depend on pending happenings.
+This is a partial item milestone, not completion of optional modules or stage 7;
+no full-suite success is claimed. Paused HUD work remains excluded.
+
 ## Battle March Baggage Carts: 2026-09-13
 
 General's Companion pp. 36-37. Enable `baggage_carts` in the secondary objectives

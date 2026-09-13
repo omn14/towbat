@@ -21,6 +21,14 @@ class EffectKind(StrEnum):
     RULE = 'rule_grant'
     SPELLS = 'extra_known_spells'
     REROLL = 'reroll'
+    FIRST_TURN = 'first_turn_modifier'
+    WARD = 'ward_save'
+    BODY_ARMOUR = 'body_armour'
+    AP_ZERO_ARMOUR = 'ap_zero_armour'
+    MAGIC_ROLL = 'magic_roll_modifier'
+    COMBAT_RESULT = 'combat_result'
+    WEAPON = 'weapon_profile'
+    INITIATIVE = 'initiative_modifier'
 
 
 class Scope(StrEnum):
@@ -111,7 +119,55 @@ REGISTRY = ItemRegistry((
                    "Battle March: General's Companion p. 47; FAQ v1.5.3 Characters",
                    effects=(ItemEffect('veteran', EffectKind.RULE, 'Veteran', Scope.UNIT_AND_JOINED),),
                    aliases=('Banner of the Bold',)),
+    ItemDefinition('rangers_glass', "The Ranger's Glass", 'Enchanted Items',
+                   "Battle March: General's Companion p. 48",
+                   effects=(ItemEffect('first_turn', EffectKind.FIRST_TURN, 1),),
+                   aliases=("Ranger's Glass",)),
+    ItemDefinition('warding_talisman', 'The Warding Talisman', 'Talismans',
+                   "Battle March: General's Companion p. 47",
+                   effects=(ItemEffect('ward', EffectKind.WARD, 6),),
+                   aliases=('Warding Talisman',)),
+    ItemDefinition('padded_hauberk', 'Padded Hauberk', 'Magic Armour',
+                   "Battle March: General's Companion p. 47",
+                   effects=(ItemEffect('heavy_armour', EffectKind.BODY_ARMOUR, 5),
+                            ItemEffect('padding', EffectKind.AP_ZERO_ARMOUR, 1))),
+    ItemDefinition('wyrdstone_shard', 'Wyrdstone Shard', 'Arcane Items',
+                   "Battle March: General's Companion p. 48",
+                   effects=(ItemEffect('magic_roll', EffectKind.MAGIC_ROLL, 1, ability='shard'),),
+                   abilities=(ItemAbility('shard', 'Magic roll'),)),
+    ItemDefinition('banner_of_renown', 'Banner of Renown', 'Magic Standards',
+                   "Battle March: General's Companion p. 47",
+                   effects=(ItemEffect('combat_result', EffectKind.COMBAT_RESULT, 1, Scope.UNIT, 'renown'),),
+                   abilities=(ItemAbility('renown', 'Combat result'),)),
+    ItemDefinition('diestros_blade', "Diestro's Blade", 'Magic Weapons',
+                   "Battle March: General's Companion p. 46",
+                   effects=(ItemEffect('blade', EffectKind.WEAPON, 'diestros_blade'),
+                            ItemEffect('quickness', EffectKind.INITIATIVE, 1))),
+    ItemDefinition('skirmishers_blade', "Skirmisher's Blade", 'Magic Weapons',
+                   "Battle March: General's Companion p. 46",
+                   effects=(ItemEffect('blade', EffectKind.WEAPON, 'skirmishers_blade'),)),
+    ItemDefinition('thornspitter_stave', 'Thornspitter Stave', 'Magic Weapons',
+                   "Battle March: General's Companion p. 46",
+                   effects=(ItemEffect('combat', EffectKind.WEAPON, 'thornspitter_combat'),
+                            ItemEffect('ranged', EffectKind.WEAPON, 'thornspitter_ranged'))),
 ))
+
+
+ITEM_WEAPONS = {
+    'diestros_blade': {'name': "Diestro's Blade", 'tag': 'combat', 'strength_bonus': 0,
+                      'ap_penetration': 1, 'magical': True, 'magic_item': True,
+                      'special_rules': ['Magical Attacks']},
+    'skirmishers_blade': {'name': "Skirmisher's Blade", 'tag': 'combat', 'strength_bonus': 0,
+                         'ap_penetration': 1, 'magical': True, 'magic_item': True, 'extra_attacks': 1,
+                         'wound_reroll_flank': True, 'special_rules': ['Magical Attacks', 'Extra Attacks (+1)']},
+    'thornspitter_combat': {'name': 'Thornspitter Stave', 'tag': 'combat', 'strength_bonus': 1,
+                           'ap_penetration': 0, 'magical': True, 'magic_item': True,
+                           'special_rules': ['Armour Bane (1)', 'Magical Attacks']},
+    'thornspitter_ranged': {'name': 'Thornspitter Stave (ranged)', 'tag': 'ranged', 'ranged_range': 24,
+                          'ranged_strength': 4, 'ranged_AP': 0, 'ranged_shots': 1, 'ponderous': True,
+                          'magical': True, 'magic_item': True,
+                          'special_rules': ['Armour Bane (1)', 'Magical Attacks', 'Ponderous']},
+}
 
 
 @dataclass
@@ -198,6 +254,39 @@ def bind_inventory(member):
             profiles.append(part)
     for profile in profiles:
         profile._magic_item_member = reference
+    refresh_item_weapons(member, profiles)
+
+
+def refresh_item_weapons(member, profiles):
+    """Owned weapon profiles are derived from live inventory, not roster prose (p. 46)."""
+    for profile in profiles:
+        equipped = profile.equipedWeapon
+        owned_equipped = bool(equipped and equipped.get('item_source'))
+        profile.weapons = {name: weapon for name, weapon in profile.weapons.items() if not weapon.get('item_source')}
+        for item in inventory(member):
+            definition = REGISTRY.resolve(item.source)
+            bearer = resolve_bearer(member, item)
+            if definition is None or bearer is None or bearer.profile is not profile:
+                continue
+            for effect in definition.effects:
+                if effect.kind != EffectKind.WEAPON:
+                    continue
+                weapon = deepcopy(ITEM_WEAPONS[effect.value])
+                slot = profile.weapon_slot(weapon['name'])
+                if slot is not None:
+                    if profile.weapons[slot] is equipped:
+                        owned_equipped = True
+                    del profile.weapons[slot]
+                if bearer_unavailable(member, item, allow_retired=True):
+                    continue
+                weapon['item_source'] = item.instance_id
+                profile.weapons[weapon['name']] = weapon
+        if owned_equipped:
+            slot = profile.weapon_slot(equipped['name']) or profile.weapon_slot('Hand Weapon')
+            profile.special_rules = [rule for rule in profile.special_rules if rule is not equipped]
+            profile.equipedWeapon = profile.weapons.get(slot)
+            if profile.equipedWeapon is not None:
+                profile.special_rules.append(profile.equipedWeapon)
 
 
 def item_armour_save(profile, base_save, *, log=False):
@@ -206,9 +295,18 @@ def item_armour_save(profile, base_save, *, log=False):
     member = reference() if callable(reference) else None
     if member is None:
         return base_save
+    body_armour = effects_for(member, EffectKind.BODY_ARMOUR, profile=profile)
+    original = base_save
+    if body_armour:
+        from models import ARMOUR_MODIFIERS
+        modifiers = sum(str(piece).strip().casefold() in ARMOUR_MODIFIERS for piece in profile.armour)
+        base_save = max(2, min(int(entry.effect.value) for entry in body_armour) - modifiers)
     effects = effects_for(member, EffectKind.ARMOUR, profile=profile)
     result = max(2, base_save - sum(int(entry.effect.value) for entry in effects)) if effects else base_save
     if log:
+        for entry in body_armour:
+            rule_log(entry.item.name, member, f'{profile.name}: body armour {entry.effect.value}+, '
+                     f'with equipment modifiers {original}+ -> {base_save}+ before AP')
         report_inactive_effects(member, EffectKind.ARMOUR, f'armour remains {base_save}+ before AP', profile=profile)
         for entry in effects:
             if result != base_save:
@@ -218,6 +316,30 @@ def item_armour_save(profile, base_save, *, log=False):
             else:
                 rule_skipped(entry.item.name, member, f'{profile.name}: armour already at the 2+ limit before AP')
     return result
+
+
+def item_ap_armour_save(profile, save, penetration, permitted, history=None):
+    """Padded Hauberk improves only AP '-' saves, capped at 2+ (Companion p. 47)."""
+    entries = profile_effects(profile, EffectKind.AP_ZERO_ARMOUR)
+    result = max(2, save - max((int(entry.effect.value) for entry in entries), default=0)) if entries and permitted and penetration == 0 else save
+    if history is not None:
+        history.extend((entry, save, result, penetration, permitted) for entry in entries)
+    return result
+
+
+def report_ap_armour(profile, history):
+    from collections import Counter
+    groups = Counter((entry.item.instance_id, before, after, penetration, permitted)
+                     for entry, before, after, penetration, permitted in history)
+    entries = {entry.item.instance_id: entry for entry, *_ in history}
+    for (identity, before, after, penetration, permitted), count in groups.items():
+        entry = entries[identity]
+        if before != after:
+            rule_log(entry.item.name, entry.bearer.carrier,
+                     f'{count} wound(s) at AP 0: armour {before}+ -> {after}+ (maximum 2+)')
+        else:
+            reason = 'armour saves prohibited' if not permitted else f'AP -{penetration}' if penetration else 'already at 2+'
+            rule_skipped(entry.item.name, entry.bearer.carrier, f'{count} wound(s): no padding improvement; {reason}')
 
 
 async def reroll_break_test(game, unit, dice, ld, diff, overwhelm, roll_dice, bsb=None):
@@ -435,6 +557,12 @@ def effects_for(member, kind, *, value=None, profile=None, context=None):
             if entry.effect.kind == kind and (value is None or entry.effect.value == value)]
 
 
+def profile_effects(profile, kind):
+    reference = getattr(profile, '_magic_item_member', None)
+    member = reference() if callable(reference) else None
+    return effects_for(member, kind, profile=profile) if member is not None else []
+
+
 def report_inactive_effects(member, kind, detail, *, value=None, profile=None, context=None):
     """Explain inactive nearby purchases only at an outcome, never from a query."""
     active = {entry.item.instance_id for entry in effects_for(member, kind, value=value,
@@ -500,6 +628,54 @@ def activate_ability(game, member, item, ability_key, context, *, confirmed, rec
     return spent
 
 
+async def combat_result_bonus(game, units, own_score, enemy_score):
+    """Optional Banner of Renown before the musician tie-break (Companion p. 47)."""
+    from panda3d.core import Vec3
+    bonus = 0
+    seen = set()
+    for unit in units:
+        entries = effects_for(unit, EffectKind.COMBAT_RESULT, context='Combat result')
+        report_inactive_effects(unit, EffectKind.COMBAT_RESULT, 'no combat-result bonus', context='Combat result')
+        for entry in entries:
+            if entry.item.instance_id in seen:
+                continue
+            seen.add(entry.item.instance_id)
+            use = own_score + bonus <= enemy_score
+            if not game.aiControls(unit):
+                answer = await game.makeChoiceNew(['Raise banner', 'Keep banner'], Vec3(0, 0, 10), owner=unit,
+                                                  prompt=f'{unit.unit.name}: Banner of Renown?',
+                                                  detail=f'Combat result {own_score + bonus} vs {enemy_score}; single-use +1')
+                use = answer == 'Raise banner'
+            if activate_ability(game, entry.bearer.carrier, entry.item, 'renown', 'Combat result',
+                                confirmed=use, recipient=unit):
+                before = own_score + bonus
+                bonus += int(entry.effect.value)
+                rule_log(entry.item.name, unit, f'combat result {before} -> {own_score + bonus} vs {enemy_score}; '
+                         'single-use +1, before musician tie-break')
+    return bonus
+
+
+async def magic_roll_bonus(game, member, kind):
+    """Declare the Shard before casting/dispelling dice, once total (Companion p. 48)."""
+    if game is None or member is None:
+        return 0
+    from panda3d.core import Vec3
+    entries = effects_for(member, EffectKind.MAGIC_ROLL, context='Magic roll')
+    report_inactive_effects(member, EffectKind.MAGIC_ROLL, f'no {kind} modifier', context='Magic roll')
+    bonus = 0
+    for entry in entries:
+        use = game.aiControls(member)
+        if not use:
+            answer = await game.makeChoiceNew(['Use shard', 'Keep shard'], Vec3(0, 0, 10), owner=member,
+                                              prompt=f'{member.unit.name}: Wyrdstone Shard?',
+                                              detail=f'+1 to this {kind} roll; single use, declared before rolling')
+            use = answer == 'Use shard'
+        if activate_ability(game, member, entry.item, 'shard', 'Magic roll', confirmed=use):
+            bonus += int(entry.effect.value)
+            rule_log(entry.item.name, member, f'declared before {kind} dice; +1 to this roll, shared casting/dispel use spent')
+    return bonus
+
+
 def item_spell_available(member, spell):
     """An unmade item cannot supply a Bound spell (Forces of Fantasy p. 186)."""
     if not spell.get('bound'):
@@ -534,6 +710,7 @@ def disable_item(member, item, reason, *, destroyed=False):
             bind_generated_spells(member, ordinary)
     item.disabled_reason = reason
     item.destroyed = destroyed
+    bind_inventory(member)
     for key, record in list(profile.spells.items()):
         if record.get('granted_by_item') == item.instance_id:
             del profile.spells[key]

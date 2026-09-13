@@ -701,3 +701,20 @@ def test_baggage_saved_state_rejects_inconsistent_cart_records(corruption):
         config['optional_rules']['secondary_objectives'] = []
     with pytest.raises(ConfigError):
         validate_state(config, state, [])
+
+
+def test_rangers_glass_authenticity_and_modified_rolls_validate():
+    from battle_setup import resolve_setup, validate_setup
+    config = load_config()
+    config['optional_rules']['battle_march_magic_items'] = True
+    setup = resolve_setup(config, 12)
+    setup['first_turn'] = {'glass': {'players': [1, 2], 'rolls': [[3, 3], [5, 2]], 'winner': 1},
+                           'rolls': [[2, 3], [4, 4]], 'winner': 1, 'player': 2}
+    assert validate_setup(config, setup) == setup
+    setup['first_turn']['glass']['winner'] = 2
+    with pytest.raises(ConfigError, match='authenticity'):
+        validate_setup(config, setup)
+    setup['first_turn']['glass']['winner'] = 1
+    setup['first_turn']['winner'] = 2
+    with pytest.raises(ConfigError, match='recorded dice'):
+        validate_setup(config, setup)

@@ -23,6 +23,10 @@ def weapon_target(profile, fighter, target):
     previous = getattr(profile, '_charged_target', missing)
     profile._charged_target = qualifies
     weapon = profile.equipedWeapon or {}
+    previous_flank = getattr(profile, '_weapon_wound_reroll', missing)
+    profile._weapon_wound_reroll = bool(weapon.get('wound_reroll_flank') and any(
+        combat_host(foe) is host and arc in ('flank', 'rear')
+        for foe, arc in zip(getattr(enemy, 'isInCombatWith', []), getattr(enemy, 'isInCombatFlank', []))))
     try:
         if charged and (weapon.get('charge_only') or weapon.get('ap_penetration_charge') is not None):
             profile.charging = charged
@@ -38,6 +42,10 @@ def weapon_target(profile, fighter, target):
             del profile._charged_target
         else:
             profile._charged_target = previous
+        if previous_flank is missing:
+            del profile._weapon_wound_reroll
+        else:
+            profile._weapon_wound_reroll = previous_flank
 
 
 def available_weapons(profile, charged):

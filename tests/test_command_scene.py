@@ -165,7 +165,8 @@ def test_skycutter_bows_fire_as_three_crew_not_one_hull(scene):
     assert shooting_unit.model.firing_bs() == 4
 
 
-def test_final_combat_tie_includes_stand_and_shoot_before_musician(scene):
+@pytest.mark.parametrize('renown', [False, True])
+def test_final_combat_tie_includes_stand_and_shoot_before_musician(scene, renown):
     app, baseline = scene
     load_game_state(app, baseline)
     knights, skycutter = app.player1Units[0], app.player2Units[0]
@@ -173,6 +174,10 @@ def test_final_combat_tie_includes_stand_and_shoot_before_musician(scene):
     skycutter.isInCombatWith = [knights]
     knights.isInCombatFlank = skycutter.isInCombatFlank = ['front']
     skycutter.standAndShootWounds = 1
+    if renown:
+        from magic_items import install_inventory
+        install_inventory(knights, [{'name': 'Banner of Renown', 'category': 'Magic Standards',
+                                    'selection_ref': 'knights/banner', 'owner_ref': 'knights/standard'}])
     app.unitToMove = knights
     table = []
 
@@ -200,7 +205,8 @@ def test_final_combat_tie_includes_stand_and_shoot_before_musician(scene):
     rows, scores = table[0]
     assert rows['Standard Bearer'] == (1, 0)
     assert rows['Stand & Shoot'] == (0, 1)
-    assert rows['Musician'] == (1, 0)
+    assert rows['Banner of Renown'] == ((1, 0) if renown else (0, 0))
+    assert rows['Musician'] == ((0, 0) if renown else (1, 0))
     assert scores == (2, 1)
 
 

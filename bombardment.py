@@ -188,20 +188,24 @@ class Bombardment:
                 total_hit += len(children)
                 continue
             model = enemy.unit.model
-            from magic_items import item_armour_save
+            from magic_items import item_armour_save, report_ap_armour
             item_armour_save(model, model.armor_save, log=True)
             cas = 0
             ward_rolls = []
+            armour_modifiers = []
             for child in children:
                 total_hit += 1
                 if enemy is central_enemy and child is central_child:
-                    if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls, magical=magical):
+                    if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls,
+                                           magical=magical, armour_modifiers=armour_modifiers):
                         wounds = roll_dice_expr(mw) if mw else 1
                         if wounds >= stat_int(model.characteristics, 'W', 1):
                             cas += 1
                 else:
-                    if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls, magical=magical):
+                    if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls,
+                                           magical=magical, armour_modifiers=armour_modifiers):
                         cas += 1
+            report_ap_armour(model, armour_modifiers)
             report_ward_saves(enemy.unit, None, ward_rolls)
             cas = min(cas, len(enemy.model.getChildren()))
             total_cas += cas
@@ -216,7 +220,7 @@ class Bombardment:
         self.game.debugText.setText(summary)
         battle_log(summary, 'good' if total_cas else 'combat')
 
-    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None, magical=False):
+    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None, magical=False, armour_modifiers=None):
         """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141)."""
         from special_rules import is_ethereal
         if is_ethereal(model) and not magical:
@@ -225,7 +229,8 @@ class Bombardment:
         if random.randint(1, 6) < wound_target(strength, toughness):
             return False
         from magic_items import item_armour_save
-        return not check_saves(model, item_armour_save(model, model.armor_save), ap, ward_rolls=ward_rolls)
+        return not check_saves(model, item_armour_save(model, model.armor_save), ap,
+                      ward_rolls=ward_rolls, armour_modifiers=armour_modifiers)
 
     # ─── Visuals ────────────────────────────────────────────────────
 

@@ -92,6 +92,12 @@ one defender's cart or Guard Duty for both players. Each cart deploys as a singl
 miniature. Non-Combatant restrictions, enemy-zone edge escape, literal final
 bonuses, saved ownership and once-only setup are connected. Escaped carts are
 not destroyed and never earn a separate Dead or Fled award.
+Ten of the twenty Battle March items now have runtime effects: the existing Helm
+of Courage and Banner of the Bold, plus Ranger's Glass, Warding Talisman, Padded
+Hauberk, Wyrdstone Shard, Banner of Renown, Diestro's Blade, Skirmisher's Blade and
+Thornspitter Stave. Inventory ownership, suppression and single-use state remain
+the source of those effects. The item-module activation gate stays closed until
+the remaining ten items and muster availability checks are implemented.
 Runtime activation explicitly rejects the agreed time limit and other enabled
 optional modules until their handlers are complete. Standard ordinary
 terrain currently offers hills, woods and impassable buildings. Special features,

@@ -321,7 +321,8 @@ def test_battle_march_first_turn_choice_is_separate_and_saved(scene, tmp_path, w
         load_game_state(app, str(baseline))
 
 
-def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_path):
+@pytest.mark.parametrize('glass', [False, True])
+def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_path, glass):
     import asyncio
     from direct.task import Task
     from battle_config import load_config
@@ -330,7 +331,13 @@ def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_
     app, baseline = scene
     load_game_state(app, str(baseline))
     config = load_config()
+    config['optional_rules']['battle_march_magic_items'] = glass
     restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
+    if glass:
+        from tests.test_magic_item_scene import item_spec
+        for player in (1, 2):
+            general = app._create_unit(item_spec('Mage', "The Ranger's Glass", 'Enchanted Items'), player, f'Glass General {player}')
+            general.isGeneral = True
     pending = tmp_path / 'pending-first-turn.json'
 
     async def save_choice(*args, **kwargs):
@@ -345,7 +352,7 @@ def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_
         assert app.fsm.state == 'StrategyPhase'
 
     try:
-        with patch('battle_setup.random.randint', side_effect=[6, 1]), \
+        with patch('battle_setup.random.randint', side_effect=[2, 2, 6, 1, 4, 5, 3, 3] if glass else [6, 1]), \
                 patch.object(app, 'aiControls', return_value=False), \
                 patch.object(app, 'makeChoiceNew', side_effect=save_choice):
             asyncio.run(choose_first_turn(app))
@@ -357,7 +364,9 @@ def test_battle_march_pending_first_turn_choice_reloads_without_dice(scene, tmp_
             load_game_state(app, str(pending))
             run(finish_pending())
         assert app.roundCounter.current_player == 2
-        assert app.battle_setup['first_turn']['rolls'] == [[6, 1]]
+        assert app.battle_setup['first_turn']['rolls'] == ([[4, 5], [3, 3]] if glass else [[6, 1]])
+        if glass:
+            assert app.battle_setup['first_turn']['glass'] == {'players': [1, 2], 'rolls': [[2, 2], [6, 1]], 'winner': 1}
     finally:
         load_game_state(app, str(baseline))
 

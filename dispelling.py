@@ -99,9 +99,11 @@ async def attempt(game, spell, caster, *, remains=False):
         game.fatedDispelTurns = {**fated, str(side): token}
     if remains:
         spell.dispel_attempt_turn = token
+    from magic_items import magic_roll_bonus
+    item_bonus = await magic_roll_bonus(game, wizard, 'Dispel') if wizard is not None else 0
     total, dice = await Spell._roll_casting_dice(position_base=Vec3(-20, 0, 10))
     level = wizard.unit.model.wizard_level(0) if wizard is not None else 0
-    result = dispel_result(dice, level, wizardly=wizard is not None)
+    result = dispel_result(dice, level, wizardly=wizard is not None) + item_bonus
     stopped = dice == [6, 6] or is_dispelled(result, threshold)
     if dice == [1, 1] and wizard is not None:
         roll, table_dice = await Spell._roll_casting_dice()
@@ -122,6 +124,10 @@ async def attempt(game, spell, caster, *, remains=False):
              f'{spell.name}: {dice} + {result - total} = {result} vs {threshold}; '
              f'{"Unbinding; " if dice == [6, 6] else ""}'
              f'{"dispelled" if stopped else "holds (must exceed)"} (p. 110)')
+    if item_bonus:
+        report = rule_skipped if dice in ([1, 1], [6, 6]) else rule_log
+        report('Wyrdstone Shard', wizard, f'dice {dice}, +{item_bonus}: Dispel result {result} vs {threshold}; '
+               f'{"dispelled" if stopped else "not dispelled"}; natural doubles retain their special outcome')
     return stopped
 
 
