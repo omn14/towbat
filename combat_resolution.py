@@ -3657,6 +3657,8 @@ class CombatResolver:
             return
         from drilled import before_move
         await before_move(self.game, winner, 'pursuit')
+        start_position = Vec3(winner.bodyNP.getPos(self.game.render))
+        quarry_present = not target.bodyNP.isEmpty()
         targetPos = Vec3(destination) if destination is not None else target.bodyNP.getPos()
         rFrom = winner.bodyNP.getHpr()
         winner.bodyNP.lookAt(targetPos)
@@ -3681,6 +3683,28 @@ class CombatResolver:
         finally:
             winner.pursuitQuarry = None
             self.game.autoCharge = self.game.autoHold = False
+        if winner.bodyNP.isEmpty():
+            report = 'pursuer removed during the move'
+        else:
+            displacement = winner.bodyNP.getPos(self.game.render) - start_position
+            displacement.z = 0
+            enemies = [enemy for enemy in winner.isInCombatWith
+                       if not enemy.bodyNP.isEmpty()]
+            if quarry_present and target.bodyNP.isEmpty():
+                result = 'caught and destroyed the quarry'
+            elif winner.isInCombat and target in enemies:
+                result = 'caught the quarry; locked in combat'
+            elif winner.isInCombat and enemies:
+                result = ('contacted ' + ', '.join(enemy.unit.name for enemy in enemies)
+                          + '; quarry not caught')
+            elif not quarry_present:
+                result = 'quarry was already removed'
+            else:
+                result = 'quarry not caught'
+            report = f'advanced {displacement.length():.2f}"; {result}'
+        battle_log(f'Pursuit: {winner.unit.name} toward {target.unit.name}: {report}',
+                   'combat', subject=winner,
+                   details='Advance is the net ground displacement; turning and reform are not added.')
         from free_pivot import after_move
         await after_move(self.game, winner, 'Pursuit')
 

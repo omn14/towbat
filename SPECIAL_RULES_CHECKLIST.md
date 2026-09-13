@@ -10,6 +10,21 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Pursuit Summary Reports: 2026-09-13
+
+Completed pursuit moves now publish one Summary-visible combat event naming the
+pursuer and quarry, net ground advance and resolved outcome: not caught, caught
+and destroyed, locked in combat, contact with another enemy, a quarry already
+removed by an earlier pursuer, or loss of the pursuer. The report is emitted
+after awaited movement and reform completion, not during preview or dice queries.
+Existing detailed rule reports and pursuit mechanics are unchanged.
+
+Verification: eight isolated pursuit scene tests pass, including zero advance,
+unit filtering, all reported outcomes and a live two-pursuer capture sequence.
+LEFTOVER: the displayed advance is net displacement, not the pursuit dice total
+or distance spent turning; this distinction is retained in event details.
+Overrun, Follow Up and restraint reporting are unchanged. Full suite not rerun.
+
 ## Joined Mage Targeting Visual: 2026-09-13
 
 The spell/shooting trajectory update now reads caster and target positions in
