@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 from pathlib import Path
 from unittest.mock import patch
 
@@ -92,6 +93,30 @@ def test_plain_choice_does_not_reserve_an_empty_description_panel(dialog):
     choice = dialog(['Yes', 'No'])
     assert choice.detail is None
     assert -choice.panel['frameSize'][2] < 0.3
+
+
+def test_hud_startup_detail_measurements_remain_finite(display):
+    import gui_theme
+    from hud import HUD
+
+    label = gui_theme.styled_text(parent=display.aspect2d, scale=0.019)
+    details = ['', 'Ld 8 from Mage Unit', 'Hand Weapon',
+               'Wizard Level 2: 2 casting(s) left', 'Item: Silvery Wand']
+    try:
+        for cycle in range(100):
+            for text in details:
+                label.setText(text)
+                try:
+                    HUD._fit(None, label, 0.019, 0.4)
+                    measured = label.textNode.getWidth()
+                except AssertionError as error:
+                    raise AssertionError(f'HUD text measurement: cycle={cycle}, text={text!r}, '
+                                         f'transform={label.textNode.getTransform()}') from error
+                assert math.isfinite(measured) and measured >= 0, repr(text)
+                assert not label.getMat().isNan(), repr(text)
+            display.graphicsEngine.renderFrame()
+    finally:
+        label.destroy()
 
 
 def test_high_magic_generation_buttons_fit_and_render(display, dialog, tmp_path):

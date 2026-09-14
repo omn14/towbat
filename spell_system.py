@@ -195,6 +195,9 @@ class Spell:
             return
         if not self.canTarget(target):
             return
+        from magic_items import consume_scroll
+        if not consume_scroll(self):
+            return
         self.target = target
         if self.game is not None:
             from spell_effects import recasting

@@ -33,6 +33,7 @@ class EffectKind(StrEnum):
     SHOOTING_SIGHT = 'shooting_sight'
     IGNORE_COVER = 'ignore_cover'
     START_RULE = 'start_turn_rule'
+    SCROLL = 'scroll_spell'
 
 
 class Scope(StrEnum):
@@ -169,6 +170,10 @@ REGISTRY = ItemRegistry((
                             ItemEffect('cover', EffectKind.RULE, 'Move Through Cover'),
                             ItemEffect('path', EffectKind.START_RULE, 'Move Through Cover', ability='path')),
                    abilities=(ItemAbility('path', 'Start of Turn'),)),
+    ItemDefinition('scroll_of_fiery_convocation', 'Scroll of Fiery Convocation', 'Arcane Items',
+                   "Battle March: General's Companion p. 48; Rulebook p. 321",
+                   effects=(ItemEffect('fireball', EffectKind.SCROLL, 'Fireball', ability='read'),),
+                   abilities=(ItemAbility('read', 'Casting'),)),
 ))
 
 
@@ -257,6 +262,23 @@ def restore_inventory(member, records):
         raise ValueError('Duplicate saved magic-item instance')
     getattr(member, 'unit', member).magic_item_inventory = instances
     bind_inventory(member)
+
+
+def consume_scroll(spell):
+    identity = getattr(spell, 'scroll_item_id', None)
+    if identity is None:
+        return True
+    member = spell.caster
+    entry = next((entry for entry in effects_for(member, EffectKind.SCROLL, context='Casting')
+                  if entry.item.instance_id == identity and entry.effect.value == spell.name), None)
+    if entry is None or not member.unit.model.is_wizard():
+        rule_skipped('Magic Scroll', member, f'{spell.name}: owned scroll unavailable; no casting dice')
+        return False
+    if not activate_ability(spell.game, member, entry.item, 'read', 'Casting', confirmed=True):
+        return False
+    rule_log(entry.item.name, member, f'single use spent to attempt {spell.name}; ordinary casting roll, '
+             'uses one Wizard casting attempt, not a Bound spell (Companion p. 48)')
+    return True
 
 
 def item_profiles(member):
@@ -819,9 +841,20 @@ def casting_spellbook(member):
 
     Additive: `restore_spellbook` keys on `spell_key`, so an item's Bound
     Fireball never displaces the Wizard's own, and each is spent separately.
+    Scroll choices consume ordinary attempts, not known-spell slots (Companion p. 48).
     A query, so it reports nothing; the casting paths log the attempt.
     """
-    return dict(getattr(member.unit.model, 'spells', {}))
+    from battlescribe import get_catalogue
+    records = dict(getattr(member.unit.model, 'spells', {}))
+    if not member.unit.model.is_wizard():
+        return records
+    for index, entry in enumerate(effects_for(member, EffectKind.SCROLL, context='Casting'), 1):
+        record = get_catalogue().spell(entry.effect.value)
+        if record is None:
+            continue
+        key = f'{entry.item.name} [{index}]: {entry.effect.value}'
+        records[key] = dict(record, bound=False, scroll_item_id=entry.item.instance_id, source=entry.item.name)
+    return records
 
 
 def item_spell_available(member, spell):

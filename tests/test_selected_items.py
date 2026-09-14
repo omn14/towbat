@@ -401,6 +401,41 @@ def test_flaming_wounds_respect_source_and_flammable_regeneration(flammable, sou
         assert 'does not transfer to magic weapon' in output
 
 
+def test_fiery_scroll_uses_normal_cast_attempt_and_owned_once_only_state():
+    from game import MyApp
+    from magic_items import casting_spellbook, restore_inventory, save_inventory
+    from spell_system import FireballSpell, restore_spellbook
+    from tests.test_bound_spells import app_stub
+    bearer = live_member('Wizard')
+    restore_spellbook(bearer.unit.model, [], 2)
+    bearer.spellsCastThisTurn = []
+    bearer.boundSpellPhases = []
+    item = install_inventory(bearer, [{'name': 'Scroll of Fiery Convocation', 'category': 'Arcane Items',
+                                     'selection_ref': 'bearer/scroll', 'owner_ref': 'bearer', 'number': 2}])[0]
+    game = app_stub(bearer)
+    bearer.game = game
+    choices = game.castableSpells(bearer)
+    assert len(choices) == 2 and bearer.unit.model.spells == {}
+    record = casting_spellbook(bearer)[choices[0]]
+    assert record['name'] == 'Fireball' and record['casting_value'] == 8 and not record['bound']
+    spell = FireballSpell('Fireball', 8, game=game, caster=bearer)
+    spell.selection_key = choices[0]
+    spell.scroll_item_id = item.instance_id
+    spell._attempt = AsyncMock(return_value=False)
+    game.fsm.spellInstanceToCast = spell
+    game.fsm.castingUnit = bearer
+    asyncio.run(MyApp.resolveSpell(game, bearer))
+    assert bearer.spellsCastThisTurn == ['Fireball'] and bearer.boundSpellPhases == []
+    assert item.uses['read']['count'] == 1 and spell._attempt.await_count == 1
+    assert game.castableSpells(bearer) == []
+    restore_inventory(bearer, save_inventory(bearer))
+    bearer.spellsCastThisTurn = []
+    assert len(game.castableSpells(bearer)) == 1
+    spell._attempt.reset_mock()
+    asyncio.run(spell.spellFunction(bearer))
+    spell._attempt.assert_not_awaited()
+
+
 def test_helm_armour_changes_real_saves_not_baseline_and_passive_survives_use():
     from battleFunctions import resolve_magic_hits
     from magic_items import spend_ability
