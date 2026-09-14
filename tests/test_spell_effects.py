@@ -10,7 +10,7 @@ from tests.test_magic_resistance import _UnitGraphics
 def effect_case(cls=OakenShieldSpell, name='Oaken Shield'):
     caster = _UnitGraphics('Mage', nmodels=1)
     target = _UnitGraphics('Target')
-    game = SimpleNamespace(player1Units=[caster, target], player2Units=[],
+    game = SimpleNamespace(units=[caster, target], player1Units=[caster, target], player2Units=[],
                            roundCounter=SimpleNamespace(current_player=1, currentRoundPlayer=[2, 2]),
                            fsm=SimpleNamespace(endOfTurnSpells=[]), remainsInPlay=[])
     spell = cls(name, 8, game.fsm.endOfTurnSpells, game=game, caster=caster)

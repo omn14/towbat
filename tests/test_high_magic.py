@@ -51,7 +51,8 @@ def spell_case(cls=FuryOfKhaineSpell):
         unit.isDeployed = True
     target.bodyNP.setY(8)
     enemy.bodyNP.setY(9)
-    game = SimpleNamespace(player1Units=[caster, target], player2Units=[enemy], remainsInPlay=[],
+    game = SimpleNamespace(units=[caster, target, enemy], player1Units=[caster, target],
+                           player2Units=[enemy], remainsInPlay=[],
                            fsm=SimpleNamespace(endOfTurnSpells=[]),
                            roundCounter=SimpleNamespace(current_player=1, currentRoundPlayer=[0, 0]))
     name = 'Fury of Khaine' if cls is FuryOfKhaineSpell else 'Shield of Saphery'
