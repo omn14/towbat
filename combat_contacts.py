@@ -229,6 +229,7 @@ class CombatContactSnapshot:
     def allocation(self, part, models, challenge=None):
         """Contact-only character targeting and nearest-unit routing (pp. 147, 199, 209)."""
         from combat_allocation import AttackAllocation, nearest_targets
+        from challenges import is_retired
         from command_groups import champions
         host = part.host
         enemies = [enemy for enemy in getattr(host, 'isInCombatWith', [])
@@ -256,7 +257,7 @@ class CombatContactSnapshot:
                     entry = command.get(other_index, {})
                     specific = (joined if other_index >= initial else promoted.get(id(entry)))
                     if specific is not None:
-                        if (not touching or specific.unit.nmodels <= 0 or specific.retiredFromCombat
+                        if (not touching or specific.unit.nmodels <= 0 or is_retired(specific)
                                 or (challenge and challenge.involves(specific))):
                             continue
                         target = specific

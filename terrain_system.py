@@ -687,6 +687,24 @@ def _fbm2(x, y, seed, octaves=4):
 
 # ── TerrainPiece ──────────────────────────────────────────────────────────────
 
+def ellipse_path_contact(piece, before, after):
+    """Test a swept model base against an oval in normalized circle space."""
+    from shapely.geometry import MultiPoint, Point
+    from psychology import _box_corners
+    swept = MultiPoint([((horizontal - piece.center.x) / (piece.width / 2),
+                         (vertical - piece.center.y) / (piece.height / 2))
+                        for bounds in (before, after) for horizontal, vertical in _box_corners(*bounds)]).convex_hull
+    return swept.distance(Point(0, 0)) <= 1 + 1e-7
+
+
+def terrain_path_contact(piece, before, after):
+    """Preserve explicit oval footprints in ordinary and charge base sweeps."""
+    if getattr(piece, 'footprint_shape', None) == 'ellipse':
+        return ellipse_path_contact(piece, before, after)
+    from skirmish import swept_base_overlaps
+    return swept_base_overlaps(before, after, terrain_obstacle(piece))
+
+
 def terrain_obstacle(piece):
     """Preserve circular landmark bases in movement checks (Companion p. 25)."""
     from psychology import CircularObstacle
@@ -699,7 +717,8 @@ class TerrainPiece:
     """A single rectangular terrain feature on the battlefield."""
 
     def __init__(self, terrain_type: str, center: Point3,
-                 width: float, height: float, game, going: str = None, *, linear_obstacle=False):
+                 width: float, height: float, game, going: str | None = None, *, linear_obstacle=False,
+                 footprint_shape=None):
         if terrain_type not in TERRAIN_RULES:
             raise ValueError(
                 f"Unknown terrain type '{terrain_type}'. "
@@ -719,6 +738,9 @@ class TerrainPiece:
         self.height = height
         self.game = game
         self.linear_obstacle = bool(linear_obstacle)
+        if footprint_shape is not None and (footprint_shape != 'ellipse' or terrain_type != 'marsh'):
+            raise ValueError('Only marsh terrain supports an explicit ellipse footprint')
+        self.footprint_shape = footprint_shape
 
         self.river_centerline = None   # populated for river pieces
         self.debug_np = None
@@ -995,6 +1017,9 @@ class TerrainPiece:
     def _create_water_visual(self):
         """Flat quad (texcoords 0..1) for marsh; the shader paints an
         irregular, soft-edged bog so it doesn't read as a box."""
+        if self.footprint_shape == 'ellipse':
+            self._create_ellipse_water_visual()
+            return
         fmt = GeomVertexFormat.getV3n3t2()
         vdata = GeomVertexData('water', fmt, Geom.UHStatic)
         vw = GeomVertexWriter(vdata, 'vertex')
@@ -1024,6 +1049,32 @@ class TerrainPiece:
         self.visual.setPos(self.center.x, self.center.y, 0.05)
         self.visual.setTransparency(TransparencyAttrib.MAlpha)
         self.visual.setDepthWrite(False)
+
+    def _create_ellipse_water_visual(self):
+        """Opaque depth-writing oval: the alpha-sorted table must stay behind it."""
+        rim = [(self.width / 2 * math.cos(math.tau * index / 128),
+                self.height / 2 * math.sin(math.tau * index / 128)) for index in range(128)]
+        self._sight_edges = list(zip(rim, rim[1:] + rim[:1]))
+        data = GeomVertexData('oval-marsh', GeomVertexFormat.getV3n3t2(), Geom.UHStatic)
+        vertices = GeomVertexWriter(data, 'vertex')
+        normals = GeomVertexWriter(data, 'normal')
+        texture = GeomVertexWriter(data, 'texcoord')
+        for horizontal, vertical in [(0, 0), *rim]:
+            vertices.addData3(horizontal, vertical, 0)
+            normals.addData3(0, 0, 1)
+            texture.addData2(horizontal / self.width + .5, vertical / self.height + .5)
+        triangles = GeomTriangles(Geom.UHStatic)
+        for index in range(128):
+            triangles.addVertices(0, index + 1, (index + 1) % 128 + 1)
+        triangles.closePrimitive()
+        geometry = Geom(data)
+        geometry.addPrimitive(triangles)
+        node = GeomNode('oval-marsh')
+        node.addGeom(geometry)
+        self.visual = render.attachNewNode(node)
+        self.visual.setPos(self.center.x, self.center.y, .05)
+        self.visual.setTransparency(TransparencyAttrib.MNone)
+        self.visual.setDepthWrite(True)
 
     def _create_river_visual(self):
         """Build a meandering ribbon mesh that snakes across the piece.
@@ -1148,6 +1199,7 @@ class TerrainPiece:
         base = _TERRAIN_COLORS.get(self.terrain_type, Vec4(0.5, 0.5, 0.5, 1.0))
         self.visual.setShaderInput("baseColor", base)
         self.visual.setShaderInput("pieceSize", Vec2(self.width, self.height))
+        self.visual.setShaderInput("footprintEllipse", self.footprint_shape == 'ellipse')
         # Rim level for the per-pixel edge discard (hill/forest); 0 = no cut.
         self.visual.setShaderInput(
             "edgeLevel", self._field_edge if self._field is not None else 0.0)
@@ -1358,6 +1410,10 @@ class TerrainPiece:
         the metaball footprint field; everything else uses its AABB — so the
         gameplay region matches the visible shape.
         """
+        if getattr(self, 'footprint_shape', None) == 'ellipse':
+            horizontal = (pos.x - self.center.x) / (self.width / 2)
+            vertical = (pos.y - self.center.y) / (self.height / 2)
+            return horizontal * horizontal + vertical * vertical <= 1 + 1e-7
         if self.terrain_type == 'river' and self.river_centerline:
             return self._river_contains(pos)
         if self._field is not None:
@@ -1448,9 +1504,9 @@ class TerrainManager:
 
     def add_terrain(self, terrain_type: str, center: Point3,
                     width: float, height: float,
-                    going: str = None, *, linear_obstacle=False) -> TerrainPiece:
+                    going: str | None = None, *, linear_obstacle=False, footprint_shape=None) -> TerrainPiece:
         piece = TerrainPiece(terrain_type, center, width, height, self.game, going,
-                             linear_obstacle=linear_obstacle)
+                             linear_obstacle=linear_obstacle, footprint_shape=footprint_shape)
         self.terrain_pieces.append(piece)
         print(f"[Terrain] Added {terrain_type} at ({center.x:.0f}, "
               f"{center.y:.0f}) size {width:.0f}×{height:.0f}  "
@@ -1666,6 +1722,7 @@ class TerrainManager:
                 entry['height'],
                 entry.get('going'),
                 linear_obstacle=entry.get('linear_obstacle', False),
+                footprint_shape=entry.get('footprint_shape'),
             )
             if entry.get('objective_id'):
                 piece.objective_id = entry['objective_id']
@@ -1678,6 +1735,7 @@ class TerrainManager:
                     'width': t.width,
                     'height': t.height,
                     'going': t.going,
+                    **({'footprint_shape': t.footprint_shape} if getattr(t, 'footprint_shape', None) else {}),
                     **({'linear_obstacle': True} if t.linear_obstacle else {}),
                     **({'objective_id': t.objective_id} if getattr(t, 'objective_id', None) else {}),
                 }

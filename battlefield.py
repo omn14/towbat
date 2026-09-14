@@ -7,7 +7,7 @@ zone in the printed diagrams; choosing sides is separate from player identity.
 from dataclasses import dataclass
 from math import atan2, cos, degrees, hypot, pi, sin
 
-from battle_config import DEPLOYMENT_MAPS, MIRRORABLE_MAPS
+from battle_config import CUSTOM_DEPLOYMENT_MAPS, DEPLOYMENT_MAPS, MIRRORABLE_MAPS, REED_FENS_MAP
 from psychology import _box_corners, obb_distance
 
 
@@ -68,15 +68,19 @@ class Battlefield:
         """Printed distances stay fixed on both supported Battle March sizes."""
         if side not in (1, 2):
             raise ValueError('Deployment side must be 1 or 2')
-        if map_name not in ('standard', *DEPLOYMENT_MAPS):
+        if map_name not in ('standard', *DEPLOYMENT_MAPS, *CUSTOM_DEPLOYMENT_MAPS):
             raise ValueError(f'Unknown or unresolved deployment map: {map_name}')
         if mirror and map_name not in MIRRORABLE_MAPS:
             raise ValueError(f'{map_name} has no alternate deployment')
-        if map_name != 'standard' and not (44 <= self.width <= 48 and 30 <= self.depth <= 36):
+        if map_name == REED_FENS_MAP and (self.width, self.depth) != (30, 44):
+            raise ValueError('Reed Fens requires a 30 by 44 inch portrait battlefield')
+        if map_name in DEPLOYMENT_MAPS and not (44 <= self.width <= 48 and 30 <= self.depth <= 36):
             raise ValueError('Battle March maps require a 44-48 by 30-36 inch battlefield')
         half_width, half_depth = self.width / 2, self.depth / 2
         radius = 0
-        if map_name in ('standard', 'pitched_battle', 'meeting_engagement'):
+        if map_name == REED_FENS_MAP:
+            vertices = ((-15, -22), (2, -22), (2, -10), (-15, -10))
+        elif map_name in ('standard', 'pitched_battle', 'meeting_engagement'):
             front = -half_depth + 12 if map_name == 'standard' else -7.5
             left = -half_width + 11 if map_name == 'meeting_engagement' else -half_width
             vertices = ((left, -half_depth), (half_width, -half_depth),

@@ -124,6 +124,80 @@ def test_rotated_base_and_circle_edge_not_just_centre_or_corners():
     assert zone.contains_box((10, -10, 1, 1, 45))
 
 
+def test_reed_fens_portrait_zones_and_full_base_boundaries():
+    from battle_config import REED_FENS_MAP
+    from battlefield import Battlefield
+    field = Battlefield(30, 44)
+    first = field.deployment_zone(REED_FENS_MAP, 1)
+    second = field.deployment_zone(REED_FENS_MAP, 2)
+    assert first.vertices == ((-15, -22), (2, -22), (2, -10), (-15, -10))
+    assert second.vertices == tuple((-horizontal, -vertical) for horizontal, vertical in first.vertices)
+    assert first.contains_box((1, -11, 1, 1, 0))
+    assert not first.contains_box((1.01, -11, 1, 1, 0))
+    assert not first.contains_box((1, -10.99, 1, 1, 0))
+    assert not first.contains_box((1, -11, 1, 1, 45))
+    assert all(field.contains_point(point) for point in first.vertices + second.vertices)
+    with pytest.raises(ValueError, match='30 by 44'):
+        Battlefield(44, 30).deployment_zone(REED_FENS_MAP)
+
+
+def test_reed_fens_preset_and_resolved_save_roundtrip():
+    from battle_config import REED_FENS_MAP, REED_FENS_PRESET, validate_activation
+    from battle_setup import objective_records, resolve_setup, validate_setup
+    config = load_config(REED_FENS_PRESET)
+    assert validate_activation(config) == config
+    setup = resolve_setup(config, 19)
+    assert setup['deployment_map'] == REED_FENS_MAP
+    assert setup['rolls'] == {}
+    assert objective_records(config, setup) == []
+    assert validate_setup(config, json.loads(json.dumps(setup))) == setup
+    assert REED_FENS_MAP not in DEPLOYMENT_MAPS
+    for seed in range(20):
+        assert resolve_setup(load_config(), seed)['deployment_map'] in DEPLOYMENT_MAPS
+    config['terrain']['method'] = 'scattered'
+    with pytest.raises(ConfigError, match='terrain.method'):
+        validate_config(config)
+    config = load_config(REED_FENS_PRESET)
+    config['battlefield']['width'] = 44
+    with pytest.raises(ConfigError, match='battlefield.width'):
+        validate_config(config)
+
+
+def test_reed_fens_fixed_terrain_setup_and_tamper_rejection(monkeypatch):
+    import asyncio
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    import battle_preparation
+    from battle_config import REED_FENS_PRESET, REED_FENS_TERRAIN
+    from battle_setup import resolve_setup, validate_setup
+    config = load_config(REED_FENS_PRESET)
+    preparation = {'stage': 'terrain', 'army_acknowledged': [1, 2], 'map_player': 1,
+                   'first_drop_rolls': [], 'first_drop': None,
+                   'terrain': battle_preparation.new_terrain_state()}
+    game = SimpleNamespace(battle_config=config, battle_objectives=[])
+    rebuild = Mock()
+    monkeypatch.setattr(battle_preparation, 'rebuild_terrain', rebuild)
+    monkeypatch.setattr(battle_preparation, 'choose', Mock(side_effect=AssertionError('No terrain choices')))
+    monkeypatch.setattr(battle_preparation.random, 'randint', Mock(side_effect=AssertionError('No terrain dice')))
+    monkeypatch.setattr('battle_objectives.sync_markers', Mock())
+    monkeypatch.setattr('battlefield.draw_battlefield', Mock())
+    asyncio.run(battle_preparation.prepare_terrain(game, preparation))
+    assert preparation['terrain']['placed'] == list(REED_FENS_TERRAIN)
+    rebuild.assert_called_once_with(game, list(REED_FENS_TERRAIN))
+    original = deepcopy(preparation['terrain'])
+    battle_preparation.place_objectives(game, preparation)
+    assert preparation['stage'] == 'zones'
+    assert preparation['terrain'] == original
+    setup = resolve_setup(config, 19)
+    setup['preparation'] = preparation
+    assert validate_setup(config, json.loads(json.dumps(setup))) == setup
+    preparation['terrain']['placed'][0]['center'][0] += 1
+    with pytest.raises(ConfigError, match='fixed Reed Fens terrain'):
+        validate_setup(config, setup)
+    assert REED_FENS_TERRAIN[0]['center'] == [-8, -19, 0]
+
+
 def test_standard_bounds_remain_unchanged():
     from types import SimpleNamespace
     from battlefield import Battlefield, battlefield_for

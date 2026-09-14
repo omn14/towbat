@@ -88,6 +88,50 @@ class TestPieceCategory(unittest.TestCase):
 
 class TestMapFile(unittest.TestCase):
 
+    def test_explicit_oval_marsh_geometry_and_roundtrip(self):
+        from math import pi
+        from panda3d.bullet import BulletWorld
+        from panda3d.core import NodePath
+        from battle_terrain import footprint
+        render = NodePath('terrain-test')
+        game = SimpleNamespace(world=BulletWorld())
+        manager = ts.TerrainManager(game)
+        records = [{'type': 'marsh', 'center': [-8, -19, 0], 'width': 6, 'height': 4,
+                    'going': 'dangerous', 'footprint_shape': 'ellipse'}]
+        with mock.patch('terrain_system.render', render, create=True), \
+                mock.patch.object(ts.TerrainPiece, '_apply_shader'):
+            try:
+                manager.load_records(records)
+                piece = manager.terrain_pieces[0]
+                self.assertTrue(piece.contains(Point3(-8, -19, 0)))
+                self.assertTrue(piece.contains(Point3(-5, -19, 0)))
+                self.assertFalse(piece.contains(Point3(-5.1, -17.1, 0)))
+                self.assertTrue(piece.is_dangerous)
+                self.assertEqual(piece.movement_modifier, -1)
+                self.assertFalse(piece.blocks_line_of_sight)
+                self.assertEqual(footprint(piece).bounds, (-11, -21, -5, -17))
+                self.assertAlmostEqual(footprint(piece).area, pi * 3 * 2, delta=.01)
+                self.assertEqual(manager.to_records(), records)
+                manager.clear()
+                manager.load_records(records)
+                self.assertEqual(manager.to_records(), records)
+                piece = manager.terrain_pieces[0]
+                game.terrain_manager = manager
+                unit = SimpleNamespace(bodyNP=render.attachNewNode('unit'), model=object())
+                movement = MovementSystem(game)
+                corner = (-5.5, -17.5, .1, .1, 0)
+                self.assertFalse(ts.ellipse_path_contact(piece, corner, corner))
+                touching = (-4.9, -19, .1, .1, 0)
+                self.assertTrue(ts.ellipse_path_contact(piece, touching, touching))
+                with mock.patch('scouts.model_base_boxes', return_value=[(0, 0, .1, .1, 0)]):
+                    self.assertEqual(movement.movementTerrainFeatures(unit, (-5.5, -17.5, 0),
+                                                                     (-5.5, -17.4, 0)), [])
+                    self.assertEqual(movement.movementTerrainFeatures(unit, (-4.9, -20, 0),
+                                                                     (-4.9, -18, 0)), [piece])
+            finally:
+                manager.clear()
+                render.removeNode()
+
     MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        'maps', 'sample_terrain.json')
 

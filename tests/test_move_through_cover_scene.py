@@ -189,6 +189,39 @@ def test_skirmisher_preview_and_committed_move(scene, protected, maximum, capsys
         assert 'Move Through Cover' not in output
 
 
+@pytest.mark.parametrize('vertical,contact', [(1.9, False), (0, True)])
+def test_oval_marsh_loose_and_ranked_base_contacts_agree(scene, vertical, contact):
+    from formed_skirmish_charge import route_features
+    from scouts import model_base_boxes
+    from skirmish_movement import preview_move
+    app, ranked = restore(scene, 'Ordinary Woods')
+    app.terrain_manager.clear()
+    marsh = app.terrain_manager.add_terrain('marsh', Point3(0), 6, 4, footprint_shape='ellipse')
+    unit = app._create_unit(dict(name='Ranger', nmodels=1, files=1, ranks=1,
+                                 special_rules=['Skirmishers']), 1, 'Oval Skirmisher')
+    assert unit is not None and unit.isSkirmisher
+    apply_rule_keywords(unit.unit.model, ['Skirmishers'], replace=True)
+    unit.unit.model.characteristics['M'] = '4'
+    unit.bodyNP.setPos(2.9, vertical, 0)
+    unit.bodyNP.setH(0)
+    unit.isDeployed = True
+    unit.request('Idle')
+    origin = unit.bodyNP.getPos()
+    destination = origin + Point3(0, .1, 0)
+    preview = preview_move(app, unit, destination=tuple(destination))
+    expected = [marsh] if contact else []
+    assert preview.error is None
+    assert preview.terrain == [expected]
+    assert preview.allowance == (3 if contact else 4)
+    assert app.movement.movementTerrainFeatures(unit, origin, destination) == expected
+    before = model_base_boxes(unit)[0]
+    with patch('formed_skirmish_charge.route_base_paths', return_value=[[(before, preview.boxes[0])]]):
+        assert route_features(app, object()) == expected
+    with patch('terrain_system.random.randint', return_value=6) as roll:
+        assert app.movement.dangerousTerrainTests(unit, origin, destination, features=[marsh]) == 0
+        assert roll.call_count == int(contact)
+
+
 def test_old_save_preserves_existing_battlefield(scene, tmp_path):
     app, baseline = scene
     data = json.loads(Path(baseline).read_text())

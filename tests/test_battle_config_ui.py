@@ -145,6 +145,39 @@ def test_non_mirrorable_map_clears_mirror_and_exit_does_not_save(screen):
     assert not screen.isAccepting('wheel_up')
 
 
+def test_reed_fens_selection_locks_map_fields_and_restores_official_values(screen):
+    from battle_config import REED_FENS_MAP
+    screen.controls['battlefield.width'].enterText('48')
+    screen.controls['points_limit'].enterText('650')
+    screen.controls['deployment.map'].set(REED_FENS_MAP)
+    config, seed = screen.draft()
+    assert (config['battlefield']['width'], config['battlefield']['depth']) == (30, 44)
+    assert config['terrain']['method'] == 'fixed'
+    assert config['terrain']['feature_count'] == 4
+    assert config['objectives']['layout'] == 'none'
+    assert config['points_limit'] == 650
+    assert screen.controls['battlefield.width']['state'] == DGG.DISABLED
+    assert screen.controls['battlefield.depth']['state'] == DGG.DISABLED
+    click(screen, screen.tabs['Terrain'])
+    assert all(control['state'] == DGG.DISABLED for control in screen.controls.values())
+    click(screen, screen.tabs['Objectives'])
+    assert all(control['state'] == DGG.DISABLED for control in screen.controls.values())
+    assert screen.save()
+    assert load_config(screen.path) == config
+    click(screen, screen.tabs['Battle'])
+    screen.controls['deployment.map'].set('Pitched Battle')
+    restored = screen.draft()[0]
+    assert restored['battlefield']['width'] == 48
+    assert restored['battlefield']['depth'] == 30
+    assert restored['terrain']['method'] == 'alternating'
+    assert restored['objectives']['layout'] == 'random'
+    assert screen.controls['battlefield.width']['state'] == DGG.NORMAL
+    click(screen, screen.load_button)
+    assert screen.draft()[0] == config
+    screen.controls['deployment.map'].set('Pitched Battle')
+    assert screen.draft()[0]['battlefield']['width'] == 44
+
+
 def test_atomic_save_keeps_original_on_failure(tmp_path):
     path = tmp_path / 'battle.json'
     config = load_config()
@@ -232,6 +265,18 @@ def test_native_form_layout_popups_and_offscreen_pixels(screen, width, height):
             assert screen.scroll.verticalScroll['value'] == 1
         click(screen, screen.tabs['Battle'])
         assert screen.controls['points_limit'].get() == '625'
+        from battle_config import REED_FENS_MAP
+        screen.controls['deployment.map'].set(REED_FENS_MAP)
+        menu = screen.controls['deployment.map']
+        assert menu.get() == REED_FENS_MAP
+        menu.showPopupMenu()
+        game.eventMgr.doEvents()
+        game.graphicsEngine.renderFrame()
+        popup_bounds = menu.popupMenu.guiItem.getFrame()
+        for horizontal in (popup_bounds[0], popup_bounds[1]):
+            point = game.render2d.getRelativePoint(menu.popupMenu, Point3(horizontal, 0, 0))
+            assert -1 <= point.x <= 1
+        menu.hidePopupMenu()
         game.eventMgr.doEvents()
         game.graphicsEngine.renderFrame()
         game.graphicsEngine.renderFrame()

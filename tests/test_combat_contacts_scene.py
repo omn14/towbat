@@ -339,6 +339,10 @@ def test_specific_targets_require_contact_and_directed_damage_cannot_spill(scene
     load_game_state(app, baseline)
     host, enemy, character = (members(app)[name] for name in ('Mage', 'Chaos Knight', 'Aspiring Champion'))
     if kind == 'character':
+        character = app._create_unit(dict(name='Aspiring Champion', nmodels=1, files=1, ranks=1),
+                                     2, 'Fresh Joined Champion')
+        assert character is not None
+        assert not hasattr(character, 'retiredFromCombat')
         assert join_unit(app, character, enemy)
         enemy.layOutRanks()
         enemy.placeCharacter()
@@ -354,6 +358,19 @@ def test_specific_targets_require_contact_and_directed_damage_cannot_spill(scene
     part, = combat_profiles(host, enemy)
     allocation = CombatContactSnapshot([host, enemy]).allocation(part, 1)
     assert any(victim in targets for _, _, targets in allocation.batches)
+    if kind == 'character':
+        victim.retiredFromCombat = True
+        retired = CombatContactSnapshot([host, enemy]).allocation(part, 1)
+        assert all(victim not in targets for _, _, targets in retired.batches)
+        del victim.retiredFromCombat
+        app.attackers, app.defenders = [host, enemy], [enemy, host]
+        app.attackSequence = Sequence()
+        app.combat._pendingWounds = {}
+        app.combat._combatStartModels = {id(member.unit): member.unit.nmodels for member in (host, enemy)}
+        with patch('combat_resolution.simulate_battle', return_value=(1, 0, 0, 0, 0)) as fight, \
+                patch('assailment.cast_at_initiative'), patch.object(app, 'aiControls', return_value=True):
+            assert asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence())) == (0, 0, 0, 0)
+            assert fight.call_count > 0
     host.bodyNP.setX(host.bodyNP.getX() + 20)
     distant = CombatContactSnapshot([host, enemy]).allocation(part, 1)
     assert all(victim not in targets for _, _, targets in distant.batches)

@@ -9,8 +9,8 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 
 import gui_theme as theme
-from battle_config import (DEFAULT_PRESET, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
-                           MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, ConfigError, _number,
+from battle_config import (CUSTOM_DEPLOYMENT_MAPS, DEFAULT_PRESET, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
+                           MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, REED_FENS_MAP, REED_FENS_PRESET, ConfigError, _number,
                            load_config, save_config, validate_activation, validate_config)
 
 
@@ -20,14 +20,14 @@ FIELDS = {
         ('battlefield.width', 'Board width (inches)', 'number', None),
         ('battlefield.depth', 'Board depth (inches)', 'number', None),
         ('game.rounds', 'Rounds', 'integer', None),
-        ('deployment.map', 'Deployment map', 'menu', ('random', *DEPLOYMENT_MAPS)),
+        ('deployment.map', 'Deployment map', 'menu', ('random', *DEPLOYMENT_MAPS, *CUSTOM_DEPLOYMENT_MAPS)),
         ('deployment.mirror', 'Alternate deployment', 'boolean', None),
         ('battlefield.show_boundary', 'Show playable boundary', 'boolean', None),
         ('battlefield.show_deployment', 'Show deployment zones', 'boolean', None),
         ('seed', 'Setup seed (optional)', 'seed', None),
     ],
     'Terrain': [
-        ('terrain.method', 'Placement method', 'menu', ('alternating', 'scattered')),
+        ('terrain.method', 'Placement method', 'menu', ('alternating', 'scattered', 'fixed')),
         ('terrain.feature_count', 'Terrain features', 'integer', None),
         ('terrain.recommended_max_span', 'Recommended span (inches)', 'number', None),
         ('terrain.centre_clearance', 'Centre clearance (inches)', 'number', None),
@@ -35,7 +35,7 @@ FIELDS = {
         ('terrain.objective_clearance', 'Objective clearance (inches)', 'number', None),
     ],
     'Objectives': [
-        ('objectives.layout', 'Objective layout', 'menu', ('random', *OBJECTIVE_LAYOUTS)),
+        ('objectives.layout', 'Objective layout', 'menu', ('random', *OBJECTIVE_LAYOUTS, 'none')),
         ('objectives.landmark_property', 'Landmark property', 'menu', ('random', *LANDMARK_PROPERTIES)),
         ('objectives.trove_base_mm', 'Trove base (mm)', 'number', None),
         ('objectives.landmark_base_mm', 'Landmark base (mm)', 'number', None),
@@ -71,6 +71,10 @@ FIELDS = {
 }
 
 
+MAP_FIELDS = ('battlefield.width', 'battlefield.depth', 'objectives.layout',
+              *(field[0] for field in FIELDS['Terrain']))
+
+
 def _value(config, path):
     value = config
     for part in path.split('.'):
@@ -104,6 +108,8 @@ class BattleConfigScreen(DirectObject):
         self.tab = 'Battle'
         self.values = {}
         self.controls = {}
+        self.menu_choices = {}
+        self.official_map_values = None
         self.load_values()
         self.root = DirectFrame(parent=game.aspect2d, sortOrder=1000,
                                 frameTexture=theme.TEX_PARCHMENT, frameColor=(1, 1, 1, 1))
@@ -156,7 +162,7 @@ class BattleConfigScreen(DirectObject):
                 self.values[path] = bool(control['indicatorValue'])
             else:
                 self.values[path] = control['items'].index(control.get())
-                choices = next(field[3] for field in FIELDS[self.tab] if field[0] == path)
+                choices = self.menu_choices[path]
                 self.values[path] = choices[self.values[path]]
 
     def draft(self):
@@ -220,6 +226,7 @@ class BattleConfigScreen(DirectObject):
         for label in self.labels:
             label.destroy()
         self.controls.clear()
+        self.menu_choices.clear()
         self.labels.clear()
         for name, button in self.tabs.items():
             button['frameColor'] = theme.GREEN_BANNER if name == self.tab else theme.BTN_NEUTRAL
@@ -249,18 +256,26 @@ class BattleConfigScreen(DirectObject):
                     control['state'] = (DGG.NORMAL if self.values['deployment.map'] in ('random', *MIRRORABLE_MAPS)
                                         else DGG.DISABLED)
             elif kind == 'menu':
-                items = [choice.replace('_', ' ').title() for choice in choices]
+                if self.values['deployment.map'] != REED_FENS_MAP:
+                    choices = tuple(choice for choice in choices if choice not in ('fixed', 'none'))
+                self.menu_choices[path] = choices
+                items = [choice if choice in CUSTOM_DEPLOYMENT_MAPS else choice.replace('_', ' ').title()
+                         for choice in choices]
+                text_options = ({'text_scale': .8, 'text_wordwrap': (input_width - .09) / (.033 * .8),
+                                 'text_pos': (.45, .35), 'item_text_scale': .8,
+                                 'item_text_wordwrap': (input_width - .09) / (.033 * .8)}
+                                if path == 'deployment.map' else {'text_scale': 1, 'text_pos': (.45, -.06)})
                 control = DirectOptionMenu(parent=self.scroll.getCanvas(), items=items,
                                             initialitem=choices.index(value), text_font=theme.get_font(),
-                                            scale=.033, text_scale=1, text_fg=theme.CREAM,
+                                            scale=.033, text_fg=theme.CREAM,
                                             frameColor=theme.ENTRY_BG, relief=DGG.FLAT,
                                             frameSize=(0, (input_width - .05) / .033, -.91, 1.36),
-                                            text_pos=(.45, -.06), text_align=TextNode.ALeft,
+                                            text_align=TextNode.ALeft,
                                             popupMarker_scale=.6, popupMarkerBorder=(.2, .1),
                                             item_text_font=theme.get_font(), item_text_fg=theme.CREAM,
                                             item_frameColor=theme.ENTRY_BG, item_pad=(.3, .25),
                                             item_relief=DGG.FLAT, highlightColor=theme.BTN_GREEN,
-                                            pos=(input_left, 0, height))
+                                            pos=(input_left, 0, height), **text_options)
                 control.popupMenu.reparentTo(self.root)
                 control.cancelFrame.reparentTo(self.root)
                 if path == 'deployment.map':
@@ -271,17 +286,35 @@ class BattleConfigScreen(DirectObject):
                                        width=input_width / .033, numLines=1,
                                        text_font=theme.get_font(), text_fg=theme.ENTRY_FG,
                                        frameColor=theme.ENTRY_BG)
+            if self.values['deployment.map'] == REED_FENS_MAP and (path in MAP_FIELDS or path.startswith('objectives.')):
+                control['state'] = DGG.DISABLED
             self.controls[path] = control
 
     def map_changed(self):
+        previous = self.values['deployment.map']
         self.capture()
+        selected = self.values['deployment.map']
+        if selected == REED_FENS_MAP and previous != selected:
+            self.official_map_values = {path: self.values[path] for path in MAP_FIELDS}
+            self.official_source = deepcopy(self.config['source'])
+            preset = load_config(REED_FENS_PRESET)
+            for path in MAP_FIELDS:
+                value = _value(preset, path)
+                self.values[path] = str(value) if isinstance(value, (int, float)) else value
+            self.config['source'] = preset['source']
+        elif previous == REED_FENS_MAP and selected != previous:
+            if self.official_map_values is not None:
+                self.values.update(self.official_map_values)
+                self.config['source'] = self.official_source
+            else:
+                preset = load_config()
+                for path in MAP_FIELDS:
+                    value = _value(preset, path)
+                    self.values[path] = str(value) if isinstance(value, (int, float)) else value
+                self.config['source'] = preset['source']
         if self.values['deployment.map'] not in ('random', *MIRRORABLE_MAPS):
             self.values['deployment.mirror'] = False
-        mirror = self.controls['deployment.mirror']
-        mirror['indicatorValue'] = int(self.values['deployment.mirror'])
-        mirror.setIndicatorValue()
-        mirror['state'] = (DGG.NORMAL if self.values['deployment.map'] in ('random', *MIRRORABLE_MAPS)
-                           else DGG.DISABLED)
+        self.build_fields()
 
     def scroll_by(self, amount):
         scrollbar = self.scroll.verticalScroll
@@ -317,6 +350,7 @@ class BattleConfigScreen(DirectObject):
             self.message(str(error), error=True)
             return
         self.config, self.path = config, path
+        self.official_map_values = None
         self.load_values()
         self.build_fields()
         self.message(f'Loaded {path.name}')

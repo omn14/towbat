@@ -5,7 +5,7 @@ from random import Random
 import random
 import re
 
-from battle_config import (ConfigError, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
+from battle_config import (ConfigError, CUSTOM_DEPLOYMENT_MAPS, DEPLOYMENT_MAPS, LANDMARK_PROPERTIES,
                            MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, _boolean,
                            _choice, _keys, _number, validate_activation, validate_config)
 from battlefield import Battlefield, STANDARD_BATTLEFIELD, draw_battlefield
@@ -44,8 +44,8 @@ def validate_setup(config, setup):
     if type(setup['version']) is not int or setup['version'] != 1:
         raise ConfigError('setup.version: only version 1 is supported')
     _number(setup['seed'], 'setup.seed', 0, 2 ** 53 - 1, integer=True)
-    _choice(setup['deployment_map'], DEPLOYMENT_MAPS, 'setup.deployment_map')
-    _choice(setup['objective_layout'], OBJECTIVE_LAYOUTS, 'setup.objective_layout')
+    _choice(setup['deployment_map'], (*DEPLOYMENT_MAPS, *CUSTOM_DEPLOYMENT_MAPS), 'setup.deployment_map')
+    _choice(setup['objective_layout'], (*OBJECTIVE_LAYOUTS, 'none'), 'setup.objective_layout')
     if setup['objective_layout'] == 'landmark':
         _choice(setup['landmark_property'], LANDMARK_PROPERTIES, 'setup.landmark_property')
     elif setup['landmark_property'] is not None:
@@ -255,7 +255,7 @@ def objective_records(config, setup):
     """
     setup = validate_setup(config, setup)
     landmark = setup['objective_layout'] == 'landmark'
-    positions = {'two_troves': ((0, -7.5), (0, 7.5)),
+    positions = {'none': (), 'two_troves': ((0, -7.5), (0, 7.5)),
                  'three_troves': ((-11, 0), (0, 0), (11, 0)), 'landmark': ((0, 0),)}
     diameter = config['objectives']['landmark_base_mm' if landmark else 'trove_base_mm'] / 25.4
     return [{'id': f'objective-{index + 1}', 'kind': 'landmark' if landmark else 'trove',

@@ -5,6 +5,7 @@ uniform int terrainType;
 uniform vec4 baseColor;
 uniform vec2 pieceSize;   // world-space width/height of this terrain piece
 uniform float edgeLevel;  // hill/forest: discard fragments below this field value
+uniform bool footprintEllipse;
 
 // Movement/shooting range overlay (same SDF the ground card draws).
 #define MOVE_MAXPTS 83
@@ -193,6 +194,10 @@ void main() {
         float rr = length(c);
         float wob = (fbm(texcoord * 5.0) - 0.5) * 0.6;
         alpha = smoothstep(1.05, 0.55, rr + wob);
+        if (footprintEllipse) {
+            alpha = 1.0;
+            col = mix(col, vec3(0.45, 0.52, 0.24), smoothstep(0.94, 1.0, rr));
+        }
     }
 
     // Nudge toward the configured base tint so gameplay colours stay readable

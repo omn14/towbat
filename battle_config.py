@@ -11,6 +11,17 @@ from pathlib import Path
 
 
 DEFAULT_PRESET = Path(__file__).parent / 'config' / 'battle_march.json'
+REED_FENS_MAP = 'Grow Legue 2026 - Flank of the Reed Fens'
+REED_FENS_PRESET = DEFAULT_PRESET.with_name('grow_legue_2026_reed_fens.json')
+REED_FENS_TERRAIN = (
+    {'type': 'marsh', 'center': [-8, -19, 0], 'width': 6, 'height': 4,
+     'going': 'dangerous', 'footprint_shape': 'ellipse'},
+    {'type': 'marsh', 'center': [8, 19, 0], 'width': 6, 'height': 4,
+     'going': 'dangerous', 'footprint_shape': 'ellipse'},
+    {'type': 'house', 'center': [-2, -7, 0], 'width': 4, 'height': 3, 'going': 'impassable'},
+    {'type': 'house', 'center': [2, 7, 0], 'width': 4, 'height': 3, 'going': 'impassable'},
+)
+CUSTOM_DEPLOYMENT_MAPS = (REED_FENS_MAP,)
 DEPLOYMENT_MAPS = ('pitched_battle', 'close_encounter', 'opposed_flanks',
                    'meeting_engagement', 'mountain_pass', 'outflank')
 MIRRORABLE_MAPS = ('close_encounter', 'opposed_flanks', 'meeting_engagement', 'outflank')
@@ -75,14 +86,15 @@ def validate_config(record):
 
     battlefield = record['battlefield']
     _keys(battlefield, 'width depth show_boundary show_deployment', 'battlefield')
-    _number(battlefield['width'], 'battlefield.width', 44, 48)
-    _number(battlefield['depth'], 'battlefield.depth', 30, 36)
+    deployment = record['deployment']
+    _keys(deployment, 'map mirror method first_turn', 'deployment')
+    custom = deployment['map'] == REED_FENS_MAP
+    _number(battlefield['width'], 'battlefield.width', 30 if custom else 44, 30 if custom else 48)
+    _number(battlefield['depth'], 'battlefield.depth', 44 if custom else 30, 44 if custom else 36)
     for field in ('show_boundary', 'show_deployment'):
         _boolean(battlefield[field], f'battlefield.{field}')
 
-    deployment = record['deployment']
-    _keys(deployment, 'map mirror method first_turn', 'deployment')
-    _choice(deployment['map'], ('random', *DEPLOYMENT_MAPS), 'deployment.map')
+    _choice(deployment['map'], ('random', *DEPLOYMENT_MAPS, *CUSTOM_DEPLOYMENT_MAPS), 'deployment.map')
     _boolean(deployment['mirror'], 'deployment.mirror')
     if deployment['mirror'] and deployment['map'] not in ('random', *MIRRORABLE_MAPS):
         raise ConfigError('deployment.mirror: this map has no alternate deployment')
@@ -92,8 +104,10 @@ def validate_config(record):
     terrain = record['terrain']
     _keys(terrain, 'method feature_count recommended_max_span centre_clearance '
           'opponent_feature_clearance objective_clearance', 'terrain')
-    _choice(terrain['method'], ('alternating', 'scattered'), 'terrain.method')
+    _choice(terrain['method'], ('fixed',) if custom else ('alternating', 'scattered'), 'terrain.method')
     _number(terrain['feature_count'], 'terrain.feature_count', 0, 50, integer=True)
+    if custom and terrain['feature_count'] != len(REED_FENS_TERRAIN):
+        raise ConfigError('terrain.feature_count: Reed Fens has exactly four fixed features')
     for field in ('recommended_max_span', 'centre_clearance',
                   'opponent_feature_clearance', 'objective_clearance'):
         _number(terrain[field], f'terrain.{field}', 0, battlefield['width'])
@@ -103,7 +117,7 @@ def validate_config(record):
     objectives = record['objectives']
     _keys(objectives, 'layout trove_base_mm landmark_base_mm control_distance '
           'minimum_unit_strength landmark_property', 'objectives')
-    _choice(objectives['layout'], ('random', *OBJECTIVE_LAYOUTS), 'objectives.layout')
+    _choice(objectives['layout'], ('none',) if custom else ('random', *OBJECTIVE_LAYOUTS), 'objectives.layout')
     _choice(objectives['landmark_property'], ('random', *LANDMARK_PROPERTIES),
             'objectives.landmark_property')
     for field in ('trove_base_mm', 'landmark_base_mm'):

@@ -60,3 +60,26 @@ def test_multiple_combat_follows_long_chains_and_cycles_without_dead_branches():
     hosts[4].isInCombatWith.append(hosts[1])
     hosts[5].unit.nmodels = 0
     assert [id(host) for host in engaged_units(hosts[0], hosts[1])] == [id(host) for host in hosts[:5]]
+
+
+@pytest.mark.parametrize('retired', [None, False, True])
+def test_allocation_accepts_uninitialized_joined_retirement_state(monkeypatch, retired):
+    from types import SimpleNamespace
+    from combat_contacts import CombatContactSnapshot
+    character = SimpleNamespace(unit=SimpleNamespace(nmodels=1))
+    if retired is not None:
+        character.retiredFromCombat = retired
+    enemy = SimpleNamespace(unit=SimpleNamespace(nmodels=1))
+    host = SimpleNamespace(isInCombatWith=[enemy], unit=SimpleNamespace(name='Attacker'))
+    part = SimpleNamespace(host=host, profile=SimpleNamespace(name='Attacker profile'))
+    snapshot = CombatContactSnapshot.__new__(CombatContactSnapshot)
+    snapshot.formations = {
+        id(host): ([(0, 0, .5, .5, 0)], [0], {}, 1, None),
+        id(enemy): ([(0, 1, .5, .5, 0)], [0], {}, 0, character),
+    }
+    snapshot.targets = {id(enemy): [(0, (0, 1, .5, .5, 0))]}
+    monkeypatch.setattr(snapshot, 'quotas', lambda *args, **kwargs: {0: 1})
+    monkeypatch.setattr('command_groups.champions', lambda *args, **kwargs: [])
+    monkeypatch.setattr('combat_allocation.AttackAllocation', lambda host, profile, batches: batches)
+    batches = snapshot.allocation(part, 1)
+    assert batches == [(0, 1, [] if retired else [character])]

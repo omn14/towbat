@@ -6,7 +6,7 @@ import random
 
 from panda3d.core import Point3
 
-from battle_config import ConfigError, _choice, _keys, _number, army_report
+from battle_config import ConfigError, REED_FENS_MAP, REED_FENS_TERRAIN, _choice, _keys, _number, army_report
 from battle_terrain import footprint, objective_clearance_shift, scatter_distance
 from rules_log import dice_roll, rule_log, rule_skipped
 
@@ -46,6 +46,14 @@ def roll_off(rolls, rule):
 
 
 def validate_terrain_state(config, state):
+    if config['terrain']['method'] == 'fixed':
+        expected = new_terrain_state()
+        if state == expected:
+            return deepcopy(state)
+        expected['placed'] = deepcopy(list(REED_FENS_TERRAIN))
+        if state != expected:
+            raise ConfigError('setup.terrain: fixed Reed Fens terrain differs from the map')
+        return deepcopy(state)
     _keys(state, 'selections selection_complete rolls winner placed'
           + (' scatter' if 'scatter' in state else ''), 'setup.terrain')
     _keys(state['selections'], '1 2', 'setup.terrain.selections')
@@ -169,8 +177,17 @@ def rebuild_terrain(game, records):
 
 
 async def prepare_terrain(game, preparation):
-    from battle_setup_ui import TerrainPlacement
     state = preparation.setdefault('terrain', new_terrain_state())
+    if game.battle_config['terrain']['method'] == 'fixed':
+        validate_terrain_state(game.battle_config, state)
+        state['placed'] = deepcopy(list(REED_FENS_TERRAIN))
+        rebuild_terrain(game, state['placed'])
+        rule_log(REED_FENS_MAP, 'setup',
+                 '30x44 inch board; marshes 6x4 at (-8,-19)/(8,19); '
+                 'impassable 4x3 at (-2,-7)/(2,7); fixed positions, no placement dice')
+        preparation['stage'] = 'objectives'
+        return
+    from battle_setup_ui import TerrainPlacement
     count = game.battle_config['terrain']['feature_count']
     for player in (1, 2):
         if player in state['selection_complete']:
@@ -262,6 +279,15 @@ def place_objectives(game, preparation):
     from shapely.affinity import translate
     from shapely.geometry import Point
     state = preparation['terrain']
+    if game.battle_config['terrain'].get('method') == 'fixed':
+        validate_terrain_state(game.battle_config, state)
+        if game.battle_objectives:
+            raise ConfigError('Fixed Reed Fens terrain does not allow additional objective markers')
+        preparation['stage'] = 'zones'
+        sync_markers(game)
+        from battlefield import draw_battlefield
+        draw_battlefield(game)
+        return
     pieces = game.terrain_manager.terrain_pieces
     shapes = [footprint(piece) for piece in pieces]
     records = deepcopy(state['placed'])

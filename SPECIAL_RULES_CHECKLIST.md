@@ -10,6 +10,73 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Fresh Joined-Character Attack Allocation: 2026-09-14
+
+[x] Fixed the combat crash when allocating attacks against a newly joined
+character without `retiredFromCombat`. Retirement is optional state elsewhere
+in the engine; allocation now uses the existing `challenges.is_retired` predicate
+instead of reading the field directly. Missing or false means not retired;
+true still excludes the character. Contact and challenge protection are unchanged.
+
+Verification: the absent-field case reproduced the reported AttributeError before
+the fix. All 12 focused contact tests and 19 live contact/combat tests pass.
+The live test creates a fresh Aspiring Champion after loading its baseline,
+joins him, checks retirement exclusion, then runs the no-challenge Initiative
+scheduler with the field absent. Existing contact-only targeting and directed
+damage/no-spill checks are retained. Save-loaded characters previously masked
+the bug because persistence supplies a false retirement flag.
+
+LEFTOVER: this does not roll back an already interrupted combat; restart and
+reload a pre-combat save to retry. No full-suite run is claimed for this fix.
+
+## Grow Legue 2026 - Flank of the Reed Fens: 2026-09-14
+
+[x] User-defined deployment and fixed terrain, not an official rulebook diagram.
+The named preset uses a 30-by-44-inch portrait battlefield. Zone A is 17 by 12
+inches at bottom left, ending 10 inches below the centre line and 13 inches from
+the right edge; Zone B is its 180-degree counterpart. Full-base and rotated-base
+deployment checks use the existing polygon geometry. The six official random
+deployment results and their landscape size limits remain unchanged.
+
+Terrain centres, in inches about the board centre: dangerous 6-by-4 oval marshes
+at (-8, -19) and (8, 19); impassable 4-by-3 rectangular buildings at (-2, -7) and
+(2, 7). Setup installs these four pieces without selection/scatter dice and logs
+their dimensions and positions. Fixed records are checked on setup reload;
+ordinary objective-clearance relocation is bypassed. The user explicitly chose
+no objective markers; remaining defaults are 500 points and five rounds.
+
+Corrections during implementation: ordinary marshes used rectangular gameplay
+bounds despite their soft visual edges. This map opts into an explicit ellipse
+mesh, rim, containment and persisted shape. Swept-base and flight-endpoint checks
+normalize oval contact into circle space, avoiding dangerous tests in empty
+bounding-box corners. Loose movement and charge paths use the same oval contact
+helper; live tests check agreement and actual dangerous-roll counts. Existing
+marsh records retain their previous behavior.
+The native menu preserves the exact map name, locks map-owned fields and restores
+previous official-map settings when leaving the custom map.
+
+Verification: 363 checks pass across nine isolated modules: 123 configuration,
+16 native UI, 49 terrain, 13 Move Through Cover, 19 chariot terrain, 58 Scouts/setup,
+51 formed charge, 33 charge declaration and one combined startup scenario. That scenario covers
+preparation, whole-base deployment candidates, two unchanged save/reload
+cycles, and 1280x720 / 720x960 offscreen captures with full-board projection and
+per-feature pixel checks. No new full-suite run is claimed.
+
+Play-test correction: the farther oval marsh disappeared with an angled camera.
+Although its shader outputs opaque pixels, the mesh used alpha sorting without
+depth writes, allowing the alpha-enabled table to cover it. Ovals now use opaque
+rendering and depth writes; soft-edged ordinary marshes remain unchanged. The
+startup regression now renders from above and both angled ends at desktop and
+portrait sizes, checking actual marsh-interior pixels. Its projection output was
+also corrected from Vec2 to Point2, and its ordinary baseline no longer assumes
+the user's saved default deployment map. Reinstating the old render flags
+reproduced the missing upper marsh and zero changed pixels in the angled view.
+
+LEFTOVER: no generic custom-map editor or event-wide tournament rules. Buildings
+reuse the existing impassable house artwork; marshes reuse the procedural marsh
+material rather than bespoke reed models. Other irregular terrain and curved
+movement approximations retain the engine's existing limitations.
+
 ## Catalogue Troop-Type Fallback: 2026-09-14
 
 Rulebook pp. 188-197, especially Heavy Chariots p. 195 and Behemoths p. 196;

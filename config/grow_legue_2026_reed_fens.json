@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "ruleset": "battle_march_generals_companion",
+  "source": {
+    "url": "local:grow-legue-2026-reed-fens",
+    "publication": "Grow Legue 2026 - Flank of the Reed Fens (custom map)",
+    "reviewed": "2026-09-14"
+  },
+  "points_limit": 500,
+  "battlefield": {
+    "width": 30,
+    "depth": 44,
+    "show_boundary": true,
+    "show_deployment": true
+  },
+  "deployment": {
+    "map": "Grow Legue 2026 - Flank of the Reed Fens",
+    "mirror": false,
+    "method": "alternating",
+    "first_turn": "roll_off_choice"
+  },
+  "terrain": {
+    "method": "fixed",
+    "feature_count": 4,
+    "recommended_max_span": 12,
+    "centre_clearance": 0,
+    "opponent_feature_clearance": 0,
+    "objective_clearance": 0
+  },
+  "objectives": {
+    "layout": "none",
+    "trove_base_mm": 40,
+    "landmark_base_mm": 100,
+    "control_distance": 3,
+    "minimum_unit_strength": 5,
+    "landmark_property": "random"
+  },
+  "game": {
+    "rounds": 5,
+    "time_limit_minutes": null
+  },
+  "scoring": {
+    "trove_per_player_turn": 10,
+    "landmark_per_player_turn": 25,
+    "general": 50,
+    "captured_standard": 25,
+    "battle_standard_bearer": 25
+  },
+  "army": {
+    "minimum_units": 2,
+    "maximum_unit_strength": 20,
+    "maximum_character_fraction": 0.25,
+    "maximum_core_fraction": 0.35,
+    "maximum_special_fraction": 0.30,
+    "maximum_rare_mercenary_fraction": 0.25,
+    "restricted_options_allowance": 1
+  },
+  "optional_rules": {
+    "secondary_objectives": [],
+    "secret_objectives": false,
+    "random_happenings": [],
+    "battle_march_magic_items": false
+  }
+}

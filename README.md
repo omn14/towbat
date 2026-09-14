@@ -20,6 +20,37 @@ rule modules remain unavailable. Starting without `--battle-config` bypasses the
 editor and retains ordinary startup. Current scope and verification are recorded
 in [docs/BATTLE_MARCH_PLAN.md](docs/BATTLE_MARCH_PLAN.md).
 
+### Grow Legue 2026 - Flank of the Reed Fens
+
+Select this exact name under **Battle > Deployment map**, or open the supplied
+[custom preset](config/grow_legue_2026_reed_fens.json) directly:
+
+```bash
+source .venv/bin/activate && python game.py --battle-config config/grow_legue_2026_reed_fens.json
+```
+
+The playable board is **30 inches wide by 44 inches deep**, in portrait orientation.
+Zone A (Zone 1) is the bottom-left 17-by-12-inch rectangle: its right boundary is
+13 inches from the right edge, and its front is 10 inches below the centre line.
+Zone B (Zone 2) is the same rectangle rotated 180 degrees, at the top right.
+Players choose sides through the existing setup flow.
+
+All terrain distances below locate the **centre** of the piece:
+
+| Terrain | Footprint | Position |
+| --- | --- | --- |
+| Dangerous marsh | 6 by 4 inch oval | 7 inches from left, 3 from bottom |
+| Dangerous marsh | 6 by 4 inch oval | 7 inches from right, 3 from top |
+| Impassable building | 4 by 3 inch rectangle | 13 inches from left, 15 from bottom |
+| Impassable building | 4 by 3 inch rectangle | 13 inches from right, 15 from top |
+
+This user-defined map has **no objective markers**. The four pieces are fixed:
+no terrain selection, placement roll-off, scatter or objective-clearance movement.
+Board dimensions and terrain settings are locked while this map is selected;
+switching back restores the previous official-map settings. The supplied preset
+otherwise retains the current 500-point, five-round Battle March defaults.
+It is excluded from the six official maps' random deployment roll.
+
 ## Battle Results
 
 Both players receive their final configured turn before the battle ends. The

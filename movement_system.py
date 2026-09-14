@@ -552,6 +552,11 @@ class MovementSystem:
                   (box[0] + to_pos.x - current.x, box[1] + to_pos.y - current.y, *box[2:]))
                  for box in model_base_boxes(unit)]
         for piece in getattr(tm, 'terrain_pieces', []):
+            if getattr(piece, 'footprint_shape', None) == 'ellipse':
+                from terrain_system import ellipse_path_contact
+                if piece not in features and any(ellipse_path_contact(piece, before, after) for before, after in paths):
+                    features.append(piece)
+                continue
             if piece in features or getattr(piece, '_field', None) is not None or getattr(piece, 'river_centerline', None):
                 continue
             bounds = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
@@ -641,6 +646,15 @@ class MovementSystem:
                     if any(getattr(spell, 'piece', None) is piece
                            for spell in getattr(self.game, 'remainsInPlay', [])):
                         return True
+                    if getattr(piece, 'footprint_shape', None) == 'ellipse':
+                        from terrain_system import ellipse_path_contact
+                        if route is not None and participant is unit:
+                            return any(ellipse_path_contact(piece, box, box)
+                                       for distance in (0, route.distance if travel is None else travel)
+                                       for box in route.boxes_at(distance))
+                        endpoints = [(box[0] + position.x - current.x, box[1] + position.y - current.y, *box[2:])
+                                     for position in (from_pos, to_pos) for box in boxes]
+                        return any(ellipse_path_contact(piece, box, box) for box in endpoints)
                     terrain_box = (piece.center.x, piece.center.y, piece.width / 2, piece.height / 2, 0)
                     if route is not None and participant is unit:
                         return any(obb_distance(box, terrain_box) <= 0
@@ -681,8 +695,13 @@ class MovementSystem:
                 else:
                     checks = [[(path[0][0], path[0][0]), (path[-1][1], path[-1][1])]
                               if endpoints and path else path for path in paths]
-                tests += sum(any(swept_circle_distance(piece.center, before, after, bounds) < float('inf')
-                                 for before, after in path) for path in checks)
+                if getattr(piece, 'footprint_shape', None) == 'ellipse':
+                    from terrain_system import ellipse_path_contact
+                    tests += sum(any(ellipse_path_contact(piece, before, after) for before, after in path)
+                                 for path in checks)
+                else:
+                    tests += sum(any(swept_circle_distance(piece.center, before, after, bounds) < float('inf')
+                                     for before, after in path) for path in checks)
             wounds = dangerous_terrain_wounds(
                 tests, 1, 'D3' if iron_shod else damage,
                 reroll_sources=participant.unit.model.dangerous_terrain_reroll_sources(),
