@@ -799,7 +799,12 @@ class HUD(DirectObject):
 
         Unit names run from "Zombie Unit" to "Captain of the Empire Unit" and
         the ledger's text column is narrow, so the long ones have to give.
+        Empty TextNodes have no layout bounds to measure; reset their scale
+        without letting an undefined width enter the fitting calculation.
         """
+        if not node.getText():
+            node.setScale(scale)
+            return
         natural = node.textNode.getWidth() * scale
         node.setScale(scale * min(1.0, width / natural) if natural else scale)
 

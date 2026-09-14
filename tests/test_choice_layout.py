@@ -4,7 +4,7 @@ import asyncio
 import json
 import math
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from direct.showbase.ShowBase import ShowBase
@@ -95,6 +95,17 @@ def test_plain_choice_does_not_reserve_an_empty_description_panel(dialog):
     assert -choice.panel['frameSize'][2] < 0.3
 
 
+def test_hud_empty_label_restores_scale_without_measuring():
+    from hud import HUD
+
+    label = Mock()
+    label.getText.return_value = ''
+    label.textNode.getWidth.side_effect = AssertionError('Empty text has no layout bounds')
+    HUD._fit(None, label, 0.019, 0.4)
+    label.textNode.getWidth.assert_not_called()
+    label.setScale.assert_called_once_with(0.019)
+
+
 def test_hud_startup_detail_measurements_remain_finite(display):
     import gui_theme
     from hud import HUD
@@ -108,11 +119,16 @@ def test_hud_startup_detail_measurements_remain_finite(display):
                 label.setText(text)
                 try:
                     HUD._fit(None, label, 0.019, 0.4)
-                    measured = label.textNode.getWidth()
+                    if text:
+                        measured = label.textNode.getWidth()
+                        assert math.isfinite(measured) and measured >= 0, repr(text)
+                    else:
+                        assert label.getScale() == (0.019, 0.019)
                 except AssertionError as error:
                     raise AssertionError(f'HUD text measurement: cycle={cycle}, text={text!r}, '
                                          f'transform={label.textNode.getTransform()}') from error
-                assert math.isfinite(measured) and measured >= 0, repr(text)
+                assert all(math.isfinite(component) and component > 0 for component in label.getScale())
+                assert not label.textNode.getTransform().isNan(), repr(text)
                 assert not label.getMat().isNan(), repr(text)
             display.graphicsEngine.renderFrame()
     finally:
