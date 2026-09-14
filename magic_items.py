@@ -814,6 +814,16 @@ async def magic_roll_bonus(game, member, kind):
     return bonus
 
 
+def casting_spellbook(member):
+    """Every spell this bearer may attempt, ordinary and Bound (pp. 109, 342).
+
+    Additive: `restore_spellbook` keys on `spell_key`, so an item's Bound
+    Fireball never displaces the Wizard's own, and each is spent separately.
+    A query, so it reports nothing; the casting paths log the attempt.
+    """
+    return dict(getattr(member.unit.model, 'spells', {}))
+
+
 def item_spell_available(member, spell):
     """An unmade item cannot supply a Bound spell (Forces of Fantasy p. 186)."""
     if not spell.get('bound'):
