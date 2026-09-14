@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from panda3d.core import Vec2, Vec3
+from panda3d.core import Filename, Vec2, Vec3
 
 from battleFunctions import charge_initiative_bonus
 from magic_items import current_turn
@@ -154,7 +154,7 @@ def test_countercharge_pivots_and_contacts_on_an_angled_approach(scene, offset, 
     app.camera.lookAt(0, -5, 0)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / f'counter-charge-{offset}.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / f'counter-charge-{offset}.png')).getFullpath(), defaultFilename=False)
 
 
 def test_countercharge_usage_survives_reload_and_expires_next_turn(scene, tmp_path, capsys):

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from panda3d.core import FrameBufferProperties, GraphicsPipe, Point3, TransformState, Vec3, WindowProperties
+from panda3d.core import Filename, FrameBufferProperties, GraphicsPipe, Point3, TransformState, Vec3, WindowProperties
 
 from persistence import load_game_state, save_game_state
 from flight import grounded, set_mode
@@ -307,7 +307,7 @@ def test_flight_controls_render_and_select_ground(scene, tmp_path, size):
         app.graphicsEngine.renderFrame()
         image = buffer.getScreenshot()
         assert image.getXSize() == size[0] and image.getYSize() == size[1]
-        assert image.write(str(tmp_path / f'flight-controls-{size[0]}.png'))
+        assert image.write(Filename.fromOsSpecific(str(tmp_path / f'flight-controls-{size[0]}.png')))
         for button in app.flightButtons:
             frame = button.indicator.guiItem.getFrame()
             lower = button.getRelativePoint(button.indicator, Point3(frame[0], 0, frame[2]))

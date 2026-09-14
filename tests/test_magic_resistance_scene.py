@@ -206,7 +206,7 @@ if __name__ == '__main__':
                                          if u.unitName == 'MR Host with Runesmith -2'))[0] == -2
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        app.screenshot(str(ROOT / 'screenshots' / 'magicresistance.png'), defaultFilename=False)
+        app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'magicresistance.png')).getFullpath(), defaultFilename=False)
         print('Magic Resistance scenario saved, reloaded and rendered:', path)
     finally:
         app.destroy()

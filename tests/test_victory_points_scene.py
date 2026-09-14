@@ -3,7 +3,7 @@
 from math import ceil
 from unittest.mock import patch
 
-from panda3d.core import FrameBufferProperties, GraphicsPipe, WindowProperties
+from panda3d.core import Filename, FrameBufferProperties, GraphicsPipe, WindowProperties
 
 from command_groups import capture_standard
 from characters import join_unit
@@ -86,7 +86,7 @@ def test_last_player_two_turn_ends_and_restores_result_without_extra_turn(scene,
     assert app.fsm.state == 'BattleEnded' and app.roundCounter.currentRoundPlayer == [6, 6]
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    app.screenshot('/tmp/towbat-victory-points.png', defaultFilename=False)
+    app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'towbat-victory-points.png')).getFullpath(), defaultFilename=False)
     path = save_game_state(app, str(tmp_path / 'ended-battle.json'))
     result = app.battleResult
     load_game_state(app, baseline)
@@ -99,7 +99,7 @@ def test_last_player_two_turn_ends_and_restores_result_without_extra_turn(scene,
     assert app.hud._battle_result_panel is not None
 
 
-def test_result_panel_fits_smaller_viewport_with_long_outcome(scene):
+def test_result_panel_fits_smaller_viewport_with_long_outcome(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, baseline)
     result = calculate(app)
@@ -128,7 +128,7 @@ def test_result_panel_fits_smaller_viewport_with_long_outcome(scene):
         assert lower.z >= -.431 and upper.z <= .731
         image = buffer.getScreenshot()
         assert image.getXSize() == 800 and image.getYSize() == 600
-        assert image.write('/tmp/towbat-victory-points-800.png')
+        assert image.write(Filename.fromOsSpecific(str(tmp_path / 'towbat-victory-points-800.png')))
     finally:
         app.graphicsEngine.removeWindow(buffer)
         app.setAspectRatio(1280 / 720)

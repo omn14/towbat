@@ -122,7 +122,7 @@ def test_save_reloads_ready_and_spent_units_and_renders(scene, tmp_path):
     verify_scenario(app)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'loaded.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'loaded.png')).getFullpath(), defaultFilename=False)
 
 
 def test_spent_rule_and_deferred_charge_survive_reload(scene, tmp_path):
@@ -312,7 +312,7 @@ if __name__ == '__main__':
         app.refreshSelectedUnit()
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(ROOT / 'screenshots' / 'shieldwall.png'), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'shieldwall.png')).getFullpath(), defaultFilename=False)
         print(f'Verified Shieldwall save: {path}')
     finally:
         app.destroy()

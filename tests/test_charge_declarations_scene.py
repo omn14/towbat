@@ -7,7 +7,7 @@ import pytest
 
 from charge_declarations import begin_declarations, queue_charge, resolve_declarations
 from first_charge import begin_charge_attempt
-from panda3d.core import Vec3
+from panda3d.core import Filename, Vec3
 from tests.test_counter_charge_scene import declared_charge
 from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
@@ -651,7 +651,7 @@ def test_phase_button_resolves_once_before_allowing_remaining_moves(scene, tmp_p
     assert app.hud._end_btn['text'] == 'RESOLVE\nCHARGES'
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'resolve-charges.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'resolve-charges.png')).getFullpath(), defaultFilename=False)
 
     async def close_declarations():
         app.fsm.nextPhase()

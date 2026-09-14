@@ -1,6 +1,6 @@
 """Walk Between Worlds with the actual High Elf/Chaos roster scene (p. 329)."""
 
-from panda3d.core import Point3, Vec2, Vec3
+from panda3d.core import Filename, Point3, Vec2, Vec3
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 import asyncio
@@ -130,7 +130,7 @@ def test_live_joined_walk_cast_reload_reserve_move_and_owner_expiry(scene, tmp_p
     assert app.castableSpells(mage) == []
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    app.screenshot(str(tmp_path / 'walk-reserve.png'), defaultFilename=False)
+    app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'walk-reserve.png')).getFullpath(), defaultFilename=False)
     phase_save = save_game_state(app, str(tmp_path / 'walk-reserve.json'))
     load_game_state(app, phase_save)
     assert host.reserveMoveOriginal is not None

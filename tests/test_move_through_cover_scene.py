@@ -122,7 +122,7 @@ def test_save_restores_terrain_and_character_faq(scene, tmp_path):
     verify_scenario(app)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'cover-loaded.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'cover-loaded.png')).getFullpath(), defaultFilename=False)
 
 
 @pytest.mark.parametrize('name,maximum', [('Cover Woods', 8), ('Ordinary Woods', 6),
@@ -225,7 +225,7 @@ if __name__ == '__main__':
         app.refreshSelectedUnit()
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(ROOT / 'screenshots' / 'move_through_cover.png'),
+        assert app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'move_through_cover.png')).getFullpath(),
                               defaultFilename=False)
         print(f'Verified Move Through Cover save: {path}')
     finally:

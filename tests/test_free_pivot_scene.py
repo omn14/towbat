@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from panda3d.core import Filename
 
 from free_pivot import begin, constrain, pending, rule_for
 from persistence import load_game_state, save_game_state
@@ -137,4 +138,4 @@ def test_mouse_facing_task_confirms_and_renders_bounded_pivot(scene, tmp_path):
     app.camera.lookAt(0, -9, 0)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'skycutter-free-pivot.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'skycutter-free-pivot.png')).getFullpath(), defaultFilename=False)

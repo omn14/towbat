@@ -109,7 +109,7 @@ def test_high_magic_generation_buttons_fit_and_render(display, dialog, tmp_path)
         assert bottom.z >= lower and top.z <= upper, button['text']
     display.graphicsEngine.renderFrame()
     display.graphicsEngine.renderFrame()
-    assert display.screenshot(str(tmp_path / 'spell-generation.png'), defaultFilename=False)
+    assert display.screenshot(Filename.fromOsSpecific(str(tmp_path / 'spell-generation.png')).getFullpath(), defaultFilename=False)
     with patch.object(display.taskMgr, 'add') as schedule:
         choice.buttons[2]['command'](*choice.buttons[2]['extraArgs'])
     asyncio.run(schedule.call_args.args[0])
@@ -151,11 +151,11 @@ def test_generation_reference_browsing_is_not_an_answer_and_stays_bounded(displa
     assert 'Not generated' in choice.reference_text.getText()
     display.graphicsEngine.renderFrame()
     display.graphicsEngine.renderFrame()
-    assert display.screenshot(str(tmp_path / 'generation-reference.png'), defaultFilename=False)
+    assert display.screenshot(Filename.fromOsSpecific(str(tmp_path / 'generation-reference.png')).getFullpath(), defaultFilename=False)
     choice._inspect_reference("Vaul's Unmaking")
     display.graphicsEngine.renderFrame()
     display.graphicsEngine.renderFrame()
-    assert display.screenshot(str(tmp_path / 'generation-effect.png'), defaultFilename=False)
+    assert display.screenshot(Filename.fromOsSpecific(str(tmp_path / 'generation-effect.png')).getFullpath(), defaultFilename=False)
     reference[-1]['detail'] = 'Long effect. ' * 350 + '\nLast effect line.'
     choice._inspect_reference(reference[-1]['name'])
     assert choice.reference_reader['canvasSize'][2] < choice.reference_reader['frameSize'][2]

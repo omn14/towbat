@@ -67,7 +67,7 @@ def test_load_places_command_without_extra_bodies(scene, tmp_path):
     assert all(child.getY() == 0 for child in children.values())
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'command.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'command.png')).getFullpath(), defaultFilename=False)
 
 
 def test_live_casualties_preserve_then_remove_command_and_reload(scene, tmp_path):

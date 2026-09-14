@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from direct.task.Task import TaskManager
-from panda3d.core import AsyncTaskManager, Vec2, Vec3
+from panda3d.core import AsyncTaskManager, Filename, Vec2, Vec3
 
 import aiMinimaxIntegration
 import game as game_module
@@ -464,7 +464,7 @@ def test_render_vanguard_selection_offscreen(scene, tmp_path):
     app.refreshSelectedUnit()
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'vanguard.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'vanguard.png')).getFullpath(), defaultFilename=False)
 
 
 def test_drilled_is_offered_once_when_vanguard_movement_begins(scene):
@@ -517,7 +517,7 @@ if __name__ == '__main__':
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
         screenshot = Path(__file__).resolve().parents[1] / 'screenshots' / 'vanguard.png'
-        assert app.screenshot(str(screenshot), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(screenshot)).getFullpath(), defaultFilename=False)
         print(f'Verified Vanguard test save: {path}')
     finally:
         app.destroy()

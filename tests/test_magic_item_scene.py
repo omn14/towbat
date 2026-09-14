@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from panda3d.core import Filename
 from unittest.mock import AsyncMock, patch
 
 from tests.test_shieldwall_scene import combat_tasks
@@ -133,7 +134,7 @@ def test_item_details_render_in_existing_unit_card(item_scene, tmp_path):
     assert 'Helm Of Courage' in '\n'.join(label.getText() for label in hud._detail_labels)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'items.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'items.png')).getFullpath(), defaultFilename=False)
     app.showSelectedUnit(app.unitToMove)
     assert hud._detail_offset == 2
     hud.scroll_details(100)

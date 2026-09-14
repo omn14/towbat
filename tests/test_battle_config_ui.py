@@ -237,7 +237,7 @@ def test_native_form_layout_popups_and_offscreen_pixels(screen, width, height):
         game.graphicsEngine.renderFrame()
         image = PNMImage()
         assert buffer.getScreenshot(image)
-        assert image.write(str(ROOT / '.pytest_cache' / f'battle_config_ui_{width}x{height}.png'))
+        assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'battle_config_ui_{width}x{height}.png')))
         colors = {tuple(image.getXel(horizontal, vertical))
                   for horizontal in range(0, width, 13) for vertical in range(0, height, 13)}
         assert len(colors) > 50

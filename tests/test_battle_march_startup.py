@@ -66,6 +66,6 @@ def test_explicit_startup_preserves_visual_board_and_holds_deployment(tmp_path):
         assert app.fsm.state == 'DeployPhase'
         app.eventMgr.doEvents()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(root / '.pytest_cache' / 'battle_march_startup.png'), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(root / '.pytest_cache' / 'battle_march_startup.png')).getFullpath(), defaultFilename=False)
     finally:
         app.destroy()

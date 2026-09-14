@@ -166,7 +166,7 @@ def capture_nomination(app, path):
                               for button in dialog.buttons)
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(path), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(path)).getFullpath(), defaultFilename=False)
         dialog.onCancel()
         await action
 
@@ -186,7 +186,7 @@ def test_loaded_scene_and_render(scene, tmp_path):
     verify_scenario(app)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'rallying-cry.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'rallying-cry.png')).getFullpath(), defaultFilename=False)
 
 
 def test_real_selection_offers_only_valid_targets_and_target_veteran(scene):
@@ -382,7 +382,7 @@ if __name__ == '__main__':
         app.refreshSelectedUnit()
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(ROOT / 'screenshots' / 'rallying_cry.png'), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'rallying_cry.png')).getFullpath(), defaultFilename=False)
         capture_nomination(app, ROOT / 'screenshots' / 'rallying_cry_choice.png')
         print(f'Verified Rallying Cry save: {path}')
     finally:

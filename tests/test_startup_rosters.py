@@ -68,7 +68,7 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path,
             assert not choice.choiceMade and choice.choice is None
             app.graphicsEngine.renderFrame()
             app.graphicsEngine.renderFrame()
-            assert app.screenshot(str(tmp_path / 'startup-spells.png'), defaultFilename=False)
+            assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'startup-spells.png')).getFullpath(), defaultFilename=False)
             choice._pick('Keep spells')
             return choice
 
@@ -93,7 +93,7 @@ def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path,
         assert hero.unit.model.armor_save == 5 and hero.unit.model.effective_armour_save() == 4
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(tmp_path / 'startup-items.png'), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'startup-items.png')).getFullpath(), defaultFilename=False)
         check_first_fury_cast(app, 'Pass', applied=True)
         check_first_fury_cast(app, 'Fated dispel', applied=False)
         ready = check_matchup_roundtrip(app, tmp_path)
@@ -249,7 +249,7 @@ def check_matchup_roundtrip(app, tmp_path):
         assert not pending_wizards(app) and not app.spellGenerationBusy and not app.magicBusy
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'he-chaos-500-ready.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'he-chaos-500-ready.png')).getFullpath(), defaultFilename=False)
     return path
 
 
@@ -298,7 +298,7 @@ def check_matchup_cavalry(app, ready, tmp_path, cavalry):
     assert app.battleResult['scores'] == result['scores']
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / f'he-chaos-500-{stem}-result.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / f'he-chaos-500-{stem}-result.png')).getFullpath(), defaultFilename=False)
 
 
 def check_matchup_specialists(app, ready, tmp_path):

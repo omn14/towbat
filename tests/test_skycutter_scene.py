@@ -107,7 +107,7 @@ def test_statless_saved_skycutter_recovers_live_profile(scene, tmp_path, recreat
     assert_skycutter(app.player1Units[0])
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'skycutter.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'skycutter.png')).getFullpath(), defaultFilename=False)
 
 
 def test_valid_custom_saved_stats_are_not_replaced(scene, tmp_path):

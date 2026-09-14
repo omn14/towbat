@@ -152,7 +152,7 @@ def test_battle_march_geometry_reload_and_offscreen_lines(scene, tmp_path, width
                 cyan += color.y > .65 and color.z > .8 and color.x < .3
                 red += color.x > .8 and .2 < color.y < .5 and color.z < .4
         assert cyan > 100 and red > 100
-        assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_{width}x{depth}.png'))
+        assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'battle_march_{width}x{depth}.png')))
     finally:
         app.cam.node().setLens(lens)
         app.camera.setTransform(camera_transform)
@@ -576,7 +576,7 @@ def test_baggage_cart_miniature_renders_within_view(scene, size):
         image = PNMImage()
         assert buffer.getScreenshot(image)
         assert image.getXSize() == size[0] and image.getYSize() == size[1]
-        assert image.write(str(ROOT / '.pytest_cache' / f'baggage-cart-{size[0]}.png'))
+        assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'baggage-cart-{size[0]}.png')))
         lower, upper = model.getTightBounds()
         for horizontal in (lower.x, upper.x):
             for vertical in (lower.y, upper.y):
@@ -834,7 +834,7 @@ def test_objective_clearance_avoids_terrain_and_reloads_once(scene, tmp_path, wi
             colors = {tuple(image.getXel(horizontal + offset_x, vertical + offset_y))
                       for offset_x in range(-12, 13, 3) for offset_y in range(-12, 13, 3)}
             assert len(colors) > 3
-        assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_clearance_{kind}_{width}x{depth}.png'))
+        assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'battle_march_clearance_{kind}_{width}x{depth}.png')))
     finally:
         app.aspect2d.show()
         app.cam.node().setLens(lens)
@@ -875,7 +875,7 @@ def test_terrain_placement_controls_render_and_cancel(scene):
         app.graphicsEngine.renderFrame()
         image = PNMImage()
         assert app.win.getScreenshot(image)
-        assert image.write(str(ROOT / '.pytest_cache' / 'battle_march_terrain_controls.png'))
+        assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / 'battle_march_terrain_controls.png')))
         editor.cancel()
         await Task.pause(.1)
         assert results == [None]
@@ -961,7 +961,7 @@ def test_objective_markers_and_hud_render_both_orientations(scene, layout):
                                   and image.getXel(horizontal, vertical).z > .7
                                   for horizontal in range(605, 675) for vertical in range(325, 395))
                 assert cyan_pixels > 100
-                assert image.write(str(ROOT / '.pytest_cache' / f'battle_march_{layout}_{app.hud.orientation}.png'))
+                assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'battle_march_{layout}_{app.hud.orientation}.png')))
                 app.toggleHudLayout()
     finally:
         with patch.object(game_module, 'save_setting'):
@@ -1171,6 +1171,6 @@ if __name__ == '__main__':
         assert app.deploymentStage == 'scouts' and app.scoutDeployFirst == 1
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        app.screenshot(str(ROOT / 'screenshots' / 'scouts.png'), defaultFilename=False)
+        app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'scouts.png')).getFullpath(), defaultFilename=False)
     finally:
         app.destroy()

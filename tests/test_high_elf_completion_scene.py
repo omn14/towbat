@@ -14,7 +14,7 @@ from spell_effects import end_effect
 from tests.test_faction_rules_scene import members, scene as scene
 from tests.test_shieldwall_scene import combat_tasks
 from tempest import TempestSpell
-from panda3d.core import Point3
+from panda3d.core import Filename, Point3
 
 
 def test_vaul_disables_real_helm_and_survives_reload(scene, tmp_path):
@@ -216,14 +216,14 @@ def test_fiery_only_suppresses_regeneration_on_flammable_targets(scene, flammabl
     assert damage.call_args.kwargs['allow_regeneration'] is not flammable
 
 
-def test_tempest_offscreen_render(scene):
+def test_tempest_offscreen_render(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, baseline)
     spell = TempestSpell('Tempest', 9, game=app, caster=members(app)['Mage'])
     spell.place(app, Point3(0, -8, 0))
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot('/tmp/towbat-high-magic.png', defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'towbat-high-magic.png')).getFullpath(), defaultFilename=False)
     end_effect(spell, 'render complete')
 
 

@@ -115,7 +115,7 @@ def test_save_restores_keywords_characters_and_rally_state(scene, tmp_path):
     verify_scenario(app)
     app.graphicsEngine.renderFrame()
     app.graphicsEngine.renderFrame()
-    assert app.screenshot(str(tmp_path / 'veteran-loaded.png'), defaultFilename=False)
+    assert app.screenshot(Filename.fromOsSpecific(str(tmp_path / 'veteran-loaded.png')).getFullpath(), defaultFilename=False)
 
 
 @pytest.mark.parametrize('index, eligible', [(0, True), (1, False), (2, True), (3, False), (4, True)])
@@ -199,7 +199,7 @@ if __name__ == '__main__':
         app.refreshSelectedUnit()
         app.graphicsEngine.renderFrame()
         app.graphicsEngine.renderFrame()
-        assert app.screenshot(str(ROOT / 'screenshots' / 'veteran.png'), defaultFilename=False)
+        assert app.screenshot(Filename.fromOsSpecific(str(ROOT / 'screenshots' / 'veteran.png')).getFullpath(), defaultFilename=False)
         print(f'Verified Veteran save: {path}')
     finally:
         app.destroy()
