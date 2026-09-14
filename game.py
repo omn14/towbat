@@ -333,32 +333,7 @@ class MyApp(ShowBase):
         self.player1Units = []
         self.player2Units = []
 
-        # Spell definitions for wizard units
-        spells = {
-            'Raise Dead': {
-                'description': 'Allows the Necromancer to raise fallen units as Zombies.',
-                'casting_value': 7,
-                'range': 12,
-                'effect': 'Raises a fallen unit within range as a Zombie under the Necromancer\'s control.',
-                'phase': 'strategy',
-                'class': RaiseDeadSpell
-            },
-            'Deathly Chill': {
-                'description': 'Inflicts a chilling effect on enemy units, reducing their movement.',
-                'casting_value': 6,
-                'range': 18,
-                'effect': 'Reduces the movement characteristic of enemy units within range by 2 for one turn.',
-                'phase': 'shooting'
-            },
-            'Devils visit': {
-                'description': 'Increase ally movement',
-                'casting_value': 6,
-                'range': 18,
-                'effect': 'increases the movement characteristic of ally',
-                'phase': 'strategy',
-                'class': DevilsVisitSpell
-            }
-        }
+        
 
         #self.load_player1_army("strategy_armies/gunline.json")
         #self.load_player2_army("strategy_armies/horde_rush.json")
