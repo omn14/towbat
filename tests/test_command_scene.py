@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from direct.interval.IntervalGlobal import Sequence
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from battleFunctions import melee_attacks
 from challenges import Challenge, duellist
@@ -34,7 +34,7 @@ def knights_spec():
 @pytest.fixture(scope='module')
 def scene(tmp_path_factory):
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
     def first(app, _):
         app._create_unit(knights_spec(), 1, 'Knights')

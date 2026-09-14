@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from direct.task import Task
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from characters import join_unit
 from game import MyApp
@@ -20,7 +20,7 @@ CASES = ('Veteran Rally', 'Ordinary Rally', 'Veteran Escort', 'Tied Veterans', '
 
 def build_scenario():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
     def add(app, name, count, veteran, player=1, character=False):
         unit = app._create_unit(dict(name='Captain of the Empire' if character else 'Dwarf Warrior',

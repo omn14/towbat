@@ -14,14 +14,14 @@ through the bottom where nothing showed them.
 import os
 import sys
 
-from panda3d.core import loadPrcFileData, getModelPath, PNMImage, Point2, Point3
+from panda3d.core import Filename, loadPrcFileData, getModelPath, PNMImage, Point2, Point3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 loadPrcFileData("", "window-type offscreen\nwin-size 1280 720\n"
                     "audio-library-name null")
-getModelPath().appendDirectory(ROOT)
+getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
 from direct.showbase.ShowBase import ShowBase   # noqa: E402
 

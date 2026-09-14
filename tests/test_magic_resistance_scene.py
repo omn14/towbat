@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pytest
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from battlescribe import get_catalogue
 from characters import join_unit, slay_character
@@ -22,7 +22,7 @@ from spell_system import FireballSpell, Spell
 
 def build_scenario():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
     bound = []
     _collect_spells({'name': 'Ruby Ring of Ruin'}, bound)
 

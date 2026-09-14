@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Point3, getModelPath, loadPrcFileData
+from panda3d.core import Filename, Point3, getModelPath, loadPrcFileData
 
 from battlescribe import get_catalogue, spell_key
 from choiceFunctions import Choice
@@ -20,7 +20,7 @@ from tests.test_spell_generation import mage_with_pool
 def display(request):
     width, height = request.param
     loadPrcFileData('', f'window-type offscreen\nwin-size {width} {height}\naudio-library-name null')
-    getModelPath().appendDirectory(str(Path(__file__).resolve().parents[1]))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(Path(__file__).resolve().parents[1])))
     base = ShowBase()
     yield base
     base.destroy()

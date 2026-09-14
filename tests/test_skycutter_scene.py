@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from battleFunctions import impact_hit_report, resolve_impact_hits, unmodified_strength
 from game import MyApp
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def build_scene():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
     def player_one(app, _):
         app._create_unit({'name': 'Lothern Skycutter', 'nmodels': 1, 'files': 1,

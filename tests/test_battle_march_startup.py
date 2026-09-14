@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from battle_config import load_config
 from battle_preparation import run_preparation
@@ -15,7 +15,7 @@ from game import MyApp
 def test_explicit_startup_preserves_visual_board_and_holds_deployment(tmp_path):
     root = Path(__file__).resolve().parents[1]
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(root))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(root)))
     config = load_config()
     config['terrain']['feature_count'] = 0
 

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 from direct.gui.DirectGui import DGG, DirectCheckButton, DirectEntry, DirectOptionMenu
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import (FrameBufferProperties, GraphicsPipe, PNMImage, Point3,
+from panda3d.core import (Filename, FrameBufferProperties, GraphicsPipe, PNMImage, Point3,
                           WindowProperties, getModelPath, loadPrcFileData)
 
 from battle_config import ConfigError, load_config, save_config, startup_options
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(scope='module')
 def app():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
     game = ShowBase()
     yield game
     game.destroy()

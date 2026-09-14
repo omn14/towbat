@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from panda3d.core import Point3, getModelPath, loadPrcFileData
+from panda3d.core import Filename, Point3, getModelPath, loadPrcFileData
 
 from characters import join_unit
 from game import MyApp
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def build_scenario():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
     placements = {}
 
     def add(app, player, name, xpos, protected=False):

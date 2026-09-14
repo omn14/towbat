@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from direct.interval.IntervalGlobal import Sequence, ivalMgr
 from direct.task.Task import TaskManager
-from panda3d.core import AsyncTaskManager, ClockObject, Vec3, getModelPath, loadPrcFileData
+from panda3d.core import AsyncTaskManager, ClockObject, Filename, Vec3, getModelPath, loadPrcFileData
 
 import combat_resolution
 import game as game_module
@@ -25,7 +25,7 @@ DEFENDERS = ('Shieldwall Ready', 'Shieldwall Spent', 'Shieldwall Weapon Choice')
 
 def build_scenario():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
     def add(app, player, name, count):
         unit = app._create_unit(dict(name='Dwarf Warrior', nmodels=count,

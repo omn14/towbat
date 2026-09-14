@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pytest
-from panda3d.core import AsyncTaskManager, getModelPath, loadPrcFileData, Vec2, Vec3
+from panda3d.core import AsyncTaskManager, Filename, getModelPath, loadPrcFileData, Vec2, Vec3
 from direct.task.Task import TaskManager
 
 import aiMinimaxIntegration
@@ -34,7 +34,7 @@ def drop(app, name, x, y):
 
 def build_scenario():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(ROOT))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(ROOT)))
 
     def add(app, player, name, profile, count):
         assert app._create_unit(dict(name=profile, nmodels=count, files=5,

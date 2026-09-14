@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from panda3d.core import CardMaker, GeomVertexReader, NodePath, Point3, getModelPath, loadPrcFileData
+from panda3d.core import CardMaker, Filename, GeomVertexReader, NodePath, Point3, getModelPath, loadPrcFileData
 
 from battleFunctions import strike_initiative, ward_save_value
 from characters import join_unit
@@ -50,7 +50,7 @@ def base_model(graphics, modelpath):
 def scene(tmp_path_factory):
     """Real rules/collisions on an empty map; cases add their own terrain."""
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(Path(__file__).resolve().parents[1]))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(Path(__file__).resolve().parents[1])))
     bake_mat = MyApp.bakeBattleMat
     with patch('spell_generation.begin_spell_generation'), \
             patch.object(unitGraphics, 'loadFigureModel', base_model), \

@@ -6,7 +6,7 @@ from random import Random
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from panda3d.core import getModelPath, loadPrcFileData
+from panda3d.core import Filename, getModelPath, loadPrcFileData
 
 from battleFunctions import attack_characteristic
 from choiceFunctions import Choice
@@ -22,7 +22,7 @@ from tests.test_shieldwall_scene import combat_tasks
 
 def test_default_startup_generates_spells_and_displays_purchased_items(tmp_path, capsys):
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
-    getModelPath().appendDirectory(str(Path(__file__).resolve().parents[1]))
+    getModelPath().appendDirectory(Filename.fromOsSpecific(str(Path(__file__).resolve().parents[1])))
     scheduled = []
 
     def capture_generation(game):
