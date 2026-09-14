@@ -7,6 +7,8 @@ from charge_declarations import begin_declarations, queue_charge
 def unit_at(position):
     return SimpleNamespace(bodyNP=Mock(getPos=Mock(return_value=position),
                                        getHpr=Mock(return_value=(0, 0, 0))),
+                           unit=SimpleNamespace(model=SimpleNamespace(
+                               characteristics={}, special_rules=[])),
                            chargeAttempts=1, chargeAttemptPending=True)
 
 

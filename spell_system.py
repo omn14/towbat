@@ -299,9 +299,10 @@ class Spell:
                 rule_skipped('Magic Resistance', unit,
                              f'{resistance} from {source}: {reason}')
             else:
+                item_term = f' + item {item_bonus}' if item_bonus else ''
                 rule_log('Magic Resistance', unit,
                          f'{resistance} from {source} (strongest, not cumulative): '
-                         f'{self.name}, dice {total} + bonus {bonus} + item {item_bonus} {modifier:+d} '
+                         f'{self.name}, dice {total} + bonus {bonus}{item_term} {modifier:+d} '
                          f'= {result} vs {required}+ -> {outcome} (pp. 108, 173)')
         if self.bound:
             rule_log('Bound Spells', self.caster or unit,
