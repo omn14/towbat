@@ -28,6 +28,29 @@ DEFAULT_CAT_DIR = os.path.join(REPO_DIR, "Warhammer-The-Old-World")
 # The BattleScribe schema namespace; ElementTree prefixes every tag with it.
 NS = "{http://www.battlescribe.net/schema/catalogueSchema}"
 
+# Fan supplements that redefine profiles the official army books already carry.
+# The first definition of a profile wins, and plain filename order loads these
+# first because a space sorts before a full stop -- 'Chaos Dwarfs - Renegades
+# 2.0' ahead of 'Chaos Dwarfs' -- which silently replaced 483 official model,
+# weapon and special-rule profiles across seven armies. Naptha Bombs was the
+# visible symptom: the official weapon has Ponderous, the Renegades one has not.
+# Official Arcane Journal supplements only add profiles, so none need deferring.
+DEFERRED_CATALOGUES = (
+    "Chaos Dwarfs - Renegades",
+    "Daemons of Chaos - Renegades",
+    "Dark Elves - Renegades",
+    "Lizardmen - Renegades",
+    "Ogre Kingdoms - Renegades",
+    "Skaven - Renegades",
+    "Vampire Counts - Renegades",
+)
+
+
+def catalogue_rank(filename: str) -> tuple:
+    """Load order: official books, then the supplements that redefine them."""
+    deferred = any(filename.startswith(prefix) for prefix in DEFERRED_CATALOGUES)
+    return (deferred, not filename.endswith('.json'), filename)
+
 
 def _catalogue_root(source):
     """Normalize NewRecruit JSON to the element tree used by the XML readers."""
@@ -800,7 +823,7 @@ class Catalogue:
             print(f"[battlescribe] catalogue directory not found: {self.cat_dir}")
             return
         loaded = set()
-        for filename in sorted(os.listdir(self.cat_dir), key=lambda name: (not name.endswith('.json'), name)):
+        for filename in sorted(os.listdir(self.cat_dir), key=catalogue_rank):
             path = os.path.join(self.cat_dir, filename)
             if not filename.endswith(('.cat', '.gst', '.json')):
                 continue
