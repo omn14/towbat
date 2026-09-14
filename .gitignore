@@ -26,7 +26,10 @@ strategy_armies/player1_army.json
 strategy_armies/player2_army.json
 
 # Interface preferences: follows the player, not the repository
-settings.json
+/settings.json
+
+# Editor setup: interpreter paths are machine-specific
+.vscode/
 
 # Battle journal exports belong to the player.
 logs/
