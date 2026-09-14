@@ -152,6 +152,8 @@ def draw_battlefield(game):
     game.battlefield_overlay = root
     root.setDepthTest(False)
     root.setDepthWrite(False)
+    # LineSegs geometry carries no normals, so the scene lights render it black.
+    root.setLightOff()
     root.setBin('fixed', 20)
     settings = (getattr(game, 'battle_config', None) or {}).get('battlefield', {})
 
