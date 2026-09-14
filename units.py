@@ -3,7 +3,7 @@ import random
 from models import *
 from direct.fsm.FSM import FSM
 from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
-from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs
+from panda3d.core import Point3, TextNode, BitMask32, TextPropertiesManager, TextProperties, LineSegs, Filename
 from rules_log import rule_log
 from characters import JOIN_TAG
 from skirmish import layout_positions
@@ -501,7 +501,9 @@ class unitGraphics(FSM):
         if self.unit is not None and self.unit.model.name == 'Baggage Cart':
             from battle_secondary import cart_model
             return cart_model(self.color)
-        return loader.loadModel(modelpath)
+        # Panda3D reads its own '/c/...' convention, so an OS path needs converting;
+        # a path already in that form passes through unchanged.
+        return loader.loadModel(Filename.fromOsSpecific(str(modelpath)))
 
     def _varyModelTones(self):
         """Give each miniature its own tone, so a regiment reads as many models
