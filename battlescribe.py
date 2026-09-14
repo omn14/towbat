@@ -19,6 +19,8 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+from troop_types import TROOP_TYPES, normalise
+
 # Stat keys in the canonical order used throughout the codebase.
 STAT_KEYS = ["M", "WS", "BS", "S", "T", "W", "I", "A", "Ld"]
 
@@ -379,7 +381,7 @@ def _unit_context(unit: ET.Element) -> dict:
                 continue
             for char in profile.iter(f"{NS}characteristic"):
                 if char.get("name") == "Troop Type":
-                    troop_type = (char.text or "").strip()
+                    troop_type = (char.text or "").strip() or None
                 elif char.get("name") == "Unit Size":
                     unit_size = (char.text or "").strip()
 
@@ -402,6 +404,45 @@ def _unit_context(unit: ET.Element) -> dict:
         "Unit Size": unit_size,
         "Special Rules": special_rules,
     }
+
+
+def _category_troop_type(entry: ET.Element) -> str | None:
+    """Recognize one direct troop-type tag (Rulebook pp. 188-197).
+
+    Descendant crew and mounts do not classify their parent. Organization and
+    broad category names are not troop subtypes; conflicting tags are unresolved.
+    """
+    links = _direct_child(entry, "categoryLinks")
+    if links is None:
+        return None
+    names = {normalise(link.get("name")) for link in links}
+    types = names.intersection(TROOP_TYPES)
+    return next(iter(types)).title() if len(types) == 1 else None
+
+
+def _index_troop_types_by_profile(root: ET.Element, profiles: dict) -> dict:
+    """Keep a standalone profile's own type, not the type of a unit using it."""
+    explicit_types: dict = {}
+    category_types: dict = {}
+    for entry in root.iter(f"{NS}selectionEntry"):
+        if entry.get("type") != "model":
+            continue
+        profile_id = _first_model_profile_id(entry, profiles)
+        if profile_id is None:
+            continue
+        troop_type = _unit_context(entry)["Troop Type"]
+        if troop_type:
+            explicit_types.setdefault(profile_id, set()).add(troop_type)
+        else:
+            troop_type = _category_troop_type(entry)
+            if troop_type:
+                category_types.setdefault(profile_id, set()).add(troop_type)
+    resolved = {}
+    for profile_id in explicit_types.keys() | category_types.keys():
+        types = explicit_types.get(profile_id) or category_types[profile_id]
+        if len(types) == 1:
+            resolved[profile_id] = next(iter(types))
+    return resolved
 
 
 def weapon_from_profile(name: str, chars: dict) -> dict:
@@ -693,6 +734,7 @@ def parse_catalogue_full(cat_path: str | os.PathLike | ET.Element):
     profiles = _index_model_profiles(root)
     org_map = _index_org_categories(root)
     base_by_profile = _index_base_by_profile(root, profiles)
+    troop_type_by_profile = _index_troop_types_by_profile(root, profiles)
     entries_by_name = _index_entries_by_name(root)
     records: list = []
 
@@ -726,7 +768,9 @@ def parse_catalogue_full(cat_path: str | os.PathLike | ET.Element):
             record["Unit"] = unit_name
             model_context = (_unit_context(model_entry)
                              if context["Troop Type"] is None else context)
-            record["Troop Type"] = context["Troop Type"] or model_context["Troop Type"]
+            record["Troop Type"] = (context["Troop Type"] or model_context["Troop Type"]
+                                    or _category_troop_type(unit)
+                                    or _category_troop_type(model_entry))
             record["Unit Size"] = context["Unit Size"] or model_context["Unit Size"]
             record["Special Rules"] = list(context["Special Rules"] or model_context["Special Rules"])
             record["Category"] = category
@@ -746,7 +790,7 @@ def parse_catalogue_full(cat_path: str | os.PathLike | ET.Element):
         rec["Points"] = 0
         _apply_base_size(rec, base_by_profile.get(pid))
         rec["Unit"] = None
-        rec["Troop Type"] = None
+        rec["Troop Type"] = troop_type_by_profile.get(pid)
         rec["Unit Size"] = None
         rec["Special Rules"] = []
         rec["Category"] = "Other"

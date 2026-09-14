@@ -92,6 +92,58 @@ def test_xml_json_extraction_parity(catalogue_pair):
     assert root.find(f'.//{NS}alias').text == 'Alias'
 
 
+@pytest.mark.parametrize('unit_type,model_type,unit_tags,model_tags,expected', [
+    (None, None, ['Heavy Chariot'], [], 'Heavy Chariot'),
+    ('  ', None, ['Heavy Chariot'], [], 'Heavy Chariot'),
+    (None, None, [], ['Behemoth'], 'Behemoth'),
+    ('Regular Infantry', None, ['Heavy Chariot'], [], 'Regular Infantry'),
+    (None, 'Monstrous Creature', ['Behemoth'], [], 'Monstrous Creature'),
+    ('Regular Infantry', 'Heavy Infantry', [], [], 'Regular Infantry'),
+    (None, None, ['Heavy Chariot'], ['Heavy Infantry'], 'Heavy Chariot'),
+    (None, None, ['Characters', 'Cavalry', 'CHARIOT CREW'], [], None),
+    (None, None, ['Heavy Cavalry', 'Light Cavalry'], [], None),
+    (None, None, [' heavy chariots '], [], 'Heavy Chariot'),
+])
+def test_troop_type_category_fallback_preserves_profiles(
+        catalogue_pair, unit_type, model_type, unit_tags, model_tags, expected):
+    xml_path, json_path = catalogue_pair
+    document = json.loads(json_path.read_text())
+    unit = document['catalogue']['sharedSelectionEntries'][0]
+    model = unit['selectionEntries'][0]
+    for entry, profile_type, tags in ((unit, unit_type, unit_tags), (model, model_type, model_tags)):
+        entry['categoryLinks'] = [{'name': name, 'primary': False} for name in tags]
+        if profile_type is not None:
+            entry['profiles'] = [{'name': 'Unit', 'typeName': 'Unit', 'characteristics': [
+                {'name': 'Troop Type', '$text': profile_type}]}]
+    json_path.write_text(json.dumps(document))
+    ET.ElementTree(_catalogue_root(json_path)).write(xml_path, encoding='utf-8')
+    parsed = parse_catalogue_full(json_path)
+    assert parsed == parse_catalogue_full(xml_path)
+    record = parsed[1][0]
+    assert record['Troop Type'] == expected
+    assert record['Category'] == 'Core'
+    assert record['Points'] == 13
+
+
+def test_tagged_model_with_same_unit_name_has_troop_type(catalogue_pair):
+    xml_path, json_path = catalogue_pair
+    document = json.loads(json_path.read_text())
+    entries = document['catalogue']['sharedSelectionEntries']
+    unit = entries[0]
+    model = unit.pop('selectionEntries')[0]
+    unit['name'] = model['name']
+    unit['categoryLinks'] = [{'name': 'Behemoth'}]
+    model['categoryLinks'] = [{'name': 'Behemoth'}]
+    unit['entryLinks'] = [{'name': model['name'], 'targetId': model['id'], 'type': 'selectionEntry'}]
+    entries.append(model)
+    json_path.write_text(json.dumps(document))
+    ET.ElementTree(_catalogue_root(json_path)).write(xml_path, encoding='utf-8')
+    parsed = parse_catalogue_full(json_path)
+    assert parsed == parse_catalogue_full(xml_path)
+    record = Catalogue(str(json_path.parent)).characteristics('Test Soldier')
+    assert record['Troop Type'] == 'Behemoth'
+
+
 def test_system_namespace_and_shared_weapons(catalogue_pair):
     xml_path, json_path = catalogue_pair
     xml_path.write_text(xml_path.read_text().replace('catalogue', 'gameSystem'))
@@ -133,3 +185,35 @@ def test_offline_converter_accepts_json(catalogue_pair, tmp_path):
     convert_catalogue(json_path, str(output))
     record = json.loads((output / 'test_army' / 'test_soldier_characteristics.json').read_text())
     assert record['WS'] == '4' and record['Points'] == 13 and record['Category'] == 'Core'
+
+
+@pytest.mark.parametrize('profile_type,tags,other_tags,expected', [
+    (None, ['Heavy Cavalry'], [], 'Heavy Cavalry'),
+    ('Light Cavalry', ['Heavy Cavalry'], [], 'Light Cavalry'),
+    (None, ['Heavy Cavalry'], ['Light Cavalry'], None),
+    (None, ['Characters', 'CHARIOT CREW'], [], None),
+    (None, [], [], None),
+])
+def test_standalone_profile_uses_its_own_unambiguous_type(
+        catalogue_pair, profile_type, tags, other_tags, expected):
+    xml_path, json_path = catalogue_pair
+    document = json.loads(json_path.read_text())
+    unit = document['catalogue']['sharedSelectionEntries'][0]
+    model = unit['selectionEntries'][0]
+    model['subType'] = 'mount'
+    model['categoryLinks'] = [{'name': name} for name in tags]
+    if profile_type is not None:
+        model['profiles'] = [{'name': 'Unit', 'typeName': 'Unit', 'characteristics': [
+            {'name': 'Troop Type', '$text': profile_type}]}]
+    model['selectionEntries'] = [{'type': 'model', 'subType': 'crew',
+                                 'categoryLinks': [{'name': 'Heavy Infantry'}]}]
+    entries = document['catalogue']['sharedSelectionEntries'] = [model]
+    if other_tags:
+        entries.append(dict(model, id='other-model', name='Other Mount',
+                            categoryLinks=[{'name': name} for name in other_tags]))
+    json_path.write_text(json.dumps(document))
+    ET.ElementTree(_catalogue_root(json_path)).write(xml_path, encoding='utf-8')
+    assert parse_catalogue_full(json_path) == parse_catalogue_full(xml_path)
+    record = Catalogue(str(json_path.parent)).characteristics('Test Soldier')
+    assert record['Unit'] is None
+    assert record['Troop Type'] == expected

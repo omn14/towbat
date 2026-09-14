@@ -10,6 +10,40 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Catalogue Troop-Type Fallback: 2026-09-14
+
+Rulebook pp. 188-197, especially Heavy Chariots p. 195 and Behemoths p. 196;
+wording checked against the online rules index. XML and JSON imports now fill
+missing or blank troop-type text from a single recognized direct category tag.
+Explicit unit and model profile text wins. Broad categories, army-organization
+tags and descendant crew/mount tags do not classify the enclosing entry.
+Standalone stat profiles retain the unambiguous type of their own model entries,
+with explicit text preferred over category tags; conflicting shared-profile
+types remain unresolved rather than depending on catalogue order.
+
+Tuskgor Chariot now resolves to Heavy Chariot; Khemrian Warsphinx and Stegadon
+resolve to Behemoth. Bretonnian Warhorse and Warhorse retain Heavy Cavalry and
+Light Cavalry respectively. These values reach the existing model Unit Strength,
+rank and troop-rule paths; no rule effects or per-query logging were added.
+Comparison against the committed parser preserves every previously explicit
+type, all non-type record fields, index membership, weapons, spells and lores.
+
+Corrections during verification: name-based entry links can confuse a unit and
+model with the same name. A general target-ID repair also changed which crew
+profiles won global lookups, so that broader change was removed. The standalone
+type index supplies this task's missing types without changing unit selection,
+points, category, stats or special-rule keywords.
+
+Validation: 26 catalogue format/precedence cases, 74 troop-type checks, 38 chariot,
+17 character, 10 roster-import, 19 command-group, 22 marching and one offscreen
+startup check pass in sequential bounded processes (207 checks). Full suite was
+not rerun for this change; the preceding HUD milestone passed 2,863 tests.
+
+LEFTOVER: missing/unknown/ambiguous tags stay unresolved, including category links
+with no name. General target-ID link resolution and duplicate crew/profile
+selection need a separate change; fallback-only models can still lack unit-level
+points and organization metadata. No extra troop-rule effects are implemented.
+
 ## Cover And Three Pending Items: 2026-09-13
 
 Rulebook pp. 138-139, 169, 206; General's Companion pp. 46-48. Per-shooter cover

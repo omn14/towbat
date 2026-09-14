@@ -209,6 +209,40 @@ class TestTheModelReportsThem(unittest.TestCase):
         skirmisher.special_rules.append({'name': 'Skirmishers', 'skirmish': True})
         self.assertTrue(skirmisher.has_all_round_vision())
 
+    def test_category_tagged_heavy_chariots_reach_existing_rules(self):
+        """Heavy Chariots: US5, no ranks, Scythed Wheels (Rulebook p. 195)."""
+        for name in ('Tuskgor Chariot', 'Razorgor Chariot'):
+            with self.subTest(model=name):
+                chariot = model(name, '')
+                self.assertEqual(troop_types.normalise(chariot.troop_type()), 'heavy chariot')
+                self.assertEqual(chariot.unit_strength(), 5)
+                self.assertEqual(chariot.impact_hit_ap(), 2)
+                self.assertTrue(chariot.has_all_round_vision())
+                self.assertTrue(troop_types.has_rule(chariot.troop_type(), 'Lumbering'))
+                unit = SimpleNamespace(model=chariot, nmodels=6, files=3, ranks=2)
+                self.assertEqual(rank_bonus(unit), 0)
+
+    def test_category_tagged_behemoths_use_starting_wounds(self):
+        """Behemoths: starting Wounds as US, no ranks (Rulebook p. 196)."""
+        for name in ('Khemrian Warsphinx', 'Stegadon', 'Ancient Stegadon'):
+            with self.subTest(model=name):
+                creature = model(name, '')
+                self.assertEqual(troop_types.normalise(creature.troop_type()), 'behemoth')
+                self.assertEqual(creature.unit_strength(), 5)
+                creature.characteristics['W'] = 1
+                self.assertEqual(creature.unit_strength(), 5)
+                self.assertTrue(troop_types.has_rule(creature.troop_type(), 'Lumbering'))
+                self.assertTrue(troop_types.has_rule(creature.troop_type(), 'Thunderstomp'))
+                unit = SimpleNamespace(model=creature, nmodels=6, files=3, ranks=2)
+                self.assertEqual(rank_bonus(unit), 0)
+
+    def test_standalone_mount_category_types_are_preserved(self):
+        for name, expected in (('Bretonnian Warhorse', 'Heavy Cavalry'), ('Warhorse', 'Light Cavalry')):
+            with self.subTest(model=name):
+                record = get_catalogue().characteristics(name)
+                self.assertEqual(record['Troop Type'], expected)
+                self.assertEqual(troop_types.unit_strength(record['Troop Type'], 1), 2)
+
 
 class TestRankBonus(unittest.TestCase):
 
