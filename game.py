@@ -341,9 +341,13 @@ class MyApp(ShowBase):
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
         #self.p1army="strategy_armies/orc_and_goblin_horde.json"
         #self.p1army="strategy_armies/my_army_he.json"
-        self.p1army="my_army1.json"
+        rosters = (battle_config or {}).get('rosters', {})
+        self.p1army = (os.path.join(os.path.dirname(__file__), os.path.expanduser(rosters['player1']))
+                   if rosters.get('player1') else 'my_army1.json')
+        self.p2army = (os.path.join(os.path.dirname(__file__), os.path.expanduser(rosters['player2']))
+                   if rosters.get('player2') else 'my_army2.json')
         self.load_player1_army(self.p1army)
-        self.load_player2_army("my_army2.json")
+        self.load_player2_army(self.p2army)
 
 
         self.unitToMove=self.player1Units[0]
@@ -475,7 +479,7 @@ class MyApp(ShowBase):
 
     def load_army_from_json(self, filename, player_num=1, start_pos=Point3(0, -20, 0), spacing=12):
         """
-        Load army units from a JSON file created by the list builder
+        Load a list-builder army or import a NewRecruit/BattleScribe JSON roster.
         
         Args:
             filename: Path to the JSON army list file
@@ -496,6 +500,14 @@ class MyApp(ShowBase):
         except json.JSONDecodeError:
             print(f"Error: Invalid JSON in {filename}!")
             return []
+
+        if isinstance(raw, dict) and 'roster' in raw:
+            try:
+                from roster_importer import import_roster
+                raw = import_roster(filename)
+            except Exception as error:
+                print(f"Error importing roster {filename}: {error}")
+                return []
 
         # Support list-builder format: {"budget": N, "units": [...]}
         if isinstance(raw, dict) and 'units' in raw:

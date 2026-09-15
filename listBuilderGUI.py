@@ -1297,6 +1297,9 @@ class ArmyListBuilderGUI:
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
+            if isinstance(data, dict) and 'roster' in data:
+                from roster_importer import import_roster
+                data = import_roster(filepath)
             if isinstance(data, dict) and 'units' in data:
                 self.points_budget = data.get('budget', self.points_budget)
                 self.army_list = data['units']

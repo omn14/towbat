@@ -73,8 +73,14 @@ def _options(value, choices, path):
 
 def validate_config(record):
     """Return an independent validated record; no coercion or silent defaults."""
+    roster_fields = ' rosters' if isinstance(record, dict) and 'rosters' in record else ''
     _keys(record, 'schema_version ruleset source points_limit battlefield deployment '
-          'terrain objectives game scoring army optional_rules', 'config')
+          'terrain objectives game scoring army optional_rules' + roster_fields, 'config')
+    if roster_fields:
+        _keys(record['rosters'], 'player1 player2', 'rosters')
+        for player, path in record['rosters'].items():
+            if path is not None and (not isinstance(path, str) or not path.strip()):
+                raise ConfigError(f'rosters.{player}: expected a roster path or null')
     if type(record['schema_version']) is not int or record['schema_version'] != 1:
         raise ConfigError('schema_version: only version 1 is supported')
     _choice(record['ruleset'], ('battle_march_generals_companion',), 'ruleset')

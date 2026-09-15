@@ -13,6 +13,17 @@ battle, terrain, objectives, scoring, muster limits and supported optional rules
 saves and starts the battle in the same window. **Load** reads another preset
 from that field, and **Exit** leaves without saving edits.
 
+Under **Rosters**, each player has an **Import Roster** button. Select a
+NewRecruit/BattleScribe JSON export from `strategy_armies/nr/`, just as in the
+list builder. The selected filename, unit count and points are shown for that
+player. **Use Default** restores `my_army1.json` or `my_army2.json`.
+Both selections are saved with the preset and imported when the battle starts;
+the original exports and default army files are not overwritten. Paths within
+the project are saved relative to the project root; external paths are absolute.
+Keep the selected exports available when reopening the preset. An invalid,
+empty or missing roster displays an error instead of replacing a valid selection
+or starting the battle with a different army.
+
 Pass an existing preset with `--battle-config path/to/preset.json`. The optional
 `--battle-seed 19` prepopulates the setup seed; leaving it blank generates a new
 seed on Start Game. This seed is a launch setting, not a preset field. Unsupported

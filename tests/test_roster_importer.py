@@ -28,6 +28,42 @@ def spell_profile(name, profile_id):
                                 {"name": "Range", "$text": "Self"}]}
 
 
+@pytest.mark.parametrize('player', [1, 2])
+def test_game_loads_raw_roster_for_each_player_with_metadata(roster_path, player):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from game import MyApp
+    path = roster_path([{'id': 'noble-unit', 'type': 'unit', 'name': 'Noble', 'selections': [
+        {'id': 'noble', 'type': 'model', 'name': 'Noble', 'number': 1, 'selections': [
+            {'id': 'helm', 'type': 'upgrade', 'name': 'Dragon Helm',
+             'profiles': [{'id': 'helm-profile', 'typeName': 'Magic Armour', 'name': 'Dragon Helm'}]}]}]}])
+    expected = import_roster(path)['units'][0]
+    graphics = SimpleNamespace(unitWidth=1, bodyNP=Mock())
+    app = MyApp.__new__(MyApp)
+    app._create_unit = Mock(return_value=graphics)
+    app.nominate_general = Mock()
+    loaded = getattr(app, f'load_player{player}_army')(path)
+    assert loaded == [graphics]
+    app._create_unit.assert_called_once_with(expected, player, f'P{player}_Noble0')
+    assert expected['magic_items'][0]['name'] == 'Dragon Helm'
+    app.nominate_general.assert_called_once_with(loaded, player)
+    if player == 2:
+        graphics.bodyNP.setH.assert_called_once_with(180)
+
+
+def test_list_builder_reopens_imported_startup_roster(roster_path):
+    from listBuilderGUI import ArmyListBuilderGUI
+    path = roster_path([{'id': 'mage', 'type': 'unit', 'name': 'Mage', 'number': 1}])
+    expected = import_roster(path)
+    builder = ArmyListBuilderGUI.__new__(ArmyListBuilderGUI)
+    builder.points_budget = 750
+    builder.factions = {'High Elf Realms': []}
+    builder.load_from_file(path)
+    assert builder.army_list == expected['units']
+    assert builder.points_budget == 500
+    assert builder.selected_faction
+
+
 def test_lore_profiles_are_options_not_known_spells(roster_path):
     unit = {"id": "mage-unit", "type": "unit", "name": "Mage", "selections": [
         {"id": "mage", "type": "model", "name": "Mage", "number": 1,

@@ -17,6 +17,24 @@ from battle_config_ui import BattleConfigScreen, FIELDS
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def official_defaults(monkeypatch):
+    original = load_config
+
+    def load_official(path=None):
+        config = original() if path is None else original(path)
+        if path is None:
+            config['battlefield'].update(width=44, depth=30)
+            config['deployment'].update(map='random', mirror=False)
+            config['terrain'].update(method='alternating', feature_count=4)
+            config['objectives']['layout'] = 'random'
+            config.pop('rosters', None)
+        return config
+
+    monkeypatch.setattr(__name__ + '.load_config', load_official)
+    monkeypatch.setattr('battle_config_ui.load_config', load_official)
+
+
 @pytest.fixture(scope='module')
 def app():
     loadPrcFileData('', 'window-type offscreen\nwin-size 1280 720\naudio-library-name null')
@@ -37,6 +55,20 @@ def screen(app, tmp_path):
 def click(screen, button):
     screen.game.messenger.send(DGG.B1CLICK + button.guiId, [None])
     screen.game.eventMgr.doEvents()
+
+
+def test_optional_player_roster_paths_round_trip_without_changing_old_presets(tmp_path):
+    from battle_config import validate_config
+    config = load_config()
+    assert 'rosters' not in validate_config(config)
+    config['rosters'] = {'player1': 'strategy_armies/nr/high_elves.json', 'player2': None}
+    path = tmp_path / 'rosters.json'
+    save_config(path, config)
+    assert load_config(path) == config
+    for invalid in ('', 42, [], {}):
+        config['rosters']['player2'] = invalid
+        with pytest.raises(ConfigError, match='rosters.player2'):
+            validate_config(config)
 
 
 def test_form_saves_edits_across_tabs_and_starts_once(screen):
@@ -69,6 +101,52 @@ def test_form_saves_edits_across_tabs_and_starts_once(screen):
     click(screen, screen.start_button)
     click(screen, screen.start_button)
     screen.on_start.assert_called_once_with(saved, 23)
+
+
+def test_player_roster_picker_import_save_reload_and_reset(screen, tmp_path, monkeypatch):
+    monkeypatch.setattr('battle_config_ui.ROSTER_DIR', tmp_path)
+    first, second = tmp_path / 'High Elves.json', tmp_path / 'Empire.json'
+    first.write_text('{}')
+    second.write_text('{}')
+    army = {'units': [{'name': 'Noble', 'points_cost': 96}], 'budget': 500}
+    screen.controls['points_limit'].enterText('650')
+    click(screen, screen.tabs['Rosters'])
+    with patch('roster_importer.import_roster', return_value=army) as importer:
+        for player, path in (('player1', first), ('player2', second)):
+            click(screen, screen.roster_buttons[player])
+            assert set(screen.roster_file_buttons) == {first.name, second.name}
+            click(screen, screen.roster_file_buttons[path.name])
+            assert screen.roster_paths[player] == str(path)
+            importer.assert_called_with(str(path))
+        assert screen.save()
+        assert load_config(screen.path)['rosters'] == {'player1': str(first), 'player2': str(second)}
+        click(screen, screen.default_roster_buttons['player1'])
+        assert screen.roster_paths == {'player1': None, 'player2': str(second)}
+        click(screen, screen.load_button)
+        assert screen.roster_paths['player1'] == str(first)
+        click(screen, screen.start_button)
+        assert screen.on_start.call_args.args[0]['rosters'] == screen.roster_paths
+        assert screen.on_start.call_args.args[0]['points_limit'] == 650
+
+
+def test_roster_errors_cancel_and_empty_directory_preserve_selection(screen, tmp_path, monkeypatch):
+    monkeypatch.setattr('battle_config_ui.ROSTER_DIR', tmp_path)
+    click(screen, screen.tabs['Rosters'])
+    click(screen, screen.roster_buttons['player2'])
+    assert not screen.roster_file_buttons
+    screen.game.messenger.send('escape')
+    assert screen.roster_player is None and not screen.closed
+    screen.roster_paths['player1'] = str(tmp_path / 'selected.json')
+    for error in (ValueError('Invalid export'), OSError('File missing')):
+        with patch('roster_importer.import_roster', side_effect=error):
+            assert not screen.import_roster_path('player1', tmp_path / 'broken.json')
+        assert screen.roster_paths['player1'].endswith('selected.json')
+        assert 'import failed' in screen.status.getText()
+    with patch('roster_importer.import_roster', return_value={'units': []}):
+        assert not screen.import_roster_path('player2', tmp_path / 'empty.json')
+    screen.start()
+    screen.on_start.assert_not_called()
+    assert not screen.started and 'Player 1 roster' in screen.status.getText()
 
 
 @pytest.mark.parametrize('invalid', ['abc', '500.5', '399', '751', 'nan'])
@@ -221,7 +299,7 @@ def test_large_seed_and_numeric_precision_survive_opening(app, tmp_path):
 
 
 @pytest.mark.parametrize('width,height', [(1280, 720), (800, 600), (720, 960)])
-def test_native_form_layout_popups_and_offscreen_pixels(screen, width, height):
+def test_native_form_layout_popups_and_offscreen_pixels(screen, width, height, tmp_path, monkeypatch):
     game = screen.game
     framebuffer = FrameBufferProperties()
     framebuffer.setRgbColor(True)
@@ -286,5 +364,34 @@ def test_native_form_layout_popups_and_offscreen_pixels(screen, width, height):
         colors = {tuple(image.getXel(horizontal, vertical))
                   for horizontal in range(0, width, 13) for vertical in range(0, height, 13)}
         assert len(colors) > 50
+        monkeypatch.setattr('battle_config_ui.ROSTER_DIR', tmp_path)
+        for name in ('HE_BM_2.json', 'Empire Battle March.json', 'A_very_long_roster_filename_' * 3 + '.json'):
+            (tmp_path / name).write_text('{}')
+        click(screen, screen.tabs['Rosters'])
+        for view in ('rosters', 'roster_picker'):
+            if view == 'roster_picker':
+                click(screen, screen.roster_buttons['player2'])
+            game.eventMgr.doEvents()
+            game.graphicsEngine.renderFrame()
+            game.graphicsEngine.renderFrame()
+            buttons = [*screen.roster_buttons.values(), *screen.default_roster_buttons.values(),
+                       *screen.roster_file_buttons.values()]
+            for button in buttons:
+                bounds = button.guiItem.getFrame()
+                lower = screen.root.getRelativePoint(button, Point3(bounds[0], 0, bounds[2]))
+                upper = screen.root.getRelativePoint(button, Point3(bounds[1], 0, bounds[3]))
+                assert -screen.width / 2 <= lower.x < upper.x <= screen.width / 2
+                assert -.61 <= lower.z < upper.z <= .43
+                text = button.component('text0').textNode
+                scale = button['text_scale'][0]
+                offset = button['text_pos'][0]
+                text_lower = screen.root.getRelativePoint(button, Point3(offset + text.getLeft() * scale, 0, 0))
+                text_upper = screen.root.getRelativePoint(button, Point3(offset + text.getRight() * scale, 0, 0))
+                assert lower.x <= text_lower.x < text_upper.x <= upper.x
+            assert buffer.getScreenshot(image)
+            assert image.write(Filename.fromOsSpecific(str(ROOT / '.pytest_cache' / f'{view}_{width}x{height}.png')))
+            colors = {tuple(image.getXel(horizontal, vertical))
+                      for horizontal in range(0, width, 13) for vertical in range(0, height, 13)}
+            assert len(colors) > 50
     finally:
         game.graphicsEngine.removeWindow(buffer)

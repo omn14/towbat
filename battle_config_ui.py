@@ -13,6 +13,8 @@ from battle_config import (CUSTOM_DEPLOYMENT_MAPS, DEFAULT_PRESET, DEPLOYMENT_MA
                            MIRRORABLE_MAPS, OBJECTIVE_LAYOUTS, REED_FENS_MAP, REED_FENS_PRESET, ConfigError, _number,
                            load_config, save_config, validate_activation, validate_config)
 
+ROSTER_DIR = Path(__file__).parent / 'strategy_armies' / 'nr'
+
 
 FIELDS = {
     'Battle': [
@@ -26,6 +28,7 @@ FIELDS = {
         ('battlefield.show_deployment', 'Show deployment zones', 'boolean', None),
         ('seed', 'Setup seed (optional)', 'seed', None),
     ],
+    'Rosters': [],
     'Terrain': [
         ('terrain.method', 'Placement method', 'menu', ('alternating', 'scattered', 'fixed')),
         ('terrain.feature_count', 'Terrain features', 'integer', None),
@@ -109,6 +112,9 @@ class BattleConfigScreen(DirectObject):
         self.values = {}
         self.controls = {}
         self.menu_choices = {}
+        self.roster_widgets = []
+        self.roster_player = None
+        self.roster_summaries = {}
         self.official_map_values = None
         self.load_values()
         self.root = DirectFrame(parent=game.aspect2d, sortOrder=1000,
@@ -136,7 +142,7 @@ class BattleConfigScreen(DirectObject):
         self.accept('aspectRatioChanged', self.layout)
         self.accept('wheel_up', self.scroll_by, [-.13])
         self.accept('wheel_down', self.scroll_by, [.13])
-        self.accept('escape', self.exit)
+        self.accept('escape', self.escape)
         self.layout()
 
     def button(self, label, command, width, primary=False):
@@ -147,6 +153,8 @@ class BattleConfigScreen(DirectObject):
                             relief=DGG.FLAT, command=command)
 
     def load_values(self):
+        self.roster_paths = dict(self.config.get('rosters', {'player1': None, 'player2': None}))
+        self.roster_summaries.clear()
         for fields in FIELDS.values():
             for path, label, kind, options in fields:
                 value = self.seed if kind == 'seed' else _value(self.config, path)
@@ -168,6 +176,8 @@ class BattleConfigScreen(DirectObject):
     def draft(self):
         self.capture()
         config = deepcopy(self.config)
+        if 'rosters' in config or any(self.roster_paths.values()):
+            config['rosters'] = dict(self.roster_paths)
         seed = None
         for fields in FIELDS.values():
             for path, label, kind, options in fields:
@@ -191,6 +201,7 @@ class BattleConfigScreen(DirectObject):
 
     def select_tab(self, name):
         self.capture()
+        self.roster_player = None
         self.tab = name
         self.build_fields()
 
@@ -221,6 +232,9 @@ class BattleConfigScreen(DirectObject):
         self.build_fields()
 
     def build_fields(self):
+        for widget in self.roster_widgets:
+            widget.destroy()
+        self.roster_widgets.clear()
         for control in self.controls.values():
             control.destroy()
         for label in self.labels:
@@ -230,6 +244,9 @@ class BattleConfigScreen(DirectObject):
         self.labels.clear()
         for name, button in self.tabs.items():
             button['frameColor'] = theme.GREEN_BANNER if name == self.tab else theme.BTN_NEUTRAL
+        if self.tab == 'Rosters':
+            self.build_rosters()
+            return
         fields = FIELDS[self.tab]
         left, right = -self.width / 2 + .015, self.width / 2 - .07
         input_width = min(.72, self.width * .43)
@@ -289,6 +306,117 @@ class BattleConfigScreen(DirectObject):
             if self.values['deployment.map'] == REED_FENS_MAP and (path in MAP_FIELDS or path.startswith('objectives.')):
                 control['state'] = DGG.DISABLED
             self.controls[path] = control
+
+    def roster_button(self, label, command, left, height, width):
+        metrics = TextNode('roster-button-label')
+        metrics.setFont(theme.get_font())
+        metrics.setText(label)
+        scale = min(.032, (width - .06) / max(1, metrics.getWidth()))
+        button = DirectButton(parent=self.scroll.getCanvas(), text=label, text_font=theme.get_font(),
+                              text_scale=scale, text_fg=theme.CREAM, text_align=TextNode.ALeft,
+                              text_pos=(.025, -.012), pos=(left, 0, height),
+                              frameSize=(0, width, -.045, .045), frameColor=theme.BTN_NEUTRAL,
+                              relief=DGG.FLAT, command=command)
+        self.roster_widgets.append(button)
+        return button
+
+    def roster_label(self, text, left, height, scale=.032):
+        label = theme.styled_text(text, parent=self.scroll.getCanvas(), pos=(left, height),
+                                  scale=scale, fg=theme.INK, shadow=None,
+                                  wordwrap=(self.width - .14) / scale)
+        self.roster_widgets.append(label)
+        return label
+
+    def build_rosters(self):
+        left = -self.width / 2 + .015
+        width = self.width - .09
+        self.scroll['canvasSize'] = (-self.width / 2, self.width / 2 - .04, -.61, .43)
+        self.scroll.verticalScroll['value'] = 0
+        self.roster_buttons = {}
+        self.default_roster_buttons = {}
+        self.roster_file_buttons = {}
+        if self.roster_player is not None:
+            player = self.roster_player
+            self.roster_label(f'Import Roster - Player {player[-1]}', left, .34)
+            self.roster_cancel_button = self.roster_button('Cancel', self.cancel_roster_picker,
+                                                           left, .21, .27)
+            try:
+                paths = sorted((path for path in ROSTER_DIR.glob('*.json') if path.is_file()),
+                               key=lambda path: path.name.casefold())
+            except OSError as error:
+                self.message(str(error), error=True)
+                paths = []
+            if not paths:
+                self.roster_label('No roster exports found.', left, .05)
+            for index, path in enumerate(paths):
+                self.roster_file_buttons[path.name] = self.roster_button(
+                    path.name, lambda path=path: self.import_roster_path(player, path),
+                    left, .065 - index * .115, width)
+            self.scroll['canvasSize'] = (-self.width / 2, self.width / 2 - .04,
+                                         min(-.61, .005 - len(paths) * .115), .43)
+            return
+        for index, player in enumerate(('player1', 'player2')):
+            height = .34 - index * .48
+            self.roster_label(f'Player {index + 1}', left, height)
+            path = self.roster_paths[player]
+            name = Path(path).name if path else f'my_army{index + 1}.json (default)'
+            metrics = TextNode('roster-filename')
+            metrics.setFont(theme.get_font())
+            metrics.setText(name)
+            self.roster_label(name, left, height - .09,
+                              min(.032, (width - .03) / max(1, metrics.getWidth())))
+            if player in self.roster_summaries:
+                self.roster_label(self.roster_summaries[player], left, height - .16, .027)
+            self.roster_buttons[player] = self.roster_button('Import Roster',
+                lambda player=player: self.show_roster_picker(player), left, height - .26, .45)
+            self.default_roster_buttons[player] = self.roster_button('Use Default',
+                lambda player=player: self.clear_roster(player), left + .48, height - .26, .4)
+            if path is None:
+                self.default_roster_buttons[player]['state'] = DGG.DISABLED
+
+    def show_roster_picker(self, player):
+        self.capture()
+        self.tab = 'Rosters'
+        self.roster_player = player
+        self.message('')
+        self.build_fields()
+
+    def cancel_roster_picker(self):
+        self.roster_player = None
+        self.build_fields()
+
+    def import_roster_path(self, player, path):
+        if self.started or self.closed:
+            return False
+        try:
+            from roster_importer import import_roster
+            path = Path(path).expanduser().resolve()
+            army = import_roster(str(path))
+            if not army.get('units'):
+                raise ValueError('Roster contains no units')
+            points = sum(unit.get('points_cost', 0) for unit in army['units'])
+        except Exception as error:
+            self.message(f'Player {player[-1]} import failed: {error}', error=True)
+            return False
+        root = Path(__file__).parent
+        self.roster_paths[player] = str(path.relative_to(root) if path.is_relative_to(root) else path)
+        self.roster_summaries[player] = f'{len(army["units"])} units, {points:g} points'
+        self.roster_player = None
+        self.build_fields()
+        self.message(f'Player {player[-1]}: imported {path.name}')
+        return True
+
+    def clear_roster(self, player):
+        self.roster_paths[player] = None
+        self.roster_summaries.pop(player, None)
+        self.build_fields()
+        self.message(f'Player {player[-1]}: default army')
+
+    def escape(self):
+        if self.roster_player is not None:
+            self.cancel_roster_picker()
+        else:
+            self.exit()
 
     def map_changed(self):
         previous = self.values['deployment.map']
@@ -361,6 +489,15 @@ class BattleConfigScreen(DirectObject):
         try:
             config, seed = self.draft()
             validate_activation(config)
+            from roster_importer import import_roster
+            for player, path in self.roster_paths.items():
+                if path:
+                    try:
+                        roster = import_roster(str(Path(__file__).parent / Path(path).expanduser()))
+                        if not roster.get('units'):
+                            raise ValueError('Roster contains no units')
+                    except Exception as error:
+                        raise ConfigError(f'Player {player[-1]} roster: {error}') from error
         except ConfigError as error:
             self.message(str(error), error=True)
             return
