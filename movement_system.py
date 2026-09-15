@@ -2218,6 +2218,14 @@ class MovementSystem:
 
         loser.setPos(newPos)
         bpos=loser.getPos()
+        loserUnit = self.game.getSelectedUnit(loser.node())
+        outcome = 'give_ground' if GG else 'fall_back' if rally else 'flee'
+        loser.setHpr(fleeHpr)
+        if self.game.combat.retreatEdgeContact(loserUnit, outcome) is not None:
+            loser.setPos(loserPos)
+            loser.setHpr(oldHpr)
+            return Sequence(rotate_interval, move_interval,
+                            Func(self.game.combat.removeRetreatAtEdge, loserUnit, outcome, from_pos=loserPos))
         loser.setHpr(newHpr)
         if rally or flee:
             self.fallBackContactTest(loser,direction*.1)
@@ -2226,6 +2234,8 @@ class MovementSystem:
             self.fallBackContactTest(loser,-direction*.1)
 
         newPos = loser.getPos()
+        loser.setHpr(fleeHpr)
+        ends_at_edge = self.game.combat.retreatEdgeContact(loserUnit, outcome) is not None
         if (newPos - bpos).length() > 1.1:
             print("Adjusted fallback position due to collision:", bpos,newPos)
             loserUnit = self.game.getSelectedUnit(loser.node())
@@ -2248,6 +2258,9 @@ class MovementSystem:
             hpr=newHpr,
             blendType='easeInOut'
         )
+        if ends_at_edge:
+            return Sequence(rotate_interval, move_interval, move_interval2,
+                            Func(self.game.combat.removeRetreatAtEdge, loserUnit, outcome, from_pos=loserPos))
         sequence = Sequence(
             rotate_interval,
             move_interval,

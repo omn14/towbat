@@ -476,7 +476,10 @@ def test_baggage_cart_setup_escape_scoring_and_reload(scene, tmp_path, outcome, 
     app, baseline = scene
     load_game_state(app, str(baseline))
     config = load_config()
-    config['deployment']['map'] = 'pitched_battle'
+    config['battlefield'].update(width=44, depth=30)
+    config['deployment'].update(map='pitched_battle', mirror=False)
+    config['terrain']['method'] = 'alternating'
+    config['objectives']['layout'] = 'two_troves'
     config['optional_rules']['secondary_objectives'] = ['baggage_carts']
     restore_battle(app, {'config': config, 'setup': resolve_setup(config, 12)})
     try:

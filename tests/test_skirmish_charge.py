@@ -188,7 +188,7 @@ def test_defence_requires_front_edge_contact_not_just_a_front_row_model(position
 
 
 @pytest.mark.parametrize('member,attribute,value', [
-    ('attacker', 'joinedCharacter', object()), ('defender', 'joinedCharacter', object()),
+    ('defender', 'joinedCharacter', object()),
     ('attacker', 'state', 'IsPursuing'), ('defender', 'state', 'IsFleeing'),
     ('defender', 'state', 'InCombat'), ('defender', 'skirmishCombat', True),
     ('attacker', 'isSkirmisher', True), ('defender', 'isSkirmisher', False),
@@ -199,6 +199,21 @@ def test_defender_form_up_keeps_unsupported_pairings_on_legacy_path(member, attr
     assert supported_skirmish_defender(attacker, defender)
     setattr(attacker if member == 'attacker' else defender, attribute, value)
     assert not supported_skirmish_defender(attacker, defender)
+
+
+@pytest.mark.parametrize('character_half_width', [0.5, 0.75])
+def test_joined_character_in_formed_charger_does_not_disable_defender_form_up(character_half_width):
+    attacker = SimpleNamespace(isSkirmisher=False, state='Idle', joinedCharacter=object())
+    defender = SimpleNamespace(isSkirmisher=True, state='Idle', joinedCharacter=None, skirmishCombat=False)
+    assert supported_skirmish_defender(attacker, defender)
+    sources = boxes([(-.5 - character_half_width, 0), (.5 + character_half_width, 0)])
+    sources.append((0, 0, character_half_width, .5, 0))
+    targets = boxes([(-1.6, 2.6), (0, 1), (1.6, 2.6)], 180)
+    original = list(sources)
+    rank = plan_skirmish_defence(sources, targets, 4)
+    assert rank is not None and sources == original
+    assert all(min(obb_distance((*position, .5, .5, rank.heading), source)
+                   for source in sources) < 1e-5 for position in rank.positions[:rank.files])
 
 
 @pytest.mark.parametrize('character_half_width', [0.5, 0.75])

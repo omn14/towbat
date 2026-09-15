@@ -26,6 +26,23 @@ benefits. Tests cover Open Order and Skirmisher Horsemen, three target headings,
 with/without the Noble, positive rider/mount attack counts, and deliberately
 broken final alignment.
 
+[x] Reverse direction: a formed charger with a joined character now uses the
+same base-aware route and defender-only form-up as an unaccompanied regiment
+(Rulebook p. 186, Formed Units Charging Skirmishers). Spearmen with a Noble no
+longer fall back to legacy alignment against dispersed Horsemen. The formed
+charger, including the Noble, stays fixed after contact while the Horsemen form
+their fighting rank. Existing logs report the rank size and Movement allowance.
+
+[x] Corrected during the reverse-charge regression: `apply_fighting_rank` now
+anchors the geometric rank origin, not the first model node. A command model
+(the Horsemen's musician) is placed centrally by `layOutRanks`; anchoring that
+model as the leftmost file shifted the entire rank sideways, leaving fighting
+models out of contact. The shared rank-origin fix preserves the planned front.
+Live declaration tests cover three target headings, with/without the Noble,
+the reported [1, 3] charge dice, a genuinely short [1, 1] roll, every defending
+front-rank base in contact, rider/mount attack allocation, and joined ownership.
+Pure tests also cover differing character base widths on the formed charger.
+
 LEFTOVER: joined characters in the charging loose formation and loose defenders
 with joined characters still need individual form-up support. The special
 obstructed/disordered gap case on p. 128 needs explicit virtual combat-contact
@@ -4146,6 +4163,32 @@ charge path was quietly handling it — check there before believing an absence.
       LEFTOVER: untested. The margin needs a real Bullet sweep to reach, so it
       is two lines of arithmetic behind the same async/`render` boundary that
       `alignToEnemy` sits behind.
+
+- [x] Retreating off the battlefield (Rulebook pp. 132, 134; Combat FAQ v1.5.3).
+      Giving Ground destroys the whole unit if any base crosses beyond an edge;
+      merely touching it survives. Fleeing and Falling Back in Good Order destroy
+      the whole unit on touching or crossing. The FAQ overrides the generic
+      prohibition on moving off the table: Give Ground is not clamped at the edge.
+      `CombatResolver.retreatEdgeContact` uses actual world-space model-base corners,
+      including rotated bases, incomplete ranks and joined characters, against the
+      configured battlefield. A 0.00001-inch tolerance absorbs transform rounding.
+      Combat retreats and Panic/charge-reaction fleeing share destruction cleanup;
+      combat FBIGO checks both its rolled and collision-adjusted fleeing positions
+      before its rally turn. Off-table Panic FBIGO never offers a free reform.
+      The old boundary safety check uses the same cleanup and tolerates repeated
+      contacts and multiple fleeing units. Destruction logs the edge and signed
+      base clearance, removes joined characters and their caster-owned effects,
+      clears only affected combat links/challenges, and awards full Dead or Fled VP.
+      Declared pursuers retain the removed quarry's exit position. Baggage Cart
+      Flee To Safety remains an escape, not destruction, with combat links cleared.
+      Tests cover four edges of a 30 x 44 board, rotated bases, contact versus
+      crossing, combat/Panic callbacks, pre-rally timing, joined-caster cleanup,
+      multiple combat opponents, full VP, and the Baggage Cart exemption.
+      Corrected on the way: the cart regression inherited incompatible custom-map
+      dimensions, terrain and objectives; its official-map setup is now explicit.
+      LEFTOVER: continuous corner sweeps during pivot animations are not tested
+      or newly implemented here; checks use the movement's resolved base facings.
+      Pursuers' own off-table return rules are unchanged.
 
 ### Not in this section
 Whether a unit that Falls Back in Good Order panics its friends was checked and

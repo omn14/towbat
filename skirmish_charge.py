@@ -246,10 +246,10 @@ def plan_skirmish_defence(attackers, defenders, defender_movement):
 
 
 def supported_skirmish_defender(attacker, defender):
+    """The formed charger's joined bases stay fixed while defenders form up (p. 186)."""
     return (not getattr(attacker, 'isSkirmisher', False)
             and getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat
             and defender.state not in ('IsFleeing', 'InCombat') and attacker.state != 'IsPursuing'
-            and getattr(attacker, 'joinedCharacter', None) is None
             and getattr(defender, 'joinedCharacter', None) is None)
 
 
@@ -333,7 +333,7 @@ def declaration_route(game, unit, target, maximum):
 
 
 def apply_fighting_rank(game, unit, formation):
-    """Keep planned model identities and contact while resizing the body (pp. 186-187)."""
+    """Anchor the rank origin, not a centrally placed command model (pp. 186-187)."""
     from panda3d.core import Point3
     from rules_log import rule_log
     children = list(unit.model.getChildren())
@@ -354,8 +354,7 @@ def apply_fighting_rank(game, unit, formation):
     unit.bodyNP.setHpr(game.render, formation.heading, 0, 0)
     unit.layOutRanks()
     unit.rebuildFootprint()
-    first = unit.model.getChild(0)
-    current = first.getPos(game.render)
+    current = unit.model.getPos(game.render)
     desired = Point3(*formation.positions[0], current.z)
     unit.bodyNP.setPos(game.render, unit.bodyNP.getPos(game.render) + desired - current)
     unit.bodyNP.node().setTransformDirty()

@@ -959,9 +959,10 @@ class PsychologySystem:
         final, passed = self._flee_until_clear(unit, start, direction, distance)
         final.z = start.z
         # Face the flee direction (heading only — keep the body upright).
-        unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
-        unit.bodyNP.setP(0)
-        unit.bodyNP.setR(0)
+        if outcome != 'give_ground':
+            unit.bodyNP.lookAt(Point3(start.x + direction.x, start.y + direction.y, start.z))
+            unit.bodyNP.setP(0)
+            unit.bodyNP.setR(0)
         label = {'fall_back': "falls back",
                  'give_ground': "gives ground"}.get(outcome, "flees")
         print(f"[Panic] {unit.unit.name} {label} {distance:.0f}\" from "
@@ -975,6 +976,14 @@ class PsychologySystem:
         friendlies = list(self._friendlies_of(unit))
 
         def after_move(task=None):
+            if resolver is not None and resolver.removeRetreatAtEdge(unit, outcome, from_pos=start):
+                if outcome != 'give_ground':
+                    for other in passed:
+                        if (other in friendlies and not other.bodyNP.isEmpty()
+                                and fled_through_panics(is_skirmish_unit(unit), is_skirmish_unit(other))):
+                            self._panic_queue.append((other, None, 'fled through', False))
+                on_done()
+                return
             unit.updateTextNode()
             if outcome != 'give_ground':
                 # Fleeing through an enemy is perilous (p. 133), and a Fall

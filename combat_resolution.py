@@ -127,6 +127,70 @@ class CombatResolver:
         if unit in self.game.player2Units:
             self.game.player2Units.remove(unit)
 
+    def retreatEdgeContact(self, unit, outcome):
+        """Flee/FBIGO touch the edge (pp. 132, 134); Give Ground crosses it (FAQ v1.5.3)."""
+        from battlefield import battlefield_for
+        from psychology import _box_corners
+        from scouts import model_base_boxes
+        if unit.bodyNP.isEmpty():
+            return None
+        field = battlefield_for(self.game)
+        corners = [corner for box in model_base_boxes(unit) for corner in _box_corners(*box)]
+        if not corners:
+            return None
+        clearance, edge = min((distance, name) for horizontal, vertical in corners
+                              for distance, name in ((field.width / 2 - horizontal, 'east'),
+                                                     (field.width / 2 + horizontal, 'west'),
+                                                     (field.depth / 2 - vertical, 'north'),
+                                                     (field.depth / 2 + vertical, 'south')))
+        crossed = clearance < -1e-5 if outcome == 'give_ground' else clearance <= 1e-5
+        return (clearance, edge) if crossed else None
+
+    def removeRetreatAtEdge(self, unit, outcome, *, from_pos=None):
+        """Destroy a retreat at the edge before rallying (pp. 132, 134; Combat FAQ v1.5.3)."""
+        from battle_secondary import escape_cart
+        if unit.bodyNP.isEmpty():
+            return True
+        position = Vec3(unit.bodyNP.getPos())
+        contact = self.retreatEdgeContact(unit, outcome)
+        escaped = escape_cart(self.game, unit, from_pos=from_pos)
+        if not escaped and contact is None:
+            return False
+        if not escaped:
+            clearance, edge = contact
+            label = {'give_ground': 'Give Ground', 'fall_back': 'Fall Back in Good Order'}.get(outcome, 'Flee')
+            rule_log(label, unit,
+                     f'{edge} battlefield edge, nearest base clearance {clearance:.4f}"; '
+                     f'entire unit destroyed ({"Official FAQ v1.5.3" if outcome == "give_ground" else "pp. 132, 134"})')
+        unit.retreatExitPosition = position
+        for opponent in list(self.game.units):
+            if opponent is unit or unit not in opponent.isInCombatWith:
+                continue
+            retained = [(enemy, flank) for enemy, flank in
+                        zip(opponent.isInCombatWith, opponent.isInCombatFlank) if enemy is not unit]
+            opponent.isInCombatWith = [enemy for enemy, _ in retained]
+            opponent.isInCombatFlank = [flank for _, flank in retained]
+            if not retained and opponent.state == 'InCombat':
+                opponent.request('Idle')
+        unit.isInCombatWith = []
+        unit.isInCombatFlank = []
+        unit.isInCombat = False
+        for challenge in list(getattr(self.game, 'challenges', None) or []):
+            if unit in challenge.hosts():
+                self.game.challenges.remove(challenge)
+        if escaped:
+            return True
+        joined = getattr(unit, 'joinedCharacter', None)
+        from characters import on_host_removed
+        on_host_removed(self.game, unit)
+        if joined is not None:
+            joined.model.removeNode()
+            joined.bodyNP.removeNode()
+            joined.unit.nmodels = 0
+        unit.unit.nmodels = 0
+        self.removeUnitFromPlay(unit)
+        return True
+
     # ─── Charge & Charge Reaction ─────────────────────────────────────────
 
     def counterChargeOption(self, defender, charger, fromPos, fromHpr):
@@ -1024,8 +1088,7 @@ class CombatResolver:
             terning.remove(self.game.world)
         unit.bodyNP.wrtReparentTo(parent)
 
-        from battle_secondary import escape_cart
-        escape_cart(self.game, fleeingUnit, from_pos=fleePos)
+        self.removeRetreatAtEdge(fleeingUnit, 'flee', from_pos=fleePos)
         unit.request("Moved")
 
         return
@@ -3507,6 +3570,8 @@ class CombatResolver:
             await self.game.attackSequence2
             for unit, origin in origins:
                 if not unit.bodyNP.isEmpty():
+                    if unit is loserUnit and self.removeRetreatAtEdge(unit, 'give_ground', from_pos=origin):
+                        continue
                     if unit is not loserUnit and (unit.bodyNP.getPos() - origin).length() > 1e-6:
                         unit.frenzyFollowUpNextTurn = True
                     with nullcontext() if unit is loserUnit else grounded(unit):
@@ -3574,7 +3639,11 @@ class CombatResolver:
         await self.game.fallBack2(loserUnit.bodyNP, direction, length=distance * 1.0,
                                   rally=(outcome == 'fall_back'),
                                   flee=(outcome == 'break'))
+        if self.removeRetreatAtEdge(loserUnit, outcome, from_pos=before):
+            return
         self.nudgeOneInchApart(loserUnit, direction)
+        if self.removeRetreatAtEdge(loserUnit, outcome, from_pos=before):
+            return
         after = Vec3(loserUnit.bodyNP.getPos())
         # A unit can be finished off by the ground it ran over, so the position
         # is taken before the tests that might remove it.
@@ -3762,8 +3831,9 @@ class CombatResolver:
         two are still nose to nose with no room to turn in.
         """
         outcome_of = {id(u): o for u, o in outcomes}
-        destinations = {id(response['target']): Vec3(response['target'].bodyNP.getPos())
-                for response in responses if not response['target'].bodyNP.isEmpty()}
+        destinations = {id(response['target']): (
+            Vec3(response['target'].bodyNP.getPos()) if not response['target'].bodyNP.isEmpty()
+            else getattr(response['target'], 'retreatExitPosition', None)) for response in responses}
         for r in responses:
             winner, target = r['winner'], r['target']
             if winner.bodyNP.isEmpty():
@@ -3789,7 +3859,7 @@ class CombatResolver:
                 continue
             if target.bodyNP.isEmpty():
                 rule_log('Pursuit', winner,
-                         f'{target.unit.name} already caught; completes the declared pursuit '
+                         f'{target.unit.name} already removed; completes the declared pursuit '
                          f'towards ({destination.x:.2f}, {destination.y:.2f}) using current obstacles (p. 156)')
             await self.pursuitMove(winner, target, outcome_of.get(id(target)), destination=destination)
 

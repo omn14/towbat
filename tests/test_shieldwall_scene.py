@@ -223,6 +223,173 @@ def test_full_combat_gives_ground_and_follows_up_without_panic(scene, index, cap
     assert 'Give Ground 2"' in capsys.readouterr().out
 
 
+@pytest.mark.parametrize('outcome', ['give_ground', 'break', 'fall_back'])
+@pytest.mark.parametrize('source', ['combat', 'panic'])
+def test_retreat_off_battlefield_destroys_unit_and_clears_combat(scene, outcome, source):
+    from battlefield import battlefield_for
+    from psychology import _box_corners
+    from scouts import model_base_boxes
+    app, baseline = scene
+    load_game_state(app, baseline)
+    loser, winner = app.player1Units[0], app.player2Units[0]
+    for index, unit in enumerate(app.units):
+        unit.bodyNP.setPos(-20 + index * 6, 10, 0)
+    loser.bodyNP.setPos(0, 0, 0)
+    loser.bodyNP.setH(0)
+    lower = min(corner[1] for box in model_base_boxes(loser) for corner in _box_corners(*box))
+    loser.bodyNP.setY(-battlefield_for(app).depth / 2 + .5 - lower)
+    winner.bodyNP.setPos(0, loser.bodyNP.getY() + (loser.unitHeight + winner.unitHeight) / 2, 0)
+    app.resolvingCombat = True
+    app.attackSequence = Sequence()
+    with combat_tasks(app) as run, \
+            patch.object(app.combat, 'swiftstrideChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rollMoveDice', AsyncMock(return_value=[2, 2])), \
+            patch.object(app, 'startFreeReform') as reform:
+        if source == 'panic':
+            from direct.task import Task
+            completed = []
+
+            async def retreat():
+                app.psychology._start_flee_move(loser, Vec3(0, -1, 0), 2,
+                    'flee' if outcome == 'break' else outcome, lambda: completed.append(True))
+                while not completed:
+                    await Task.pause(.1)
+
+            run(retreat())
+            assert completed == [True]
+        elif outcome == 'give_ground':
+            run(app.combat.giveGroundMove(loser, []))
+        else:
+            run(app.combat.fleeMove(loser, outcome))
+        reform.assert_not_called()
+    assert loser not in app.units and loser not in app.player1Units
+    assert loser.bodyNP.isEmpty() and loser.model.isEmpty()
+    assert loser not in winner.isInCombatWith
+    assert not winner.isInCombat and winner.state != 'InCombat'
+    assert winner in app.units
+    if source == 'combat' and outcome != 'give_ground':
+        with combat_tasks(app) as run, patch.object(app.combat, 'pursuitMove', AsyncMock()) as pursuit:
+            run(app.combat.pursuitPass([(loser, outcome)],
+                [{'winner': winner, 'target': loser, 'action': 'pursue'}]))
+        pursuit.assert_awaited_once()
+        assert tuple(pursuit.call_args.kwargs['destination']) == tuple(loser.retreatExitPosition)
+
+
+@pytest.mark.parametrize('outcome', ['give_ground', 'flee', 'fall_back'])
+@pytest.mark.parametrize('axis,sign', [(0, -1), (0, 1), (1, -1), (1, 1)])
+@pytest.mark.parametrize('heading', [0, 37])
+@pytest.mark.parametrize('clearance', [.01, 0, -.01])
+def test_retreat_edge_uses_rotated_bases_on_custom_board(scene, outcome, axis, sign, heading, clearance):
+    from battlefield import Battlefield
+    from psychology import _box_corners
+    from scouts import model_base_boxes
+    app, baseline = scene
+    load_game_state(app, baseline)
+    unit = app.player1Units[0]
+    unit.bodyNP.setPos(0, 0, 0)
+    unit.bodyNP.setH(heading)
+    furthest = max(sign * corner[axis] for box in model_base_boxes(unit) for corner in _box_corners(*box))
+    position = Vec3(0, 0, 0)
+    position[axis] = sign * ((15 if axis == 0 else 22) - furthest - clearance)
+    unit.bodyNP.setPos(position)
+    with patch('battlefield.battlefield_for', return_value=Battlefield(30, 44)):
+        removed = app.combat.removeRetreatAtEdge(unit, outcome)
+    expected = clearance < 0 if outcome == 'give_ground' else clearance <= 0
+    assert removed is expected
+    assert unit.bodyNP.isEmpty() is expected
+    assert (unit not in app.units) is expected
+
+
+def test_retreat_removes_joined_caster_and_spell_without_freeing_other_combat(scene):
+    from characters import join_unit
+    from spell_effects import register
+    from unittest.mock import Mock
+    from victory_points import calculate, register_army
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3), 1, 'Retreat Spears')
+    caster = app._create_unit(dict(name='Mage', nmodels=1, files=1, ranks=1), 1, 'Retreat Mage')
+    host.unit.roster_metadata = {'points_cost': 140}
+    caster.unit.roster_metadata = {'points_cost': 100}
+    register_army(app, [host, caster], 1)
+    assert join_unit(app, caster, host)
+    enemy, survivor = app.player2Units[0], app.player1Units[0]
+    host.isInCombatWith, host.isInCombatFlank = [enemy], ['front']
+    enemy.isInCombatWith, enemy.isInCombatFlank = [host, survivor], ['front', 'flank']
+    challenge = SimpleNamespace(hosts=lambda: [host, enemy])
+    app.challenges = [challenge]
+    spell = SimpleNamespace(name='Retreat spell', caster=caster, game=app,
+                            duration_list=app.remainsInPlay, endSpell=Mock())
+    register(spell, enemy, duration='remains')
+    host.bodyNP.setPos(0, -40, 0)
+    assert app.combat.removeRetreatAtEdge(host, 'flee')
+    assert caster not in app.units and host not in app.units
+    assert host.joinedCharacter is None and caster.hostUnit is None
+    assert caster.bodyNP.isEmpty() and caster.model.isEmpty()
+    assert caster.unit.nmodels == host.unit.nmodels == 0
+    assert spell not in app.remainsInPlay and spell.ended
+    spell.endSpell.assert_called_once()
+    assert enemy.isInCombatWith == [survivor] and enemy.isInCombatFlank == ['flank']
+    assert enemy.isInCombat and enemy.state == 'InCombat'
+    assert not app.challenges
+    awards = [row for row in calculate(app)['rows'] if row['rule'] == 'Dead or Fled' and row['player'] == 2]
+    assert sum(row['points'] for row in awards) == 240
+    assert app.combat.removeRetreatAtEdge(host, 'flee')
+    spell.endSpell.assert_called_once()
+
+
+@pytest.mark.parametrize('adjusted', [False, True])
+def test_fbigo_edge_removal_precedes_rally_turn(scene, adjusted):
+    from battlefield import battlefield_for
+    app, baseline = scene
+    load_game_state(app, baseline)
+    unit = app.player1Units[0]
+    unit.bodyNP.setPos(0, -battlefield_for(app).depth / 2 + (4 if adjusted else .5), 0)
+    unit.bodyNP.setH(0)
+    headings = []
+    remove = app.combat.removeRetreatAtEdge
+
+    def record_removal(member, outcome, **kwargs):
+        headings.append(member.bodyNP.getH() % 360)
+        return remove(member, outcome, **kwargs)
+
+    def push_clear(body, direction):
+        body.setY(body.getY() - 4)
+
+    with combat_tasks(app) as run, \
+            patch.object(app.combat, 'removeRetreatAtEdge', side_effect=record_removal), \
+            patch.object(app.movement, 'fallBackContactTest', side_effect=push_clear) as adjustment:
+
+        async def retreat():
+            await app.fallBack2(unit.bodyNP, Vec3(0, -1, 0), length=2, rally=True)
+
+        run(retreat())
+    assert unit.bodyNP.isEmpty()
+    assert headings == pytest.approx([180])
+    assert adjustment.call_count == int(adjusted)
+
+
+def test_retreat_boundary_safety_check_handles_multiple_units_and_repeated_contacts(scene):
+    import ClassOutOfBounds
+    app, baseline = scene
+    load_game_state(app, baseline)
+    fleeing = list(app.player1Units[:2])
+    contacts = []
+    for unit in fleeing:
+        unit.request('IsFleeing')
+        unit.bodyNP.setPos(0, -40, 0)
+        node = unit.bodyNP.node()
+        contact = SimpleNamespace(getNode0=lambda: 'boundary', getNode1=lambda node=node: node,
+            getManifoldPoint=lambda: SimpleNamespace(getDistance=lambda: 0, getAppliedImpulse=lambda: 0,
+                getPositionWorldOnA=lambda: 0, getPositionWorldOnB=lambda: 0,
+                getLocalPointA=lambda: 0, getLocalPointB=lambda: 0))
+        contacts.extend([contact, contact])
+    world = SimpleNamespace(contactTest=lambda ghost: SimpleNamespace(getContacts=lambda: contacts))
+    with patch.object(ClassOutOfBounds, 'base', SimpleNamespace(world=world), create=True):
+        app.boundries.contactTest(app.boundries.southBoundry, 0)
+    assert all(unit not in app.units and unit.bodyNP.isEmpty() for unit in fleeing)
+
+
 @pytest.mark.parametrize('handler', ['chargeInterval', '_skirmishChargeInterval'])
 @pytest.mark.parametrize('distance, reached', [(4, True), (12, False)])
 def test_charge_contact_records_target_only_when_reached(scene, handler, distance, reached):

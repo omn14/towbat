@@ -402,6 +402,78 @@ def test_horsemen_charge_spearmen_finishes_in_model_base_contact(scene, heading,
     assert all(snapshot.attacks(part, charger.unit.nmodels) > 0 for part in combat_profiles(charger, defender))
 
 
+@pytest.mark.parametrize('heading', [180, 195, 217])
+@pytest.mark.parametrize('joined', [False, True])
+@pytest.mark.parametrize('rolls,succeeds', [([1, 3], True), ([1, 1], False)])
+def test_spearmen_charge_loose_horsemen_forms_defender_rank(scene, heading, joined, rolls, succeeds):
+    from characters import join_unit
+    from combat_contacts import CombatContactSnapshot
+    from combat_profiles import combat_profiles
+    from formed_skirmish_charge import preview_charge
+    from psychology import obb_distance
+    from scouts import model_base_boxes
+    app, baseline = scene
+    load_game_state(app, baseline)
+    for index, member in enumerate(app.units):
+        member.bodyNP.setPos(-30 + index * 6, 20, 0)
+    defender = members(app)['Marauder Horsemen']
+    assert defender.isSkirmisher and not defender.skirmishCombat
+    charger = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3),
+                               1, 'Charging Spearmen')
+    if joined:
+        noble = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Charging Noble')
+        assert join_unit(app, noble, charger)
+    origin, facing = Vec3(0, -11, 0), Vec3(0, 0, 0)
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    defender.bodyNP.setPos(1, 0, 0)
+    defender.bodyNP.setH(heading)
+    charger.isDeployed = defender.isDeployed = True
+    app.roundCounter.currentRoundPlayer = [2, 2]
+    app.roundCounter.current_player = 1
+    preview = preview_charge(app, charger, defender)
+    assert preview.error is None
+    assert 6 < preview.route.distance < 8
+    assert len(preview.route.original_boxes) == 14 + int(joined)
+    defender_before = model_base_boxes(defender)
+    charger.formedSkirmishCharge = preview
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    entry.reaction = 'hold'
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'alignToEnemy', AsyncMock()) as legacy_alignment, \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], rolls))):
+        run(resolve_declarations(app))
+    legacy_alignment.assert_not_awaited()
+    if not succeeds:
+        assert charger.state == 'Moved' and not charger.isInCombat
+        assert defender.state == 'Idle' and not defender.skirmishCombat
+        assert model_base_boxes(defender) == defender_before
+        assert not charger.chargedThisTurn and not defender.wasChargedThisTurn
+        assert not charger.isInCombatWith and not defender.isInCombatWith
+        assert not charger.chargeAttemptPending and app.chargeStage == 'remaining'
+        assert tuple(charger.bodyNP.getPos()) == pytest.approx(preview.route.pose(max(rolls))[0], abs=1e-4)
+        return
+    assert charger.state == defender.state == 'InCombat'
+    assert defender.skirmishCombat
+    assert charger.isInCombatWith == [defender] and defender.isInCombatWith == [charger]
+    assert charger.chargedThisTurn and defender.wasChargedThisTurn
+    assert not charger.chargeAttemptPending and app.chargeStage == 'remaining'
+    assert tuple(charger.bodyNP.getPos()) == pytest.approx(preview.route.destination, abs=1e-4)
+    for target in model_base_boxes(defender)[:defender.unit.files]:
+        assert min(obb_distance(source, target) for source in model_base_boxes(charger)) < 1e-4
+    snapshot = CombatContactSnapshot([charger, defender])
+    for attacker, target in ((charger, defender), (defender, charger)):
+        assert all(snapshot.attacks(part, attacker.unit.nmodels) > 0
+                   for part in combat_profiles(attacker, target))
+    if joined:
+        assert noble.hostUnit is charger and noble in app.units
+        assert not noble.bodyNP.isEmpty() and noble.bodyNP.getParent() == charger.bodyNP
+
+
 def test_queued_charge_rebuilds_route_to_fleeing_horsemen(scene):
     from scouts import model_base_boxes
     app, charger, knights, origin, facing, _ = declared_charge(scene)

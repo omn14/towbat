@@ -79,22 +79,14 @@ class OutOfBounds:
                 print(mpoint.getLocalPointB())
                 #np=render.find(f"**/{contact.getNode1().getName()}")
                 selected_unit = self.game.getSelectedUnit(contact.getNode1())
+                if selected_unit is None or selected_unit.bodyNP.isEmpty():
+                    continue
                 if selected_unit.state == 'InCombat':
                     print("Unit in combat, cannot be moved in bounds again now!")
                     return
                 if selected_unit.state == 'IsFleeing':
-                    print("Unit is fleeing out of the battle field, it is destroyed!")
-                    from spell_effects import caster_removed
-                    caster_removed(self.game, selected_unit)
-                    base.world.removeRigidBody(selected_unit.bodyNP.node())
-                    self.game.units.remove(selected_unit)
-                    if selected_unit in self.game.player1Units:
-                        self.game.player1Units.remove(selected_unit)
-                    if selected_unit in self.game.player2Units:
-                        self.game.player2Units.remove(selected_unit)
-                    selected_unit.bodyNP.removeNode()
-                    selected_unit.model.removeNode()
-                    return
+                    self.game.combat.removeRetreatAtEdge(selected_unit, 'flee')
+                    continue
                 np=selected_unit.bodyNP
                 np.setHpr(Vec3(H,0,0))
                 cpos=Vec3(np.getPos())
