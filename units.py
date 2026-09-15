@@ -500,10 +500,23 @@ class unitGraphics(FSM):
     def loadFigureModel(self, modelpath):
         if self.unit is not None and self.unit.model.name == 'Baggage Cart':
             from battle_secondary import cart_model
-            return cart_model(self.color)
-        # Panda3D reads its own '/c/...' convention, so an OS path needs converting;
-        # a path already in that form passes through unchanged.
-        return loader.loadModel(Filename.fromOsSpecific(str(modelpath)))
+            figures = cart_model(self.color)
+        else:
+            # Panda3D reads its own '/c/...' convention; convert OS asset paths.
+            figures = loader.loadModel(Filename.fromOsSpecific(str(modelpath)))
+        from pathlib import Path
+        from miniature_bases import BAKED_PLINTH_ASSETS, base_figure
+        size = self.unit.model.get_base_size() if self.unit is not None else None
+        baked_plinth = (Path(str(modelpath)).stem in BAKED_PLINTH_ASSETS
+                or (self.unit is not None and self.unit.model.name == 'Baggage Cart'))
+        if size:
+            width, depth = (dimension / MM_PER_UNIT for dimension in size)
+        else:
+            lower, upper = figures.getChild(0).getTightBounds(figures)
+            width, depth = upper.x - lower.x, upper.y - lower.y
+        for figure in list(figures.getChildren()):
+            base_figure(figure, width, depth, baked_plinth=baked_plinth)
+        return figures
 
     def _varyModelTones(self):
         """Give each miniature its own tone, so a regiment reads as many models

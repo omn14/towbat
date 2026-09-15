@@ -597,6 +597,23 @@ custom stats with current catalogue values. Entirely statless records, such as
 the formerly unresolved Lothern Skycutter, are repaired from the catalogue while
 preserving saved rules and battle state. Loading does not rewrite the save file.
 
+## Miniature Bases
+
+Every miniature uses a bevelled charcoal base with a fine-grained earth and flock
+surface. The bottom edge matches `model.get_base_size()` exactly, including the
+mount's catalogue dimensions for mounted models; the top is inset and the rim is
+2.8 mm tall. Formation spacing and gameplay footprints continue to use the same
+catalogue dimensions. Profiles without base data retain their artwork footprint.
+
+The old plinth faces in the shipped miniature assets are removed at load time,
+without changing the asset files. Figures are centred and uniformly reduced only
+when needed to fit the base top. Each base stays inside its miniature's node, so
+cloning, command groups, casualties and joined characters retain their usual
+hierarchy. Base geometry and the ground texture are shared between instances.
+
+`tests/test_miniature_bases.py` checks footprint dimensions, every shipped figure
+asset, mounted profiles, the baggage cart, and offscreen lineup/regiment previews.
+
 ## Testing
 
 Battle startup no longer initializes the unused campaign map. Its heightmap,
