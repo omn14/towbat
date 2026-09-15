@@ -135,11 +135,18 @@ def test_hud_startup_detail_measurements_remain_finite(display):
         label.destroy()
 
 
-def test_high_magic_generation_buttons_fit_and_render(display, dialog, tmp_path):
-    choice = dialog(['Keep spells', 'Drain Magic', "Vaul's Unmaking",
-                     'Courage of Aenarion', 'Hand of Khaine'],
-                    prompt='Mage: signature spell?',
-                    detail='Generated: Walk Between Worlds, Fiery Convocation, Shield of Saphery')
+@pytest.mark.parametrize('remains_in_play', [False, True])
+def test_spell_choice_buttons_fit_and_render(display, dialog, tmp_path, remains_in_play):
+    if remains_in_play:
+        choice = dialog(['Keep', 'Keep this player turn', 'End spell'],
+                        prompt='Courage of Aenarion: Remains in Play', detail='Caster: Mage')
+        selected = 1
+    else:
+        choice = dialog(['Keep spells', 'Drain Magic', "Vaul's Unmaking",
+                         'Courage of Aenarion', 'Hand of Khaine'],
+                        prompt='Mage: signature spell?',
+                        detail='Generated: Walk Between Worlds, Fiery Convocation, Shield of Saphery')
+        selected = 2
     for button in choice.buttons:
         text = button.component('text0')
         node = text.textNode
@@ -150,11 +157,13 @@ def test_high_magic_generation_buttons_fit_and_render(display, dialog, tmp_path)
         assert bottom.z >= lower and top.z <= upper, button['text']
     display.graphicsEngine.renderFrame()
     display.graphicsEngine.renderFrame()
-    assert display.screenshot(Filename.fromOsSpecific(str(tmp_path / 'spell-generation.png')).getFullpath(), defaultFilename=False)
+    filename = 'remains-in-play.png' if remains_in_play else 'spell-generation.png'
+    assert display.screenshot(Filename.fromOsSpecific(str(tmp_path / filename)).getFullpath(), defaultFilename=False)
     with patch.object(display.taskMgr, 'add') as schedule:
-        choice.buttons[2]['command'](*choice.buttons[2]['extraArgs'])
+        choice.buttons[selected]['command'](*choice.buttons[selected]['extraArgs'])
     asyncio.run(schedule.call_args.args[0])
-    assert choice.choice == "Vaul's Unmaking" and choice.choiceMade
+    assert choice.choice == ('Keep this player turn' if remains_in_play else "Vaul's Unmaking")
+    assert choice.choiceMade
 
 
 def test_generation_reference_browsing_is_not_an_answer_and_stays_bounded(display, dialog, tmp_path):

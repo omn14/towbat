@@ -259,8 +259,10 @@ def test_joined_caster_death_ends_vortex_without_erasing_timed_ward(scene):
     assert ward.rule in host.unit.model.special_rules
 
 
-def test_voluntary_end_choice_waits_before_advancing_phase(scene):
+@pytest.mark.parametrize('answer', ['End spell', 'Keep this player turn'])
+def test_voluntary_end_choice_waits_before_advancing_phase(scene, answer):
     from panda3d.core import Point3
+    from spell_effects import choose_ending
     app, baseline = scene
     load_game_state(app, baseline)
     mage = members(app)['Mage']
@@ -269,12 +271,23 @@ def test_voluntary_end_choice_waits_before_advancing_phase(scene):
     app.fsm.request('ShootingPhase')
     with combat_tasks(app) as run, \
             patch('game_fsm.taskMgr', app.taskMgr, create=True), \
-            patch.object(app, 'makeChoiceNew', AsyncMock(return_value='End spell')) as choice:
+            patch.object(app, 'makeChoiceNew', AsyncMock(return_value=answer)) as choice:
         async def advance():
+            origin = app.fsm.state
             app.fsm.nextPhase()
-            assert app.fsm.state == 'ShootingPhase' and app.magicBusy
+            assert app.fsm.state == origin and app.magicBusy
             await app.taskMgr.getTasksNamed('endSpellChoiceTask')[0]
         run(advance())
+        assert not app.magicBusy and app.fsm.state == 'CombatPhase'
+        if answer == 'Keep this player turn':
+            assert spell in app.remainsInPlay and not spell.ended
+            run(choose_ending(app))
+            choice.assert_awaited_once()
+            assert not app.magicBusy and app.fsm.state == 'CombatPhase'
+            choice.return_value = 'End spell'
+            app.fsm.request('ShootingPhase')
+            run(advance())
+            assert choice.await_count == 2
     assert choice.call_args.kwargs['owner'] is mage
     assert not app.remainsInPlay
     assert app.fsm.state == 'CombatPhase'

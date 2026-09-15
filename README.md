@@ -31,6 +31,16 @@ rule modules remain unavailable. Starting without `--battle-config` bypasses the
 editor and retains ordinary startup. Current scope and verification are recorded
 in [docs/BATTLE_MARCH_PLAN.md](docs/BATTLE_MARCH_PLAN.md).
 
+During deployment, the mouse wheel rotates a grabbed unit in 5-degree steps.
+Wheel up and down turn in opposite directions; clicking places it at the chosen
+heading. The wheel resumes camera zoom once the unit is placed, and scrolling
+over the battle log still scrolls the log.
+
+For Remains in Play spells, **Keep this player turn** skips further prompts for
+that spell until the next player turn. **Keep** asks again at the next phase
+boundary; **End spell** removes the effect immediately. Dispelling, recasting
+and caster removal still end spells normally.
+
 ### Grow Legue 2026 - Flank of the Reed Fens
 
 Select this exact name under **Battle > Deployment map**, or open the supplied

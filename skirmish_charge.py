@@ -262,11 +262,11 @@ def supported_pair(attacker, defender):
 
 
 def supported_formed_target(attacker, defender):
+    """A joined defender stays fixed; its own base is a valid target (pp. 186, 207)."""
     return (getattr(attacker, 'isSkirmisher', False) and not attacker.skirmishCombat
             and not (getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat)
             and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing'
-            and getattr(attacker, 'joinedCharacter', None) is None
-            and getattr(defender, 'joinedCharacter', None) is None)
+            and getattr(attacker, 'joinedCharacter', None) is None)
 
 
 def declaration_route(game, unit, target, maximum):

@@ -1166,6 +1166,26 @@ class CombatResolver:
 
     # ─── Charge Interval ──────────────────────────────────────────────────
 
+    def chargeContactEstablished(self, unit, defender):
+        """Require completed form-up and actual base contact before engagement (pp. 126, 186)."""
+        from combat_contacts import CONTACT_EPSILON
+        from psychology import obb_distance
+        from scouts import model_base_boxes
+        sources, targets = model_base_boxes(unit), model_base_boxes(defender)
+        gap = min((obb_distance(source, target) for source in sources for target in targets),
+                  default=float('inf'))
+        unformed = any(getattr(member, 'isSkirmisher', False) and not member.skirmishCombat
+                       for member in (unit, defender))
+        if not unformed and gap <= CONTACT_EPSILON:
+            return True
+        reason = 'Skirmisher fighting rank is not formed' if unformed else 'no model-base contact'
+        rule_skipped('Charge Alignment', unit,
+                     f'{defender.unit.name}: {reason}; nearest base {gap:.4f}" '
+                     f'(tolerance {CONTACT_EPSILON}"); no engagement or charging benefits')
+        unit.isChargingMove = False
+        unit.request('Moved')
+        return False
+
     async def chargeInterval(self, unit, defenderNP, angleToRotate, oposUnit, orotUnit, flank, chdice=None):
         """Track one attempt across all charge geometries (First Charge, p. 169)."""
         from first_charge import begin_charge_attempt, finish_charge_attempt
@@ -1397,6 +1417,11 @@ class CombatResolver:
             await self.freeReform(unit)
             return
 
+        if not self.chargeContactEstablished(unit, defenderUnit):
+            for terning in terninger:
+                terning.remove(self.game.world)
+            self.game.movement.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
+            return
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True
@@ -1555,6 +1580,8 @@ class CombatResolver:
         if not formed_target and not await self._formChargedSkirmishers(unit, defender):
             rule_skipped('Skirmishers', unit, 'contact reached but defender cannot form; charge not engaged (p. 186)')
             unit.request('Moved')
+            return
+        if not self.chargeContactEstablished(unit, defender):
             return
         for participant, opponent in ((unit, defender), (defender, unit)):
             if participant.state != 'InCombat':
@@ -1753,6 +1780,9 @@ class CombatResolver:
         was_pursuing = unit.state == 'IsPursuing'
         joins, why_not = (self.joinsCombatThisPhase(defenderUnit) if was_pursuing
                           else (False, ''))
+        if not self.chargeContactEstablished(unit, defenderUnit):
+            self.game.movement.dangerousTerrainTests(unit, oposUnit, unit.bodyNP.getPos())
+            return
         unit.request("InCombat")
         unit.isInCombat = True
         unit.chargedThisTurn = True

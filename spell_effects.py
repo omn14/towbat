@@ -16,6 +16,8 @@ def register(spell, target=None, *, duration='next_start', phase=None):
     """Record ownership and an explicit boundary, without touching base stats (p. 111)."""
     spell.affected_unit = target
     spell.ended = False
+    if duration == 'remains':
+        spell._keep_prompt_turn = None
     game = spell.game
     if game is not None and spell.caster is not None and current_turn(game) is not None:
         spell.lifecycle = dict(duration=duration, cast_turn=current_turn(game),
@@ -127,18 +129,27 @@ def refresh_self_spells(caster):
 async def choose_ending(game):
     """Voluntary RIP ending at exposed phase boundaries (Rulebook p. 111)."""
     from panda3d.core import Vec3
+    token = current_turn(game)
     for spell in list(getattr(game, 'remainsInPlay', [])):
         if spell.caster is None:
             continue
-        if game.aiControls(spell.caster):
+        keep_this_turn = token is not None and getattr(spell, '_keep_prompt_turn', None) == token
+        if game.aiControls(spell.caster) or keep_this_turn:
             choice = 'Keep'
         else:
             choice = await game.makeChoiceNew(
-                ['Keep', 'End spell'], Vec3(0, 0, 10), owner=spell.caster,
+                ['Keep', 'Keep this player turn', 'End spell'], Vec3(0, 0, 10), owner=spell.caster,
                 prompt=f'{spell.name}: Remains in Play',
                 detail=f'Caster: {spell.caster.unit.name}')
+        if choice == 'Keep this player turn' and token is not None:
+            spell._keep_prompt_turn = token
+            keep_this_turn = True
         if choice == 'End spell':
             end_effect(spell, 'caster voluntarily ends it at the phase boundary')
+        elif keep_this_turn:
+            rule_skipped(spell.name, spell.caster,
+                         f'kept for player {token[0]} turn {token[1]}; '
+                         'further phase-boundary prompts suppressed this player turn')
         else:
             rule_skipped(spell.name, spell.caster, 'caster keeps Remains in Play effect at phase boundary')
 

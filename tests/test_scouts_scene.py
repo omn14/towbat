@@ -1,5 +1,6 @@
 """Real deployment, first-turn lifecycle and reload checks, rendered offscreen."""
 
+import asyncio
 import json
 import sys
 from contextlib import ExitStack
@@ -12,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 import pytest
 from panda3d.core import AsyncTaskManager, Filename, getModelPath, loadPrcFileData, Vec2, Vec3
 from direct.task.Task import TaskManager
+from direct.task import Task
 
 import aiMinimaxIntegration
 import deployPhase
@@ -82,6 +84,44 @@ def finish_deployment(app):
     drop(app, 'P2 Scouts B', 18, -10)
     assert app.fsm.state == 'StrategyPhase' and app.roundCounter.current_player == 1
     return p1, p2
+
+
+def test_grabbed_deployment_unit_rotates_with_wheel_and_keeps_heading_on_drop(scene):
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    held = next(unit for unit in app.units if unit.unitName == 'P1 Scouts')
+    app.unitToMove = held
+    held.bodyNP.setPos(-18, 0, 0)
+    held.bodyNP.setH(20)
+    camera = app.camera.getTransform()
+    position = held.bodyNP.getPos()
+    asyncio.run(app.taskLoopDeploy(Task.Task(lambda task: task.done)))
+    assert app.taskMgr.hasTaskNamed('taskMoveUnit')
+    try:
+        with patch.object(app.hud, 'pointer_over_log', return_value=False):
+            for _ in range(3):
+                app.messenger.send('wheel_up')
+            assert held.bodyNP.getH() == pytest.approx(35)
+            app.messenger.send('wheel_down')
+            assert held.bodyNP.getH() == pytest.approx(30)
+            assert held.bodyNP.getPos() == position
+            assert app.camera.getTransform() == camera
+            task = app.taskMgr.getTasksNamed('taskMoveUnit')[0]
+            with patch('deployPhase.getMouseXY', return_value=(-17, 1)):
+                assert deployPhase.taskMoveUnit(app, held, task) == task.cont
+            assert held.bodyNP.getH() == pytest.approx(30)
+            assert placement_error(app, held, scouting=True) is None
+            app.graphicsEngine.renderFrame()
+            app.messenger.send('mouse1')
+            assert held.isDeployed and held.deployedAsScouts
+            assert not app.taskMgr.hasTaskNamed('taskMoveUnit')
+            assert held.bodyNP.getH() == pytest.approx(30)
+            app.messenger.send('wheel_up')
+            assert app.camera.getTransform() != camera
+            assert held.bodyNP.getH() == pytest.approx(30)
+    finally:
+        app.taskMgr.remove('taskMoveUnit')
+        app.camera.setTransform(camera)
 
 
 def test_reload_mid_scouts_restores_order_and_choices_without_reroll(scene, tmp_path):

@@ -10,6 +10,28 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Charge Alignment Contact: 2026-09-15
+
+[x] Skirmisher charges against formed units with a joined character now use
+the contact-anchored fighting-rank planner (Rulebook pp. 126, 186). The defender
+stays fixed, including its character's own base. Previously the character
+disabled this planner and sent Horsemen through legacy movement and form-up;
+live Horsemen versus Spearmen/Noble tests reproduced gaps of 0.20 to 1.38 inches
+despite both units being marked InCombat.
+
+[x] Charge engagement paths now require completed fighting ranks and actual
+model-base contact using the same tolerance as combat attacks. An invalid
+alignment logs the measured gap and grants neither combat links nor charge
+benefits. Tests cover Open Order and Skirmisher Horsemen, three target headings,
+with/without the Noble, positive rider/mount attack counts, and deliberately
+broken final alignment.
+
+LEFTOVER: joined characters in the charging loose formation and loose defenders
+with joined characters still need individual form-up support. The special
+obstructed/disordered gap case on p. 128 needs explicit virtual combat-contact
+support; it must not silently become an ordinary successful no-contact charge.
+This fix does not repair units already left separated in an existing combat.
+
 ## HE_BM_2 High Elf Rules: 2026-09-15
 
 Wording checked at tow.whfb.app, including the High Elf FAQ v1.5.3.

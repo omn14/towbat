@@ -199,3 +199,18 @@ def test_defender_form_up_keeps_unsupported_pairings_on_legacy_path(member, attr
     assert supported_skirmish_defender(attacker, defender)
     setattr(attacker if member == 'attacker' else defender, attribute, value)
     assert not supported_skirmish_defender(attacker, defender)
+
+
+@pytest.mark.parametrize('character_half_width', [0.5, 0.75])
+def test_joined_character_in_formed_target_does_not_disable_contact_plan(character_half_width):
+    from skirmish_charge import supported_formed_target
+    attacker = SimpleNamespace(isSkirmisher=True, skirmishCombat=False, state='Idle', joinedCharacter=None)
+    defender = SimpleNamespace(isSkirmisher=False, state='Idle', joinedCharacter=object())
+    assert supported_formed_target(attacker, defender)
+    sources = boxes([(-1.6, -6), (0, -6), (1.6, -6)])
+    targets = boxes([(-1, 0), (1, 0)], 180) + [(0, 0, character_half_width, 0.5, 180)]
+    original = list(targets)
+    plan = plan_formed_charge(sources, targets, 9, (0, -6))
+    assert plan is not None and plan.defender is None and targets == original
+    assert all(min(obb_distance((*position, .5, .5, plan.attacker.heading), target)
+                   for target in targets) < 1e-5 for position in plan.attacker.positions[:plan.attacker.files])

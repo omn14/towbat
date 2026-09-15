@@ -339,6 +339,69 @@ def test_second_charge_uses_horsemen_combat_formation(scene):
         assert member.chargeAttempts == 1 and not member.chargeAttemptPending
 
 
+@pytest.mark.parametrize('heading', [180, 195, 217])
+@pytest.mark.parametrize('formed', [False, True])
+@pytest.mark.parametrize('joined', [False, True])
+@pytest.mark.parametrize('break_contact', [False, True])
+def test_horsemen_charge_spearmen_finishes_in_model_base_contact(scene, heading, formed, joined, break_contact):
+    from combat_contacts import CombatContactSnapshot
+    from combat_profiles import combat_profiles
+    from psychology import obb_distance
+    from scouts import model_base_boxes
+    app, baseline = scene
+    load_game_state(app, baseline)
+    for index, member in enumerate(app.units):
+        member.bodyNP.setPos(-30 + index * 6, 20, 0)
+    charger = (app._create_unit(dict(name='Marauder Horsemen', nmodels=5, files=5, ranks=1),
+                                2, 'Contact Horsemen') if formed else members(app)['Marauder Horsemen'])
+    assert charger.isSkirmisher is not formed
+    defender = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3),
+                                1, 'Contact Spearmen')
+    if joined:
+        from characters import join_unit
+        noble = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Contact Noble')
+        assert join_unit(app, noble, defender)
+    origin, facing = Vec3(0, -10, 0), Vec3(0, 0, 0)
+    charger.bodyNP.setPos(origin)
+    charger.bodyNP.setHpr(facing)
+    defender.bodyNP.setPos(2, 0, 0)
+    defender.bodyNP.setH(heading)
+    charger.isDeployed = defender.isDeployed = True
+    app.roundCounter.currentRoundPlayer = [2, 2]
+    app.roundCounter.current_player = 2
+    begin_declarations(app)
+    begin_charge_attempt(charger)
+    entry = queue_charge(app, charger, defender, origin, facing)
+    entry.reaction = 'hold'
+    alignment = app.combat.alignToEnemy if formed else app.combat._formSkirmishCharge
+
+    async def finish_alignment(*args, **kwargs):
+        await alignment(*args, **kwargs)
+        if break_contact:
+            charger.bodyNP.setY(charger.bodyNP.getY() - .25)
+
+    with combat_tasks(app) as run, \
+            patch.object(app, 'aiControls', return_value=True), \
+            patch.object(app.combat, 'alignToEnemy' if formed else '_formSkirmishCharge', finish_alignment), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))):
+        run(app.combat.resolveDeclaredCharge(entry))
+    if break_contact:
+        assert charger.state == 'Moved'
+        assert not charger.isInCombat and not defender.isInCombat
+        assert not charger.chargedThisTurn and not defender.wasChargedThisTurn
+        assert not charger.isInCombatWith and not defender.isInCombatWith
+        assert not charger.chargeAttemptPending
+        return
+    assert charger.state == defender.state == 'InCombat'
+    distance = min(obb_distance(source, target) for source in model_base_boxes(charger)
+                   for target in model_base_boxes(defender))
+    assert distance < 1e-4, (distance, model_base_boxes(charger), model_base_boxes(defender))
+    snapshot = CombatContactSnapshot([charger, defender])
+    assert any(position.contact for position in snapshot.positions(charger, defender)[1])
+    assert all(snapshot.attacks(part, charger.unit.nmodels) > 0 for part in combat_profiles(charger, defender))
+
+
 def test_queued_charge_rebuilds_route_to_fleeing_horsemen(scene):
     from scouts import model_base_boxes
     app, charger, knights, origin, facing, _ = declared_charge(scene)

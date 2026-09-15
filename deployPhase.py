@@ -358,6 +358,32 @@ def _clamp(val, lo, hi):
 
 # ── Original deploy task (now strategy-aware for AI) ──────────────────
 
+def _preview_placement(game, unit):
+    """Refresh collision transforms, terrain alignment and placement colour."""
+    unit.bodyNP.node().setTransformDirty()
+    if hasattr(game, 'movement'):
+        game.movement.alignModelsToHillNormal(unit)
+    error = placement_error(game, unit, scouting=getattr(game, 'deploymentStage', 'ordinary') == 'scouts')
+    unit.model.setColor((.6, .6, .6, 1) if error else unit.color)
+    return error
+
+
+def rotate_held_unit(game, degrees):
+    """Consume a wheel turn only while a human is placing a deployment unit."""
+    if (getattr(getattr(game, 'fsm', None), 'state', None) != 'DeployPhase'
+            or not game.taskMgr.hasTaskNamed('taskMoveUnit')):
+        return False
+    unit = getattr(game, 'unitToMove', None)
+    if unit is None or unit.isDeployed or unit.bodyNP.isEmpty():
+        return False
+    player = game.roundCounter.current_player
+    if (player == 2 and game.AIplayer2.active) or unit not in deployment_candidates(game, player):
+        return False
+    unit.bodyNP.setH((unit.bodyNP.getH() + degrees) % 360)
+    _preview_placement(game, unit)
+    return True
+
+
 def taskMoveUnit(game,unit,task):
     #game.ignore('mouse1')
     if game.roundCounter.current_player == 2 and game.AIplayer2.active:
@@ -385,18 +411,7 @@ def taskMoveUnit(game,unit,task):
     x, y = pxy
     #print("Mouse position during move phase:", x, y)
     unit.bodyNP.setPos(x,y,0)
-    
-    # Notify Bullet that the transform has changed
-    unit.bodyNP.node().setTransformDirty()
-    # Raise the visual models onto any hill/forest surface under them.
-    if hasattr(game, 'movement'):
-        game.movement.alignModelsToHillNormal(unit)
-    outBounds = placement_error(
-        game, unit, scouting=getattr(game, 'deploymentStage', 'ordinary') == 'scouts')
-    if outBounds:
-        unit.model.setColor(.6,0.6,0.6,1)
-    else:
-        unit.model.setColor(unit.color)
+    outBounds = _preview_placement(game, unit)
 
     
     if game.roundCounter.current_player == 2 and game.AIplayer2.active:

@@ -73,6 +73,60 @@ def test_keyword_is_coded_and_joined_character_does_not_grant_it(pair):
     assert not has_scouts(scout)
 
 
+@pytest.mark.parametrize('direction,degrees', [('zoomIn', 5), ('zoomOut', -5)])
+@pytest.mark.parametrize('scouting', [False, True])
+def test_deployment_wheel_rotates_held_unit_and_refreshes_preview(pair, direction, degrees, scouting):
+    game, held, enemy = pair
+    game.unitToMove = held
+    game.taskMgr = Mock(hasTaskNamed=Mock(return_value=True))
+    game.camera = NodePath('camera')
+    game.camera.setPos(0, -75, 50)
+    game.hud = Mock(pointer_over_log=Mock(return_value=False))
+    game.movement = Mock()
+    held.scoutDeploymentChoice = 'scouts' if scouting else 'normal'
+    game.deploymentStage = 'scouts' if scouting else 'ordinary'
+    held.bodyNP.setPos(3, -18, 2)
+    held.bodyNP.setH(358)
+    position, camera = held.bodyNP.getPos(), game.camera.getTransform()
+    with patch('deployPhase.placement_error', return_value='Outside deployment zone') as placement:
+        getattr(MyApp, direction)(game)
+        placement.assert_called_once_with(game, held, scouting=scouting)
+    assert held.bodyNP.getH() == pytest.approx((358 + degrees) % 360)
+    assert held.bodyNP.getPos() == position
+    assert tuple(held.model.getColor()) == pytest.approx((.6, .6, .6, 1), abs=1 / 1024)
+    assert game.camera.getTransform() == camera
+    game.movement.alignModelsToHillNormal.assert_called_once_with(held)
+    with patch('deployPhase.placement_error', return_value=None):
+        assert deployPhase.rotate_held_unit(game, -degrees)
+    assert held.bodyNP.getH() == pytest.approx(358)
+    assert tuple(held.model.getColor()) == pytest.approx(held.color)
+
+
+@pytest.mark.parametrize('state', ['not-held', 'placed', 'other-phase', 'ai', 'other-player', 'over-log'])
+def test_deployment_rotation_does_not_replace_other_wheel_actions(pair, state):
+    game, held, enemy = pair
+    game.unitToMove = held
+    held.scoutDeploymentChoice = 'normal'
+    game.taskMgr = Mock(hasTaskNamed=Mock(return_value=state != 'not-held'))
+    game.hud = Mock(pointer_over_log=Mock(return_value=state == 'over-log'))
+    game.camera = NodePath('camera')
+    game.camera.setPos(0, -75, 50)
+    if state == 'placed':
+        held.isDeployed = True
+    elif state == 'other-phase':
+        game.fsm.state = 'MovementPhase'
+    elif state in ('ai', 'other-player'):
+        game.roundCounter.current_player = 2
+        game.AIplayer2.active = state == 'ai'
+    with patch('deployPhase._preview_placement') as preview:
+        MyApp.zoomIn(game)
+        preview.assert_not_called()
+    assert held.bodyNP.getH() == 0
+    assert game.camera.getY() == (-75 if state == 'over-log' else -70)
+    MyApp.zoomOut(game)
+    assert game.camera.getY() == -75
+
+
 @pytest.mark.parametrize('gap,allowed', [(11.999, False), (12.0, False), (12.001, True)])
 def test_strict_base_clearance(pair, gap, allowed):
     game, scout, enemy = pair
