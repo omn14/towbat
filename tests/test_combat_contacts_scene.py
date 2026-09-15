@@ -33,6 +33,126 @@ def edge_contact(host, enemy):
         member.hasAttackedThisTurn = False
 
 
+def test_kings_guard_duel_excludes_one_body_protects_it_and_reloads(scene, tmp_path):
+    from challenges import Challenge, KingGuard, add_challenge
+    from persistence import save_game_state
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='White Lion', nmodels=5, files=5, ranks=1), 1, 'Guard Lions')
+    general = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Guard General')
+    general.isGeneral = True
+    assert join_unit(app, general, host)
+    enemy = members(app)['Aspiring Champion']
+    edge_contact(host, enemy)
+    guard = next(candidate for candidate in duellists(host) if isinstance(candidate, KingGuard))
+    challenge = Challenge(guard, host, enemy, enemy)
+    add_challenge(app, challenge)
+    part = combat_profiles(host, enemy)[0]
+    snapshot = CombatContactSnapshot([host, enemy])
+    before = snapshot.attacks(part, 5)
+    expected_loss = snapshot.quotas(part, 5).get(guard.guard_index, 0)
+    assert expected_loss > 0
+    assert snapshot.attacks(part, 5, challenge) == before - expected_loss
+    assert app.combat.commandWoundLimit(host, 10, challenge=challenge) == (4, 0)
+    restored = save_game_state(app, str(tmp_path / 'king-guard.json'))
+    load_game_state(app, restored)
+    challenge, = app.challenges
+    guard, host = challenge.challenger, challenge.host
+    assert isinstance(guard, KingGuard) and guard.unit.model is host.unit.model
+    assert host.unit.nmodels == 5 and guard.unit.nmodels == 1
+    removals = Sequence()
+    assert app.combat.previewMiscastWounds(guard, 1, removals) == 1
+    assert host.unit.nmodels == 4 and guard.unit.nmodels == 0
+    assert len(host.model.getChildren()) == 5
+    removals.finish()
+    assert len(host.model.getChildren()) == 4
+
+
+@pytest.mark.parametrize('round_number,expected_ws', [(1, 7), (2, 6)])
+def test_joined_noble_martial_prowess_reaches_real_attack_and_defence(scene, round_number, expected_ws):
+    from battleFunctions import simulate_battle
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3), 1, 'Prowess Spears')
+    noble = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Prowess Noble')
+    assert join_unit(app, noble, host)
+    enemy = members(app)['Chaos Warrior']
+    host.roundsFought = round_number
+    edge_contact(host, enemy)
+    part = next(part for part in combat_profiles(host, enemy) if part.fighter is noble)
+    observations = []
+
+    def fight(attacker, defender, **kwargs):
+        observations.append((int(attacker.model.characteristics['WS']), int(defender.model.characteristics['WS'])))
+        return simulate_battle(attacker, defender, **kwargs)
+
+    with patch('combat_resolution.simulate_battle', side_effect=fight), \
+            patch('battleFunctions.random.randint', return_value=1):
+        app.combat.resolveProfileAttacks(part, enemy, 1, 10, None, Sequence())
+        app.combat.resolveProfileAttacks(combat_profiles(enemy, host)[0], noble, 1, 4, None, Sequence())
+    assert observations == [(expected_ws, 5), (5, expected_ws)]
+    assert noble.unit.model.characteristics['WS'] == '6'
+
+
+def test_retired_kings_guard_returns_after_combat(scene, tmp_path):
+    from challenges import KingGuard, guard_fighters
+    from persistence import save_game_state
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='White Lion', nmodels=5, files=5, ranks=1), 1, 'Retired Lions')
+    general = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Retired General')
+    general.isGeneral = True
+    assert join_unit(app, general, host)
+    enemy = members(app)['Chaos Warrior']
+    edge_contact(host, enemy)
+    guard = next(candidate for candidate in duellists(host) if isinstance(candidate, KingGuard))
+    guard.retiredFromCombat = True
+    snapshot = CombatContactSnapshot([host, enemy])
+    assert guard.guard_index not in snapshot.quotas(combat_profiles(host, enemy)[0], 5)
+    replacement = next(candidate for candidate in duellists(host) if isinstance(candidate, KingGuard))
+    assert replacement is not guard and replacement.guard_index != guard.guard_index
+    saved = save_game_state(app, str(tmp_path / 'retired-guards.json'))
+    load_game_state(app, saved)
+    host = next(member for member in app.units if member.unitName == 'Retired Lions')
+    guards = guard_fighters(host)
+    assert len(guards) == 2 and len({fighter.guard_index for fighter in guards}) == 2
+    assert sum(fighter.retiredFromCombat for fighter in guards) == 1
+    host.exitInCombat()
+    assert any(isinstance(candidate, KingGuard) for candidate in duellists(host))
+
+
+def test_spear_multiple_combat_scopes_initiative_without_duplicating_attacks(scene):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=2, files=1, ranks=2), 1, 'Two Spears')
+    front = app._create_unit(dict(name='Chaos Warrior', nmodels=1, files=1, ranks=1), 2, 'Front Charger')
+    rear = app._create_unit(dict(name='Chaos Warrior', nmodels=1, files=1, ranks=1), 2, 'Rear Enemy')
+    host.unit.model.give_weapon('Thrusting Spear')
+    host.unit.model.equip_weapon('Thrusting Spear')
+    edge_contact(host, front)
+    rear.bodyNP.setH(0)
+    rear.bodyNP.setPos(0, 0, 0)
+    own, other = model_base_boxes(host)[-1], model_base_boxes(rear)[0]
+    rear.bodyNP.setPos(own[0] - other[0], own[1] - own[3] - other[3] - other[1], 0)
+    host.isInCombatWith, host.isInCombatFlank = [rear, front], ['rear', 'front']
+    rear.isInCombatWith, rear.isInCombatFlank = [host], ['front']
+    host.roundsFought = 1
+    front.chargedThisTurn = True
+    front.chargeTargets = [host.unitName]
+    app.attackers, app.defenders = [host, host], [rear, front]
+    app.attackSequence = Sequence()
+    observations = []
+
+    def fight(part, target, count, initiative, challenge, removals):
+        observations.append((target.unitName, count, initiative))
+        return 0
+
+    with patch.object(app.combat, 'resolveProfileAttacks', side_effect=fight), \
+            patch.object(app, 'aiControls', return_value=True), patch('assailment.cast_at_initiative'):
+        asyncio.run(app.combat.resolveCombatWithSpells(None, Sequence()))
+    assert observations == [('Front Charger', 1, 6), ('Rear Enemy', 1, 5)]
+
+
 @pytest.mark.parametrize('target_name', ['Chaos Knight', 'Mage'])
 def test_dragon_princes_fury_reaches_live_attack_counts(scene, target_name, capsys):
     from high_magic import FuryOfKhaineSpell

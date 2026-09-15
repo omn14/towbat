@@ -23,6 +23,7 @@ class EffectKind(StrEnum):
     REROLL = 'reroll'
     FIRST_TURN = 'first_turn_modifier'
     WARD = 'ward_save'
+    FLAMING_WARD = 'flaming_ward_save'
     BODY_ARMOUR = 'body_armour'
     AP_ZERO_ARMOUR = 'ap_zero_armour'
     MAGIC_ROLL = 'magic_roll_modifier'
@@ -112,6 +113,9 @@ class ItemRegistry:
 
 
 REGISTRY = ItemRegistry((
+    ItemDefinition('dragon_helm', 'Dragon Helm', 'Magic Armour', 'Forces of Fantasy p. 182',
+                   effects=(ItemEffect('armour', EffectKind.ARMOUR, 1),
+                            ItemEffect('flame_ward', EffectKind.FLAMING_WARD, 6))),
     ItemDefinition('silvery_wand', 'Silvery Wand', 'Arcane Items', 'Forces of Fantasy p. 183',
                    effects=(ItemEffect('extra_spell', EffectKind.SPELLS, 1),)),
     ItemDefinition('helm_of_courage', 'Helm of Courage', 'Magic Armour',
@@ -467,7 +471,7 @@ def item_armour_save(profile, base_save, *, log=False):
             if result != base_save:
                 rule_log(entry.item.name, member,
                          f'{profile.name}: armour {base_save}+ -> {result}+ before AP; '
-                         'passive protection independent of the Break re-roll use')
+                         'passive protection, maximum 2+')
             else:
                 rule_skipped(entry.item.name, member, f'{profile.name}: armour already at the 2+ limit before AP')
     return result

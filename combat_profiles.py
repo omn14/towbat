@@ -18,6 +18,7 @@ class CombatProfile:
     count: int = 1
     entry: object = None
     fighter: object = None
+    deferred_from: object = None
 
     def attacks(self, models, initial, challenge=None):
         """Use the start of this Initiative step, not the start of combat (p. 146)."""
@@ -46,6 +47,9 @@ class CombatProfile:
             group.files = max(0, group.files - 1)
         if self.role == 'main':
             ordinary = melee_attacks(group, charged, fallen, charge_distance=distance, frenzy_bonus=bonus)
+            from challenges import guard_fighters
+            blocked += sum(bool(guard.retiredFromCombat or (challenge and challenge.involves(guard)))
+                           for guard in guard_fighters(self.host))
             return max(0, ordinary - blocked * attack_characteristic(group.model, charged=charged, inches=distance, frenzy_bonus=bonus))
         behind = max(0, models + fallen - group.files)
         fighting = max(0, min(group.files, models) - min(fallen, behind))
@@ -95,7 +99,7 @@ def combat_profiles(host, target, challenge=None):
     return parts
 
 
-def profile_strike_order(attackers, defenders, facing, challenge=None):
+def profile_strike_order(attackers, defenders, facing, challenge=None, *, split_targets=False):
     """Each weapon's Initiative modifiers belong to its wielder (pp. 192-194)."""
     seen = set()
     order = []
@@ -111,7 +115,14 @@ def profile_strike_order(attackers, defenders, facing, challenge=None):
                 inches=float(getattr(host, 'chargeDistance', 0) or 0),
                 flank_or_rear=facing(target, host) in ('flank', 'rear'),
                 first_round=getattr(host, 'roundsFought', 0) == 1, log=True)
-            order.append((initiative, part))
+            from combat_weapons import defensive_spear_initiative
+            enemies = (getattr(host, 'isInCombatWith', []) or [target]) if split_targets else [target]
+            steps = {defensive_spear_initiative(part.profile, host, enemy, initiative) for enemy in enemies}
+            order.append((max(steps), part))
+            if len(steps) > 1:
+                deferred = copy(part)
+                deferred.deferred_from = part
+                order.append((min(steps), deferred))
     return sorted(order, key=lambda entry: -entry[0])
 
 

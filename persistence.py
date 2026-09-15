@@ -262,6 +262,8 @@ def save_game_state(game, filename=None):
         unit_data = {
             'name': unit.unitName,
             'command': copy.deepcopy(getattr(unit.unit, 'command', [])),
+            'king_guard': copy.deepcopy(getattr(unit.unit, 'king_guard_state', None)),
+            'retired_king_guards': copy.deepcopy(getattr(unit.unit, 'retired_guard_states', [])),
             'command_profiles': {key: _save_profile_state(profile) for key, profile in
                                  getattr(unit.unit, 'command_models', {}).items()},
             'roster_metadata': copy.deepcopy(getattr(unit.unit, 'roster_metadata', {})),
@@ -719,6 +721,10 @@ def load_game_state(game, filename):
         _restore_profile_state(unit.unit.model, unit_data)
         from roster_runtime import apply_roster_ownership
         apply_roster_ownership(unit.unit, {'command': unit_data.get('command', [])})
+        unit.unit.king_guard_state = copy.deepcopy(unit_data.get('king_guard'))
+        unit.unit.king_guard_fighter = None
+        unit.unit.retired_guard_states = copy.deepcopy(unit_data.get('retired_king_guards', []))
+        unit.unit.retired_king_guards = None
         unit.unit.roster_metadata = copy.deepcopy(unit_data.get('roster_metadata', {}))
         restore_inventory(unit, unit_data.get('magic_item_inventory', []))
         for key, record in unit_data.get('command_profiles', {}).items():
@@ -802,6 +808,11 @@ def load_game_state(game, filename):
     for member in game.units:
         challenge_models.update({champion.unitName: champion for champion in
                                  champions(member, include_retired=True)})
+        if getattr(member.unit, 'king_guard_state', None):
+            from challenges import king_guard
+            guard = king_guard(member, restore=True)
+            if guard is not None:
+                challenge_models[guard.unitName] = guard
     for saved in game_state.get('challenges') or []:
         challenger = challenge_models.get(saved.get('challenger'))
         if challenger is None:

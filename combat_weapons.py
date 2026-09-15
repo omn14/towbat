@@ -12,6 +12,24 @@ def combat_host(fighter):
     return getattr(fighter, 'command_host', None) or getattr(fighter, 'hostUnit', None) or fighter
 
 
+def defensive_spear_initiative(profile, fighter, target, initiative):
+    """Thrusting spears gain +1 I only against frontal chargers (Rulebook p. 215)."""
+    if (profile.equipedWeapon or {}).get('name', '').casefold() != 'thrusting spear':
+        return initiative
+    host, enemy = combat_host(fighter), combat_host(target)
+    targets = getattr(enemy, 'chargeTargets', None)
+    enemies = getattr(host, 'isInCombatWith', [])
+    arcs = getattr(host, 'isInCombatFlank', [])
+    frontal = any(opponent is enemy and arc == 'front' for opponent, arc in zip(enemies, arcs))
+    eligible = (frontal and getattr(enemy, 'chargedThisTurn', False)
+                and (targets is None or getattr(host, 'unitName', host.unit.name) in targets))
+    result = min(10, initiative + 1) if eligible else initiative
+    logger = rule_log if result != initiative else rule_skipped
+    logger('Thrusting Spear', fighter,
+           f'{enemy.unit.name}: frontal charger={bool(eligible)}; I{initiative} -> I{result}, maximum 10 (p. 215)')
+    return result
+
+
 @contextmanager
 def weapon_target(profile, fighter, target):
     """Keep charge-only weapons but scope their S/AP to the charged enemy (pp. 214-215)."""

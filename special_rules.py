@@ -16,6 +16,7 @@ import cycle; the base model imports `build_special_rules` from here.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import re
 
 from battlescribe import get_catalogue
@@ -182,6 +183,51 @@ def _ithilmar_weapons(model, param, desc):
             'tag': 'combat', 'ithilmar_weapons': True}
 
 
+def martial_prowess_applies(profile, host):
+    """Unit-wide benefits include joined characters (FoF p. 185; Rulebook p. 207)."""
+    from combat_weapons import combat_host
+    host = combat_host(host)
+    if any(rule.get('name') == 'Martial Prowess' for rule in profile.special_rules):
+        return True
+    unit_profile = getattr(host.unit, 'model', None)
+    if unit_profile is None or not any(rule.get('name') == 'Martial Prowess' for rule in unit_profile.special_rules):
+        return False
+    members = [unit_profile, *getattr(host.unit, 'command_models', {}).values()]
+    joined = getattr(host, 'joinedCharacter', None)
+    if joined is not None and joined.unit.nmodels > 0:
+        members.append(joined.unit.model)
+    profiles = [*members, *(part for member in members for tag in ('mount', 'crew', 'beasts')
+                          if (part := getattr(member, f'get_{tag}')()) is not None)]
+    return any(profile is member for member in profiles)
+
+
+@contextmanager
+def martial_prowess(*combatants):
+    """First-round unit WS, including joined characters (FoF p. 185; BRB p. 207)."""
+    from rules_log import rule_log, rule_skipped
+    from combat_weapons import combat_host
+    originals = []
+    seen = set()
+    try:
+        for profile, host in combatants:
+            host = combat_host(host)
+            if id(profile) in seen or not martial_prowess_applies(profile, host):
+                continue
+            seen.add(id(profile))
+            original = profile.characteristics['WS']
+            originals.append((profile, original))
+            before = int(original)
+            after = before + 1 if getattr(host, 'roundsFought', 0) == 1 else before
+            profile.characteristics['WS'] = str(after)
+            logger = rule_log if after != before else rule_skipped
+            logger('Martial Prowess', host,
+                   f'{profile.name}: combat round {getattr(host, "roundsFought", 0)}, WS{before} -> WS{after} (FoF p. 185)')
+        yield
+    finally:
+        for profile, original in originals:
+            profile.characteristics['WS'] = original
+
+
 def _ensorcelled_weapons(model, param, desc):
     """Single mundane hand weapon: AP-1 and Magical Attacks (Ravening Hordes p. 81)."""
     return {'name': 'Ensorcelled Weapons', 'description': desc or 'Hand weapon: AP-1 and Magical Attacks.',
@@ -207,6 +253,11 @@ def _ithilmar_barding(model, param, desc):
     """Dangerous Terrain natural-1 rerolls only (Forces of Fantasy p. 185)."""
     return {'name': 'Ithilmar Barding', 'description': desc or 'Re-roll natural 1s on Dangerous Terrain tests.',
             'tag': 'movement', 'dangerous_terrain_reroll': True}
+
+
+def _ithilmar_armour(model, param, desc):
+    """Armour shares the barding terrain reroll (Forces of Fantasy p. 185)."""
+    return {**_ithilmar_barding(model, param, desc), 'name': 'Ithilmar Armour'}
 
 
 def _chaos_undivided(model, param, desc):
@@ -441,6 +492,8 @@ SPECIAL_RULE_BUILDERS = {
     "ensorcelled weapons": _ensorcelled_weapons,
     "valour of ages": _valour_of_ages,
     "ithilmar barding": _ithilmar_barding,
+    "ithilmar armour": _ithilmar_armour,
+    "ithilmar armour/ithilmar barding": _ithilmar_armour,
     "mark of chaos undivided": _chaos_undivided,
     "chaos armour": _chaos_armour,
     "magic resistance": _magic_resistance,
@@ -583,7 +636,10 @@ def build_special_rules(model) -> list:
     """
     cat = get_catalogue()
     rules: list = []
-    for raw in model.characteristics.get("Special Rules", []) or []:
+    keywords = list(model.characteristics.get("Special Rules", []) or [])
+    if any(name.casefold() == 'warden of saphery' for name in keywords):
+        keywords = list(dict.fromkeys([*keywords, 'Deflect Shots', 'Ithilmar Armour', 'Killing Blow']))
+    for raw in keywords:
         display, param = parse_special_rule(raw)
         desc = cat.rule_description(display) or cat.rule_description(raw)
         builder = SPECIAL_RULE_BUILDERS.get(display.lower())

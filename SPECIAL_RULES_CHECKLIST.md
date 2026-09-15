@@ -10,6 +10,68 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## HE_BM_2 High Elf Rules: 2026-09-15
+
+Wording checked at tow.whfb.app, including the High Elf FAQ v1.5.3.
+This pass covers the selected Mage, Warden Noble, Spearmen, White Lions and
+Skycutter; the roster itself is unchanged.
+
+[x] Thrusting Spear (Rulebook p. 215): remains selectable when not charging.
+The parser previously combined "infantry only" with a separate sentence about
+being charged and incorrectly marked the weapon charge-only. Frontal chargers
+grant +1 Initiative, maximum 10; front/rear multiple combats split already
+allocated attacks between the appropriate Initiative steps without duplicating
+the model's attack budget. Supporting attacks still require the weapon and do
+not apply when its bearer charges.
+
+[x] Martial Prowess (Forces of Fantasy p. 185; Rulebook p. 207): temporary +1 WS
+in the unit's first combat round, on attack and defence, including a living
+joined character. Corrected the initial bearer-only interpretation and removed
+an unsupported WS 10 cap. Benefits do not double-count native and inherited
+sources, persist after combat, or remain on a character after leaving.
+Supporting attacks may face flank/rear, but the rule does not itself grant
+Fight in Extra Rank (High Elf FAQ).
+
+[x] Dragon Helm (FoF p. 182): +1 armour, maximum 2+, and a conditional 6+ Ward
+against Flaming Attacks; item suppression removes both. Deflect Shots (p. 164)
+grants a 6+ Ward against non-magical shooting only. Lion Cloak (p. 185) improves
+armour by 1, maximum 2+, against non-magical shooting only. Shared save paths
+carry attack properties through normal attacks, cannon/template shooting,
+magic and Impact Hits; flaming spell/template damage reaches the Helm Ward.
+Ward selection takes the best eligible save, never multiple Ward rolls.
+
+[x] Ithilmar Armour (FoF p. 185): reuses the existing Dangerous Terrain natural-1
+reroll. Warden of Saphery (p. 180) supplies Deflect Shots, Ithilmar Armour and
+Killing Blow even when those keywords are not duplicated by the export.
+The selected Sword of Hoeth already supplies its weapon effects.
+
+[x] Chracian Warriors and King's Guard (FoF p. 163): White Lions accept the
+General or a Chracian Hunter, plus Korhil/Chracian Chieftain under the FAQ.
+A joined living General permits an ordinary White Lion challenge nominee,
+using its normal profile and an existing body, not champion statistics or an
+extra attack. The nominee is excluded from ordinary attacks and outside damage;
+death removes exactly one body, including deferred damage replay. Challenge
+identity and individual retirements survive reload; another eligible Lion can
+be nominated after a retirement. Combat exit clears retirement. New nomination
+eligibility ends when the General leaves. Equivalent ordinary models share one
+representative choice rather than a separate UI entry for every base.
+
+Verification: focused pure-rule and offscreen combat tests cover receiving a
+charge, split front/rear Initiative, joined Noble WS7/WS6, all-arc support,
+conditional saves, item suppression, joining restrictions, challenge body
+counts, retirement and persistence. A regression run caught and corrected the
+last-champion excess-wound cap while adding challenge protection. Pylance
+confirmed 129 compatible call sites across ten modified APIs. A runtime import
+of the actual roster confirms Noble armour 3+, shooting/flaming Wards 6+,
+Spearmen WS5 and joined Noble WS7 in round one, selectable spears when not
+charging, and White Lion armour 5+ normally / 4+ against non-magical shooting.
+
+LEFTOVER: Regimental Unit/detachment support remains unimplemented; no detachment
+is selected here. Warden-related Wizard armour purchase/casting legality is not
+an army-builder validation feature in this pass; this roster's Warden is a
+non-Wizard Noble with an explicitly selected Sword of Hoeth. No full-suite run
+or interactive play-test is claimed.
+
 ## Fresh Joined-Character Attack Allocation: 2026-09-14
 
 [x] Fixed the combat crash when allocating attacks against a newly joined

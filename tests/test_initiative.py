@@ -71,6 +71,15 @@ class ChargeBonusTests(unittest.TestCase):
     def test_a_partial_inch_is_never_negative(self):
         self.assertEqual(charge_initiative_bonus(-2.0), 0)
 
+    def test_thrusting_spear_remains_selectable_when_receiving_a_charge(self):
+        from combat_weapons import available_weapons
+        fighter = model('Elven Spearman', '')
+        self.assertTrue(fighter.give_weapon('Thrusting Spear'))
+        self.assertIn('Thrusting Spear', available_weapons(fighter, False))
+        fighter.equip_weapon('Thrusting Spear')
+        self.assertTrue(fighter.fights_in_extra_rank(charged=False))
+        self.assertFalse(fighter.fights_in_extra_rank(charged=True))
+
 
 class StrikeInitiativeTests(unittest.TestCase):
 
@@ -146,6 +155,21 @@ class StrikeOrderTests(unittest.TestCase):
 
 
 class EngagedFacingTests(unittest.TestCase):
+
+    def test_defensive_spear_bonus_is_scoped_to_frontal_charger(self):
+        from combat_profiles import profile_strike_order
+        for arc, charged, selected, expected in [('front', True, True, 6),
+                ('front', False, True, 5), ('rear', True, True, 5),
+                ('flank', True, True, 5), ('front', True, False, 5)]:
+            with self.subTest(arc=arc, charged=charged, selected=selected):
+                defender = _fighter('Elven Spearman', 5)
+                attacker = _fighter('Chaos Warrior', 3, charged=charged)
+                attacker.chargeTargets = [defender.unitName] if selected else ['Other unit']
+                defender.unit.model.give_weapon('Thrusting Spear')
+                defender.unit.model.equip_weapon('Thrusting Spear')
+                _engage(attacker, defender, arc)
+                order = profile_strike_order([defender], [attacker], CombatResolver._engagedFacing)
+                self.assertEqual(order[0][0], expected)
 
     def test_the_arc_is_read_at_the_strikers_own_index(self):
         first = _fighter("Wolves", 3)

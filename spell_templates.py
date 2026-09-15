@@ -133,7 +133,8 @@ async def fiery_template(spell, center):
     for member, hits in hits_by_model.values():
         flammable = any(rule.get('flammable') or rule.get('name', '').lower() == 'flammable'
                         for rule in member.unit.model.special_rules)
-        wounds, saves, unsaved = resolve_magic_hits(member.unit, hits, 4, 2, allow_regeneration=not flammable)
+        wounds, saves, unsaved = resolve_magic_hits(member.unit, hits, 4, 2,
+                               allow_regeneration=not flammable, flaming=True)
         rule_log(spell.name, member, f'{hits} Flaming S4 AP-2 template hits -> {wounds} wounds, '
                  f'{saves} saved, {unsaved} unsaved (p. 329)')
         if flammable:

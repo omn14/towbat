@@ -376,7 +376,7 @@ class Spell:
         from battleFunctions import resolve_magic_hits
         from models import roll_dice_expr
         hits = roll_dice_expr(dice)
-        wounds, saves, unsaved = resolve_magic_hits(unit.unit, hits, strength, ap)
+        wounds, saves, unsaved = resolve_magic_hits(unit.unit, hits, strength, ap, flaming=flaming)
         ap_str = f"AP-{ap}" if ap else "AP0"
         flame = ", Flaming Attacks" if flaming else ""
         print(f"   {unit.unit.name}: {hits} S{strength} {ap_str} hit(s){flame} "

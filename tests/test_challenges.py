@@ -86,6 +86,30 @@ class FindingADuellistTests(unittest.TestCase):
     def test_nothing_has_no_duellist(self):
         self.assertIsNone(duellist(None))
 
+    def test_kings_guard_uses_an_existing_ordinary_model_only_while_general_is_joined(self):
+        from challenges import KingGuard, duellists
+        general = _character('Noble')
+        general.isGeneral = True
+        host = _regiment('White Lion', nmodels=5, character=general)
+        host.unit.model.name = 'White Lion'
+        host.unit.model.special_rules = [{'name': "King's Guard"}]
+        candidates = duellists(host)
+        guard = next(candidate for candidate in candidates if isinstance(candidate, KingGuard))
+        self.assertEqual(host.unit.nmodels, 5)
+        self.assertEqual(guard.unit.nmodels, 1)
+        self.assertIs(guard.unit.model, host.unit.model)
+        self.assertNotIn(guard.command_entry, getattr(host.unit, 'command', []))
+        self.assertIs(guard, duellists(host)[-1])
+        guard.retiredFromCombat = True
+        replacement = duellists(host)[-1]
+        self.assertIsInstance(replacement, KingGuard)
+        self.assertIsNot(replacement, guard)
+        self.assertNotEqual(replacement.guard_index, guard.guard_index)
+        from challenges import guard_fighters
+        self.assertEqual(guard_fighters(host), [guard, replacement])
+        host.joinedCharacter = None
+        self.assertEqual(duellists(host), [])
+
 
 class SurroundedTests(unittest.TestCase):
     """Engaged in all four arcs (p. 211)."""

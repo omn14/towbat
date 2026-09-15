@@ -498,7 +498,7 @@ def weapon_from_profile(name: str, chars: dict) -> dict:
             weapon["ap_penetration_charge"] = int(apc.group(1))
         # Lance-style weapons apply their modifiers only on the charge.
         low = notes.lower()
-        if "charged" in low and "only" in low:
+        if any("charged" in sentence and "only" in sentence for sentence in low.split('.')):
             weapon["charge_only"] = True
     if is_ranged:
         # Range may be a single value or a 'min-max' band (e.g. Mortar '12-48').

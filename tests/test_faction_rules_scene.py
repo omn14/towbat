@@ -78,6 +78,19 @@ def members(app):
     return {member.unit.model.name: member for member in app.units}
 
 
+@pytest.mark.parametrize('general,hunter,allowed', [(False, False, False), (True, False, True), (False, True, True)])
+def test_chracian_warriors_restrict_actual_character_joining(scene, general, hunter, allowed):
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='White Lion', nmodels=5, files=5, ranks=1), 1, 'Test White Lions')
+    character = members(app)['Mage']
+    character.isGeneral = general
+    if hunter:
+        apply_rule_keywords(character.unit.model, ['Chracian Hunter'])
+    assert join_unit(app, character, host) == allowed
+    assert (getattr(host, 'joinedCharacter', None) is character) == allowed
+
+
 @pytest.mark.parametrize('joined', [False, True])
 @pytest.mark.parametrize('aim_at_unit', [False, True])
 def test_mage_targeting_trajectory_uses_world_positions(scene, request, joined, aim_at_unit):

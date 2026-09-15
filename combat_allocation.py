@@ -26,10 +26,12 @@ class AttackAllocation:
     profile: object
     batches: list
     attacks: list = field(default_factory=list)
+    assigned_batches: list = field(default_factory=list)
 
     async def resolve(self, game):
         """Mandatory attacks may be divided only between the model's legal targets."""
         allocated = {}
+        self.assigned_batches = []
         for slot, count, targets in self.batches:
             if not targets or count <= 0:
                 continue
@@ -45,6 +47,7 @@ class AttackAllocation:
                         prompt=f'{self.profile.name}, model {slot + 1}: attack {attack + 1}/{count}')
                     assignments.append((options.get(selected, targets[0]), 1))
             for target, attacks in assignments:
+                self.assigned_batches.append((slot, attacks, target))
                 identity = id(target)
                 previous = allocated.get(identity, (target, 0))[1]
                 allocated[identity] = (target, previous + attacks)

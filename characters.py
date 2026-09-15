@@ -154,6 +154,18 @@ def join_unit(game, character, host) -> bool:
             return False
         rule_log('Sons of Caledor', character, f'may join {host.unit.name}: '
                  + ('army General' if getattr(character, 'isGeneral', False) else 'Blood of Caledor'))
+    if 'chracian warriors' in host_rules:
+        eligible = (getattr(character, 'isGeneral', False) or 'chracian hunter' in character_rules
+                    or character.unit.model.name.casefold() in ('korhil lionmane', 'chracian chieftain'))
+        if not eligible:
+            rule_skipped('Chracian Warriors', character,
+                         f'cannot join {host.unit.name}: requires the General, Chracian Hunter, '
+                         'Korhil or a Chracian Chieftain (FoF p. 163; FAQ v1.5.3)')
+            return False
+        rule_log('Chracian Warriors', character,
+                 f'may join {host.unit.name}: General={bool(getattr(character, "isGeneral", False))}, '
+                 f'Chracian Hunter={"chracian hunter" in character_rules}, '
+                 f'profile={character.unit.model.name} (FoF p. 163; FAQ v1.5.3)')
     from special_rules import is_ethereal
     if is_ethereal(character.unit.model) != is_ethereal(host.unit.model):
         from rules_log import rule_skipped

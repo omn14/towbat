@@ -148,8 +148,10 @@ class CannonFire:
         total_hit = total_wound = total_saved = total_cas = 0
         for unit, count in hits:
             total_hit += count
+            from battleFunctions import weapon_attack_context
+            attack = weapon_attack_context(cannonUnit.unit.model, weapon)
             slain, wounded, saved = self._apply_wounds(
-                unit, count, strength, ap, magical=cannonUnit.unit.model.has_magical_attacks(weapon=weapon))
+                unit, count, strength, ap, magical=attack['magical'], flaming=attack['flaming'])
             total_wound += wounded
             total_saved += saved
             total_cas += slain
@@ -189,7 +191,7 @@ class CannonFire:
                 results.append((unit, count))
         return results
 
-    def _apply_wounds(self, unit, hits, strength, ap, *, magical=False):
+    def _apply_wounds(self, unit, hits, strength, ap, *, magical=False, flaming=False):
         """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141).
 
         Returns (slain, wounded, saved). Casualties are capped by the number of
@@ -206,16 +208,19 @@ class CannonFire:
         armour_modifiers = []
         from magic_items import item_armour_save, report_ap_armour
         save = item_armour_save(model, model.armor_save, log=hits > 0)
+        from battleFunctions import conditional_armour_save
+        attack = {'shooting': True, 'magical': magical, 'flaming': flaming}
+        conditional_armour_save(model, save, attack, log=hits > 0)
         for _ in range(hits):
             if random.randint(1, 6) < target:
                 continue  # failed to wound
             wounded += 1
-            if check_saves(model, save, ap, ward_rolls=ward_rolls, armour_modifiers=armour_modifiers):
+            if check_saves(model, save, ap, ward_rolls=ward_rolls, armour_modifiers=armour_modifiers, attack=attack):
                 saved += 1
             else:
                 casualties += 1
         report_ap_armour(model, armour_modifiers)
-        report_ward_saves(unit.unit, wounded, ward_rolls)
+        report_ward_saves(unit.unit, wounded, ward_rolls, attack=attack)
         present = len(unit.model.getChildren())
         return min(casualties, present), wounded, saved
 

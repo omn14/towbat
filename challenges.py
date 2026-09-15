@@ -10,9 +10,91 @@ incidental Miscast damage can cross between the duel and the surrounding units.
 """
 
 from characters import get_joined_character, is_character
+from command_groups import Champion
 
 # Overkill is capped at five bonus points (p. 211).
 MAX_OVERKILL = 5
+
+
+class KingGuard(Champion):
+    """An ordinary White Lion nominated for a duel, not a promotion (FoF p. 163)."""
+
+    def __init__(self, host, entry):
+        super().__init__(host, entry, host.unit.model, 'kings_guard')
+        self.unitName = f'{host.unitName}::kings_guard'
+        self.source_command = None
+
+    @property
+    def guard_index(self):
+        return self.command_entry.get('index', 0)
+
+    @guard_index.setter
+    def guard_index(self, value):
+        self.command_entry['index'] = value
+
+    def mark_slain(self):
+        self.command_entry['active'] = False
+        self.unit.nmodels = 0
+        if self.source_command is not None:
+            self.source_command['active'] = False
+
+
+def guard_fighters(host):
+    """Selected and retired ordinary duellists, separate from command (FoF p. 163)."""
+    retired = getattr(host.unit, 'retired_king_guards', None)
+    if retired is None:
+        retired = [KingGuard(host, entry) for entry in getattr(host.unit, 'retired_guard_states', [])]
+        host.unit.retired_king_guards = retired
+    current = getattr(host.unit, 'king_guard_fighter', None)
+    return [*retired, *([current] if current is not None else [])]
+
+
+def king_guard(host, *, restore=False):
+    """One representative of the identical eligible rank-and-file models (FoF p. 163)."""
+    if not restore:
+        general = get_joined_character(host)
+        if (general is None or general.unit.nmodels <= 0 or not getattr(general, 'isGeneral', False)
+                or is_retired(general) or not any(rule.get('name') == "King's Guard"
+                                                 for rule in host.unit.model.special_rules)):
+            return None
+    from command_groups import living_command
+    command = living_command(host)
+    fighters = guard_fighters(host)
+    retired_indices = {fighter.guard_index for fighter in fighters if fighter.retiredFromCombat}
+    available = [index for index in range(host.unit.nmodels)
+                 if index not in retired_indices
+                 and (index >= len(command) or command[index].get('role') != 'champion')]
+    if not available:
+        return None
+    fighter = getattr(host.unit, 'king_guard_fighter', None)
+    if fighter is not None and fighter.retiredFromCombat and not restore:
+        host.unit.retired_king_guards.append(fighter)
+        host.unit.retired_guard_states = [guard.command_entry for guard in host.unit.retired_king_guards]
+        host.unit.king_guard_state = None
+        fighter = None
+    if fighter is None or not fighter.command_entry.get('active', True):
+        entry = getattr(host.unit, 'king_guard_state', None) or {}
+        if not entry.get('active', True):
+            entry = {}
+        entry = {'active': True, 'wounds': 0, **entry}
+        fighter = KingGuard(host, entry)
+        host.unit.king_guard_fighter = fighter
+        host.unit.king_guard_state = entry
+    enemies = [enemy for enemy in getattr(host, 'isInCombatWith', []) if enemy.unit.nmodels > 0]
+    if getattr(host, 'isInCombat', False) and enemies and hasattr(host, 'modelWidth'):
+        from combat_contacts import CombatContactSnapshot
+        contacts = CombatContactSnapshot([host, *enemies])
+        eligible = []
+        for index in available:
+            fighter.guard_index = index
+            if contacts.can_challenge(host, fighter, enemies):
+                eligible.append(index)
+        available = eligible
+    if not available:
+        return None
+    fighter.guard_index = next((index for index in available if index >= len(command)), available[0])
+    fighter.source_command = command[fighter.guard_index] if fighter.guard_index < len(command) else None
+    return fighter
 
 
 class Challenge:
@@ -67,6 +149,9 @@ def duellists(unit):
             candidates.append(joined)
         from command_groups import champions
         candidates.extend(champions(unit))
+        guard = king_guard(unit)
+        if guard is not None and not is_retired(guard):
+            candidates.append(guard)
     enemies = [enemy for enemy in getattr(unit, 'isInCombatWith', []) if enemy.unit.nmodels > 0]
     if getattr(unit, 'isInCombat', False) and enemies and hasattr(unit, 'modelWidth'):
         from combat_contacts import CombatContactSnapshot
@@ -160,6 +245,13 @@ def add_challenge(game, challenge):
     if getattr(game, 'challenges', None) is None:
         game.challenges = []
     game.challenges.append(challenge)
+    from rules_log import rule_log
+    for participant in challenge.participants():
+        if isinstance(participant, KingGuard):
+            rule_log("King's Guard", participant.command_host,
+                     f'General joined: one {participant.unit.name} fights the challenge with its normal '
+                     f'A{participant.unit.model.characteristics.get("A", 1)} and W'
+                     f'{participant.unit.model.characteristics.get("W", 1)} (FoF p. 163)')
 
 
 def end_challenge(game, challenge):

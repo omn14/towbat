@@ -68,6 +68,38 @@ def helm_bearer():
     return bearer, helm
 
 
+def test_dragon_helm_armour_flaming_ward_and_suppression(capsys):
+    from battleFunctions import check_saves, report_ward_saves, ward_save_value
+    bearer = live_member('Noble')
+    fighter = bearer.unit.model
+    fighter.special_rules = []
+    fighter.set_armour(['Full Plate Armour'])
+    helm = install_inventory(bearer, [{'name': 'Dragon Helm', 'category': 'Magic Armour',
+                                     'selection_ref': 'bearer/helm', 'owner_ref': 'bearer'}])[0]
+    assert fighter.effective_armour_save() == 3
+    assert ward_save_value(fighter) == 0
+    assert ward_save_value(fighter, attack={'flaming': True}) == 6
+    from battleFunctions import resolve_magic_hits
+    with patch('battleFunctions.random.randint', return_value=6):
+        assert resolve_magic_hits(bearer.unit, 1, 10, 9, flaming=True) == (1, 1, 0)
+        assert resolve_magic_hits(bearer.unit, 1, 10, 9, flaming=False) == (1, 0, 1)
+    from battleFunctions import resolve_impact_hits
+    attacker = live_member('Lothern Skycutter')
+    attacker.unit.model.special_rules = [{'name': 'Impact Hits', 'impact_hits': '1'},
+                                        {'name': 'Flaming Attacks', 'flaming_attacks': True}]
+    with patch('battleFunctions.random.randint', return_value=6), \
+            patch.object(attacker.unit.model, 'impact_hit_ap', return_value=9):
+        assert resolve_impact_hits(attacker.unit, bearer.unit) == (1, 1, 1, 0)
+    with patch('battleFunctions.random.randint', return_value=6):
+        assert check_saves(fighter, 3, 9, attack={'flaming': True})
+        assert not check_saves(fighter, 3, 9)
+    report_ward_saves(bearer.unit, 1, [6], attack={'flaming': True})
+    assert 'saves 1/1' in capsys.readouterr().out
+    disable_item(bearer, helm, 'Vaul test')
+    assert fighter.effective_armour_save() == 4
+    assert ward_save_value(fighter, attack={'flaming': True}) == 0
+
+
 def test_warding_talisman_real_save_log_suppression_and_better_native_ward(capsys):
     from battleFunctions import check_saves, report_ward_saves, ward_save_value
     from magic_items import restore_inventory, save_inventory

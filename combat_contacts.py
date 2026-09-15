@@ -37,7 +37,7 @@ class FightingPosition:
         return 0
 
 
-def fighting_positions(boxes, enemies, files, *, facing='front', press=False, slots=None):
+def fighting_positions(boxes, enemies, files, *, facing='front', press=False, slots=None, support_flanks=False):
     """Classify rows/files from actual contact; support is front-only (pp. 145, 190)."""
     files = max(1, files)
     slots = list(range(len(boxes))) if slots is None else slots
@@ -48,7 +48,8 @@ def fighting_positions(boxes, enemies, files, *, facing='front', press=False, sl
     touched = {lines[index] for index, distance in enumerate(distances) if distance <= CONTACT_EPSILON}
     inward = -1 if facing in ('rear', 'right') else 1
     fighting = touched | {line + inward for line in touched} if press else touched
-    support = {line + 1 for line in fighting} - fighting if facing == 'front' else set()
+    support = ({line + inward for line in fighting} - fighting
+               if facing == 'front' or support_flanks else set())
     return [FightingPosition(index, distances[index], distances[index] <= CONTACT_EPSILON,
                              line in fighting, line in support)
             for index, line in enumerate(lines)]
@@ -73,17 +74,33 @@ class CombatContactSnapshot:
             if joined is not None and len(boxes) > len(children):
                 slots.append(getattr(host, 'characterSlot', 0) or 0)
             command = {index: entry for index, entry in enumerate(living_command(host))}
+            from challenges import guard_fighters
+            available = [index for index in range(len(children))
+                         if command.get(index, {}).get('role') != 'champion']
+            for guard in guard_fighters(host):
+                if not guard.command_entry.get('active', True) or not available:
+                    continue
+                if guard.guard_index not in available:
+                    guard.guard_index = available[0]
+                available.remove(guard.guard_index)
+                guard.source_command = command.get(guard.guard_index)
             self.formations[id(host)] = (boxes, slots, command, len(children), joined)
         self.targets = {identity: list(enumerate(formation[0])) for identity, formation in self.formations.items()}
 
-    def refresh(self):
+    def refresh(self, challenge=None):
         """Remove rear-rank target bases between Initiative steps, never mid-step (pp. 146, 150)."""
         from rules_log import rule_log
         for host in self.hosts:
             boxes, slots, command, initial, joined = self.formations[id(host)]
             live_command = [index for index in command if command[index].get('active', True)]
             ordinary = sorted((index for index in range(initial) if index not in command), key=lambda index: slots[index])
+            from challenges import guard_fighters
+            guards = [guard for guard in guard_fighters(host)
+                      if guard.retiredFromCombat or (challenge and challenge.involves(guard))]
+            ordinary = [index for index in ordinary if all(index != guard.guard_index for guard in guards)]
             survivors = set(live_command[:max(0, host.unit.nmodels)])
+            survivors.update(guard.guard_index for guard in guards
+                             if guard.unit.nmodels > 0 and guard.command_entry.get('active', True))
             survivors.update(ordinary[:max(0, host.unit.nmodels - len(survivors))])
             if joined is not None and joined.unit.nmodels > 0 and len(boxes) > initial:
                 survivors.add(initial)
@@ -98,7 +115,7 @@ class CombatContactSnapshot:
     def target_boxes(self, host):
         return [box for _, box in self.targets[id(host)]]
 
-    def positions(self, host, target):
+    def positions(self, host, target, *, profile=None):
         boxes, slots, _, _, _ = self.formations[id(host)]
         enemy_boxes = self.target_boxes(target)
         facing = 'front'
@@ -109,8 +126,11 @@ class CombatContactSnapshot:
         if facing == 'flank':
             facing = 'left' if target.bodyNP.getPos(host.bodyNP).x < 0 else 'right'
         press = host.unit.model.troop_type_rule('Press of Battle') and not getattr(host, 'chargedThisTurn', False)
+        profile = host.unit.model if profile is None else profile
+        from special_rules import martial_prowess_applies
+        martial = martial_prowess_applies(profile, host)
         return facing, fighting_positions(boxes, enemy_boxes, host.unit.files, facing=facing,
-                                           press=press, slots=slots)
+                           press=press, slots=slots, support_flanks=martial)
 
     def can_challenge(self, host, candidate, enemies):
         """A candidate must be within or adjacent to a fighting rank (p. 210)."""
@@ -119,6 +139,8 @@ class CombatContactSnapshot:
             index = initial if len(slots) > initial else None
         elif candidate is host:
             index = 0 if slots else None
+        elif hasattr(candidate, 'guard_index'):
+            index = candidate.guard_index if candidate.guard_index < initial else None
         else:
             index = next((index for index, entry in command.items()
                           if entry is getattr(candidate, 'command_entry', None)), None)
@@ -140,7 +162,7 @@ class CombatContactSnapshot:
         boxes, slots, command, initial, joined = self.formations[id(host)]
         charged = bool(getattr(host, 'chargedThisTurn', False))
         enemies = [part.target] if enemies is None else enemies
-        per_enemy = [self.positions(host, enemy)[1] for enemy in enemies]
+        per_enemy = [self.positions(host, enemy, profile=profile)[1] for enemy in enemies]
         positions = [FightingPosition(index, min(group[index].distance for group in per_enemy),
                   any(group[index].contact for group in per_enemy),
                   any(group[index].fighting for group in per_enemy),
@@ -149,10 +171,17 @@ class CombatContactSnapshot:
         champion_indices = {index for index, entry in command.items() if entry.get('role') == 'champion'}
         duelling = {id(getattr(member, 'command_entry', None)) for member in challenge.participants()} if challenge else set()
         lost_champions = sum(not command[index].get('active', True) for index in champion_indices)
+        from challenges import guard_fighters
+        guards = [guard for guard in guard_fighters(host)
+                  if guard.retiredFromCombat or (challenge and challenge.involves(guard))]
+        guard_indices = {guard.guard_index for guard in guards}
+        lost_champions += sum(not guard.command_entry.get('active', True) for guard in guards)
         casualties = max(0, initial - models - lost_champions)
-        ordinary = [index for index in range(initial) if index not in champion_indices]
+        ordinary = [index for index in range(initial) if index not in champion_indices
+                    and index not in guard_indices]
         ordinary.sort(key=lambda index: (not positions[index].fighting, not positions[index].supporting, slots[index]))
         excluded = set(ordinary[:casualties])
+        excluded.update(guard_indices)
         excluded.update(index for index in champion_indices if not command[index].get('active', True)
                         or command[index].get('retired', False) or id(command[index]) in duelling)
         support = part.role in ('main', 'champion', 'character') and profile.fights_in_extra_rank(charged=charged)
@@ -178,6 +207,13 @@ class CombatContactSnapshot:
         quotas = {index: positions[index].attacks(characteristic, movement, support=support, count=count)
                   for index in indices if index not in excluded}
         total = sum(quotas.values())
+        from special_rules import martial_prowess_applies
+        if martial_prowess_applies(profile, host):
+            supported = sum(attacks for index, attacks in quotas.items() if positions[index].supporting)
+            logger = rule_log if supported else rule_skipped
+            logger('Martial Prowess', host,
+                   f'{profile.name}: front/flank/rear support permitted; {supported} supporting attacks, '
+                   f'weapon support={support}, charged={charged} (FoF p. 185)')
         contacts = sum(positions[index].contact for index in quotas)
         missing_contact = positions and not any(position.contact for position in positions)
         if (part.role == 'main' and charged and not total and not casualties
@@ -229,7 +265,7 @@ class CombatContactSnapshot:
     def allocation(self, part, models, challenge=None):
         """Contact-only character targeting and nearest-unit routing (pp. 147, 199, 209)."""
         from combat_allocation import AttackAllocation, nearest_targets
-        from challenges import is_retired
+        from challenges import is_retired, guard_fighters
         from command_groups import champions
         host = part.host
         enemies = [enemy for enemy in getattr(host, 'isInCombatWith', [])
@@ -253,6 +289,10 @@ class CombatContactSnapshot:
                 promoted = {id(champion.command_entry): champion for champion in champions(enemy, include_retired=True)}
                 ordinary_present = enemy.unit.nmodels > len(promoted)
                 for other_index, box in self.targets[id(enemy)]:
+                    if any(other_index == guard.guard_index
+                           and (guard.retiredFromCombat or (challenge and challenge.involves(guard)))
+                           for guard in guard_fighters(enemy)):
+                        continue
                     touching = obb_distance(own_boxes[index], box) <= CONTACT_EPSILON
                     entry = command.get(other_index, {})
                     specific = (joined if other_index >= initial else promoted.get(id(entry)))

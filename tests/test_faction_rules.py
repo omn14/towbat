@@ -19,6 +19,47 @@ def profile(*keywords):
     return fighter
 
 
+@pytest.mark.parametrize('round_number,expected', [(1, 5), (2, 4)])
+def test_martial_prowess_changes_attack_and_defence_without_persisting(round_number, expected):
+    from special_rules import martial_prowess
+    from toHitAndToWound import to_hit
+    fighter, enemy = profile('Martial Prowess'), profile()
+    fighter.characteristics['WS'] = enemy.characteristics['WS'] = '4'
+    host = SimpleNamespace(roundsFought=round_number, unit=SimpleNamespace(name='Spearmen'))
+    with martial_prowess((fighter, host), (fighter, host), (enemy, host)):
+        assert int(fighter.characteristics['WS']) == expected
+        assert to_hit(fighter, enemy) == (3 if round_number == 1 else 4)
+        assert to_hit(enemy, fighter) == 4
+        assert enemy.characteristics['WS'] == '4'
+    assert fighter.characteristics['WS'] == '4'
+
+
+@pytest.mark.parametrize('round_number,joined,native,expected', [
+    (1, True, False, 7), (2, True, False, 6), (1, False, False, 6), (1, True, True, 7)])
+def test_joined_character_receives_unit_martial_prowess_once(round_number, joined, native, expected):
+    from special_rules import martial_prowess, martial_prowess_applies
+    from toHitAndToWound import to_hit
+    regiment_profile = profile('Martial Prowess')
+    character_profile = profile(*(['Martial Prowess'] if native else []))
+    character_profile.characteristics['WS'] = '6'
+    character = SimpleNamespace(unit=SimpleNamespace(model=character_profile, nmodels=1))
+    host = SimpleNamespace(unit=SimpleNamespace(model=regiment_profile, name='Spearmen'),
+                           roundsFought=round_number, joinedCharacter=character if joined else None)
+    character.hostUnit = host if joined else None
+    character.roundsFought = round_number
+    enemy = profile()
+    enemy.characteristics['WS'] = '3'
+    assert martial_prowess_applies(character_profile, host) == (joined or native)
+    with martial_prowess((character_profile, character), (character_profile, host)):
+        assert int(character_profile.characteristics['WS']) == expected
+        assert to_hit(enemy, character_profile) == (5 if expected == 7 else 4)
+    assert character_profile.characteristics['WS'] == '6'
+    host.joinedCharacter = None
+    character.hostUnit = None
+    with martial_prowess((character_profile, character)):
+        assert int(character_profile.characteristics['WS']) == (7 if native and round_number == 1 else 6)
+
+
 def test_dragon_armour_is_separate_ward_not_body_armour():
     fighter = profile('Dragon Armour')
     fighter.set_armour(['Full Plate Armour', 'Shield', 'Barding'])
@@ -31,6 +72,65 @@ def test_dragon_armour_is_separate_ward_not_body_armour():
     with patch('battleFunctions.random.randint', return_value=4) as dice:
         assert check_saves(fighter, 2, 10, slaying_blow=True)
     assert dice.call_count == 1 and ward_save_value(fighter) == 4
+
+
+@pytest.mark.parametrize('shooting,magical,expected', [(True, False, 6), (True, True, 0), (False, False, 0)])
+def test_deflect_shots_only_protects_nonmagical_shooting(shooting, magical, expected):
+    fighter = profile('Deflect Shots')
+    attack = {'shooting': shooting, 'magical': magical}
+    assert ward_save_value(fighter, attack=attack) == expected
+    with patch('battleFunctions.random.randint', return_value=6):
+        assert check_saves(fighter, 7, 0, allow_armour=False, attack=attack) == bool(expected)
+
+
+@pytest.mark.parametrize('shooting,magical,permitted,expected', [
+    (True, False, True, 4), (True, True, True, 5), (False, False, True, 5), (True, False, False, 5)])
+def test_lion_cloak_is_conditional_armour(shooting, magical, permitted, expected):
+    from battleFunctions import conditional_armour_save
+    fighter = profile('Lion Cloak')
+    attack = {'shooting': shooting, 'magical': magical}
+    assert conditional_armour_save(fighter, 5, attack, permitted=permitted) == expected
+    assert conditional_armour_save(fighter, 2, attack, permitted=permitted) == 2
+    with patch('battleFunctions.random.randint', return_value=4):
+        assert check_saves(fighter, 5, 0, attack=attack, allow_armour=permitted) == (expected == 4)
+
+
+def test_warden_grants_terrain_reroll_and_killing_blow_without_extra_exported_rules():
+    fighter = profile('Warden of Saphery')
+    assert fighter.has_killing_blow()
+    assert fighter.dangerous_terrain_reroll_sources() == ['Ithilmar Armour']
+    assert ward_save_value(fighter, attack={'shooting': True}) == 6
+
+
+@pytest.mark.parametrize('magical', [False, True])
+def test_deflect_shots_reaches_shooting_and_cannon_batches(magical, capsys):
+    from cannon_fire import CannonFire
+    attacker, defender = profile(), profile('Deflect Shots')
+    attacker.give_weapon('Shortbow')
+    attacker.equip_weapon('Shortbow')
+    attacker.equipedWeapon['magical'] = magical
+    firing = SimpleNamespace(model=attacker, name='Archer', nmodels=1, files=1, ranks=1)
+    target = SimpleNamespace(model=defender, name='Noble', nmodels=1, files=1, ranks=1)
+    with patch('battleFunctions.random.randint', return_value=6):
+        assert simulate_battle(firing, target, charge=False)[-1] == int(magical)
+    cannon_target = SimpleNamespace(unit=target, model=SimpleNamespace(getChildren=lambda: [object()]))
+    with patch('battleFunctions.random.randint', return_value=6):
+        assert CannonFire.__new__(CannonFire)._apply_wounds(cannon_target, 1, 10, 3,
+                                                          magical=magical)[0] == int(magical)
+    assert 'Deflect Shots' in capsys.readouterr().out
+
+
+def test_lion_cloak_reaches_shooting_save_without_changing_melee_armour(capsys):
+    attacker, defender = profile(), profile('Lion Cloak')
+    defender.set_armour(['Heavy Armour'])
+    attacker.give_weapon('Shortbow')
+    attacker.equip_weapon('Shortbow')
+    firing = SimpleNamespace(model=attacker, name='Archer', nmodels=1, files=1, ranks=1)
+    target = SimpleNamespace(model=defender, name='Lion', nmodels=1, files=1, ranks=1)
+    with patch('battleFunctions.random.randint', side_effect=[6, 6, 4]):
+        assert simulate_battle(firing, target, charge=False)[-1] == 0
+    assert defender.armor_save == 5 and defender.melee_armour_save() == 5
+    assert '5+ -> 4+' in capsys.readouterr().out
 
 
 @pytest.mark.parametrize('keyword,value', [('Chaos Armour (5+)', 5), ('Chaos Armour (6+)', 6),

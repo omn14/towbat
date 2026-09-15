@@ -413,7 +413,47 @@ def check_armor_save(model, armor_save_value, AP):
     return False
 
 
-def ward_save_value(model) -> int:
+def conditional_ward_sources(model, attack=None):
+    """Attack-scoped wards, never a permanent bearer Ward (FoF pp. 164, 182)."""
+    from magic_items import EffectKind, profile_effects
+    attack = attack or {}
+    sources = []
+    if any(rule.get('name') == 'Deflect Shots' for rule in model.special_rules):
+        sources.append({'name': 'Deflect Shots', 'ward': 6,
+                        'eligible': bool(attack.get('shooting') and not attack.get('magical'))})
+    for entry in profile_effects(model, EffectKind.FLAMING_WARD):
+        sources.append({'name': entry.item.name, 'ward': int(entry.effect.value),
+                        'eligible': bool(attack.get('flaming'))})
+    return sources
+
+
+def conditional_armour_save(model, save, attack=None, *, permitted=True, log=False):
+    """Lion Cloak protects against non-magical shooting only (FoF p. 185)."""
+    if not any(rule.get('name') == 'Lion Cloak' for rule in model.special_rules):
+        return save
+    attack = attack or {}
+    eligible = permitted and attack.get('shooting') and not attack.get('magical')
+    result = max(2, save - 1) if eligible else save
+    if log:
+        logger = rule_log if result != save else rule_skipped
+        logger('Lion Cloak', model, f'shooting={bool(attack.get("shooting"))}, '
+               f'magical={bool(attack.get("magical"))}, armour permitted={permitted}: '
+               f'{save}+ -> {result}+ before AP, maximum 2+ (FoF p. 185)')
+    return result
+
+
+def weapon_attack_context(profile, weapon):
+    """Native Flaming Attacks do not transfer to magic weapons (Rulebook p. 169)."""
+    native = any(rule.get('flaming_attacks') or rule.get('name', '').casefold() == 'flaming attacks'
+                 for rule in getattr(profile, 'special_rules', []) if isinstance(rule, dict))
+    flaming = bool(weapon.get('flaming_attacks') or any(str(rule).casefold() == 'flaming attacks'
+                                                      for rule in weapon.get('special_rules', [])))
+    return {'shooting': weapon.get('tag') == 'ranged',
+            'magical': profile.has_magical_attacks(weapon=weapon) if profile is not None else False,
+            'flaming': flaming or (native and not (weapon.get('magical') or weapon.get('magic_item')))}
+
+
+def ward_save_value(model, *, attack=None) -> int:
     """The model's Warding value, or 0 for none.
 
     Only one Ward save may ever be attempted and two never combine, so a model
@@ -427,11 +467,14 @@ def ward_save_value(model) -> int:
     for entry in profile_effects(model, EffectKind.WARD):
         value = int(entry.effect.value)
         best = min(best, value) if best else value
+    for source in conditional_ward_sources(model, attack):
+        if source['eligible']:
+            best = min(best, source['ward']) if best else source['ward']
     return best
 
 
 def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None,
-                allow_armour=True, allow_regeneration=True, regenerated=None, armour_modifiers=None):
+                allow_armour=True, allow_regeneration=True, regenerated=None, armour_modifiers=None, attack=None):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
@@ -443,11 +486,13 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
     Spell-specific save prohibitions are independent of slaying (p. 329).
     """
     from magic_items import item_ap_armour_save
+    armor_save_value = conditional_armour_save(model, armor_save_value, attack,
+                                                permitted=allow_armour and not slaying_blow)
     armor_save_value = item_ap_armour_save(model, armor_save_value, AP, allow_armour and not slaying_blow,
                                          armour_modifiers)
     if allow_armour and not slaying_blow and check_armor_save(model, armor_save_value, AP):
         return True
-    ward = ward_save_value(model)
+    ward = ward_save_value(model, attack=attack)
     if ward:
         rolled = random.randint(1, 6)
         if ward_rolls is not None:
@@ -464,9 +509,9 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
     return False
 
 
-def report_ward_saves(unit, wounds, rolls):
+def report_ward_saves(unit, wounds, rolls, *, attack=None):
     """Report once per wound batch, never in the save loop (Rulebook p. 141)."""
-    best = ward_save_value(unit.model)
+    best = ward_save_value(unit.model, attack=attack)
     from magic_items import EffectKind, profile_effects, report_inactive_effects
     entries = profile_effects(unit.model, EffectKind.WARD)
     reference = getattr(unit.model, '_magic_item_member', None)
@@ -474,6 +519,13 @@ def report_ward_saves(unit, wounds, rolls):
     if member is not None:
         report_inactive_effects(member, EffectKind.WARD, 'no item Ward save', profile=unit.model)
     sources = [{'name': entry.item.name, 'ward': int(entry.effect.value), 'faction_ward': True} for entry in entries]
+    for source in conditional_ward_sources(unit.model, attack):
+        if source['eligible']:
+            sources.append({**source, 'faction_ward': True})
+        else:
+            rule_skipped(source['name'], unit, f'{wounds} wounds: attack does not qualify for its {source["ward"]}+ Ward; '
+                         f'shooting={bool((attack or {}).get("shooting"))}, magical={bool((attack or {}).get("magical"))}, '
+                         f'flaming={bool((attack or {}).get("flaming"))}')
     for rule in [*unit.model.special_rules, *sources]:
         if not rule.get('faction_ward'):
             continue
@@ -524,7 +576,7 @@ def ethereal_blocks_hits(unit, hits, magical, source):
 
 
 def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
-                       allow_armour=True, allow_regeneration=True, regenerated=None):
+                       allow_armour=True, allow_regeneration=True, regenerated=None, flaming=False):
     """*hits* automatic hits of the given Strength and AP against *unit*.
 
     Returns (wounds, saves, unsaved). A spell has no attacking model, so there
@@ -534,6 +586,7 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
         return 0, 0, 0
     ethereal_blocks_hits(unit, hits, True, 'spell')
     m = unit.model
+    attack = {'magical': True, 'flaming': flaming}
     from magic_items import item_armour_save, report_ap_armour
     if allow_armour:
         item_armour_save(m, m.armor_save, log=True)
@@ -542,13 +595,14 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
     ward_rolls = []
     armour_modifiers = []
+    conditional_armour_save(m, m.melee_armour_save(), attack, permitted=allow_armour, log=True)
     saves = sum(1 for _ in range(wounds)
                 if check_saves(m, m.melee_armour_save() if allow_armour else 7, ap,
                                ward_rolls=ward_rolls, allow_armour=allow_armour,
                                allow_regeneration=allow_regeneration, regenerated=regenerated,
-                               armour_modifiers=armour_modifiers))
+                               armour_modifiers=armour_modifiers, attack=attack))
     report_ap_armour(m, armour_modifiers)
-    report_ward_saves(unit, wounds, ward_rolls)
+    report_ward_saves(unit, wounds, ward_rolls, attack=attack)
     _report_too_tough_to_wound(unit, hits, strength, target)
     return wounds, saves, wounds - saves
 
@@ -674,14 +728,18 @@ def resolve_impact_hits(unit1, unit2):
 
     ap = m.impact_hit_ap() if hasattr(m, 'impact_hit_ap') else 0
     from magic_items import item_armour_save, report_ap_armour
+    attack = {'magical': m.has_magical_attacks(innate_only=True),
+              'flaming': any(rule.get('flaming_attacks') or rule.get('name', '').casefold() == 'flaming attacks'
+                             for rule in m.special_rules if rule is not m.equipedWeapon)}
     item_armour_save(unit2.model, unit2.model.armor_save, log=True)
+    conditional_armour_save(unit2.model, unit2.model.melee_armour_save(), attack, log=True)
     ward_rolls = []
     armour_modifiers = []
     saves = sum(1 for _ in range(wounds)
                 if check_saves(unit2.model, unit2.model.melee_armour_save(), ap, ward_rolls=ward_rolls,
-                               armour_modifiers=armour_modifiers))
+                               armour_modifiers=armour_modifiers, attack=attack))
     report_ap_armour(unit2.model, armour_modifiers)
-    report_ward_saves(unit2, wounds, ward_rolls)
+    report_ward_saves(unit2, wounds, ward_rolls, attack=attack)
     _report_too_tough_to_wound(unit2, hits, strength, target)
     return hits, wounds, saves, wounds - saves
 
@@ -909,6 +967,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                          for rule in unit1.model.special_rules if isinstance(rule, dict))
     if not (weapon.get('magical') or weapon.get('magic_item')):
         flaming = flaming or native_flaming
+    attack = weapon_attack_context(unit1.model, weapon)
+    conditional_armour_save(unit2.model, defender_save, attack, log=attacks1 > 0)
     flammable = any(rule.get('flammable') or rule.get('name', '').casefold() == 'flammable'
                     for rule in unit2.model.special_rules if isinstance(rule, dict))
     # Reported once for the exchange, not once per save roll.
@@ -947,12 +1007,13 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
                 armour_bypassed += 1
             else:
                 penetration = getattr(unit1.model, 'attack_AP', unit1.model.AP)
-                target = item_ap_armour_save(unit2.model, defender_save, penetration, True) + penetration
+                target = item_ap_armour_save(unit2.model,
+                    conditional_armour_save(unit2.model, defender_save, attack), penetration, True) + penetration
                 save_targets[target] = save_targets.get(target, 0) + 1
             if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
                            slaying_blow=bool(struck), ward_rolls=ward_rolls, armour_modifiers=armour_modifiers,
-                           allow_regeneration=not (flaming and flammable)):
+                           allow_regeneration=not (flaming and flammable), attack=attack):
                 saves_made += 1
                 total_wounds -= 1
             elif struck:
@@ -979,7 +1040,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             cause = 'magical attacks can wound' if unit1.model.has_magical_attacks() else 'no wounds to prevent'
             rule_skipped('Ethereal', unit2, f'{attacks1} attacks by {unit1.name}: {cause} (p. 167)')
     report_ap_armour(unit2.model, armour_modifiers)
-    report_ward_saves(unit2, suffered_wounds, ward_rolls)
+    report_ward_saves(unit2, suffered_wounds, ward_rolls, attack=attack)
     if flaming:
         regeneration = any(rule.get('regen') for rule in unit2.model.special_rules if isinstance(rule, dict))
         report = rule_log if flammable and regeneration and total_wounds else rule_skipped

@@ -44,6 +44,18 @@ def test_no_contact_means_no_fighting_rank_even_within_movement():
     assert all(place.attacks(3, 10, support=True) == 0 for place in positions)
 
 
+@pytest.mark.parametrize('facing,enemy', [('left', (-1, -1, .5, 1.5, 0)),
+                                         ('right', (5, -1, .5, 1.5, 0)),
+                                         ('rear', (2, -3, 2.5, .5, 0))])
+def test_martial_prowess_supports_inward_from_each_facing(facing, enemy):
+    ordinary = fighting_positions(formation(ranks=3), [enemy], 5, facing=facing)
+    martial = fighting_positions(formation(ranks=3), [enemy], 5, facing=facing, support_flanks=True)
+    assert not any(place.supporting for place in ordinary)
+    assert sum(place.attacks(2, 4, support=True) for place in martial) > sum(
+        place.attacks(2, 4, support=True) for place in ordinary)
+    assert all(place.attacks(2, 4, support=True) == 1 for place in martial if place.supporting)
+
+
 def test_reserved_character_slot_does_not_shift_ordinary_rank_membership():
     boxes = formation(files=3, ranks=2)
     slots = [0, 2, 3, 4, 5]

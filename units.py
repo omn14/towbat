@@ -596,6 +596,13 @@ class unitGraphics(FSM):
                 entry['retired'] = False
                 rule_log('Refusing a Challenge', self,
                          f"{entry.get('name', 'Champion')} returns to the fighting rank; combat ended (p. 210)")
+        guard = getattr(self.unit, 'king_guard_fighter', None)
+        if guard is not None and guard.retiredFromCombat:
+            rule_log("King's Guard", self, 'retired White Lion returns to the fighting rank; combat ended (p. 210)')
+        self.unit.king_guard_fighter = None
+        self.unit.king_guard_state = None
+        self.unit.retired_king_guards = []
+        self.unit.retired_guard_states = []
         char = getattr(self, 'joinedCharacter', None)
         if char is not None and getattr(char, 'retiredFromCombat', False):
             char.retiredFromCombat = False

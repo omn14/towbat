@@ -2058,19 +2058,23 @@ class CombatResolver:
         """Undirected attacks cannot spill onto a champion (Rulebook p. 199)."""
         from command_groups import champions
         protected = champions(target, include_retired=True)
-        if not protected:
-            return wounds, slaying
         duelling = challenge is not None and any(challenge.involves(champion) for champion in protected)
-        reserve = 1 if target.unit.nmodels > 1 or duelling else 0
+        reserve = int(bool(protected) and (target.unit.nmodels > 1 or duelling))
+        from challenges import guard_fighters
+        guards = [guard for guard in guard_fighters(target) if guard.unit.nmodels > 0 and (
+              guard.retiredFromCombat or (challenge and challenge.involves(guard)))]
+        reserve += len(guards)
+        if not protected and not guards:
+            return wounds, slaying
         available = max(0, target.unit.nmodels - reserve)
         per_model = max(1, _stat_int(target.unit.model.characteristics, 'W', 1))
         killed = min(slaying, available)
         partial = 0 if killed else getattr(self, '_pendingWounds', {}).get(id(target), getattr(target, 'woundsOnModel', 0))
         admitted = min(wounds, max(0, (available - killed) * per_model - partial))
         if admitted != wounds or killed != slaying:
-            rule_log('Champion', target,
+            rule_log('Challenge Protection' if guards else 'Champion', target,
                      f'{wounds} wounds and {slaying} slaying blows against ordinary models -> '
-                     f'{admitted} wounds and {killed} slaying blows; champion protected (p. 199)')
+                     f'{admitted} wounds and {killed} slaying blows; {reserve} personal models protected (pp. 199, 211)')
         return admitted, killed
 
     def applyCombatWounds(self, target, wounds, slaying=0):
@@ -2112,13 +2116,17 @@ class CombatResolver:
         """Resolve every rider, mount and crew at its own Initiative (pp. 146, 192-194)."""
         from combat_profiles import profile_strike_order
         order = profile_strike_order(self.game.attackers, self.game.defenders,
-                                     self._engagedFacing, challenge)
+                                     self._engagedFacing, challenge, split_targets=contacts is not None)
         engaged = {id(member): member for member in self.game.attackers + self.game.defenders}
         scores = [0, 0]
         initiative_step = None
         snapshots = {}
         attacks_at_step = {}
         allocations = {}
+        deferred_attacks = {}
+        spent_attacks = {}
+        split_profiles = {id(part.deferred_from): initiative for initiative, part in order
+                  if part.deferred_from is not None}
         animated = set()
         cast = set()
         self._pendingWounds = getattr(self, '_pendingWounds', {})
@@ -2139,7 +2147,7 @@ class CombatResolver:
                     nonlocal snapshots, attacks_at_step, allocations
                     snapshots = {identity: member.unit.nmodels for identity, member in engaged.items()}
                     if contacts is not None:
-                        contacts.refresh()
+                        contacts.refresh(challenge)
                         allocations = {id(candidate): contacts.allocation(candidate, snapshots[id(candidate.host)], challenge)
                                        for step, candidate in order if step == initiative}
                     attacks_at_step = {id(candidate): (sum(count for _, count, targets in allocations[id(candidate)].batches if targets)
@@ -2147,7 +2155,8 @@ class CombatResolver:
                         snapshots[id(candidate.host)], self._combatStartModels.get(
                             id(candidate.host.unit), snapshots[id(candidate.host)]), challenge))
                         for step, candidate in order if step == initiative}
-                    return list(allocations.values())
+                    return [allocations[id(candidate)] for step, candidate in order
+                            if step == initiative and candidate.deferred_from is None and id(candidate) in allocations]
                 if interleave:
                     from combat_initiative import InitiativeStep
                     yield InitiativeStep(initiative, prepare_step)
@@ -2222,9 +2231,35 @@ class CombatResolver:
                 continue
             if contacts is not None:
                 allocation = allocations[id(part)]
-                if not interleave:
+                if not interleave and part.deferred_from is None:
                     yield allocation
-                batches = allocation.attacks
+                if part.deferred_from is not None:
+                    original = id(part.deferred_from)
+                    _, slots, _, _, _ = contacts.formations[id(host)]
+                    quotas = contacts.quotas(part, models, challenge,
+                                             enemies=getattr(host, 'isInCombatWith', []) or [target])
+                    remaining = {slots[index]: max(0, count - spent_attacks.get((original, slots[index]), 0))
+                                 for index, count in quotas.items()}
+                    batches = []
+                    for slot, count, victim in deferred_attacks.get(original, []):
+                        count = min(count, remaining.get(slot, 0))
+                        if count and victim.unit.nmodels > 0:
+                            batches.append((victim, count))
+                            remaining[slot] -= count
+                elif id(part) in split_profiles:
+                    from combat_weapons import defensive_spear_initiative
+                    base_initiative = split_profiles[id(part)]
+                    batches = []
+                    deferred_attacks[id(part)] = []
+                    for slot, count, victim in allocation.assigned_batches:
+                        if defensive_spear_initiative(part.profile, host, victim, base_initiative) == initiative:
+                            batches.append((victim, count))
+                            key = (id(part), slot)
+                            spent_attacks[key] = spent_attacks.get(key, 0) + count
+                        else:
+                            deferred_attacks[id(part)].append((slot, count, victim))
+                else:
+                    batches = allocation.attacks
             else:
                 batches = [(target, attacks_at_step[id(part)])]
             for victim, count in batches:
@@ -2238,8 +2273,10 @@ class CombatResolver:
         if target.unit.model.equipedWeapon.get('tag') == 'ranged':
             target.unit.model.equip_best_melee()
         from fear import attack_penalty
-        from combat_weapons import weapon_target
-        with attack_penalty(self.game, host, target, part.profile), weapon_target(part.profile, host, target):
+        from combat_weapons import weapon_target, combat_host
+        from special_rules import martial_prowess
+        with attack_penalty(self.game, host, target, part.profile), weapon_target(part.profile, host, target), \
+            martial_prowess((part.profile, host), (target.unit.model, combat_host(target))):
             result = simulate_battle(part.unit(count), target.unit,
                                      charge=getattr(host, 'chargedThisTurn', False),
                                      charge_distance=float(getattr(host, 'chargeDistance', 0) or 0),
@@ -2292,6 +2329,9 @@ class CombatResolver:
                     victim.unit.nmodels = 0
                     if getattr(victim, 'command_host', None) is not None:
                         victim.command_entry['active'] = False
+                        from challenges import KingGuard
+                        if isinstance(victim, KingGuard):
+                            victim.mark_slain()
                         specific.unit.nmodels = max(0, specific.unit.nmodels - 1)
                 removals.append(Func(self.applyAssailmentModelWounds, victim, previous, admitted))
         else:
@@ -2379,6 +2419,8 @@ class CombatResolver:
             initiative = strike_initiative(model, charged=charged, inches=inches,
                                            flank_or_rear=flanking,
                                            first_round=getattr(striker, 'roundsFought', 0) == 1, log=True)
+            from combat_weapons import defensive_spear_initiative
+            initiative = defensive_spear_initiative(model, striker, target, initiative)
             if base != profile:
                 name = 'Strike First' if base > profile else 'Strike Last'
                 weapon = (model.active_melee_weapon() or {}).get('name')
@@ -2465,6 +2507,14 @@ class CombatResolver:
             await self.armDuellists(live)
             return live
 
+        from challenges import KingGuard
+        for host in hosts:
+            if any(rule.get('name') == "King's Guard" for rule in host.unit.model.special_rules):
+                guards = [candidate for candidate in duellists(host) if isinstance(candidate, KingGuard)]
+                if not guards:
+                    rule_skipped("King's Guard", host,
+                                 'no eligible White Lion: requires a living joined General and a model '
+                                 'within or adjacent to the fighting rank (FoF p. 163; Rulebook p. 210)')
         for own, opposing in (groups, groups[::-1]):
             candidates = [candidate for host in own for candidate in duellists(host)]
             if not candidates or not opposing:
@@ -2604,6 +2654,9 @@ class CombatResolver:
             return False
         if getattr(model, 'command_host', None) is not None:
             model.command_entry['active'] = False
+            from challenges import KingGuard
+            if isinstance(model, KingGuard):
+                model.mark_slain()
             self.game.movement.removeModelsFromUnit(model.command_host, 1)
         elif getattr(model, 'hostUnit', None) is not None:
             slay_character(self.game, model)
@@ -2643,8 +2696,12 @@ class CombatResolver:
             inches = float(getattr(host or model, 'chargeDistance', 0.0) or 0.0)
             first = getattr(host or model, 'roundsFought', 0) == 1
             for unit, label in self.duelCombatants(model, host):
-                order.append((strike_initiative(unit.model, charged=charged,
-                                                inches=inches, first_round=first, log=True),
+                from combat_weapons import defensive_spear_initiative
+                initiative = strike_initiative(unit.model, charged=charged,
+                                               inches=inches, first_round=first, log=True)
+                initiative = defensive_spear_initiative(unit.model, host or model,
+                                                        challenge.opponent_of(model), initiative)
+                order.append((initiative,
                               model, unit, label, charged, first, inches))
         order.sort(key=lambda e: -e[0])
         battle_log("Challenge: " + " vs ".join(
@@ -2704,11 +2761,13 @@ class CombatResolver:
                 if weapon is None or weapon.get('tag') == 'ranged':
                     unit.model.equip_best_melee()
                 from fear import attack_penalty
-                from combat_weapons import weapon_target
+                from combat_weapons import weapon_target, combat_host
+                from special_rules import martial_prowess
                 fighting_unit = (SimpleNamespace(name=unit.name, model=unit.model, nmodels=unit.nmodels,
                                  files=unit.files, ranks=unit.ranks, _attack_count=frozen_attacks[id(unit)])
                                  if interleave else unit)
-                with attack_penalty(self.game, model, rival, unit.model), weapon_target(unit.model, model, rival):
+                with attack_penalty(self.game, model, rival, unit.model), weapon_target(unit.model, model, rival), \
+                    martial_prowess((unit.model, combat_host(model)), (rival.unit.model, combat_host(rival))):
                     attacks, hits, suffered, saved, wounds = simulate_battle(
                         fighting_unit, rival.unit, charge=charged, first_round=first,
                         charge_distance=inches)
