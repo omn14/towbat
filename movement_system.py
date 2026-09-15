@@ -1905,6 +1905,7 @@ class MovementSystem:
         # Survivors close up, keeping any joined character's slot open.
         unit.layOutRanks()
         unit.rebuildFootprint()
+        unit.placeCharacter()
 
     # ─── Sweep Tests ──────────────────────────────────────────────────────
 

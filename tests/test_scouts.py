@@ -62,6 +62,26 @@ def pair():
     root.removeNode()
 
 
+@pytest.mark.parametrize('reason', ['eligible', 'opponent', 'ai', 'other-phase', 'no-character', 'empty'])
+def test_pending_joined_formation_is_only_available_to_its_human_owner(pair, reason):
+    game, host, character = pair
+    host.deploymentFormationPending = True
+    host.joinedCharacter = character
+    if reason == 'opponent':
+        game.roundCounter.current_player = 2
+    elif reason == 'ai':
+        game.player1Units, game.player2Units = game.player2Units, game.player1Units
+        game.roundCounter.current_player = 2
+        game.AIplayer2.active = True
+    elif reason == 'other-phase':
+        game.fsm.state = 'MovementPhase'
+    elif reason == 'no-character':
+        host.joinedCharacter = None
+    elif reason == 'empty':
+        host.bodyNP.removeNode()
+    assert deployPhase.pending_deployment_formation(game) is (host if reason == 'eligible' else None)
+
+
 def test_keyword_is_coded_and_joined_character_does_not_grant_it(pair):
     game, scout, enemy = pair
     assert has_scouts(scout)
@@ -125,6 +145,84 @@ def test_deployment_rotation_does_not_replace_other_wheel_actions(pair, state):
     assert game.camera.getY() == (-75 if state == 'over-log' else -70)
     MyApp.zoomOut(game)
     assert game.camera.getY() == -75
+
+
+@pytest.mark.parametrize('player', [1, 2])
+@pytest.mark.parametrize('scouting', [False, True])
+@pytest.mark.parametrize('delta', [-1, 1])
+def test_deployment_redress_changes_only_formation_and_refreshes_preview(pair, player, scouting, delta):
+    game, held, enemy = pair
+    if player == 2:
+        game.player1Units, game.player2Units = game.player2Units, game.player1Units
+    game.roundCounter.current_player = player
+    game.deploymentStage = 'scouts' if scouting else 'ordinary'
+    held.scoutDeploymentChoice = 'scouts' if scouting else 'normal'
+    held.unit.nmodels, held.unit.files, held.unit.ranks = 12, 5, 3
+    held.slotCount = Mock(return_value=12)
+    held.characterSlot = None
+    held.layOutRanks, held.rebuildFootprint, held.placeCharacter = Mock(), Mock(), Mock()
+    held.updateTextNode = Mock()
+    held.moveSpentThisTurn, held.redressDelta, held.manoeuvreThisTurn = 3, 4, 'Reform'
+    held.hasMovedThisTurn = True
+    game.unitToMove = held
+    game.taskMgr = Mock(hasTaskNamed=Mock(return_value=True))
+    game.awaitingChoice = False
+    game.refreshSelectedUnit, game.movement = Mock(), Mock()
+    with patch('deployPhase._preview_placement') as preview:
+        MyApp.redressRanks(game, delta)
+    assert held.unit.files == 5 + delta
+    assert held.unit.ranks == (12 + held.unit.files - 1) // held.unit.files
+    assert (held.moveSpentThisTurn, held.redressDelta, held.manoeuvreThisTurn) == (3, 4, 'Reform')
+    assert held.hasMovedThisTurn
+    held.rebuildFootprint.assert_called_once()
+    held.placeCharacter.assert_called_once()
+    preview.assert_called_once_with(game, held)
+    game.refreshSelectedUnit.assert_called_once()
+    game.movement.redressRanks.assert_not_called()
+
+
+@pytest.mark.parametrize('reason', ['not-held', 'placed', 'other-player', 'ai', 'choice',
+                                   'skirmisher', 'empty', 'minimum', 'maximum'])
+def test_deployment_redress_rejects_ineligible_units_and_frontages(pair, reason):
+    game, held, enemy = pair
+    held.scoutDeploymentChoice = 'normal'
+    held.unit.nmodels, held.unit.files, held.unit.ranks = 5, 5, 1
+    held.slotCount = Mock(return_value=5)
+    game.unitToMove = held
+    game.taskMgr = Mock(hasTaskNamed=Mock(return_value=reason != 'not-held'))
+    game.awaitingChoice = reason == 'choice'
+    game.refreshSelectedUnit, game.movement = Mock(), Mock()
+    if reason == 'placed':
+        held.isDeployed = True
+    elif reason in ('other-player', 'ai'):
+        game.roundCounter.current_player = 2
+        game.AIplayer2.active = reason == 'ai'
+        if reason == 'ai':
+            game.player1Units, game.player2Units = game.player2Units, game.player1Units
+    elif reason == 'skirmisher':
+        held.isSkirmisher = True
+    elif reason == 'empty':
+        held.bodyNP.removeNode()
+    elif reason == 'minimum':
+        held.unit.files, held.unit.ranks = 1, 5
+    before = held.unit.files, held.unit.ranks
+    with patch('deployPhase._preview_placement') as preview:
+        MyApp.redressRanks(game, 1 if reason == 'maximum' else -1)
+    assert (held.unit.files, held.unit.ranks) == before
+    preview.assert_not_called()
+    game.refreshSelectedUnit.assert_not_called()
+    game.movement.redressRanks.assert_not_called()
+
+
+def test_battle_redress_still_uses_normal_movement_handler(pair):
+    game, held, enemy = pair
+    game.fsm.state = 'MovementPhase'
+    game.awaitingChoice = False
+    game.unitToMove = held
+    game.movement, game.refreshSelectedUnit = Mock(), Mock()
+    MyApp.redressRanks(game, 1)
+    game.movement.redressRanks.assert_called_once_with(held, 1)
+    game.refreshSelectedUnit.assert_called_once()
 
 
 @pytest.mark.parametrize('gap,allowed', [(11.999, False), (12.0, False), (12.001, True)])

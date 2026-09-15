@@ -36,6 +36,17 @@ Wheel up and down turn in opposite directions; clicking places it at the chosen
 heading. The wheel resumes camera zoom once the unit is placed, and scrolling
 over the battle log still scrolls the log.
 
+While a formed unit is picked up during deployment, **V** adds one file and
+**Shift+V** removes one. Repeat freely with no movement cost or manoeuvre penalty,
+including during Scout deployment. The centre and heading stay fixed, and the
+unit must still fit its deployment area when placed. Skirmishers have no ranks
+to redress. During battle, the normal redress costs and limits still apply.
+
+After dropping a character into a formed unit, the host remains selected for
+free **V** / **Shift+V** rank adjustments. Click again to confirm and finish that
+deployment. The already placed host cannot move or rotate during this step;
+invalid rank changes are refused. Saving and reloading keeps the adjustment open.
+
 For Remains in Play spells, **Keep this player turn** skips further prompts for
 that spell until the next player turn. **Keep** asks again at the next phase
 boundary; **End spell** removes the effect immediately. Dispelling, recasting

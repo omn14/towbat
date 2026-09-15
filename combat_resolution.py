@@ -2597,6 +2597,9 @@ class CombatResolver:
                      f"the challenge against {self._duelName(live.accepter)} carries "
                      f"into round {live.rounds + 1}; no other may be issued in this "
                      f"combat until it resolves (p. 211)")
+            continuation = (f'Challenge continues: {self._duelName(live.challenger)} vs '
+                            f'{self._duelName(live.accepter)}, duel round {live.rounds + 1}.')
+            battle_log(continuation, 'combat', subject=live.challenger)
             await self.armDuellists(live)
             return live
 
@@ -2627,6 +2630,8 @@ class CombatResolver:
             if answer != "Issue a challenge":
                 rule_skipped('Challenges', challenger,
                              "its player declined to issue a challenge")
+                battle_log(f'Challenge: {issuer.unit.name} declines to issue.',
+                           'combat', subject=issuer)
                 continue
             challenger = await self.chooseDuellist(candidates, issuer,
                                                    'Who issues the challenge in this combat?')
@@ -2634,6 +2639,9 @@ class CombatResolver:
             challenge = Challenge(challenger, challenger_host)
             rule_log('Challenges', challenger,
                      f"issues from {challenger_host.unit.name} against {len(opposing)} enemy unit(s) in this combat (p. 210)")
+            battle_log(f'Challenge issued: {self._duelName(challenger)} from {challenger_host.unit.name} '
+                       f'against {", ".join(host.unit.name for host in opposing)}.',
+                       'combat', subject=challenger)
             await self.answerChallenge(challenge, target, hosts=opposing)
             add_challenge(self.game, challenge)
             await self.armDuellists(challenge)
@@ -2675,6 +2683,9 @@ class CombatResolver:
             rule_log('Challenges', challenge.challenger,
                      f"{target.unit.name} has no character to answer, so the "
                      f"challenge goes unanswered (p. 210)")
+            unanswered = (f'Challenge unanswered: {self._duelName(challenge.challenger)}; '
+                          f'{", ".join(host.unit.name for host in hosts)} has no eligible participant.')
+            battle_log(unanswered, 'combat', subject=challenge.challenger)
             return
         accepter = candidates[0]
         barred = next((reason for candidate, host in owners
@@ -2699,12 +2710,20 @@ class CombatResolver:
             rule_log('Challenges', accepter,
                      f"accepts the challenge from "
                      f"{self._duelName(challenge.challenger)} (p. 210)")
+            battle_log(f'Challenge accepted: {self._duelName(accepter)} from '
+                       f'{challenge.accepter_host.unit.name} faces {self._duelName(challenge.challenger)}.'
+                       + (f' Refusal barred: {barred}.' if barred is not None else ''),
+                       'combat', subject=accepter)
             return
         challenge.refused = True
+        battle_log(f'Challenge refused: {target.unit.name} declines '
+                   f'{self._duelName(challenge.challenger)}.', 'combat', subject=target)
         nominee = await self.chooseDuellist(candidates, challenge.host or challenge.challenger,
                                            f'{target.unit.name} refused: nominate a model to retire', optional=True)
         if nominee is None:
             rule_skipped('Refusing a Challenge', target, 'challenger declines to nominate a retiring model (p. 210)')
+            battle_log(f'Challenge refusal: {target.unit.name}; no model nominated to retire.',
+                       'combat', subject=target)
             return
         challenge.retired = nominee
         self.retireFromCombat(nominee, next(host for candidate, host in owners if candidate is nominee))
@@ -2721,6 +2740,9 @@ class CombatResolver:
                  "retires from combat: makes no attacks, has none directed at it, "
                  "and confers no Leadership or special rules on its unit while its "
                  "unit stays engaged (p. 210)")
+        battle_log(f'Challenge refusal: {self._duelName(model)} retires from {self._duelName(host)}; '
+               'no attacks, cannot be attacked, and provides no Leadership or special rules while engaged.',
+               'combat', subject=model)
 
     def duelCombatants(self, model, host):
         """A duellist and whatever fights alongside it, each with its own I.
@@ -2798,7 +2820,7 @@ class CombatResolver:
                               model, unit, label, charged, first, inches))
         order.sort(key=lambda e: -e[0])
         battle_log("Challenge: " + " vs ".join(
-            self._duelName(m) for m in challenge.participants()))
+            self._duelName(m) for m in challenge.participants()), 'combat', subject=challenge.challenger)
         scores = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         overkill = {id(challenge.challenger): 0, id(challenge.accepter): 0}
         incidental = [0, 0]
@@ -2828,6 +2850,8 @@ class CombatResolver:
                 if id(model) in fallen or id(rival) in fallen:
                     rule_skipped('Challenges & Mounts', model,
                                  f'I{initiative}{label}: a participant was slain at a higher Initiative (p. 211)')
+                    battle_log(f'Challenge: {self._duelName(model)}{label} does not attack at I{initiative}; '
+                               'a participant was slain at a higher Initiative.', 'combat', subject=model)
                     continue
                 if unit.model is model.unit.model and id(model) not in cast:
                     cast.add(id(model))
@@ -2870,6 +2894,12 @@ class CombatResolver:
                 rule_log('Fighting a Challenge', model,
                          f'strikes{label} at I{initiative}: {attacks} attack(s) -> '
                          f'{hits} hit -> {wounds} unsaved wound(s) on {self._duelName(rival)} (p. 211)')
+                from battleFunctions import format_combat_report, take_last_combat_report
+                details = format_combat_report(take_last_combat_report())
+                battle_log(f'Challenge I{initiative}: {self._duelName(model)}{label} / {unit.name} '
+                           f'vs {self._duelName(rival)}: {attacks} attacks -> {hits} hits -> '
+                           f'{suffered} wounds -> {saved} saved -> {wounds} unsaved',
+                           'combat', subject=model, details='\n'.join(details))
                 inflicted[id(model)] += wounds
             hazard_removals.finish()
             fallen.update(hazard_fallen)
@@ -2895,11 +2925,23 @@ class CombatResolver:
                         rule_log('Overkill', model,
                                  f'{wounds} unsaved wounds against {left} Wounds remaining -> '
                                  f'{left} wounds +{bonus} overkill (max {MAX_OVERKILL}) (p. 211)')
+                damage = (f'Challenge damage: {self._duelName(model)} inflicts {wounds} wound(s) on '
+                          f'{self._duelName(rival)}: {left} -> {max(0, left - wounds)} Wounds remaining')
+                damage += f'; {self._duelName(rival)} slain, +{bonus} overkill.' if slain else '.'
+                battle_log(damage, 'combat', subject=rival)
         if fallen:
             end_challenge(self.game, challenge)
         first, second = challenge.challenger, challenge.accepter
         if not player_one:
             first, second = second, first
+        outcome = ', '.join(f'{self._duelName(participant)} slain' if id(participant) in fallen else
+                            f'{self._duelName(participant)} survives'
+                            for participant in challenge.participants())
+        battle_log(f'Challenge result: {outcome}; '
+                   f'P1 {scores[id(first)] + incidental[0]} wounds +{overkill[id(first)]} overkill, '
+                   f'P2 {scores[id(second)] + incidental[1]} wounds +{overkill[id(second)]} overkill. '
+                   + ('Challenge ends.' if fallen else 'Both survive; challenge continues.'),
+                   'combat', subject=challenge.challenger)
         return (scores[id(first)] + incidental[0], scores[id(second)] + incidental[1],
                 overkill[id(first)], overkill[id(second)])
 

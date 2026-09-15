@@ -124,6 +124,168 @@ def test_grabbed_deployment_unit_rotates_with_wheel_and_keeps_heading_on_drop(sc
         app.camera.setTransform(camera)
 
 
+def test_held_deployment_redress_is_free_and_keeps_formation_on_drop(scene):
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    held = app._create_unit(dict(name='Dwarf Warrior', nmodels=12, files=5, ranks=3), 1, 'Redress Warriors')
+    held.scoutDeploymentChoice = 'normal'
+    app.deploymentStage = 'ordinary'
+    held.isDeployed = False
+    app.unitToMove = held
+    held.bodyNP.setPos(-2, -15, 0)
+    held.bodyNP.setH(25)
+    transform = held.bodyNP.getTransform()
+    flags = ('moveSpentThisTurn', 'manoeuvreThisTurn', 'redressDelta',
+             'hasMovedThisTurn', 'marchedThisTurn', 'cannotChargeThisTurn')
+    before = {flag: getattr(held, flag) for flag in flags}
+    asyncio.run(app.taskLoopDeploy(Task.Task(lambda task: task.done)))
+    assert app.taskMgr.hasTaskNamed('taskMoveUnit')
+    try:
+        assert not app.awaitingChoice
+        assert deployPhase._held_deployment_unit(app) is held
+        assert not held.isSkirmisher
+        with patch.object(app.movement, 'redressRanks') as battle_redress:
+            for _ in range(7):
+                app.messenger.send('v')
+            assert (held.unit.files, held.unit.ranks) == (12, 1)
+            for _ in range(8):
+                app.messenger.send('shift-v')
+            assert (held.unit.files, held.unit.ranks) == (4, 3)
+            battle_redress.assert_not_called()
+        assert held.bodyNP.getTransform() == transform
+        assert {flag: getattr(held, flag) for flag in flags} == before
+        assert held.unitWidth == pytest.approx(held.modelWidth * 4)
+        assert held.unitHeight == pytest.approx(held.modelHeight * 3)
+        assert placement_error(app, held, scouting=False) is None
+        app.messenger.send('mouse1')
+        assert held.isDeployed and not app.taskMgr.hasTaskNamed('taskMoveUnit')
+        assert (held.unit.files, held.unit.ranks) == (4, 3)
+        app.messenger.send('v')
+        assert (held.unit.files, held.unit.ranks) == (4, 3)
+    finally:
+        app.taskMgr.remove('taskMoveUnit')
+
+
+def test_held_deployment_redress_keeps_joined_character_and_validates_drop(scene, tmp_path):
+    from characters import join_unit
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    held = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3), 1, 'Redress Spears')
+    noble = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Redress Noble')
+    assert join_unit(app, noble, held)
+    held.scoutDeploymentChoice = 'normal'
+    held.isDeployed = False
+    app.deploymentStage = 'ordinary'
+    app.unitToMove = held
+    held.bodyNP.setPos(0, 100, 0)
+    held.bodyNP.setH(25)
+    asyncio.run(app.taskLoopDeploy(Task.Task(lambda task: task.done)))
+    try:
+        for _ in range(11):
+            app.messenger.send('v')
+        assert (held.unit.files, held.unit.ranks) == (15, 1)
+        assert tuple(held.model.getColor()) == pytest.approx((.6, .6, .6, 1), abs=1 / 1024)
+        app.messenger.send('mouse1')
+        assert not held.isDeployed and not app.taskMgr.hasTaskNamed('taskMoveUnit')
+        held.bodyNP.setPos(-2, -15, 0)
+        asyncio.run(app.taskLoopDeploy(Task.Task(lambda task: task.done)))
+        for _ in range(12):
+            app.messenger.send('shift-v')
+        assert (held.unit.files, held.unit.ranks) == (3, 5)
+        assert len(model_base_boxes(held)) == 15
+        assert noble.hostUnit is held and noble.bodyNP.getParent() == held.bodyNP
+        assert held.characterSlot < 3
+        assert held.unitHeight == pytest.approx(5 * held.modelHeight)
+        assert placement_error(app, held) is None
+        assert tuple(held.model.getColor()) == pytest.approx(held.color, abs=1 / 1024)
+        assert held.moveSpentThisTurn == 0 and held.manoeuvreThisTurn is None and held.redressDelta == 0
+        app.graphicsEngine.renderFrame()
+        app.messenger.send('mouse1')
+        assert held.isDeployed
+        path = save_game_state(app, str(tmp_path / 'deployment-redress.json'))
+        load_game_state(app, path)
+        restored = next(unit for unit in app.units if unit.unitName == 'Redress Spears')
+        assert (restored.unit.files, restored.unit.ranks) == (3, 5)
+        assert restored.joinedCharacter.unitName == 'Redress Noble'
+        assert restored.moveSpentThisTurn == 0 and restored.redressDelta == 0
+    finally:
+        app.taskMgr.remove('taskMoveUnit')
+
+
+@pytest.mark.parametrize('player', [1, 2])
+@pytest.mark.parametrize('last_drop', [False, True])
+def test_character_drop_allows_free_host_redress_before_finishing(scene, tmp_path, player, last_drop):
+    app, baseline = scene
+    load_game_state(app, str(baseline))
+    app.AIplayer2.active = False
+    app.roundCounter.request('PlayerOne' if player == 1 else 'PlayerTwo')
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=14, files=5, ranks=3), player, 'Join Spears')
+    noble = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), player, 'Join Noble')
+    host.scoutDeploymentChoice = noble.scoutDeploymentChoice = 'normal'
+    host.isDeployed = True
+    if last_drop:
+        for unit in app.units:
+            unit.isDeployed = True
+    else:
+        waiting = 'Warriors' if player == 1 else 'Normal Rangers'
+        next(unit for unit in app.units if unit.unitName == waiting).isDeployed = False
+    noble.isDeployed = False
+    app.deploymentStage = 'ordinary'
+    host.bodyNP.setPos(-2, -15 if player == 1 else 15, 0)
+    noble.bodyNP.setPos(host.bodyNP.getPos())
+    app.unitToMove = noble
+    asyncio.run(app.taskLoopDeploy(Task.Task(lambda task: task.done)))
+    try:
+        app.messenger.send('mouse1')
+        assert host.joinedCharacter is noble and noble.hostUnit is host
+        assert app.unitToMove is host
+        assert app.roundCounter.current_player == player
+        app.fsm.nextPhase()
+        assert app.fsm.state == 'DeployPhase'
+        assert deployPhase.pending_deployment_formation(app) is host
+        transform = host.bodyNP.getTransform()
+        app.messenger.send('shift-v')
+        assert (host.unit.files, host.unit.ranks) == (4, 4)
+        assert host.bodyNP.getTransform() == transform
+        assert host.moveSpentThisTurn == 0 and host.manoeuvreThisTurn is None and host.redressDelta == 0
+        assert len(model_base_boxes(host)) == 15
+        assert placement_error(app, host) is None
+        assert not app.taskMgr.hasTaskNamed('taskMoveUnit')
+        assert not deployPhase.allUnitsDeployed([host, noble])
+        saved = save_game_state(app, str(tmp_path / 'pending-joined-formation.json'))
+        load_game_state(app, saved)
+        host = next(unit for unit in app.units if unit.unitName == 'Join Spears')
+        noble = host.joinedCharacter
+        assert app.unitToMove is host
+        assert deployPhase.pending_deployment_formation(app) is host
+        assert (host.unit.files, host.unit.ranks) == (4, 4)
+        assert host.moveSpentThisTurn == 0 and host.manoeuvreThisTurn is None and host.redressDelta == 0
+        boxes = model_base_boxes(host)
+        slot = host.characterSlot
+        with patch('deployPhase.placement_error', return_value='outside deployment zone'):
+            app.messenger.send('v')
+            assert (host.unit.files, host.unit.ranks) == (4, 4)
+            assert host.characterSlot == slot
+            assert model_base_boxes(host) == boxes
+            app.messenger.send('mouse1')
+            assert deployPhase.pending_deployment_formation(app) is host
+        app.messenger.send('v')
+        app.messenger.send('shift-v')
+        assert (host.unit.files, host.unit.ranks) == (4, 4)
+        app.messenger.send('mouse1')
+        assert host.isDeployed and noble.isDeployed
+        assert not host.deploymentFormationPending
+        if last_drop:
+            assert app.fsm.state == 'StrategyPhase'
+            assert app.firstFinishedDeploying == player
+        else:
+            assert app.roundCounter.current_player == 3 - player
+        app.messenger.send('v')
+        assert (host.unit.files, host.unit.ranks) == (4, 4)
+    finally:
+        app.taskMgr.remove('taskMoveUnit')
+
+
 def test_reload_mid_scouts_restores_order_and_choices_without_reroll(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, str(baseline))
@@ -1198,6 +1360,13 @@ def test_joined_scout_character_validates_final_host_and_rolls_back(scene, y, al
         assert host.joinedCharacter is char and char.hostUnit is host
         assert char not in app.player1Units and char in app.units
         assert scout_charge_blocked(app, host)
+        assert deployPhase.pending_deployment_formation(app) is host
+        app.messenger.send('shift-v')
+        assert (host.unit.files, host.unit.ranks) == (4, 3)
+        assert placement_error(app, char, scouting=True, ignore=host) is None
+        app.messenger.send('mouse1')
+        assert not host.deploymentFormationPending
+        assert char.deployedAsScouts and scout_charge_blocked(app, host)
     else:
         assert host.joinedCharacter is None and char.hostUnit is None
         assert app.player1Units.index(char) == index

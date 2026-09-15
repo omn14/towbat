@@ -15,7 +15,7 @@ import random
 
 from panda3d.core import Vec3, Point3, LineSegs
 
-from battleFunctions import check_saves, report_ward_saves
+from battleFunctions import check_saves, report_armour_saves, report_ward_saves
 from cannon_fire import wound_target
 from models import roll_dice_expr, stat_int
 from dice import ArtilleryDice, ScatterDice, checkDice
@@ -198,19 +198,23 @@ class Bombardment:
             conditional_armour_save(model, model.effective_armour_save(), attack, log=True)
             cas = 0
             ward_rolls = []
+            armour_rolls = []
             armour_modifiers = []
             for child in children:
                 total_hit += 1
                 if enemy is central_enemy and child is central_child:
                     if self._wound_unsaved(model, s_central, ap_central, ward_rolls=ward_rolls,
-                                           magical=magical, armour_modifiers=armour_modifiers, flaming=attack['flaming']):
+                                           magical=magical, armour_modifiers=armour_modifiers, flaming=attack['flaming'],
+                                           armour_rolls=armour_rolls):
                         wounds = roll_dice_expr(mw) if mw else 1
                         if wounds >= stat_int(model.characteristics, 'W', 1):
                             cas += 1
                 else:
                     if self._wound_unsaved(model, strength, ap, ward_rolls=ward_rolls,
-                                           magical=magical, armour_modifiers=armour_modifiers, flaming=attack['flaming']):
+                                   magical=magical, armour_modifiers=armour_modifiers, flaming=attack['flaming'],
+                                   armour_rolls=armour_rolls):
                         cas += 1
+                    report_armour_saves(enemy.unit, 'Bombardment', armour_rolls)
             report_ap_armour(model, armour_modifiers)
             report_ward_saves(enemy.unit, None, ward_rolls, attack=attack)
             cas = min(cas, len(enemy.model.getChildren()))
@@ -226,7 +230,8 @@ class Bombardment:
         self.game.debugText.setText(summary)
         battle_log(summary, 'good' if total_cas else 'combat')
 
-    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None, magical=False, armour_modifiers=None, flaming=False):
+    def _wound_unsaved(self, model, strength, ap, *, ward_rolls=None, magical=False, armour_modifiers=None, flaming=False,
+                       armour_rolls=None):
         """Roll To Wound then Armour/Ward/Regeneration (Rulebook p. 141)."""
         from special_rules import is_ethereal
         if is_ethereal(model) and not magical:
@@ -237,7 +242,7 @@ class Bombardment:
         from magic_items import item_armour_save
         return not check_saves(model, item_armour_save(model, model.armor_save), ap,
                       ward_rolls=ward_rolls, armour_modifiers=armour_modifiers,
-                      attack={'shooting': True, 'magical': magical, 'flaming': flaming})
+                      attack={'shooting': True, 'magical': magical, 'flaming': flaming}, armour_rolls=armour_rolls)
 
     # ─── Visuals ────────────────────────────────────────────────────
 

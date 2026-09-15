@@ -84,6 +84,43 @@ def test_live_casualties_preserve_then_remove_command_and_reload(scene, tmp_path
     assert knights.unit.nmodels == 2 and not has_command(knights, 'musician')
 
 
+@pytest.mark.parametrize('heading', [0, 37, 180])
+@pytest.mark.parametrize('with_command', [False, True])
+@pytest.mark.parametrize('count_already_reduced', [False, True])
+def test_casualties_keep_joined_character_in_front_rank(scene, heading, with_command, count_already_reduced):
+    from characters import join_unit
+    app, baseline = scene
+    load_game_state(app, baseline)
+    spec = dict(name='Elven Spearman', nmodels=14, files=5, ranks=3)
+    if with_command:
+        spec['command'] = knights_spec()['command']
+    host = app._create_unit(spec, 1, 'Casualty Spears')
+    character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Casualty Noble')
+    host.bodyNP.setPos(7, -8, 0)
+    host.bodyNP.setH(heading)
+    assert join_unit(app, character, host)
+    transform = host.bodyNP.getTransform()
+    for casualties in (4, 1, 5, 1):
+        if count_already_reduced:
+            host.unit.nmodels -= casualties
+        app.removeModelsFromUnit(host, casualties)
+        position = character.bodyNP.getPos(host.model)
+        assert position.y == pytest.approx(0, abs=1e-5)
+        assert position.x == pytest.approx(host.characterSlot * host.modelWidth, abs=1e-5)
+        assert host.characterSlot < host.unit.files
+        assert character.hostUnit is host and character.bodyNP.getParent() == host.bodyNP
+        assert host.bodyNP.getTransform() == transform
+        assert len(host.model.getChildren()) == host.unit.nmodels
+        assert all((child.getPos(app.render) - character.bodyNP.getPos(app.render)).length() > 1e-5
+                   for child in host.model.getChildren())
+    character.retiredFromCombat = True
+    host.placeCharacter()
+    app.removeModelsFromUnit(host, 1)
+    position = character.bodyNP.getPos(host.model)
+    assert position.y == pytest.approx(-host.modelHeight, abs=1e-5)
+    assert character.retiredFromCombat and character.hostUnit is host
+
+
 def test_live_scheduler_uses_later_mount_count_and_chariot_wounds(scene):
     app, baseline = scene
     load_game_state(app, baseline)

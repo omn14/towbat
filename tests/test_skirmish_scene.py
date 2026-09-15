@@ -899,6 +899,10 @@ def test_last_ordinary_casualty_leaves_character_alive(scene):
                                      files=1, ranks=1), 1, 'Last Survivor')
     assert join_unit(app, character, member)
     position = character.bodyNP.getPos(app.render)
+    before = model_base_boxes(member)
+    app.movement.removeModelsFromUnit(member, 1)
+    assert character.bodyNP.getPos(app.render).almostEqual(position)
+    assert all(box in before for box in model_base_boxes(member))
     app.movement.removeModelsFromUnit(member, member.unit.nmodels)
     assert character in app.units and character in app.player1Units
     assert character.hostUnit is None

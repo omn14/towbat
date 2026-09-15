@@ -1,6 +1,6 @@
 import random
 from toHitAndToWound import *
-from rules_log import rule_log, rule_skipped
+from rules_log import battle_log, rule_log, rule_skipped, subject_name
 
 
 # ── Combat report (debug printout) ─────────────────────────────────────────
@@ -403,11 +403,13 @@ def _report_hatred(unit1, unit2, attacks, first_round, hated,
 
 
 
-def check_armor_save(model, armor_save_value, AP):
+def check_armor_save(model, armor_save_value, AP, *, rolls=None):
     armor_save_roll = random.randint(1, 6)
     for rule in model.special_rules:
         if rule.get('to_save'):
             armor_save_roll = rule['to_save'](armor_save_roll)
+    if rolls is not None and armor_save_value + AP <= 6:
+        rolls.append(armor_save_roll)
     if armor_save_roll - AP >= armor_save_value:
         return True
     return False
@@ -474,7 +476,8 @@ def ward_save_value(model, *, attack=None) -> int:
 
 
 def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward_rolls=None,
-                allow_armour=True, allow_regeneration=True, regenerated=None, armour_modifiers=None, attack=None):
+                allow_armour=True, allow_regeneration=True, regenerated=None, armour_modifiers=None, attack=None,
+                armour_rolls=None):
     """The whole save sequence against one wound: Armour, then Ward, then
     Regeneration (Rulebook p. 141, p. 176). True if the wound is saved.
 
@@ -490,7 +493,7 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
                                                 permitted=allow_armour and not slaying_blow)
     armor_save_value = item_ap_armour_save(model, armor_save_value, AP, allow_armour and not slaying_blow,
                                          armour_modifiers)
-    if allow_armour and not slaying_blow and check_armor_save(model, armor_save_value, AP):
+    if allow_armour and not slaying_blow and check_armor_save(model, armor_save_value, AP, rolls=armour_rolls):
         return True
     ward = ward_save_value(model, attack=attack)
     if ward:
@@ -507,6 +510,12 @@ def check_saves(model, armor_save_value, AP, slaying_blow: bool = False, *, ward
                 regenerated.append(True)
             return True
     return False
+
+
+def report_armour_saves(unit, source, rolls):
+    if rolls:
+        battle_log(f'{source}: {subject_name(unit)} attempts {len(rolls)} armour save(s)',
+                   'combat', subject=unit, details=f'Armour rolls (after modifiers): {rolls}')
 
 
 def report_ward_saves(unit, wounds, rolls, *, attack=None):
@@ -594,13 +603,15 @@ def resolve_magic_hits(unit, hits: int, strength: int, ap: int, *,
     target = to_wound(m, m, strength=strength)
     wounds = sum(1 for _ in range(hits) if random.randint(1, 6) >= target)
     ward_rolls = []
+    armour_rolls = []
     armour_modifiers = []
     conditional_armour_save(m, m.melee_armour_save(), attack, permitted=allow_armour, log=True)
     saves = sum(1 for _ in range(wounds)
                 if check_saves(m, m.melee_armour_save() if allow_armour else 7, ap,
                                ward_rolls=ward_rolls, allow_armour=allow_armour,
                                allow_regeneration=allow_regeneration, regenerated=regenerated,
-                               armour_modifiers=armour_modifiers, attack=attack))
+                               armour_modifiers=armour_modifiers, attack=attack, armour_rolls=armour_rolls))
+    report_armour_saves(unit, 'Spell hits', armour_rolls)
     report_ap_armour(m, armour_modifiers)
     report_ward_saves(unit, wounds, ward_rolls, attack=attack)
     _report_too_tough_to_wound(unit, hits, strength, target)
@@ -734,10 +745,12 @@ def resolve_impact_hits(unit1, unit2):
     item_armour_save(unit2.model, unit2.model.armor_save, log=True)
     conditional_armour_save(unit2.model, unit2.model.melee_armour_save(), attack, log=True)
     ward_rolls = []
+    armour_rolls = []
     armour_modifiers = []
     saves = sum(1 for _ in range(wounds)
                 if check_saves(unit2.model, unit2.model.melee_armour_save(), ap, ward_rolls=ward_rolls,
-                               armour_modifiers=armour_modifiers, attack=attack))
+                               armour_modifiers=armour_modifiers, attack=attack, armour_rolls=armour_rolls))
+    report_armour_saves(unit2, 'Impact Hits', armour_rolls)
     report_ap_armour(unit2.model, armour_modifiers)
     report_ward_saves(unit2, wounds, ward_rolls, attack=attack)
     _report_too_tough_to_wound(unit2, hits, strength, target)
@@ -946,6 +959,7 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
     weapon_wound_rerolls = weapon_wound_converted = 0
     ethereal_prevented = 0
     ward_rolls = []
+    armour_rolls = []
     armour_modifiers = []
     hit_rolls = []
     wound_rolls = []
@@ -1013,7 +1027,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
             if check_saves(unit2.model, defender_save,
                            getattr(unit1.model, 'attack_AP', unit1.model.AP),
                            slaying_blow=bool(struck), ward_rolls=ward_rolls, armour_modifiers=armour_modifiers,
-                           allow_regeneration=not (flaming and flammable), attack=attack):
+                           allow_regeneration=not (flaming and flammable), attack=attack,
+                           armour_rolls=armour_rolls):
                 saves_made += 1
                 total_wounds -= 1
             elif struck:
@@ -1101,7 +1116,8 @@ def simulate_battle(unit1, unit2,charge: bool, casualties: int = 0,
         LAST_COMBAT_REPORT = build_combat_report(unit1, unit2, charge, attacks1)
         LAST_COMBAT_REPORT.update(
             rolls={'To Hit (after modifiers/re-rolls)': hit_rolls,
-                   'To Wound (after modifiers)': wound_rolls, 'Ward rolls': ward_rolls},
+                 'To Wound (after modifiers)': wound_rolls,
+                 'Armour rolls (after modifiers)': armour_rolls, 'Ward rolls': ward_rolls},
             save_targets=save_targets, armour_bypassed=armour_bypassed)
     except Exception as e:
         LAST_COMBAT_REPORT = None

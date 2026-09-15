@@ -339,6 +339,7 @@ def save_game_state(game, filename=None):
             'startOfPhaseEngaged': getattr(unit, 'startOfPhaseEngaged', False),
             'roundsFought': getattr(unit, 'roundsFought', 0),
             'isDeployed': unit.isDeployed,
+            'deploymentFormationPending': getattr(unit, 'deploymentFormationPending', False),
             'scoutDeploymentChoice': getattr(unit, 'scoutDeploymentChoice', None),
             'deployedAsScouts': getattr(unit, 'deployedAsScouts', False),
             'vanguardDone': getattr(unit, 'vanguardDone', False),
@@ -707,6 +708,7 @@ def load_game_state(game, filename):
         unit.startOfPhaseEngaged = unit_data.get('startOfPhaseEngaged', False)
         unit.roundsFought = unit_data.get('roundsFought', 0)
         unit.isDeployed = unit_data['isDeployed']
+        unit.deploymentFormationPending = unit_data.get('deploymentFormationPending', False)
         unit.scoutDeploymentChoice = unit_data.get('scoutDeploymentChoice')
         unit.deployedAsScouts = unit_data.get('deployedAsScouts', False)
         unit.vanguardDone = unit_data.get('vanguardDone', False)

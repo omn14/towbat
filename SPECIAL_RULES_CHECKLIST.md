@@ -10,6 +10,76 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Challenge Battle History: 2026-09-15
+
+[x] Challenge events now appear in the game log and Battle History's default
+Summary mode. Previously, only the duel heading was visible there; decisions,
+attacks, deaths and overkill were confined to filtered rule entries, and duel
+combat reports were not consumed into history.
+
+Visible events include issuing, declining, accepting (with a barred-refusal
+reason when applicable), refusing, retirement or no retirement, unanswered
+challenges and continuation into another duel round. Each Initiative/profile
+attack records attacks, hits, wounds, saves and unsaved wounds, with its captured
+combat report and dice available under Roll details. Mount/crew attacks remain
+labelled separately. Damage records remaining Wounds and slain participants;
+the final summary reports each player's wound and overkill contribution and
+whether the challenge ends or continues. Existing detailed rules traces remain.
+Resolution, simultaneous attacks and Overkill scoring (pp. 210-211) are unchanged.
+
+Tests cover live HUD/history visibility and the Roll details toggle, character
+and champion nominations, refusals, continuation, deterministic armour rolls,
+mount attacks, simultaneous deaths and capped Overkill. LEFTOVER: previously
+recorded history cannot reconstruct missing duel reports or summary events.
+
+## Casualty Character Alignment: 2026-09-15
+
+[x] Casualty removal now places the joined character after laying out survivors
+and rebuilding the footprint. Previously, losing a rank recentered the ordinary
+models while leaving the character at its old offset, ahead of the front rank.
+The character follows its reserved slot without moving the host or changing
+casualty counts. Characters retired from a challenge remain at the rear.
+
+Tests cover successive rank losses, shrinking frontage, rotated units, command
+groups, combat callers that already reduced the logical count, retired characters
+and loose Skirmisher survivors. LEFTOVER: none for casualty-driven placement;
+this corrects geometry without changing casualty or character rules.
+
+## Deployment Frontage Controls: 2026-09-15
+
+[x] Held formed units can freely choose their deployment frontage using V and
+Shift+V. This is placement configuration, not the movement-phase Redress the
+Ranks manoeuvre (Rulebook p. 125): no Movement is spent, no manoeuvre is used,
+and repeated changes are not limited to five files. Existing battle redress
+costs, Drilled and Vanguard behavior are unchanged.
+
+The active human player must be holding an undeployed eligible unit or adjusting
+the host immediately after a character joins it. Held ordinary and Scout units
+use the same eligibility checks as held-unit rotation. Files stay
+between one and the available model slots, including a joined character;
+remaining models fill ranks with only the rear rank incomplete. The centre
+and heading remain fixed while model positions, collision footprint, character
+placement, unit text and placement feedback refresh. Invalid placements still
+cannot be committed. Every accepted change logs the old/new frontage and zero
+cost. Skirmishers are refused explicitly because they have no ranks to redress.
+
+Corrected the actual character-drop workflow: it previously advanced deployment
+immediately, leaving no opportunity to redress the already deployed host. Human
+joins into formed units now select the host for free frontage adjustment until
+another click confirms. No cursor movement or rotation is started for the host.
+Invalid changes restore the previous ranks, character slot and footprint; both
+host deployment bounds and the character's Scout clearance are validated.
+Pending formation confirmation blocks turn/phase completion, including the final
+character drop, and survives save/reload. AI joins still finish automatically.
+
+Tests cover both players, both deployment stages, repeated changes beyond five
+files, untouched movement counters, limits, ineligible selections, real key
+events, joined-character geometry, invalid drops, save/reload and wheel rotation.
+The character-drop regression also covers final-drop confirmation and phase-skip
+prevention, rather than only joining models directly in the test setup.
+LEFTOVER: confirmed deployments cannot be reopened for rank changes; Skirmisher
+layout editing is a separate control, not a rank redress.
+
 ## Charge Alignment Contact: 2026-09-15
 
 [x] Skirmisher charges against formed units with a joined character now use
@@ -779,6 +849,16 @@ not established. This is separate from the paused HUD startup NaN investigation.
       (pp. 121, 167, 178, 269; FAQ v1.5.3). Break tests name the unit, dice, modifier,
       Leadership and final outcome. Combat reports distinguish unsaved wounds from
       slain models, identify the attacking profile and show effective armour targets.
+- [x] Melee and shooting combat reports retain armour-save dice in Battle History's
+      Roll details, alongside hit, wound and Ward rolls and actual armour targets.
+      Armour values are labelled after modifiers; Ward and Regeneration dice are
+      not mixed into them. Prohibited saves, slaying blows and targets above 6+
+      produce no armour-roll detail. Save outcomes and dice consumption are unchanged.
+      Spell hits, Impact Hits, cannon fire and bombardment record one armour-save
+      history entry per target batch, with the dice under Roll details rather than
+      individual per-die log messages. Tests cover all six attack paths, the detail
+      toggle, exports and save bypasses.
+      LEFTOVER: older history entries cannot reconstruct dice that were not recorded.
 - [x] Summary / Rules / Debug history retains 5,000 structured events, groups
       round/player/phase/combat/Initiative, filters by unit and expands roll details.
       Interleaved duel and ordinary attacks retain the correct Initiative context.

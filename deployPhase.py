@@ -368,19 +368,100 @@ def _preview_placement(game, unit):
     return error
 
 
-def rotate_held_unit(game, degrees):
-    """Consume a wheel turn only while a human is placing a deployment unit."""
+def _held_deployment_unit(game):
+    """Return only the undeployed unit currently held by the active human player."""
     if (getattr(getattr(game, 'fsm', None), 'state', None) != 'DeployPhase'
             or not game.taskMgr.hasTaskNamed('taskMoveUnit')):
-        return False
+        return None
     unit = getattr(game, 'unitToMove', None)
     if unit is None or unit.isDeployed or unit.bodyNP.isEmpty():
-        return False
+        return None
     player = game.roundCounter.current_player
     if (player == 2 and game.AIplayer2.active) or unit not in deployment_candidates(game, player):
+        return None
+    return unit
+
+
+def rotate_held_unit(game, degrees):
+    """Consume a wheel turn only while a human is placing a deployment unit."""
+    unit = _held_deployment_unit(game)
+    if unit is None:
         return False
     unit.bodyNP.setH((unit.bodyNP.getH() + degrees) % 360)
     _preview_placement(game, unit)
+    return True
+
+
+def pending_deployment_formation(game):
+    if (getattr(getattr(game, 'fsm', None), 'state', None) != 'DeployPhase'
+            or (game.roundCounter.current_player == 2 and game.AIplayer2.active)):
+        return None
+    side = game.player1Units if game.roundCounter.current_player == 1 else game.player2Units
+    return next((unit for unit in side if getattr(unit, 'deploymentFormationPending', False)
+                 and not unit.bodyNP.isEmpty() and has_joined_character(unit)), None)
+
+
+def _joined_formation_error(game, host):
+    character = host.joinedCharacter
+    return (placement_error(game, host, scouting=host.deployedAsScouts)
+            or placement_error(game, character, scouting=character.deployedAsScouts, ignore=host))
+
+
+def finish_deployment_formation(game):
+    host = pending_deployment_formation(game)
+    if host is None:
+        return
+    error = _joined_formation_error(game, host)
+    if error:
+        _deployment_refused(host, error, host.deployedAsScouts)
+        return
+    host.deploymentFormationPending = False
+    _advance_after_deploy(game)
+
+
+def redress_held_unit(game, delta):
+    """Choose deployment ranks freely; the battle manoeuvre cost (p. 125) does not apply."""
+    from movement_system import redress_formation
+    pending = pending_deployment_formation(game)
+    unit = pending or _held_deployment_unit(game)
+    if unit is None:
+        return False
+    if getattr(unit, 'isSkirmisher', False):
+        rule_skipped('Deployment formation', unit, 'Skirmishers have no ranks to redress')
+        return False
+    old_files, old_ranks = unit.unit.files, unit.unit.ranks
+    slots = unit.slotCount()
+    formation = redress_formation(slots, old_files, delta)
+    if formation is None:
+        rule_skipped('Deployment formation', unit,
+                     f'{old_files + delta} files is outside the available 1-{slots} model slots')
+        return False
+    old_slot = unit.characterSlot
+    old_transform = unit.bodyNP.getTransform()
+    unit.unit.files, unit.unit.ranks = formation
+    if unit.characterSlot is not None:
+        unit.characterSlot = min(unit.characterSlot, unit.unit.files - 1)
+    unit.layOutRanks()
+    unit.rebuildFootprint()
+    unit.placeCharacter()
+    _preview_placement(game, unit)
+    if pending is not None:
+        error = _joined_formation_error(game, unit)
+        if error:
+            unit.unit.files, unit.unit.ranks = old_files, old_ranks
+            unit.characterSlot = old_slot
+            unit.layOutRanks()
+            unit.rebuildFootprint()
+            unit.placeCharacter()
+            unit.bodyNP.setTransform(old_transform)
+            _preview_placement(game, unit)
+            rule_skipped('Deployment formation', unit,
+                         f'{old_files} -> {formation[0]} files refused: {error}; formation unchanged')
+            return False
+    unit.updateTextNode()
+    rule_log('Deployment formation', unit,
+             f'front rank {old_files} -> {unit.unit.files}, ranks {old_ranks} -> {unit.unit.ranks}; '
+             '0" movement cost, no manoeuvre used')
     return True
 
 
@@ -464,6 +545,10 @@ def endMoveUnit(game,taskToEnd):
             _record_deployment(game, held, scouting)
             print(f"{held.unitName} joins {host.unitName}.")
             taskMgr.remove(taskToEnd)
+            if not host.isSkirmisher and not (game.roundCounter.current_player == 2 and game.AIplayer2.active):
+                host.deploymentFormationPending = True
+                refresh_deployment(game)
+                return
             _advance_after_deploy(game)
             return
 
@@ -507,6 +592,12 @@ def _record_deployment(game, held, scouting):
 
 def refresh_deployment(game):
     """Refresh controls after a placement or reload without rolling again."""
+    host = pending_deployment_formation(game)
+    if host is not None:
+        game.unitToMove = host
+        game.refreshSelectedUnit()
+        game.accept('mouse1', finish_deployment_formation, [game])
+        return
     from battle_preparation import begin_preparation
     if begin_preparation(game):
         return
@@ -596,7 +687,7 @@ def getMouseXY():
     
 def allUnitsDeployed(units):
     for unit in units:
-        if not unit.isDeployed:
+        if not unit.isDeployed or getattr(unit, 'deploymentFormationPending', False):
             return False
     return True
 

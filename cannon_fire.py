@@ -14,7 +14,7 @@ import random
 
 from panda3d.core import Vec3, Point3, LineSegs
 
-from battleFunctions import check_saves, report_ward_saves
+from battleFunctions import check_saves, report_armour_saves, report_ward_saves
 from dice import ArtilleryDice, checkDice
 from rules_log import battle_log
 
@@ -205,6 +205,7 @@ class CannonFire:
         target = wound_target(strength, toughness)
         wounded = saved = casualties = 0
         ward_rolls = []
+        armour_rolls = []
         armour_modifiers = []
         from magic_items import item_armour_save, report_ap_armour
         save = item_armour_save(model, model.armor_save, log=hits > 0)
@@ -215,10 +216,12 @@ class CannonFire:
             if random.randint(1, 6) < target:
                 continue  # failed to wound
             wounded += 1
-            if check_saves(model, save, ap, ward_rolls=ward_rolls, armour_modifiers=armour_modifiers, attack=attack):
+            if check_saves(model, save, ap, ward_rolls=ward_rolls, armour_modifiers=armour_modifiers,
+                           attack=attack, armour_rolls=armour_rolls):
                 saved += 1
             else:
                 casualties += 1
+        report_armour_saves(unit.unit, 'Cannon fire', armour_rolls)
         report_ap_armour(model, armour_modifiers)
         report_ward_saves(unit.unit, wounded, ward_rolls, attack=attack)
         present = len(unit.model.getChildren())

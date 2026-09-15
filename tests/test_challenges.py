@@ -302,11 +302,45 @@ class DuelResolutionTests(unittest.TestCase):
         self.assertEqual(ok1, 3, "5 wounds against 2 remaining is +3")
         self.assertEqual(ok2, 0)
 
+    def test_challenge_result_and_slain_models_are_visible_in_summary_history(self):
+        from rules_log import BattleJournal
+        journal = BattleJournal()
+        with mock.patch.object(combat_resolution, 'battle_log', side_effect=journal.append):
+            self._fight({'Captain Unit': 5, 'Champion Unit': 0})
+        text = '\n'.join(entry.text for entry in journal.visible())
+        self.assertIn('Challenge result:', text)
+        self.assertIn('Captain Unit', text)
+        self.assertIn('Champion Unit slain', text)
+        self.assertIn('3 overkill', text)
+        self.assertIn('does not attack at I3', text)
+
     def test_equal_initiative_duellists_can_slay_each_other(self):
+        from rules_log import BattleJournal
         self.b.unit.model.characteristics['I'] = '5'
-        result = self._fight({'Captain Unit': 2, 'Champion Unit': 2})
+        journal = BattleJournal()
+        with mock.patch.object(combat_resolution, 'battle_log', side_effect=journal.append):
+            result = self._fight({'Captain Unit': 2, 'Champion Unit': 2})
         self.assertEqual(result, (2, 2, 0, 0))
         self.assertEqual(len(self.slain), 2)
+        summary = journal.visible()[-1].text
+        self.assertIn('Captain Unit slain, Champion Unit slain', summary)
+        self.assertIn('P1 2 wounds +0 overkill, P2 2 wounds +0 overkill', summary)
+        self.assertIn('Challenge ends.', summary)
+
+    def test_mount_attacks_are_labelled_separately_in_challenge_history(self):
+        from rules_log import BattleJournal
+        mount = _character('Steed').unit.model
+        mount.name = 'Steed'
+        mount.characteristics['I'] = '1'
+        mount.equipedWeapon = {'name': 'Hooves', 'tag': 'combat'}
+        self.a.unit.model.special_rules.append({'mountUnit': mount})
+        journal = BattleJournal()
+        with mock.patch.object(combat_resolution, 'battle_log', side_effect=journal.append):
+            result = self._fight({'Steed': 1})
+        self.assertEqual(result, (1, 0, 0, 0))
+        text = '\n'.join(entry.text for entry in journal.visible())
+        self.assertIn('Challenge I1: Captain Unit (mount) / Steed', text)
+        self.assertIn('Both survive; challenge continues.', text)
 
     def test_a_resolved_challenge_leaves_play(self):
         self._fight({'Captain Unit': 2, 'Champion Unit': 0})

@@ -1043,6 +1043,10 @@ class MyApp(ShowBase):
         from spell_generation import begin_spell_generation, pending_wizards
         if getattr(self, 'spellGenerationBusy', False) is True:
             return task.done
+        from deployPhase import pending_deployment_formation, refresh_deployment
+        if pending_deployment_formation(self) is not None:
+            refresh_deployment(self)
+            return task.done
         if pending_wizards(self):
             begin_spell_generation(self)
             return task.done
@@ -1244,7 +1248,14 @@ class MyApp(ShowBase):
         """Widen (v) or narrow (shift-v) the selected unit's front rank."""
         from vanguard import in_vanguard
         from reserve_move import in_reserve, unavailable
-        if self.awaitingChoice or (self.fsm.state != 'MovementPhase' and not in_vanguard(self) and not in_reserve(self)):
+        if self.awaitingChoice:
+            return
+        if self.fsm.state == 'DeployPhase':
+            from deployPhase import redress_held_unit
+            if redress_held_unit(self, delta):
+                self.refreshSelectedUnit()
+            return
+        if self.fsm.state != 'MovementPhase' and not in_vanguard(self) and not in_reserve(self):
             return
         unit = getattr(self, 'unitToMove', None)
         if unit is not None and not unit.bodyNP.isEmpty():

@@ -74,6 +74,144 @@ class TestTheLogLine(unittest.TestCase):
 
 
 class TestBattleJournal(unittest.TestCase):
+    def test_armour_rolls_reach_battle_history_for_melee_and_shooting(self):
+        from unittest.mock import patch
+        from battleFunctions import simulate_battle
+        from combat_resolution import CombatResolver
+        from hud import HUD
+        from models import model
+        from rules_log import BattleJournal
+
+        for mode in ('melee', 'ranged'):
+            with self.subTest(mode=mode):
+                attacker, defender = model('Goblin', ''), model('Goblin', '')
+                for profile in (attacker, defender):
+                    profile.special_rules = []
+                    profile.characteristics.update({'WS': 3, 'BS': 3, 'S': 3, 'T': 3, 'A': 1})
+                attacker.equipedWeapon = {'name': 'Test weapon', 'tag': mode,
+                                         'ranged_strength': 3, 'ranged_AP': 0}
+                attacker.AP = 0
+                defender.armor_save = 5
+                attacker_unit = SimpleNamespace(model=attacker, nmodels=2, files=2, ranks=1, name='Attackers')
+                defender_unit = SimpleNamespace(model=defender, nmodels=2, files=2, ranks=1, name='Defenders')
+                journal = BattleJournal()
+                with patch('battleFunctions.random.randint', side_effect=[4, 4, 5, 4, 4, 2]) as dice, \
+                        patch('battleFunctions.melee_attacks', return_value=2), \
+                        patch.object(defender, 'melee_armour_save', return_value=5), \
+                        patch.object(defender, 'effective_armour_save', return_value=5), \
+                        patch('combat_resolution.battle_log', side_effect=journal.append):
+                    results = simulate_battle(attacker_unit, defender_unit, False)
+                    CombatResolver.printBattleResults(SimpleNamespace(),
+                        SimpleNamespace(unit=attacker_unit), SimpleNamespace(unit=defender_unit), *results)
+                self.assertEqual(results, (2, 2, 2, 1, 1))
+                self.assertEqual(dice.call_count, 6)
+                entry = journal.visible()[0]
+                self.assertIn('Armour rolls (after modifiers): [5, 2]', entry.details)
+                self.assertIn('2 wound(s) at 5+', entry.details)
+                self.assertIn('Armour rolls (after modifiers): [5, 2]', journal.export())
+                self.assertIn('Armour rolls (after modifiers): [5, 2]',
+                              HUD.log_text(journal.visible(), details=True))
+                self.assertNotIn('Armour rolls', HUD.log_text(journal.visible(), details=False))
+
+    def test_automatic_hit_armour_rolls_are_reported_once_per_batch(self):
+        from unittest.mock import patch
+        from battleFunctions import resolve_impact_hits, resolve_magic_hits
+        from models import model
+        from rules_log import BattleJournal
+
+        for source in ('Spell hits', 'Impact Hits'):
+            with self.subTest(source=source):
+                defender = model('Goblin', '')
+                defender.special_rules = []
+                defender.characteristics['T'] = 3
+                target = SimpleNamespace(model=defender, name='Defenders')
+                charger = model('Goblin', '')
+                charger.special_rules = [{'name': 'Impact Hits (2)', 'impact_hits': '2'}]
+                charger._base_characteristics['S'] = 3
+                attacker = SimpleNamespace(model=charger, name='Attacker', nmodels=1, files=1)
+                journal = BattleJournal()
+                with patch('battleFunctions.random.randint', side_effect=[4, 4, 5, 2]) as dice, \
+                        patch.object(defender, 'melee_armour_save', return_value=5), \
+                        patch.object(charger, 'impact_hit_ap', return_value=0), \
+                        patch('battleFunctions.battle_log', side_effect=journal.append):
+                    if source == 'Spell hits':
+                        result = resolve_magic_hits(target, 2, 3, 0)
+                    else:
+                        result = resolve_impact_hits(attacker, target)[1:]
+                self.assertEqual(result, (2, 1, 1))
+                self.assertEqual(dice.call_count, 4)
+                self.assertEqual(len(journal.visible()), 1)
+                entry = journal.visible()[0]
+                self.assertIn(source, entry.text)
+                self.assertEqual(entry.subject, 'Defenders')
+                self.assertIn('Armour rolls (after modifiers): [5, 2]', entry.details)
+
+    def test_war_machine_armour_rolls_are_reported_once_per_target(self):
+        from types import MethodType
+        from unittest.mock import Mock, patch
+        from bombardment import Bombardment
+        from cannon_fire import CannonFire
+        from models import model
+        from rules_log import BattleJournal
+
+        for source in ('Cannon fire', 'Bombardment'):
+            with self.subTest(source=source):
+                defender = model('Goblin', '')
+                defender.special_rules = []
+                defender.characteristics['T'] = 3
+                defender.armor_save = 5
+                children = [Mock(), Mock()]
+                target = Mock(unit=SimpleNamespace(model=defender, name='Defenders'))
+                target.model.getChildren.return_value = children
+                resolver = SimpleNamespace(game=Mock())
+                resolver._models_under_template = Mock(return_value=[
+                    (target, children[0], 0), (target, children[1], 1)])
+                resolver._wound_unsaved = MethodType(Bombardment._wound_unsaved, resolver)
+                journal = BattleJournal()
+                with patch('battleFunctions.random.randint', side_effect=[4, 5, 4, 2]) as dice, \
+                        patch('battleFunctions.battle_log', side_effect=journal.append):
+                    if source == 'Cannon fire':
+                        self.assertEqual(CannonFire._apply_wounds(resolver, target, 2, 3, 0), (1, 2, 1))
+                    else:
+                        Bombardment._resolve_damage(resolver, SimpleNamespace(), {}, None, 1)
+                        resolver.game.removeModelsFromUnit.assert_called_once_with(target, 1)
+                self.assertEqual(dice.call_count, 4)
+                self.assertEqual(len(journal.visible()), 1)
+                entry = journal.visible()[0]
+                self.assertIn(source, entry.text)
+                self.assertEqual(entry.subject, 'Defenders')
+                self.assertIn('Armour rolls (after modifiers): [5, 2]', entry.details)
+
+    def test_armour_roll_details_exclude_other_saves_and_armour_bypasses(self):
+        from unittest.mock import patch
+        from battleFunctions import check_saves
+        from models import model
+
+        cases = [
+            ('armour', 5, 0, {}, [5], [5], [], True),
+            ('ward', 5, 0, {}, [1, 5], [1], [5], True),
+            ('regeneration', 5, 0, {}, [1, 1, 5], [1], [1], True),
+            ('slaying', 5, 0, {'slaying_blow': True}, [1], [], [1], False),
+            ('prohibited', 5, 0, {'allow_armour': False}, [5], [], [5], True),
+            ('unarmoured', 7, 0, {}, [6, 5], [], [5], True),
+            ('AP removes armour', 5, 2, {}, [6, 5], [], [5], True),
+            ('modified armour roll', 5, 0, {}, [4], [5], [], True),
+        ]
+        for name, save, penetration, options, dice, expected_armour, expected_ward, expected_saved in cases:
+            with self.subTest(name=name):
+                defender = model('Goblin', '')
+                defender.special_rules = [{'name': 'Ward', 'ward': 4}, {'name': 'Regeneration', 'regen': 4}]
+                if name == 'modified armour roll':
+                    defender.special_rules.append({'to_save': lambda rolled: rolled + 1})
+                armour_rolls, ward_rolls = [], []
+                with patch('battleFunctions.random.randint', side_effect=dice) as rolled:
+                    saved = check_saves(defender, save, penetration, armour_rolls=armour_rolls,
+                                        ward_rolls=ward_rolls, **options)
+                self.assertEqual(saved, expected_saved)
+                self.assertEqual(armour_rolls, expected_armour)
+                self.assertEqual(ward_rolls, expected_ward)
+                self.assertEqual(rolled.call_count, len(dice))
+
     def test_round_and_turn_headings_repeat_only_at_their_boundaries(self):
         from dataclasses import replace
         from rules_log import BattleJournal, LogEntry
