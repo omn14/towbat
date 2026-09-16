@@ -180,13 +180,8 @@ class CombatResolver:
                 self.game.challenges.remove(challenge)
         if escaped:
             return True
-        joined = getattr(unit, 'joinedCharacter', None)
         from characters import on_host_removed
         on_host_removed(self.game, unit)
-        if joined is not None:
-            joined.model.removeNode()
-            joined.bodyNP.removeNode()
-            joined.unit.nmodels = 0
         unit.unit.nmodels = 0
         self.removeUnitFromPlay(unit)
         return True
@@ -1712,13 +1707,15 @@ class CombatResolver:
                              'using legacy alignment (p. 186 LEFTOVER)')
             return False
         movement = self.game.movement.movementAllowance(defender)
-        rank = plan_skirmish_defence(model_base_boxes(attacker), model_base_boxes(defender), movement)
+        rank = plan_skirmish_defence(model_base_boxes(attacker), model_base_boxes(defender), movement, defender=defender)
         if rank is None:
             rule_skipped('Skirmishers', defender,
                          f'cannot form a supported rank within M{movement:g} at actual front-base '
                          'contact; using legacy alignment (p. 186 LEFTOVER)')
             return False
         children = list(defender.model.getChildren())
+        from characters import get_joined_characters
+        children.extend(character.bodyNP for character in get_joined_characters(defender))
         moves = []
         for index, position in zip(rank.order, rank.positions):
             child = children[index]
@@ -1779,14 +1776,14 @@ class CombatResolver:
                     from skirmish_charge import first_contact
                     nearest = first_contact(model_base_boxes(unit), targets)[1]
                     targets = [targets[nearest]]
-                formation = plan_formed_charge(model_base_boxes(unit), targets, chdist, oposUnit)
+                formation = plan_formed_charge(model_base_boxes(unit), targets, chdist, oposUnit, attacker=unit)
             elif formed_target:
                 formation = plan_formed_charge(
-                    model_base_boxes(unit), model_base_boxes(defenderUnit), chdist, oposUnit)
+                    model_base_boxes(unit), model_base_boxes(defenderUnit), chdist, oposUnit, attacker=unit)
             else:
                 formation = plan_skirmish_charge(
                     model_base_boxes(unit), model_base_boxes(defenderUnit), chdist,
-                    self.game.movement.movementAllowance(defenderUnit))
+                    self.game.movement.movementAllowance(defenderUnit), attacker=unit, defender=defenderUnit)
             if formation is not None:
                 await self._formSkirmishCharge(unit, defenderUnit, formation)
 
@@ -1894,6 +1891,8 @@ class CombatResolver:
 
         def intervals(member, rank, indices):
             children = list(member.model.getChildren())
+            from characters import get_joined_characters
+            children.extend(character.bodyNP for character in get_joined_characters(member))
             moves = []
             for model_index in indices:
                 slot = rank.order.index(model_index)
@@ -2734,8 +2733,9 @@ class CombatResolver:
         from spell_effects import refresh_self_spells
         refresh_self_spells(model)
         if host is not None and host is not model:
-            host.placeCharacter()
             host.layOutRanks()
+            host.rebuildFootprint()
+            host.placeCharacter()
         rule_log('Refusing a Challenge', model,
                  "retires from combat: makes no attacks, has none directed at it, "
                  "and confers no Leadership or special rules on its unit while its "

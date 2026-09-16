@@ -64,6 +64,23 @@ class unitGraphics(FSM):
         # Skirmishers deploy as a loose blob (~1" apart), not rigid ranks/files.
         self.isSkirmisher = bool(self.unit and self.unit.model
                                  and self.unit.model.is_skirmisher())
+        from characters import is_character
+        if is_character(self):
+            from rules_log import rule_skipped
+            profile = self.unit.model
+            mount = profile.get_mount()
+            troop_type = (mount if mount is not None else profile).troop_type()
+            if self.isSkirmisher:
+                rule_log('Characters & Formations', self,
+                         f'{troop_type}, 1 independent character: Skirmish formation; '
+                         'moves in any direction without wheeling (pp. 205-206)')
+            else:
+                formations = [rule.get('name', '') for rule in profile.special_rules
+                              if rule.get('name', '').casefold() in
+                              ('close order', 'open order', 'lance formation')]
+                reason = ', '.join(formations) or f'{troop_type} mount/profile formation'
+                rule_skipped('Characters & Formations', self,
+                             f'no default Skirmish formation: {reason} takes precedence (p. 205)')
         self.skirmishCombat = False
         self.skirmishLayout = []
         if self.isSkirmisher:
@@ -326,8 +343,8 @@ class unitGraphics(FSM):
         if self.isInCombatFlank:
             row += f"Flanks : {self.isInCombatFlank}\n"
 
-        char = getattr(self, 'joinedCharacter', None)
-        if char is not None:
+        from characters import get_joined_characters
+        for char in get_joined_characters(self):
             note = " (retired from combat)" if getattr(
                 char, 'retiredFromCombat', False) else ""
             row += f"Joined : {char.unitName}{note} — hover its base\n"
@@ -364,6 +381,32 @@ class unitGraphics(FSM):
         from command_groups import command_positions, living_command
         command = living_command(self)
         positions = command_positions(self, files)
+        from characters import get_joined_characters, rank_placements
+        characters = get_joined_characters(self)
+        if characters:
+            command_slots = [positions[id(entry)] for entry in command]
+            slots, placements = rank_placements(len(children), files, self.modelWidth, self.modelHeight,
+                [(member.unitName, member.modelWidth, member.modelHeight,
+                                    getattr(member, 'retiredFromCombat', False)) for member in characters], command_slots,
+                                {member.unitName: member.combatSlot for member in characters
+                                 if getattr(member, 'combatSlot', None) is not None})
+            self.characterPlacements = placements
+            from collections import Counter
+            counts = Counter(slot // files for slot in slots)
+            for record in placements.values():
+                counts.update(slot // files for slot in record['cells'])
+                if not record['cells']:
+                    counts[record['slot'] // files] += 1
+            self.unit.characterRankCounts = dict(counts)
+            self.characterSlot = placements[characters[0].unitName]['slot']
+            for index, (child, slot) in enumerate(zip(children, slots)):
+                child.clearPythonTag('command_role')
+                if index < len(command):
+                    child.setPythonTag('command_role', command[index]['role'])
+                child.setPos(slot % files * self.modelWidth, -(slot // files) * self.modelHeight, 0)
+            return
+        self.unit.characterRankCounts = None
+        self.characterPlacements = {}
         occupied = set(positions.values())
         if self.characterSlot is not None:
             candidates = [slot for slot in range(max(len(children), files) + 1) if slot not in occupied]
@@ -386,14 +429,28 @@ class unitGraphics(FSM):
             child.setPos(Point3(col * self.modelWidth, -row * self.modelHeight, 0))
 
     def slotCount(self):
-        """Grid slots the unit fills: its own models, plus a joined character."""
-        return self.unit.nmodels + (1 if self.characterSlot is not None else 0)
+        """Grid area occupied by ordinary models and attached character bases."""
+        from characters import get_joined_characters
+        extra = sum(max(1, round(member.modelWidth / self.modelWidth)
+                        * round(member.modelHeight / self.modelHeight))
+                    for member in get_joined_characters(self))
+        return self.unit.nmodels + extra
 
     def placeCharacter(self):
         """Sit a joined character in the slot the ranks were laid out around."""
-        char = getattr(self, 'joinedCharacter', None)
-        if char is None or self.characterSlot is None or char.bodyNP.isEmpty():
+        from characters import get_joined_characters
+        characters = get_joined_characters(self)
+        if not characters:
             return
+        if not (self.isSkirmisher and not self.skirmishCombat):
+            placements = getattr(self, 'characterPlacements', {})
+            for char in characters:
+                record = placements.get(char.unitName)
+                if record is not None and not char.bodyNP.isEmpty():
+                    char.bodyNP.setPos(self.model.getPos() + Point3(record['x'], record['y'], 0))
+                    char.formationSlot = record['slot']
+            return
+        char = characters[0]
         if self.isSkirmisher and not self.skirmishCombat:
             position = getattr(self, 'skirmishCharacterPosition', None)
             if position is None:
@@ -402,6 +459,16 @@ class unitGraphics(FSM):
                             rightmost['y']]
                 self.skirmishCharacterPosition = position
             char.bodyNP.setPos(position[0], position[1], 0)
+            char.joinedPosition = list(position)
+            previous = char
+            for char in characters[1:]:
+                position = getattr(char, 'joinedPosition', None)
+                if position is None:
+                    position = [previous.bodyNP.getX() + (previous.modelWidth + char.modelWidth) / 2 + .6,
+                                previous.bodyNP.getY()]
+                char.bodyNP.setPos(*position, 0)
+                char.joinedPosition = list(position)
+                previous = char
             return
         files = max(1, self.unit.files)
         if getattr(char, 'retiredFromCombat', False):
@@ -418,7 +485,7 @@ class unitGraphics(FSM):
         """Resize the collision box to the current formation.
 
         A Bullet shape cannot be resized in place, so the body leaves the world,
-        swaps its box, and goes back in.
+        swaps its box, and goes back in unless it belongs to a joined character.
         """
         if not self.world or self.bodyNP.isEmpty() or self.model.isEmpty():
             return
@@ -428,7 +495,8 @@ class unitGraphics(FSM):
         box_size = self.footprintSize()
         self.bodyNP.node().addShape(BulletBoxShape(box_size * 0.5))
         self.bodyNP.node().setMass(0)
-        self.world.attachRigidBody(self.bodyNP.node())
+        if getattr(self, 'hostUnit', None) is None:
+            self.world.attachRigidBody(self.bodyNP.node())
         self.applyFootprint(box_size)
 
     def footprintSize(self):
@@ -451,6 +519,12 @@ class unitGraphics(FSM):
             if character is not None and position is not None:
                 box_size.setX(max(box_size.x, 2 * abs(position[0]) + character.modelWidth))
                 box_size.setY(max(box_size.y, 2 * abs(position[1]) + character.modelHeight))
+            from characters import get_joined_characters
+            for character in get_joined_characters(self):
+                position = getattr(character, 'joinedPosition', None)
+                if position is not None:
+                    box_size.setX(max(box_size.x, 2 * abs(position[0]) + character.modelWidth))
+                    box_size.setY(max(box_size.y, 2 * abs(position[1]) + character.modelHeight))
         elif getattr(self, 'baseSize', None):
             files = max(1, self.unit.files)
             slots = self.slotCount()
@@ -458,6 +532,19 @@ class unitGraphics(FSM):
             rows = (slots + files - 1) // files
             box_size.setX(self.modelWidth * cols)
             box_size.setY(self.modelHeight * rows)
+            from characters import get_joined_characters
+            if get_joined_characters(self):
+                boxes = [(child.getX(), child.getY(), self.modelWidth, self.modelHeight)
+                         for child in self.model.getChildren()]
+                boxes += [(record['x'], record['y'], record['width'], record['depth'])
+                          for record in getattr(self, 'characterPlacements', {}).values()]
+                left = min(center - width / 2 for center, _, width, _ in boxes)
+                right = max(center + width / 2 for center, _, width, _ in boxes)
+                bottom = min(center - depth / 2 for _, center, _, depth in boxes)
+                top = max(center + depth / 2 for _, center, _, depth in boxes)
+                self.formationOrigin = Point3(-(left + right) / 2, -(bottom + top) / 2, 0)
+                box_size.setX(right - left)
+                box_size.setY(top - bottom)
         return box_size
 
     def applyFootprint(self, box_size):
@@ -473,6 +560,9 @@ class unitGraphics(FSM):
             return
         self.model.setPos(-box_size.x / 2 + self.modelWidth / 2,
                           box_size.y / 2 - self.modelHeight / 2, 0)
+        from characters import get_joined_characters
+        if get_joined_characters(self) and hasattr(self, 'formationOrigin'):
+            self.model.setPos(self.formationOrigin)
 
     def setUpCollisions(self):
         if self.world:
@@ -616,11 +706,15 @@ class unitGraphics(FSM):
         self.unit.king_guard_state = None
         self.unit.retired_king_guards = []
         self.unit.retired_guard_states = []
-        char = getattr(self, 'joinedCharacter', None)
-        if char is not None and getattr(char, 'retiredFromCombat', False):
+        from characters import get_joined_characters
+        for char in get_joined_characters(self):
+            if not getattr(char, 'retiredFromCombat', False):
+                continue
             char.retiredFromCombat = False
             from spell_effects import refresh_self_spells
             refresh_self_spells(char)
+            self.layOutRanks()
+            self.rebuildFootprint()
             self.placeCharacter()
             rule_log('Refusing a Challenge', char,
                      "its unit is no longer engaged, so it returns to the "
@@ -653,6 +747,9 @@ class unitGraphics(FSM):
             child.removeNode()
         self.skirmishCombat = bool(saved.get('combat', False)) if saved else self.isInCombat
         self.skirmishCharacterPosition = saved.get('character') if saved else None
+        from characters import get_joined_characters
+        for character in get_joined_characters(self):
+            character.joinedPosition = (saved.get('characters', {}).get(character.unitName) if saved else None)
         if self.isSkirmisher:
             if saved is not None:
                 self.skirmishLayout = [dict(record) for record in saved['models']]
@@ -668,9 +765,12 @@ class unitGraphics(FSM):
     def savedSkirmishLayout(self):
         if not self.isSkirmisher:
             return None
+        from characters import get_joined_characters
         return dict(models=[dict(record) for record in self.skirmishLayout],
                     combat=self.skirmishCombat,
-                    character=getattr(self, 'skirmishCharacterPosition', None))
+                    character=getattr(self, 'skirmishCharacterPosition', None),
+                    characters={member.unitName: list(member.bodyNP.getPos(self.bodyNP))[:2]
+                                for member in get_joined_characters(self)})
 
     def formUpForCombat(self):
         """Snap a skirmisher's models into a tight fighting rank for combat."""
@@ -698,8 +798,9 @@ class unitGraphics(FSM):
         positions = [child.getPos(self.bodyNP) for child in children]
         boxes = [(position.x, position.y, self.modelWidth / 2, self.modelHeight / 2, 0)
                  for position in positions]
-        character = getattr(self, 'joinedCharacter', None)
-        if character is not None:
+        from characters import get_joined_characters
+        characters = get_joined_characters(self)
+        for character in characters:
             position = character.bodyNP.getPos(self.bodyNP)
             boxes.append((position.x, position.y, character.modelWidth / 2, character.modelHeight / 2, 0))
         try:
@@ -709,8 +810,9 @@ class unitGraphics(FSM):
             return
         for record, position in zip(self.skirmishLayout, separated):
             record['x'], record['y'] = position
-        if character is not None:
-            self.skirmishCharacterPosition = list(separated[-1])
+        for index, character in enumerate(characters):
+            character.joinedPosition = list(separated[len(children) + index])
+        self.skirmishCharacterPosition = characters[0].joinedPosition if characters else None
         self.skirmishCombat = False
         self.applySkirmishLayout()
         self.placeCharacter()

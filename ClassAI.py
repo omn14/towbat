@@ -27,7 +27,13 @@ class ClassAI:
                     self.moveTowardsClosestEnemy(unit)
                     await taskMgr.add(self.loopWaitForMoveComplete, self.waitTask, extraArgs=[unit], appendTask=True)
             await resolve_declarations(self.game)
-        for unit in self.playerUnits:
+        from characters import is_character
+        from character_movement import try_ai_join
+        for unit in sorted(list(self.playerUnits), key=is_character):
+            if getattr(unit, 'joinedMovementLocked', False):
+                continue
+            if try_ai_join(self.game, unit):
+                continue
             if unit.state == "Idle" and not unit.hasMovedThisTurn:
                 print(f"AI controlling unit: {unit.unit.name}")
                 # Simple AI logic: Move forward by 1 unit

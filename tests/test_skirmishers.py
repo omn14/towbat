@@ -32,6 +32,51 @@ class SkirmisherFlagTests(unittest.TestCase):
         m = model("State Trooper", "")
         self.assertFalse(m.is_skirmisher())
 
+    def test_character_defaults_to_skirmish_on_foot_or_cavalry_mount(self):
+        for mount_name in (None, 'Elven Steed'):
+            with self.subTest(mount=mount_name):
+                character = model('Noble', '')
+                if mount_name:
+                    character.attach_mount(SimpleNamespace(model=model(mount_name, '')))
+                self.assertTrue(character.is_skirmisher())
+
+    def test_explicit_character_formation_takes_precedence(self):
+        for formation in ('Close Order', 'Open Order'):
+            with self.subTest(formation=formation):
+                character = model('Noble', '')
+                character.special_rules.append({'name': formation})
+                self.assertFalse(character.is_skirmisher())
+
+    def test_monster_and_chariot_characters_use_mount_formation(self):
+        for mount_name in ('Star Dragon', 'Tiranoc Chariot'):
+            with self.subTest(mount=mount_name):
+                character = model('Noble', '')
+                mount = model(mount_name, '')
+                character.attach_mount(SimpleNamespace(model=mount))
+                character.special_rules.append(SKIRMISH_RULE)
+                self.assertFalse(character.is_skirmisher())
+                mount.special_rules.append(SKIRMISH_RULE)
+                self.assertTrue(character.is_skirmisher())
+
+    def test_joined_formation_overrides_then_restores_own_default(self):
+        from characters import detach_character
+        for formation in (None, 'Close Order'):
+            with self.subTest(formation=formation):
+                profile = model('Noble', '')
+                if formation:
+                    profile.special_rules.append({'name': formation})
+                own_skirmish = profile.is_skirmisher()
+                profile._joined_skirmish = not own_skirmish
+                character = SimpleNamespace(unit=SimpleNamespace(model=profile, name='Noble'),
+                                            isSkirmisher=not own_skirmish)
+                host = SimpleNamespace(unit=SimpleNamespace(model=model('State Trooper', ''), name='Host'),
+                                       joinedCharacter=character)
+                character.hostUnit = host
+                self.assertEqual(profile.is_skirmisher(), not own_skirmish)
+                detach_character(host)
+                self.assertEqual(profile.is_skirmisher(), own_skirmish)
+                self.assertEqual(character.isSkirmisher, own_skirmish)
+
     def test_unit_strength_default(self):
         m = model("State Trooper", "")
         self.assertEqual(m.unit_strength(), 1)

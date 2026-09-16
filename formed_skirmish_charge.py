@@ -319,7 +319,7 @@ def preview_charge(game, unit, target, origin=None, facing=None):
         result.maximum = max_charge_range(route_allowance(game, unit, result.route), unit_has_swiftstride(unit))
         if result.route.distance > result.maximum + EPSILON:
             result.error = f'Charge {result.route.distance:.2f}" exceeds maximum {result.maximum:g}"'
-        elif plan_skirmish_defence(result.route.final_boxes, targets, game.movement.movementAllowance(target)) is None:
+        elif plan_skirmish_defence(result.route.final_boxes, targets, game.movement.movementAllowance(target), defender=target) is None:
             result.error = 'Contacted defender cannot align within its Movement'
     return result
 

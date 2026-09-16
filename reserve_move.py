@@ -2,7 +2,7 @@
 
 from panda3d.core import TransformState, Vec2
 
-from characters import side_of
+from characters import side_of, get_joined_characters
 from magic_items import current_turn
 from rules_log import rule_log, rule_skipped
 from scouts import nearest_enemy, placement_error
@@ -16,10 +16,10 @@ def has_reserve_move(model):
 def has_majority(unit):
     count = unit.unit.nmodels
     enabled = count if has_reserve_move(unit.unit.model) else 0
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None and joined.unit.nmodels > 0:
-        count += 1
-        enabled += int(has_reserve_move(joined.unit.model))
+    for joined in get_joined_characters(unit):
+        if joined.unit.nmodels > 0:
+            count += joined.unit.nmodels
+            enabled += joined.unit.nmodels * int(has_reserve_move(joined.unit.model))
     return enabled > count / 2
 
 

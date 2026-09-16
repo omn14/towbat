@@ -372,10 +372,8 @@ async def activate_start_items(game):
             if not activate_ability(game, member, item, 'path', 'Start of Turn', confirmed=use):
                 continue
             host = getattr(member, 'hostUnit', None) or member
-            recipients = [host]
-            joined = getattr(host, 'joinedCharacter', None)
-            if joined is not None:
-                recipients.append(joined)
+            from characters import get_joined_characters
+            recipients = [host, *get_joined_characters(host)]
             for recipient in recipients:
                 for profile in item_profiles(recipient):
                     profile.special_rules.append({'name': item.name, 'move_through_cover': True,
@@ -715,7 +713,8 @@ def effects_for(member, kind, *, value=None, profile=None, context=None):
     game = getattr(member, 'game', None)
     if not isinstance(getattr(game, 'units', None), (list, tuple)):
         host = getattr(member, 'hostUnit', None)
-        candidates = [member, host, getattr(member, 'joinedCharacter', None)]
+        from characters import get_joined_characters
+        candidates = [member, host, *get_joined_characters(host or member)]
         game = SimpleNamespace(units=[candidate for candidate in candidates if candidate is not None])
     return [entry for entry in active_effects(game, member, profile=profile, context=context)
             if entry.effect.kind == kind and (value is None or entry.effect.value == value)]
@@ -732,7 +731,9 @@ def report_inactive_effects(member, kind, detail, *, value=None, profile=None, c
     active = {entry.item.instance_id for entry in effects_for(member, kind, value=value,
                                                              profile=profile, context=context)}
     profile = member.unit.model if profile is None else profile
-    carriers = [member, getattr(member, 'hostUnit', None), getattr(member, 'joinedCharacter', None)]
+    from characters import get_joined_characters
+    host = getattr(member, 'hostUnit', None)
+    carriers = [member, host, *get_joined_characters(host or member)]
     seen = set()
     for carrier in carriers:
         if carrier is None:

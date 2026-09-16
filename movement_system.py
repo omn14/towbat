@@ -528,9 +528,11 @@ class MovementSystem:
                 - self.movementAllowance(unit))
 
     def movementParticipants(self, unit):
+        from characters import get_joined_characters
         participants = [unit]
-        character = getattr(unit, 'joinedCharacter', None)
-        if character is not None and character.unit.nmodels > 0:
+        for character in get_joined_characters(unit):
+            if character.unit.nmodels <= 0:
+                continue
             from scouts import has_deployment_rule
             if not in_vanguard(self.game) or has_deployment_rule(character, 'vanguard'):
                 participants.append(character)
@@ -619,10 +621,7 @@ class MovementSystem:
         if not features:
             return 0
         names = ', '.join(sorted({t.terrain_type for t in features}))
-        participants = [unit]
-        character = getattr(unit, 'joinedCharacter', None)
-        if character is not None:
-            participants.append(character)
+        participants = self.movementParticipants(unit)
         total = 0
         for participant in participants:
             from special_rules import is_ethereal
@@ -821,7 +820,7 @@ class MovementSystem:
             rule_skipped('Redress the Ranks', unit,
                          f"it is {unit.state} and may not manoeuvre")
             return False
-        if unit.hasMovedThisTurn and not drilled:
+        if (getattr(unit, 'joinedMovementLocked', False) and self.game.fsm.state == 'MovementPhase') or (unit.hasMovedThisTurn and not drilled):
             rule_skipped('Redress the Ranks', unit,
                          "its move this turn is already over")
             return False
@@ -1440,6 +1439,8 @@ class MovementSystem:
                 color=(0.4, 1.0, 0.4, 1.0))
 
     def moveUnit(self, unit, *, drilled_ready=False):
+        if getattr(unit, 'hostUnit', None) is not None or getattr(self.game, 'characterMoveEditor', None) is not None:
+            return False
         from free_pivot import pending
         if pending(self.game):
             return False
@@ -1478,7 +1479,7 @@ class MovementSystem:
         
         
         
-        if unit.hasMovedThisTurn:
+        if unit.hasMovedThisTurn or getattr(unit, 'joinedMovementLocked', False):
             print("Unit has already moved this turn.")
             return
 
@@ -1859,23 +1860,21 @@ class MovementSystem:
         from command_groups import remove_command_casualties
         remove_command_casualties(unit)
         if len(cildren) == 0:
-            if (getattr(unit, 'isSkirmisher', False) and not unit.skirmishCombat
-                    and getattr(unit, 'joinedCharacter', None) is not None):
-                from characters import detach_character, side_of
-                character = unit.joinedCharacter
-                owner = side_of(self.game, unit)
-                character.bodyNP.wrtReparentTo(unit.bodyNP.getParent())
-                detach_character(unit)
-                character._player = owner
+            from characters import get_joined_characters, release_character
+            survivors = get_joined_characters(unit)
+            for character in survivors:
+                release_character(self.game, character)
                 character.hasMovedThisTurn = unit.hasMovedThisTurn
                 character.marchedThisTurn = unit.marchedThisTurn
                 character.moveSpentThisTurn = unit.moveSpentThisTurn
-                (self.game.player1Units if owner == 1 else self.game.player2Units).append(character)
-                self.game.world.attachRigidBody(character.bodyNP.node())
-                if getattr(self.game, 'roundCounter', None) is not None:
-                    self.game.roundCounter.apply_selection_masks()
-                rule_log('Skirmishers', character,
-                         'the last ordinary model is lost; the surviving character remains in place (p. 184)')
+                character.isInCombatWith = list(unit.isInCombatWith)
+                character.isInCombatFlank = list(unit.isInCombatFlank)
+                if unit.state == 'IsFleeing':
+                    character.request('IsFleeing')
+                elif unit.isInCombatWith:
+                    character.request('InCombat')
+                rule_log('Characters & Units', character,
+                         'the last ordinary model is lost; survives independently in place (p. 207)')
             print(f"All models removed from unit {unit.unit.name}. Removing unit from game.")
             try:
                 if self.game.attackSequence.isPlaying():
@@ -1884,7 +1883,15 @@ class MovementSystem:
                 pass
             #self.game.attackSequence.finish()
             for u in unit.isInCombatWith:
-                u.request("Idle")
+                paired = [(enemy, flank) for enemy, flank in zip(u.isInCombatWith, u.isInCombatFlank)
+                          if enemy is not unit]
+                flank = next((flank for enemy, flank in zip(u.isInCombatWith, u.isInCombatFlank)
+                              if enemy is unit), 'front')
+                paired.extend((character, flank) for character in survivors)
+                u.isInCombatWith = [enemy for enemy, _ in paired]
+                u.isInCombatFlank = [flank for _, flank in paired]
+                if not paired:
+                    u.request("Idle")
             #messenger.send('unit-move-complete')
             on_host_removed(self.game, unit)
             self.game.world.removeRigidBody(unit.bodyNP.node())

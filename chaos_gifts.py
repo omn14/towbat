@@ -33,8 +33,8 @@ def has_stupidity(member):
 
 def subject_to_stupidity(member):
     host = getattr(member, 'hostUnit', None) or member
-    joined = getattr(host, 'joinedCharacter', None)
-    return has_stupidity(host) or bool(joined and has_stupidity(joined))
+    from characters import get_joined_characters
+    return any(has_stupidity(member) for member in [host, *get_joined_characters(host)])
 
 
 def succumbed(member):
@@ -107,8 +107,8 @@ async def start_and_command(game):
         leadership = leadership_for_test(game.psychology, member, 'Stupidity')[0]
         rolled = await reroll_leadership(game, member, 'Stupidity', await dice(), leadership, dice)
         member.stupidityFailed = not leadership_passed(sum(rolled), leadership)
-        joined = getattr(member, 'joinedCharacter', None)
-        if joined is not None:
+        from characters import get_joined_characters
+        for joined in get_joined_characters(member):
             joined.stupidityFailed = member.stupidityFailed
         rule_log('Stupidity', member, f'2D6={rolled} vs Ld {leadership}: '
                  + ('failed; no movement/shooting/casting/dispelling, Hold only until next Start of Turn'

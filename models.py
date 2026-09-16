@@ -432,9 +432,23 @@ class model:
         return default
 
     def is_skirmisher(self) -> bool:
-        """True if the model has the Skirmishers special rule."""
-        return any(isinstance(r, dict) and r.get('skirmish')
-                   for r in self.special_rules)
+        """Characters adopt their host or default to Skirmish (pp. 205-206)."""
+        joined_formation = getattr(self, '_joined_skirmish', None)
+        if joined_formation is not None:
+            return joined_formation
+        character = str(self.characteristics.get('Category', '')).strip().casefold() == 'characters'
+        mount = self.get_mount() if character else None
+        troop_type = (mount if mount is not None else self).troop_type()
+        lone_type = troop_types.is_infantry(troop_type) or troop_types.is_cavalry(troop_type)
+        if mount is not None and not lone_type:
+            return mount.is_skirmisher()
+        rules = [rule for rule in self.special_rules if isinstance(rule, dict)]
+        if any(rule.get('skirmish') for rule in rules):
+            return True
+        if any(rule.get('name', '').casefold() in ('close order', 'open order', 'lance formation')
+               for rule in rules):
+            return False
+        return character and lone_type
 
     def has_fire_and_flee(self) -> bool:
         """True if the model has the Fire & Flee special rule (p. 169)."""

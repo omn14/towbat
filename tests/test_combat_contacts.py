@@ -85,6 +85,7 @@ def test_allocation_accepts_uninitialized_joined_retirement_state(monkeypatch, r
     host = SimpleNamespace(isInCombatWith=[enemy], unit=SimpleNamespace(name='Attacker'))
     part = SimpleNamespace(host=host, profile=SimpleNamespace(name='Attacker profile'))
     snapshot = CombatContactSnapshot.__new__(CombatContactSnapshot)
+    snapshot.characters = {id(host): [], id(enemy): [character]}
     snapshot.formations = {
         id(host): ([(0, 0, .5, .5, 0)], [0], {}, 1, None),
         id(enemy): ([(0, 1, .5, .5, 0)], [0], {}, 0, character),

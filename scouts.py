@@ -4,7 +4,7 @@ Distances are between model bases, not regiment centres or the empty corners
 of a skirmish blob. One world unit is one inch.
 """
 
-from characters import side_of
+from characters import side_of, get_joined_characters
 from psychology import _box_corners, obb_distance
 
 SCOUT_CLEARANCE = 12.0
@@ -35,9 +35,8 @@ def has_deployment_rule(unit, flag):
 
 
 def has_scouts(unit):
-    joined = getattr(unit, 'joinedCharacter', None)
     return bool(has_deployment_rule(unit, 'scouts')
-                and (joined is None or has_scouts(joined)))
+                and all(has_scouts(joined) for joined in get_joined_characters(unit)))
 
 
 def scout_charge_blocked(game, unit):
@@ -45,17 +44,13 @@ def scout_charge_blocked(game, unit):
     owner = side_of(game, unit, default=None)
     if owner is None:
         return False
-    joined = getattr(unit, 'joinedCharacter', None)
-    deployed = (getattr(unit, 'deployedAsScouts', False)
-                or getattr(joined, 'deployedAsScouts', False))
+    deployed = any(getattr(member, 'deployedAsScouts', False) for member in [unit, *get_joined_characters(unit)])
     return bool(deployed and game.roundCounter.currentRoundPlayer[owner - 1] == 0)
 
 
 def scouts_block_vanguard(unit):
     """FAQ: late-deployed Scouts cannot subsequently make a Vanguard move."""
-    joined = getattr(unit, 'joinedCharacter', None)
-    return bool(getattr(unit, 'deployedAsScouts', False)
-                or getattr(joined, 'deployedAsScouts', False))
+    return any(getattr(member, 'deployedAsScouts', False) for member in [unit, *get_joined_characters(unit)])
 
 
 def model_base_boxes(unit):
@@ -74,8 +69,7 @@ def model_base_boxes(unit):
     for child in list(unit.model.getChildren())[:unit.unit.nmodels]:
         pos = child.getPos(root)
         boxes.append((pos.x, pos.y, hx, hy, heading))
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None:
+    for joined in get_joined_characters(unit):
         boxes.extend(model_base_boxes(joined))
     return boxes
 

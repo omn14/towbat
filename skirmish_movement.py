@@ -5,7 +5,7 @@ import math
 
 from panda3d.core import LineSegs, Point3, Vec2
 
-from characters import side_of, slay_character
+from characters import side_of, slay_character, get_joined_characters
 from psychology import _box_corners, obb_distance
 from rules_log import rule_log, rule_skipped
 from scouts import model_base_boxes
@@ -90,8 +90,7 @@ def preview_action(game, unit):
 
 def current_positions(unit):
     positions = [(record['x'], record['y']) for record in unit.skirmishLayout]
-    character = getattr(unit, 'joinedCharacter', None)
-    if character is not None:
+    for character in get_joined_characters(unit):
         position = character.bodyNP.getPos(unit.bodyNP)
         positions.append((position.x, position.y))
     return positions
@@ -200,7 +199,8 @@ def unavailable_reason(game, unit):
         return 'Not the active player\'s unit'
     if not unit.isDeployed or getattr(unit, 'hostUnit', None) is not None:
         return 'Select a deployed unit, not an attached character'
-    if unit.state != 'Idle' or unit.hasMovedThisTurn or unit.isInCombat or unit.skirmishCombat:
+    blocked = unit.state != 'Idle' or unit.hasMovedThisTurn or unit.isInCombat or unit.skirmishCombat
+    if blocked or getattr(unit, 'joinedMovementLocked', False):
         return 'This unit cannot make an ordinary move now'
     if getattr(game, 'awaitingChoice', False):
         return 'Finish the current choice first'
@@ -228,10 +228,12 @@ def commit_move(game, unit, positions=None, destination=None):
     unit.bodyNP.setPos(*preview.destination)
     for record, position in zip(unit.skirmishLayout, preview.positions):
         record['x'], record['y'] = position
-    character = getattr(unit, 'joinedCharacter', None)
-    if character is not None:
-        unit.skirmishCharacterPosition = list(preview.positions[-1])
-        unit.placeCharacter()
+    characters = get_joined_characters(unit)
+    for character, position in zip(characters, preview.positions[unit.unit.nmodels:]):
+        character.joinedPosition = list(position)
+    if characters:
+        unit.skirmishCharacterPosition = characters[0].joinedPosition
+    unit.placeCharacter()
     unit.rebuildFootprint()
     unit.bodyNP.node().setTransformDirty()
     unit.moveSpentThisTurn += preview.distance
@@ -245,8 +247,10 @@ def commit_move(game, unit, positions=None, destination=None):
         unit, features=[piece for crossed in preview.terrain for piece in crossed], log=True)
     if preview.marched:
         rule_log('Marching', unit, 'per-model movement exceeded M; shooting restrictions apply (p. 123)')
-    for participant, features in ((unit, preview.terrain[:unit.unit.nmodels]),
-                                  (character, preview.terrain[unit.unit.nmodels:])):
+    hazards = [(unit, preview.terrain[:unit.unit.nmodels])]
+    hazards.extend((character, [preview.terrain[unit.unit.nmodels + offset]])
+                   for offset, character in enumerate(characters))
+    for participant, features in hazards:
         if participant is None or participant not in game.units:
             continue
         tests = sum(sum(piece.is_dangerous for piece in crossed) for crossed in features)
@@ -260,7 +264,7 @@ def commit_move(game, unit, positions=None, destination=None):
         if tests:
             rule_log('Dangerous Terrain', participant,
                      f'{tests} model/feature tests -> {wounds} wounds (p. 269)')
-            if participant is character:
+            if participant is not unit:
                 participant.woundsOnModel += wounds
                 if participant.woundsOnModel >= max(1, stat_value(
                         participant.unit.model.characteristics.get('W'), 1)):

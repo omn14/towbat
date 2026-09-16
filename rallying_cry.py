@@ -130,11 +130,21 @@ async def use_rallying_cry(game, character, target):
 
 
 async def choose_rallying_cry(game, selected):
-    character = selected if has_rallying_cry(selected) and is_character_unit(selected) else (
-        getattr(selected, 'joinedCharacter', None))
-    if character is None or not has_rallying_cry(character):
+    from characters import get_joined_characters
+    characters = [member for member in [selected, *get_joined_characters(selected)]
+                  if is_character_unit(member) and has_rallying_cry(member)]
+    if not characters:
         battle_log('Command: this unit has no character with Rallying Cry.', 'info')
         return
+    available = [member for member in characters if source_reason(game, member) is None]
+    character = next(iter(available or characters))
+    if len(available) > 1 and not game.aiControls(selected):
+        choices = {f'{member.unit.name} [{index + 1}]': member for index, member in enumerate(available)}
+        answer = await game.makeChoiceNew(['Cancel', *choices], Vec3(0, 0, 10), owner=selected,
+                                          prompt='Rallying Cry: choose character')
+        if answer not in choices:
+            return
+        character = choices[answer]
     reason = source_reason(game, character)
     if reason is not None:
         rule_skipped('Rallying Cry', character, reason)

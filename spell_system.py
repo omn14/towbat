@@ -13,14 +13,14 @@ from panda3d.bullet import BulletBoxShape
 from dice import Dice, checkDice
 from rulesFunctions import plusSTAT
 from rules_log import battle_log, rule_log, rule_skipped
-from characters import side_of
+from characters import side_of, get_joined_characters
 from special_rules import unit_magic_resistance
 from battlescribe import spell_key
 
 
 def casting_units(game, selected):
     """Expose joined casters without lending their spellbooks to the host (pp. 108, 207)."""
-    candidates = [selected, getattr(selected, 'joinedCharacter', None)]
+    candidates = [selected, *get_joined_characters(selected)]
     return [candidate for candidate in candidates if candidate is not None
             and candidate in game.units
             and side_of(game, candidate, default=None) == game.roundCounter.current_player

@@ -4,6 +4,7 @@ from panda3d.core import Vec3
 
 from psychology import _stat_int, combat_rank_bonus
 from rules_log import rule_log, rule_skipped
+from characters import get_joined_characters
 
 
 def has_warband(unit):
@@ -14,10 +15,10 @@ def has_warband(unit):
 def majority(unit):
     count = unit.unit.nmodels
     eligible = count if has_warband(unit) else 0
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None and joined.unit.nmodels > 0:
-        count += 1
-        eligible += int(has_warband(joined))
+    for joined in get_joined_characters(unit):
+        if joined.unit.nmodels > 0:
+            count += joined.unit.nmodels
+            eligible += joined.unit.nmodels * int(has_warband(joined))
     return eligible > count / 2
 
 
@@ -26,8 +27,7 @@ def leadership_for_test(psychology, unit, kind):
     if getattr(unit.unit.model, 'troop_type_rule', lambda name: False)('Undisciplined'):
         rule_skipped('Undisciplined', unit,
                      f'{kind}: cannot use Inspiring Presence or Hold Your Ground; own Ld {original} (pp. 191, 193)')
-    joined = getattr(unit, 'joinedCharacter', None)
-    sources = [unit] + ([joined] if joined is not None else [])
+    sources = [unit, *get_joined_characters(unit)]
     if not any(has_warband(source) for source in sources):
         return original, general
     general = getattr(psychology, 'general_of', lambda member: general)(unit)

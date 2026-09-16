@@ -188,7 +188,6 @@ def test_defence_requires_front_edge_contact_not_just_a_front_row_model(position
 
 
 @pytest.mark.parametrize('member,attribute,value', [
-    ('defender', 'joinedCharacter', object()),
     ('attacker', 'state', 'IsPursuing'), ('defender', 'state', 'IsFleeing'),
     ('defender', 'state', 'InCombat'), ('defender', 'skirmishCombat', True),
     ('attacker', 'isSkirmisher', True), ('defender', 'isSkirmisher', False),

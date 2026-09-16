@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from magic_items import current_turn
 from psychology import leadership_passed, reroll_leadership, unit_strength_total
 from rules_log import rule_log, rule_skipped
+from characters import get_joined_characters
 
 
 def has_rule(model, name):
@@ -20,8 +21,7 @@ def causes(model, name):
 
 
 def strength(unit):
-    joined = getattr(unit, 'joinedCharacter', None)
-    return unit_strength_total(unit) + (unit_strength_total(joined) if joined is not None else 0)
+    return sum(unit_strength_total(member) for member in [unit, *get_joined_characters(unit)])
 
 
 def identity(unit):
@@ -35,10 +35,10 @@ def immune(unit):
         return True
     count = unit.unit.nmodels
     protected = count if has_rule(unit.unit.model, 'Immune to Psychology') else 0
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None and joined.unit.nmodels > 0:
-        count += 1
-        protected += int(has_rule(joined.unit.model, 'Immune to Psychology'))
+    for joined in get_joined_characters(unit):
+        if joined.unit.nmodels > 0:
+            count += joined.unit.nmodels
+            protected += joined.unit.nmodels * int(has_rule(joined.unit.model, 'Immune to Psychology'))
     return protected > count / 2
 
 
@@ -60,9 +60,9 @@ def model_fears(unit, source):
 def feared_strength(unit, enemy):
     """Count only Fear-causing models, not their ordinary companions (FAQ v1.5.3)."""
     result = unit_strength_total(enemy) if model_fears(unit, enemy.unit.model) else 0
-    joined = getattr(enemy, 'joinedCharacter', None)
-    if joined is not None and model_fears(unit, joined.unit.model):
-        result += unit_strength_total(joined)
+    for joined in get_joined_characters(enemy):
+        if model_fears(unit, joined.unit.model):
+            result += unit_strength_total(joined)
     return result
 
 

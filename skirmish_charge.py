@@ -14,6 +14,7 @@ class FightingRank:
     files: int
     heading: float
     lost: list
+    origin: tuple | None = None
 
 
 @dataclass
@@ -55,7 +56,73 @@ def _assign(boxes, slots, limits, fixed):
     return assigned
 
 
-def _rank(boxes, limits, anchor_index, anchor, direction, max_files=None, front_targets=None):
+def _joined_rank(member, boxes, limits, anchor_index, anchor, direction, max_files, front_targets, survivors=None):
+    """Keep command and character base areas intact when forming up (pp. 186, 207)."""
+    from copy import copy
+    from types import SimpleNamespace
+    from characters import get_joined_characters, rank_placements
+    from command_groups import command_positions, living_command
+    characters = get_joined_characters(member)
+    count = member.unit.nmodels
+    survivors = count if survivors is None else survivors
+    width, depth = member.modelWidth, member.modelHeight
+    right = (direction[1], -direction[0])
+    commands = living_command(member)
+    children = list(member.model.getChildren())
+    command_indices = {child.getPythonTag('command_role'): index for index, child in enumerate(children)
+                       if child.hasPythonTag('command_role')}
+    for files in range(min(survivors + len(characters), max_files or survivors + len(characters)), 0, -1):
+        group = copy(member.unit)
+        group.files = files
+        group.nmodels = survivors
+        command_slots = command_positions(SimpleNamespace(unit=group))
+        slots, placements = rank_placements(survivors, files, width, depth,
+            [(character.unitName, character.modelWidth, character.modelHeight,
+              getattr(character, 'retiredFromCombat', False)) for character in characters],
+            [command_slots[id(entry)] for entry in commands])
+        local = [(slot % files * width, -(slot // files) * depth) for slot in slots]
+        local += [(placements[character.unitName]['x'], placements[character.unitName]['y'])
+                  for character in characters]
+        fixed = {survivors + index: count + index for index in range(len(characters))}
+        fixed.update({slots.index(command_slots[id(entry)]): command_indices[entry['role']]
+                      for entry in commands if entry['role'] in command_indices})
+        possible = ([next(slot for slot, index in fixed.items() if index == anchor_index)]
+                    if anchor_index in fixed.values() else [slot for slot in range(survivors) if slot not in fixed])
+        front = [slot for slot, grid in enumerate(slots) if grid < files]
+        front += [survivors + index for index, character in enumerate(characters)
+                  if not placements[character.unitName]['rear']]
+        candidates = []
+        for anchor_slot in possible:
+            if anchor_slot not in front:
+                continue
+            origin = (anchor[0] - right[0] * local[anchor_slot][0] - direction[0] * local[anchor_slot][1],
+                      anchor[1] - right[1] * local[anchor_slot][0] - direction[1] * local[anchor_slot][1])
+            positions = [(origin[0] + right[0] * lateral + direction[0] * longitudinal,
+                          origin[1] + right[1] * lateral + direction[1] * longitudinal)
+                         for lateral, longitudinal in local]
+            assigned = _assign(boxes, positions, limits, {**fixed, anchor_slot: anchor_index})
+            if len(assigned) != len(local) or any(_distance(boxes[index], positions[slot]) > limits[index] + EPSILON
+                                                for slot, index in assigned.items()):
+                continue
+            if front_targets is not None and any(min(obb_distance(
+                    (*positions[slot], *boxes[assigned[slot]][2:4], _heading(direction)), target)
+                    for target in front_targets) > EPSILON for slot in front):
+                continue
+            order = [assigned[slot] for slot in range(len(local))]
+            lost = [index for index in range(count) if index not in order]
+            candidates.append(FightingRank(positions, order, files, _heading(direction), lost, origin))
+        if candidates:
+            return min(candidates, key=lambda rank: sum(_distance(boxes[index], position)
+                       for index, position in zip(rank.order, rank.positions)))
+    if survivors > max(1, len(commands)):
+        return _joined_rank(member, boxes, limits, anchor_index, anchor, direction, max_files, front_targets, survivors - 1)
+    return None
+
+
+def _rank(boxes, limits, anchor_index, anchor, direction, max_files=None, front_targets=None, member=None):
+    from characters import get_joined_characters
+    if member is not None and get_joined_characters(member):
+        return _joined_rank(member, boxes, limits, anchor_index, anchor, direction, max_files, front_targets)
     width, depth = boxes[0][2] * 2, boxes[0][3] * 2
     right = (direction[1], -direction[0])
     count = len(boxes)
@@ -135,7 +202,7 @@ def formed_contact(attackers, defenders, origin=None):
     return first_attacker, first_defender, distance, anchor, direction, flank
 
 
-def plan_formed_charge(attackers, defenders, charge_distance, origin=None):
+def plan_formed_charge(attackers, defenders, charge_distance, origin=None, *, attacker=None):
     """Form only the chargers against the stationary charged face (p. 186).
 
     Every fighting model must touch an enemy base; models unable to reach it
@@ -146,7 +213,9 @@ def plan_formed_charge(attackers, defenders, charge_distance, origin=None):
     if distance > charge_distance + EPSILON:
         return None
     attack = _rank(attackers, [charge_distance] * len(attackers), first_attacker,
-                   anchor, direction, front_targets=defenders)
+                   anchor, direction, front_targets=defenders, member=attacker)
+    if attack is None:
+        return None
     return SkirmishCharge(attack, None, first_attacker, first_defender, distance, flank)
 
 
@@ -175,37 +244,40 @@ def first_contact(attackers, defenders):
     return first_attacker, first_defender, distance, anchor, contact, direction
 
 
-def plan_skirmish_charge(attackers, defenders, charge_distance, defender_movement):
-    """First contact, centred charging rank, then defenders within M (p. 187).
-
-    Defenders must touch the charging fighting rank, including corners (p. 145).
-    Bases within each unit must share dimensions. Models unable to form any
-    contiguous rank are identified as coherency losses (Official FAQ v1.5.3).
-    """
+def plan_skirmish_charge(attackers, defenders, charge_distance, defender_movement, *, attacker=None, defender=None):
+    """First contact, then contact-aligned ranks within movement (pp. 186-187, 207)."""
     if not attackers or not defenders:
         raise ValueError('Both units need living models')
-    for boxes in (attackers, defenders):
-        if any(abs(box[2] - boxes[0][2]) > EPSILON or abs(box[3] - boxes[0][3]) > EPSILON
-               for box in boxes):
+    for boxes, member in ((attackers, attacker), (defenders, defender)):
+        if member is None and any(abs(box[2] - boxes[0][2]) > EPSILON or abs(box[3] - boxes[0][3]) > EPSILON
+                                  for box in boxes):
             raise ValueError('Mixed base sizes need individual fighting-rank slots')
     first_attacker, first_defender, distance, anchor, contact, direction = first_contact(attackers, defenders)
-    source, target = attackers[first_attacker], defenders[first_defender]
+    target = defenders[first_defender]
     if distance > charge_distance + EPSILON:
         return None
-    attack = _rank(attackers, [charge_distance] * len(attackers), first_attacker, anchor, direction)
+    attack = _rank(attackers, [charge_distance] * len(attackers), first_attacker, anchor, direction, member=attacker)
+    if attack is None:
+        return None
+    attack_boxes = [(*position, *attackers[index][2:4], attack.heading)
+                    for index, position in zip(attack.order, attack.positions)]
+    edge = max(corner[0] * direction[0] + corner[1] * direction[1]
+               for box in attack_boxes for corner in _box_corners(*box))
+    front_targets = [box for box in attack_boxes if abs(max(corner[0] * direction[0] + corner[1] * direction[1]
+                     for corner in _box_corners(*box)) - edge) < EPSILON]
     defender_anchor = (contact[0] + direction[0] * target[3], contact[1] + direction[1] * target[3])
     limits = ([defender_movement] * len(defenders) if isinstance(defender_movement, (int, float))
               else list(defender_movement))
     if _distance(target, defender_anchor) > limits[first_defender] + EPSILON:
         raise ValueError('The contacted defender cannot align within its Movement')
-    front_targets = [(*position, source[2], source[3], attack.heading)
-                     for position in attack.positions[:attack.files]]
     defend = _rank(defenders, limits, first_defender, defender_anchor,
-                   (-direction[0], -direction[1]), front_targets=front_targets)
+                   (-direction[0], -direction[1]), front_targets=front_targets, member=defender)
+    if defend is None:
+        return None
     return SkirmishCharge(attack, defend, first_attacker, first_defender, distance)
 
 
-def plan_skirmish_defence(attackers, defenders, defender_movement):
+def plan_skirmish_defence(attackers, defenders, defender_movement, *, defender=None):
     """Form loose defenders against a stationary contacted front (pp. 145, 186).
 
     The formed charger never wheels to align. Each defender can move only M;
@@ -213,7 +285,7 @@ def plan_skirmish_defence(attackers, defenders, defender_movement):
     """
     if not attackers or not defenders:
         return None
-    if any(abs(box[2] - defenders[0][2]) > EPSILON or
+    if defender is None and any(abs(box[2] - defenders[0][2]) > EPSILON or
            abs(box[3] - defenders[0][3]) > EPSILON for box in defenders):
         return None
     heading = math.radians(attackers[0][4])
@@ -242,31 +314,27 @@ def plan_skirmish_defence(attackers, defenders, defender_movement):
               else list(defender_movement))
     if _distance(target, anchor) > limits[first] + EPSILON:
         return None
-    return _rank(defenders, limits, first, anchor, (-forward[0], -forward[1]), front_targets=front)
+    return _rank(defenders, limits, first, anchor, (-forward[0], -forward[1]), front_targets=front, member=defender)
 
 
 def supported_skirmish_defender(attacker, defender):
     """The formed charger's joined bases stay fixed while defenders form up (p. 186)."""
     return (not getattr(attacker, 'isSkirmisher', False)
             and getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat
-            and defender.state not in ('IsFleeing', 'InCombat') and attacker.state != 'IsPursuing'
-            and getattr(defender, 'joinedCharacter', None) is None)
+            and defender.state not in ('IsFleeing', 'InCombat') and attacker.state != 'IsPursuing')
 
 
 def supported_pair(attacker, defender):
     return (getattr(attacker, 'isSkirmisher', False) and getattr(defender, 'isSkirmisher', False)
             and not attacker.skirmishCombat and not defender.skirmishCombat
-            and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing'
-            and getattr(attacker, 'joinedCharacter', None) is None
-            and getattr(defender, 'joinedCharacter', None) is None)
+            and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing')
 
 
 def supported_formed_target(attacker, defender):
     """A joined defender stays fixed; its own base is a valid target (pp. 186, 207)."""
     return (getattr(attacker, 'isSkirmisher', False) and not attacker.skirmishCombat
             and not (getattr(defender, 'isSkirmisher', False) and not defender.skirmishCombat)
-            and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing'
-            and getattr(attacker, 'joinedCharacter', None) is None)
+            and defender.state != 'IsFleeing' and attacker.state != 'IsPursuing')
 
 
 def declaration_route(game, unit, target, maximum):
@@ -285,9 +353,9 @@ def declaration_route(game, unit, target, maximum):
     try:
         if supported_pair(unit, target):
             formation = plan_skirmish_charge(sources, targets, maximum,
-                                             game.movement.movementAllowance(target))
+                                             game.movement.movementAllowance(target), attacker=unit, defender=target)
         elif supported_formed_target(unit, target):
-            formation = plan_formed_charge(sources, targets, maximum, origin)
+            formation = plan_formed_charge(sources, targets, maximum, origin, attacker=unit)
         else:
             return None
     except ValueError:
@@ -338,7 +406,7 @@ def apply_fighting_rank(game, unit, formation):
     from rules_log import rule_log
     children = list(unit.model.getChildren())
     records = list(unit.skirmishLayout)
-    order = formation.order + formation.lost
+    order = [index for index in formation.order + formation.lost if index < len(children)]
     for slot, index in enumerate(order):
         children[index].reparentTo(unit.model, slot)
         children[index].setHpr(0, 0, 0)
@@ -355,6 +423,10 @@ def apply_fighting_rank(game, unit, formation):
     unit.layOutRanks()
     unit.rebuildFootprint()
     current = unit.model.getPos(game.render)
-    desired = Point3(*formation.positions[0], current.z)
+    desired = Point3(*(formation.origin or formation.positions[0]), current.z)
     unit.bodyNP.setPos(game.render, unit.bodyNP.getPos(game.render) + desired - current)
+    from characters import get_joined_characters
+    for character in get_joined_characters(unit):
+        character.bodyNP.setHpr(0, 0, 0)
+    unit.placeCharacter()
     unit.bodyNP.node().setTransformDirty()

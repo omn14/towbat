@@ -9,7 +9,7 @@ attacks (p. 211). Their Initiative steps still share the combat's clock because
 incidental Miscast damage can cross between the duel and the surrounding units.
 """
 
-from characters import get_joined_character, is_character
+from characters import get_joined_character, get_joined_characters, is_character
 from command_groups import Champion
 
 # Overkill is capped at five bonus points (p. 211).
@@ -52,7 +52,8 @@ def guard_fighters(host):
 def king_guard(host, *, restore=False):
     """One representative of the identical eligible rank-and-file models (FoF p. 163)."""
     if not restore:
-        general = get_joined_character(host)
+        general = next((member for member in get_joined_characters(host)
+                if getattr(member, 'isGeneral', False)), None)
         if (general is None or general.unit.nmodels <= 0 or not getattr(general, 'isGeneral', False)
                 or is_retired(general) or not any(rule.get('name') == "King's Guard"
                                                  for rule in host.unit.model.special_rules)):
@@ -144,9 +145,8 @@ def duellists(unit):
         candidates = [] if is_retired(unit) else [unit]
     else:
         candidates = []
-        joined = get_joined_character(unit)
-        if joined is not None and joined.unit.nmodels > 0 and not is_retired(joined):
-            candidates.append(joined)
+        candidates.extend(joined for joined in get_joined_characters(unit)
+                          if joined.unit.nmodels > 0 and not is_retired(joined))
         from command_groups import champions
         candidates.extend(champions(unit))
         guard = king_guard(unit)

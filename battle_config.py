@@ -256,9 +256,9 @@ def army_report(config, units, *, restricted_options=None, composition_verified=
                  'mercenaries': 'maximum_rare_mercenary_fraction', 'mercenary': 'maximum_rare_mercenary_fraction'}
     members, seen = list(units), set()
     for member in members:
-        joined = getattr(member, 'joinedCharacter', None)
-        if joined is not None and all(joined is not entry for entry in members):
-            members.append(joined)
+        from characters import get_joined_characters
+        members.extend(joined for joined in get_joined_characters(member)
+                       if all(joined is not entry for entry in members))
     for member in members:
         if id(member) in seen:
             continue

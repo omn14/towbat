@@ -97,6 +97,49 @@ class WhichSideIsItOnTests(unittest.TestCase):
 
 
 class CharacterHelperTests(unittest.TestCase):
+    def test_join_eligibility_and_host_movement_lock(self):
+        from characters import join_reason, leave_reason
+        character = SimpleNamespace(unit=mk_unit(model('Noble', ''), 1), unitName='noble',
+                                    state='Idle', isDeployed=True)
+        host = SimpleNamespace(unit=mk_unit(model('Elven Spearman', '')), unitName='spears',
+                               state='Idle', isDeployed=True, isSkirmisher=False)
+        game = SimpleNamespace(player1Units=[character, host], player2Units=[],
+                               fsm=SimpleNamespace(state='MovementPhase'), chargeStage='remaining',
+                               roundCounter=SimpleNamespace(current_player=1))
+        self.assertIsNone(join_reason(game, character, host, movement=True))
+        host.hasMovedThisTurn = True
+        self.assertIsNone(join_reason(game, character, host, movement=True))
+        character.hostUnit = host
+        self.assertIn('moved', leave_reason(game, character))
+        host.hasMovedThisTurn = False
+        self.assertIsNone(leave_reason(game, character))
+        host.joinedMovementLocked = True
+        self.assertIn('joined', leave_reason(game, character))
+        character.hostUnit = None
+        host.unit.model.special_rules.append({'name': 'Unbreakable', 'Unbreakable': True})
+        self.assertIn('Unbreakable', join_reason(game, character, host))
+
+    def test_multiple_character_accessor_and_mixed_base_placements(self):
+        from characters import get_joined_characters, rank_placements
+        first, second = mk_graphics('Characters'), mk_graphics('Characters')
+        host = SimpleNamespace(joinedCharacters=[first, second], joinedCharacter=first)
+        self.assertEqual(get_joined_characters(host), [first, second])
+        slots, placements = rank_placements(15, 6, 25, 25,
+            [('large', 50, 50, False), ('small', 25, 25, False), ('mounted', 30, 60, False)], [3])
+        self.assertEqual(len(placements['large']['cells']), 4)
+        self.assertFalse(set(slots).intersection(placements['large']['cells']))
+        self.assertFalse(set(slots).intersection(placements['small']['cells']))
+        self.assertTrue(placements['mounted']['adjacent'])
+        self.assertEqual(placements['mounted']['y'] + 30, 12.5)
+        self.assertEqual(len(set(slots)), 15)
+
+    def test_full_command_rank_places_character_at_rear(self):
+        from characters import rank_placements
+        slots, placements = rank_placements(3, 3, 25, 25, [('lord', 25, 25, False)], [0, 1, 2])
+        self.assertEqual(slots, [0, 1, 2])
+        self.assertTrue(placements['lord']['rear'])
+        self.assertEqual(placements['lord']['y'], -25)
+
     def test_is_character_true_for_characters_category(self):
         self.assertTrue(is_character(mk_graphics("Characters")))
 
@@ -129,12 +172,17 @@ class CharacterHelperTests(unittest.TestCase):
         self.assertIs(get_joined_character(host), char)
 
     def test_on_host_removed_unlinks_and_drops_character(self):
+        from panda3d.core import NodePath
         char = mk_graphics("Characters", name="lord")
         host = mk_graphics("Core", name="spears")
         host.joinedCharacter = char
         char.hostUnit = host
         game = SimpleNamespace(units=[host, char])
+        game.player1Units, game.player2Units = [host], []
+        char.bodyNP = NodePath('character')
         on_host_removed(game, host)
+        self.assertEqual(char.unit.nmodels, 0)
+        self.assertTrue(char.bodyNP.isEmpty())
         self.assertIsNone(host.joinedCharacter)
         self.assertIsNone(char.hostUnit)
         self.assertNotIn(char, game.units)

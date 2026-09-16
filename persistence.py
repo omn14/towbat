@@ -14,7 +14,7 @@ from datetime import datetime
 
 from battlescribe import get_catalogue, STAT_KEYS
 from challenges import Challenge
-from characters import detach_character, join_unit
+from characters import detach_character, join_unit, get_joined_characters
 from models import model as Model
 from rules_log import battle_log
 from special_rules import apply_rule_keywords
@@ -186,6 +186,9 @@ def save_game_state(game, filename=None):
     if getattr(game, 'battleMarchBoundaryBusy', False):
         battle_log('Finish the objective-control choice before saving a battle.', 'info')
         return None
+    if getattr(game, 'characterMoveEditor', None) is not None:
+        battle_log('Confirm or cancel the character move before saving.', 'info')
+        return None
     from charge_declarations import save_declarations
     from drilled import move_pending
     from free_pivot import pending
@@ -281,6 +284,7 @@ def save_game_state(game, filename=None):
             'color': list(unit.color),
             'isInCombat': unit.isInCombat,
             'hasMovedThisTurn': unit.hasMovedThisTurn,
+            'joinedMovementLocked': getattr(unit, 'joinedMovementLocked', False),
             'marchedThisTurn': getattr(unit, 'marchedThisTurn', False),
             'reserveDoneTurn': getattr(unit, 'reserveDoneTurn', None),
             'reserveMovementTurn': getattr(unit, 'reserveMovementTurn', None),
@@ -370,8 +374,11 @@ def save_game_state(game, filename=None):
             # Character joined to this unit's front rank, if any.
             'joined_character': (unit.joinedCharacter.unitName
                                  if getattr(unit, 'joinedCharacter', None) else None),
+            'joined_characters': [member.unitName for member in get_joined_characters(unit)],
             'character_slot': getattr(unit, 'characterSlot', None),
             'character_combat_return_slot': getattr(unit, 'characterCombatReturnSlot', None),
+            'combat_slot': getattr(unit, 'combatSlot', None),
+            'combat_return_slot': getattr(unit, 'combatReturnSlot', None),
             'retiredFromCombat': bool(getattr(unit, 'retiredFromCombat', False)),
         }
 
@@ -509,6 +516,9 @@ def load_game_state(game, filename):
     game.remainsInPlay = []
 
     editor = getattr(game, 'skirmishEditor', None)
+    character_editor = getattr(game, 'characterMoveEditor', None)
+    if character_editor is not None:
+        character_editor.close()
     if editor is not None:
         editor.close(resume=False)
 
@@ -537,10 +547,9 @@ def load_game_state(game, filename):
     # after this save was taken) so a load reflects the saved roster exactly.
     # Unparent first: deleting an old host must not delete a character the save keeps.
     for host in list(game.units):
-        character = getattr(host, 'joinedCharacter', None)
-        if character is not None:
+        for character in get_joined_characters(host):
             character.bodyNP.wrtReparentTo(host.bodyNP.getParent())
-            detach_character(host)
+            detach_character(host, character)
             game.world.attachRigidBody(character.bodyNP.node())
             host.layOutRanks()
             host.rebuildFootprint()
@@ -641,6 +650,9 @@ def load_game_state(game, filename):
 
         unit.isInCombat = unit_data['isInCombat']
         unit.hasMovedThisTurn = unit_data['hasMovedThisTurn']
+        unit.combatSlot = unit_data.get('combat_slot')
+        unit.combatReturnSlot = unit_data.get('combat_return_slot')
+        unit.joinedMovementLocked = unit_data.get('joinedMovementLocked', False)
         unit.marchedThisTurn = unit_data.get('marchedThisTurn', False)
         unit.reserveDoneTurn = unit_data.get('reserveDoneTurn')
         unit.reserveMovementTurn = unit_data.get('reserveMovementTurn')
@@ -771,17 +783,22 @@ def load_game_state(game, filename):
 
     # Third pass: re-join characters to their host units.
     for unit_data in game_state['units']:
-        char_name = unit_data.get('joined_character')
         host = unit_map.get(unit_data['name'])
-        character = unit_map.get(char_name) if char_name else None
-        if host is not None and character is not None:
+        names = unit_data.get('joined_characters', [unit_data.get('joined_character')])
+        for char_name in names:
+            character = unit_map.get(char_name) if char_name else None
+            if host is None or character is None:
+                continue
             host_transform = host.bodyNP.getTransform()
-            join_unit(game, character, host)
+            join_unit(game, character, host, restoring=True)
             host.bodyNP.setTransform(host_transform)
             host.bodyNP.node().setTransformDirty()
             previous = unit_data.get('character_combat_return_slot')
             position = unit_data.get('character_slot')
             if previous is not None and position is not None:
+                first = get_joined_characters(host)[0]
+                first.combatSlot = position
+                first.combatReturnSlot = previous
                 host.characterCombatReturnSlot = previous
                 host.characterSlot = position
                 host.layOutRanks()
@@ -795,6 +812,8 @@ def load_game_state(game, filename):
             unit.retiredFromCombat = bool(unit_data.get('retiredFromCombat'))
     for unit in game.units:
         if getattr(unit, 'joinedCharacter', None) is not None:
+            unit.layOutRanks()
+            unit.rebuildFootprint()
             unit.placeCharacter()
 
     for unit_data in game_state['units']:

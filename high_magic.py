@@ -3,7 +3,7 @@
 from panda3d.core import Point3, Vec3
 
 from battleFunctions import attack_characteristic, resolve_magic_hits, ward_save_value
-from characters import is_character, side_of
+from characters import is_character, side_of, get_joined_characters
 from models import roll_dice_expr
 from psychology import PsychologySystem, _box_corners, _polys_overlap, obb_distance
 from rules_log import rule_log, rule_skipped
@@ -15,8 +15,7 @@ from tempest import TempestSpell
 
 def unit_members(target):
     host = getattr(target, 'hostUnit', None) or target
-    joined = getattr(host, 'joinedCharacter', None)
-    return [host, joined] if joined is not None else [host]
+    return [host, *get_joined_characters(host)]
 
 
 def profiles_for(member):

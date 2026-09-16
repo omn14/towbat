@@ -47,6 +47,24 @@ free **V** / **Shift+V** rank adjustments. Click again to confirm and finish tha
 deployment. The already placed host cannot move or rotate during this step;
 invalid rank changes are refused. Saving and reloading keeps the adjustment open.
 
+During **Remaining Moves**, select a lone character and use **Join unit** to
+choose a compatible friendly regiment. The preview measures the contact move
+and checks the final bases before Confirm. The host cannot move again that
+phase, but does not count as having moved unless it actually moved beforehand.
+Select a host and use **Leave unit** to choose an attached character, click its
+destination, then Confirm. A character must leave before the host spends any
+movement. Cancel does not move models or spend movement; march tests and terrain
+damage happen only on confirmation.
+
+Hosts can carry multiple characters, each retaining its own wounds, weapons,
+spells and items. Compatible larger bases occupy their full grid area;
+incompatible bases stand beside the front rank, and characters without room
+go to the rear. Command models are never displaced. Attachments, individual
+combat positions, retirement and movement locks survive save/load, including
+older single-character saves. Lone characters resume their own formation when
+they leave; surviving characters become independent if the last ordinary model
+is lost. A destroyed or run-down host takes all attached characters with it.
+
 For Remains in Play spells, **Keep this player turn** skips further prompts for
 that spell until the next player turn. **Keep** asks again at the next phase
 boundary; **End spell** removes the effect immediately. Dispelling, recasting

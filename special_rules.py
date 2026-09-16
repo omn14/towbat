@@ -30,8 +30,8 @@ def is_ethereal(model):
 
 def unit_is_ethereal(unit):
     """Every model must be able to cross terrain (pp. 123, 167)."""
-    joined = getattr(unit, 'joinedCharacter', None)
-    return is_ethereal(unit.unit.model) and (joined is None or is_ethereal(joined.unit.model))
+    from characters import get_joined_characters
+    return all(is_ethereal(member.unit.model) for member in [unit, *get_joined_characters(unit)])
 
 
 def parse_special_rule(text: str):
@@ -193,9 +193,8 @@ def martial_prowess_applies(profile, host):
     if unit_profile is None or not any(rule.get('name') == 'Martial Prowess' for rule in unit_profile.special_rules):
         return False
     members = [unit_profile, *getattr(host.unit, 'command_models', {}).values()]
-    joined = getattr(host, 'joinedCharacter', None)
-    if joined is not None and joined.unit.nmodels > 0:
-        members.append(joined.unit.model)
+    from characters import get_joined_characters
+    members.extend(joined.unit.model for joined in get_joined_characters(host) if joined.unit.nmodels > 0)
     profiles = [*members, *(part for member in members for tag in ('mount', 'crew', 'beasts')
                           if (part := getattr(member, f'get_{tag}')()) is not None)]
     return any(profile is member for member in profiles)
@@ -292,9 +291,8 @@ def unit_magic_resistance(unit):
         if id(m) in seen:
             continue
         seen.add(id(m))
-        joined = getattr(member, 'joinedCharacter', None)
-        if joined is not None:
-            pending.append(joined)
+        from characters import get_joined_characters
+        pending.extend(get_joined_characters(member))
         for rule in getattr(m, 'special_rules', ()) or ():
             if not isinstance(rule, dict):
                 continue
@@ -542,10 +540,8 @@ def unit_has_swiftstride(unit) -> bool:
     check = getattr(model, 'is_swiftstride', None)
     if not callable(check) or not check():
         return False
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is None:
-        return True
-    return unit_has_swiftstride(joined)
+    from characters import get_joined_characters
+    return all(unit_has_swiftstride(joined) for joined in get_joined_characters(unit))
 
 
 def max_charge_range(movement: int, swiftstride: bool = False) -> int:

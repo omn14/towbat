@@ -7,6 +7,7 @@ from rules_log import rule_log, rule_skipped
 
 def single_model_targets(targets, challenge):
     from command_groups import champions
+    from characters import get_joined_characters
     if challenge is not None and any(challenge.involves(target) for target in targets):
         return targets
     result = []
@@ -16,10 +17,9 @@ def single_model_targets(targets, challenge):
             result.append(host)
         result.extend(champion for champion in protected if not champion.retiredFromCombat
                       and not (challenge and challenge.involves(champion)))
-        joined = getattr(host, 'joinedCharacter', None)
-        if joined is not None and not getattr(joined, 'retiredFromCombat', False) and not (
-                challenge and challenge.involves(joined)):
-            result.append(joined)
+        result.extend(joined for joined in get_joined_characters(host)
+                  if not getattr(joined, 'retiredFromCombat', False)
+                  and not (challenge and challenge.involves(joined)))
     return result
 
 

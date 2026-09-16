@@ -89,10 +89,8 @@ def enemy_fire_modifier(target, *, log=False):
     """The -1 applies only when every live model is US1 (p. 185), including a joined character."""
     if not is_skirmish_unit(target):
         return False
-    members = [target]
-    joined = getattr(target, 'joinedCharacter', None)
-    if joined is not None:
-        members.append(joined)
+    from characters import get_joined_characters
+    members = [target, *get_joined_characters(target)]
     live = [member for member in members if member.unit.nmodels > 0]
     total = sum(member.unit.nmodels for member in live)
     strength_one = sum(member.unit.nmodels for member in live if member.unit.model.unit_strength() == 1)
@@ -106,6 +104,9 @@ def enemy_fire_modifier(target, *, log=False):
 
 
 def uses_individual_shooting(game, unit, target):
+    from characters import get_joined_characters
+    if get_joined_characters(unit) or get_joined_characters(target):
+        return True
     from magic_items import EffectKind, effects_for
     if any(effects_for(member, kind) for member in getattr(game, 'units', [])
            for kind in (EffectKind.TARGET_PROTECTION, EffectKind.SHOOTING_SIGHT)):
@@ -150,16 +151,21 @@ def shooting_solution(game, unit, target, *, weapon=None, stand_and_shoot=False,
     count = min(unit.unit.nmodels, len(boxes))
     files = max(1, unit.unit.files)
     volley = any(rule.get('volley_fire') for rule in unit.unit.model.special_rules)
-    joined = getattr(unit, 'joinedCharacter', None)
-    has_joined = joined is not None and joined.unit.nmodels > 0 and len(boxes) > count
-    reserved = getattr(unit, 'characterSlot', None) if has_joined and not loose else None
-    slots = {index + int(reserved is not None and index >= reserved): (unit, index)
-             for index in range(count)}
-    if has_joined:
-        slots[reserved if reserved is not None else count] = (joined, count)
-    firing = len(slots) if loose else firing_rank_count(files, len(slots), extra, volley)
-    participants = [(slot, member, index) for slot, (member, index) in sorted(slots.items())
-                    if slot < firing and not (member is joined and getattr(joined, 'retiredFromCombat', False))]
+    from characters import get_joined_characters
+    joined = get_joined_characters(unit)
+    children = list(unit.model.getChildren())[:count]
+    slots = {index: (round(-child.getY() / unit.modelHeight) * files
+                    + round(child.getX() / unit.modelWidth)) for index, child in enumerate(children)}
+    records = [(slots[index], unit, index) for index in range(count)]
+    records += [(getattr(member, 'formationSlot', getattr(unit, 'characterSlot', 0)) or 0, member, count + offset)
+                for offset, member in enumerate(joined) if member.unit.nmodels > 0]
+    firing = firing_rank_count(files, max([slot for slot, _, _ in records], default=0) + 1, extra, volley)
+    participants = [(slot, member, index) for slot, member, index in records
+                    if (loose or slot < firing) and not getattr(member, 'retiredFromCombat', False)]
+    front_sources = {slot: index for slot, member, index in records if member is unit and slot < files}
+    for offset, member in enumerate(joined):
+        cells = getattr(unit, 'characterPlacements', {}).get(member.unitName, {}).get('cells', [])
+        front_sources.update({cell: count + offset for cell in cells if cell < files})
     result = []
     cover_by_source = {}
     for slot, member, index in participants:
@@ -167,7 +173,15 @@ def shooting_solution(game, unit, target, *, weapon=None, stand_and_shoot=False,
         missile = weapon if member is unit and weapon is not None else profile.equipedWeapon or {}
         if missile.get('tag') != 'ranged':
             continue
-        source_index = index if loose else slots[slot % files][1]
+        moved = any(getattr(part, flag, False) for part in (unit, member)
+                    for flag in ('hasMovedThisTurn', 'manoeuvreThisTurn', 'moveSpentThisTurn', 'attemptedRallyThisTurn'))
+        marched = any(getattr(part, 'marchedThisTurn', False) for part in (unit, member))
+        blocked = ('marched' if marched and not profile.fires_after_marching() else
+                   'Move or Shoot' if moved and not stand_and_shoot and profile.cannot_shoot_after_moving(missile) else None)
+        if blocked:
+            result.append(Shooter(member, index, None, False, blocked))
+            continue
+        source_index = index if loose or member is not unit else front_sources.get(slot % files, index)
         source = boxes[source_index]
         own = boxes[:source_index] + boxes[source_index + 1:]
         facing = None if loose or profile.has_all_round_vision() else source[4]

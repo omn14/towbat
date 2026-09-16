@@ -104,6 +104,9 @@ class GamePhaseFSM(FSM):
 
     def nextPhase(self):
         """Advance to the next phase in the cycle."""
+        if getattr(self.game, 'characterMoveEditor', None) is not None:
+            battle_log('Confirm or cancel the character move first.', 'info')
+            return
         if self.state == 'BattleEnded':
             if getattr(self.game, 'hud', None) is not None:
                 self.game.hud.set_battle_result(self.game.battleResult)
@@ -293,6 +296,7 @@ class GamePhaseFSM(FSM):
                 spell.scatter(self.game)
         for unit in self.game.units:
             unit.hasAttackedThisTurn = False
+            unit.joinedMovementLocked = False
             unit.standAndShootWounds = 0
             unit.marchedThisTurn = False
             unit.marchTestResult = None
@@ -340,6 +344,11 @@ class GamePhaseFSM(FSM):
         )
 
     def exitMovementPhase(self):
+        character_editor = getattr(self.game, 'characterMoveEditor', None)
+        if character_editor is not None:
+            character_editor.close()
+        if getattr(self.game, 'characterMoveButton', None) is not None:
+            self.game.characterMoveButton.hide()
         from skirmish_ui import clear_plot_preview
         clear_plot_preview(self.game)
         editor = getattr(self.game, 'skirmishEditor', None)

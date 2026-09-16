@@ -4,7 +4,7 @@ import random
 
 from panda3d.core import BitMask32, TransformState, Vec2, Vec3
 
-from characters import detach_character, side_of
+from characters import side_of, get_joined_characters, release_character
 from rules_log import battle_log, dice_roll, rule_log, rule_skipped
 from scouts import (has_deployment_rule, nearest_enemy, placement_error,
                     scouts_block_vanguard)
@@ -18,9 +18,9 @@ def vanguard_unavailable(unit):
         return 'not deployed or no surviving models'
     if scouts_block_vanguard(unit):
         return 'deployed using Scouts (Official FAQ)'
-    character = getattr(unit, 'joinedCharacter', None)
-    if (character is not None and not has_deployment_rule(character, 'vanguard')
-            and not getattr(unit, 'isSkirmisher', False)):
+    blocked = [member for member in get_joined_characters(unit) if not has_deployment_rule(member, 'vanguard')]
+    if blocked and not getattr(unit, 'isSkirmisher', False):
+        character = blocked[0]
         return f'{character.unit.name} lacks Vanguard and prevents its formed unit moving (Official FAQ)'
     return None
 
@@ -33,9 +33,8 @@ def vanguard_candidates(game, player):
 
 def _participating_profiles(unit):
     profiles = [unit.unit.model]
-    character = getattr(unit, 'joinedCharacter', None)
-    if character is not None and has_deployment_rule(character, 'vanguard'):
-        profiles.append(character.unit.model)
+    profiles.extend(member.unit.model for member in get_joined_characters(unit)
+                    if has_deployment_rule(member, 'vanguard'))
     return profiles
 
 
@@ -54,10 +53,9 @@ def vanguard_movement(unit):
 def vanguard_charge_blocked(game, unit):
     """Only an actual Vanguard move bars the owner's first-turn declaration (p. 180)."""
     owner = side_of(game, unit, default=None)
-    character = getattr(unit, 'joinedCharacter', None)
     return bool(owner is not None and game.roundCounter.currentRoundPlayer[owner - 1] == 0
-                and (getattr(unit, 'madeVanguardMove', False)
-                     or getattr(character, 'madeVanguardMove', False)))
+            and any(getattr(member, 'madeVanguardMove', False)
+                for member in [unit, *get_joined_characters(unit)]))
 
 
 def in_vanguard(game):
@@ -67,8 +65,7 @@ def in_vanguard(game):
 
 def record_vanguard_move(unit):
     unit.madeVanguardMove = True
-    character = getattr(unit, 'joinedCharacter', None)
-    if character is not None:
+    for character in get_joined_characters(unit):
         character.madeVanguardMove = True
 
 
@@ -97,13 +94,29 @@ def commit_vanguard_move(game, unit):
     right = unit.bodyNP.getQuat().getRight()
     allowance = vanguard_movement(unit)
     flying = vanguard_flying(unit)
-    character = getattr(unit, 'joinedCharacter', None)
-    leaving = character is not None and not has_deployment_rule(character, 'vanguard')
-    if leaving:
-        character_transform = character.bodyNP.getTransform()
+    characters = get_joined_characters(unit)
+    leaving = [character for character in characters if not has_deployment_rule(character, 'vanguard')]
+    transforms = [(character, character.bodyNP.getTransform()) for character in leaving]
+    old_position = getattr(unit, 'skirmishCharacterPosition', None)
+    for character in leaving:
         character.bodyNP.wrtReparentTo(unit.bodyNP.getParent())
         character.hostUnit = None
-        unit.joinedCharacter = None
+    unit.joinedCharacters = [character for character in characters if character not in leaving]
+    unit.joinedCharacter = next(iter(unit.joinedCharacters), None)
+    unit.skirmishCharacterPosition = getattr(unit.joinedCharacter, 'joinedPosition', None)
+    if leaving:
+        unit.rebuildFootprint()
+
+    def restore_characters():
+        unit.joinedCharacters = characters
+        unit.joinedCharacter = next(iter(characters), None)
+        unit.skirmishCharacterPosition = old_position
+        for character, transform in transforms:
+            character.bodyNP.reparentTo(unit.bodyNP)
+            character.bodyNP.setTransform(transform)
+            character.hostUnit = unit
+        if leaving:
+            unit.rebuildFootprint()
 
     target = (game.arcPoint * 2 - Vec2(1, 1)) * 50
     unit.bodyNP.setPos(target.x, target.y, 0)
@@ -119,11 +132,7 @@ def commit_vanguard_move(game, unit):
         unit.bodyNP.setPos(origin)
         unit.bodyNP.setHpr(heading)
         unit.bodyNP.node().setTransformDirty()
-        if leaving:
-            character.bodyNP.reparentTo(unit.bodyNP)
-            character.bodyNP.setTransform(character_transform)
-            character.hostUnit = unit
-            unit.joinedCharacter = character
+        restore_characters()
         if not unit.madeVanguardMove:
             rule_skipped('Vanguard', unit, 'no displacement; no new charge restriction or character separation')
         finish_vanguard_unit(game, unit)
@@ -161,22 +170,18 @@ def commit_vanguard_move(game, unit):
         unit.bodyNP.setPos(origin)
         unit.bodyNP.setHpr(heading)
         unit.bodyNP.node().setTransformDirty()
-        if leaving:
-            character.bodyNP.reparentTo(unit.bodyNP)
-            character.bodyNP.setTransform(character_transform)
-            character.hostUnit = unit
-            unit.joinedCharacter = character
+        restore_characters()
         rule_skipped('Vanguard', unit, error)
         battle_log(error, 'info')
         return False
     if leaving:
-        unit.joinedCharacter = character
-        detach_character(unit)
-        side = game.player1Units if side_of(game, unit) == 1 else game.player2Units
-        side.append(character)
-        game.world.attachRigidBody(character.bodyNP.node())
-        rule_log('Vanguard', unit, f'Skirmishers leave {character.unit.name}, which lacks Vanguard, at its deployed position (FAQ)')
-        game.roundCounter.apply_selection_masks()
+        unit.joinedCharacters = characters
+        unit.joinedCharacter = next(iter(characters), None)
+        for character in leaving:
+            character.hostUnit = unit
+            release_character(game, character)
+            rule_log('Vanguard', unit, f'Skirmishers leave {character.unit.name}, which lacks Vanguard, at its deployed position (FAQ)')
+        unit.rebuildFootprint()
     if moved:
         record_vanguard_move(unit)
         game.movement.movementAllowance(unit, origin, destination, log=True)

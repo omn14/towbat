@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from battleFunctions import attack_characteristic, melee_attacks, strike_initiative
 from command_groups import living_command, command_positions
-from characters import get_joined_character
+from characters import get_joined_character, get_joined_characters
 
 
 @dataclass
@@ -19,6 +19,7 @@ class CombatProfile:
     entry: object = None
     fighter: object = None
     deferred_from: object = None
+    character: object = None
 
     def attacks(self, models, initial, challenge=None):
         """Use the start of this Initiative step, not the start of combat (p. 146)."""
@@ -36,15 +37,18 @@ class CombatProfile:
                  and not entry.get('retired', False)]
         joined = get_joined_character(self.host)
         if self.role == 'character':
-            if (getattr(self.host, 'characterSlot', 0) or 0) >= group.files:
+            owner = self.character or joined
+            if (getattr(owner, 'formationSlot', getattr(self.host, 'characterSlot', 0)) or 0) >= group.files:
                 return 0
             return melee_attacks(self.fighter.unit, charged, charge_distance=distance, frenzy_bonus=bonus) if self.fighter.unit.nmodels > 0 else 0
         if self.role == 'champion':
             return attack_characteristic(self.profile, charged=charged, inches=distance, frenzy_bonus=bonus) if self.entry in champions else 0
         blocked = len(champions)
-        if joined is not None and not getattr(joined, 'retiredFromCombat', False) and (
-            getattr(self.host, 'characterSlot', 0) or 0) < group.files:
-            group.files = max(0, group.files - 1)
+        for joined in get_joined_characters(self.host):
+            record = getattr(self.host, 'characterPlacements', {}).get(joined.unitName, {})
+            if not getattr(joined, 'retiredFromCombat', False) and not record.get('rear', False):
+                group.files = max(0, group.files - sum(slot < self.host.unit.files
+                                                     for slot in record.get('cells', [0])))
         if self.role == 'main':
             ordinary = melee_attacks(group, charged, fallen, charge_distance=distance, frenzy_bonus=bonus)
             from challenges import guard_fighters
@@ -85,17 +89,17 @@ def combat_profiles(host, target, challenge=None):
             getattr(participant, 'command_entry', None) is entry for participant in challenge.participants())
         if champion is not None and entry.get('active', True) and not entry.get('retired', False) and not duelling:
             parts.append(CombatProfile(host, target, champion, 'champion', entry=entry))
-    joined = get_joined_character(host)
-    if joined is not None and not getattr(joined, 'retiredFromCombat', False) and not (
-            challenge is not None and challenge.involves(joined)):
-        parts.append(CombatProfile(host, target, joined.unit.model, 'character', fighter=joined))
+    for joined in get_joined_characters(host):
+        if getattr(joined, 'retiredFromCombat', False) or (challenge is not None and challenge.involves(joined)):
+            continue
+        parts.append(CombatProfile(host, target, joined.unit.model, 'character', fighter=joined, character=joined))
         for tag in ('mount', 'crew', 'beasts'):
             part = getattr(joined.unit.model, f'get_{tag}')()
             if part is not None:
                 count = 1 if tag == 'mount' else joined.unit.model.part_count(tag)
                 fighting = SimpleNamespace(unit=SimpleNamespace(name=part.name, model=part,
                                            nmodels=count, files=count, ranks=1))
-                parts.append(CombatProfile(host, target, part, 'character', fighter=fighting))
+                parts.append(CombatProfile(host, target, part, 'character', fighter=fighting, character=joined))
     return parts
 
 

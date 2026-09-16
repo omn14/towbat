@@ -72,9 +72,8 @@ def sync_markers(game):
 
 def landmark_profiles(unit):
     pending = [unit.unit.model, *getattr(unit.unit, 'command_models', {}).values()]
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None:
-        pending.append(joined.unit.model)
+    from characters import get_joined_characters
+    pending.extend(joined.unit.model for joined in get_joined_characters(unit))
     seen = set()
     for profile in pending:
         if id(profile) in seen:
@@ -129,8 +128,8 @@ def control_snapshot(game):
             boxes = model_base_boxes(unit)
             if not boxes:
                 continue
-            joined = getattr(unit, 'joinedCharacter', None)
-            strength = unit_strength_total(unit) + (unit_strength_total(joined) if joined else 0)
+            from characters import get_joined_characters
+            strength = sum(unit_strength_total(member) for member in [unit, *get_joined_characters(unit)])
             distance = max(0, min(circle_distance(objective['center'], box) for box in boxes)
                            - objective['diameter'] / 2)
             reason = None

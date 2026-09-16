@@ -110,12 +110,13 @@ def recasting(game, caster, name):
 
 
 def caster_removed(game, caster):
-    joined = getattr(caster, 'joinedCharacter', None)
+    from characters import get_joined_characters
+    members = [caster, *get_joined_characters(caster)]
     for spell in active_spells(game):
-        if getattr(spell, 'self_scope', False) and (spell.caster is caster or spell.caster is joined):
+        if getattr(spell, 'self_scope', False) and spell.caster in members:
             end_effect(spell, 'Self spell caster slain or leaves the battlefield')
     for spell in list(getattr(game, 'remainsInPlay', [])):
-        if spell.caster is caster or (joined is not None and spell.caster is joined):
+        if spell.caster in members:
             end_effect(spell, 'caster slain or leaves the battlefield')
 
 

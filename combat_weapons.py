@@ -123,6 +123,7 @@ async def choose_unit_weapons(game, host, chosen, *, charged=None):
         if part is not None:
             await choose_profile(game, host, part, charged)
             chosen.add(id(part))
-    joined = getattr(host, 'joinedCharacter', None)
-    if joined is not None and not getattr(joined, 'retiredFromCombat', False):
-        await choose_unit_weapons(game, joined, chosen, charged=charged)
+    from characters import get_joined_characters
+    for joined in get_joined_characters(host):
+        if not getattr(joined, 'retiredFromCombat', False):
+            await choose_unit_weapons(game, joined, chosen, charged=charged)

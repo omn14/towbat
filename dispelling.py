@@ -2,7 +2,7 @@
 
 from panda3d.core import Vec3
 
-from characters import side_of
+from characters import side_of, get_joined_characters
 from magic_items import current_turn
 from psychology import PsychologySystem, obb_distance
 from rules_log import rule_log, rule_skipped
@@ -11,9 +11,7 @@ from rules_log import rule_log, rule_skipped
 def side_members(game, side):
     members = list(game.player1Units if side == 1 else game.player2Units)
     for host in list(members):
-        joined = getattr(host, 'joinedCharacter', None)
-        if joined is not None and joined not in members:
-            members.append(joined)
+        members.extend(joined for joined in get_joined_characters(host) if joined not in members)
     return [member for member in members if not member.bodyNP.isEmpty()]
 
 

@@ -11,9 +11,10 @@ def unavailable_reason(defender, charger, *, distance, movement, flank, turn,
     """Use declaration-time distance/arc; the tentative contact is not the origin."""
     if not has_counter_charge(defender):
         return 'unit does not have Counter Charge'
-    character = getattr(defender, 'joinedCharacter', None)
-    if character is not None and not has_counter_charge(character):
-        return f'joined {character.unit.name} does not have Counter Charge'
+    from characters import get_joined_characters
+    for character in get_joined_characters(defender):
+        if not has_counter_charge(character):
+            return f'joined {character.unit.name} does not have Counter Charge'
     if not declared:
         return 'pursuit is not a declared charge; no charge reaction'
     if defender.state == 'IsFleeing':

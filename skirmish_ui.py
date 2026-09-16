@@ -46,6 +46,10 @@ def show_plot_status(game, preview):
         text = f'{action} (not a charge)\n{preview.distance:.2f}" / M{preview.allowance:g}'
     status['text'] = text
     status.resetFrameSize()
+    buttons = [getattr(game, name, None) for name in ('skirmishAdjustButton', 'characterMoveButton')]
+    bottoms = [button.getZ() + button.getBounds()[2] * button.getSz()
+               for button in buttons if button is not None and not button.isHidden()]
+    status.setZ(min(-0.20, min(bottoms) - 0.025 - status.getBounds()[3]) if bottoms else -0.20)
     status.show()
 
 

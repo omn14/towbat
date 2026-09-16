@@ -402,9 +402,10 @@ def pending_deployment_formation(game):
 
 
 def _joined_formation_error(game, host):
-    character = host.joinedCharacter
+    from characters import get_joined_characters
     return (placement_error(game, host, scouting=host.deployedAsScouts)
-            or placement_error(game, character, scouting=character.deployedAsScouts, ignore=host))
+            or next((error for character in get_joined_characters(host)
+                     if (error := placement_error(game, character, scouting=character.deployedAsScouts, ignore=host))), None))
 
 
 def finish_deployment_formation(game):
@@ -515,8 +516,7 @@ def endMoveUnit(game,taskToEnd):
     if inContact and is_character(held):
         host = game.getSelectedUnit(inContact.getNode1())
         if (host is not None and host is not held and not is_character(host)
-                and host.isDeployed and same_player(game, held, host)
-                and not has_joined_character(host)):
+            and host.isDeployed and same_player(game, held, host)):
             root = held.bodyNP.getParent()
             old_transform = held.bodyNP.getTransform()
             host_transform = host.bodyNP.getTransform()
@@ -527,7 +527,7 @@ def endMoveUnit(game,taskToEnd):
             error = (placement_error(game, host, scouting=host.deployedAsScouts)
                      or placement_error(game, held, scouting=scouting, ignore=host))
             if error:
-                detach_character(host)
+                detach_character(host, held)
                 held.bodyNP.reparentTo(root)
                 held.bodyNP.setTransform(old_transform)
                 game.world.attachRigidBody(held.bodyNP.node())
@@ -536,6 +536,7 @@ def endMoveUnit(game,taskToEnd):
                 host.layOutRanks()
                 host.rebuildFootprint()
                 host.bodyNP.setTransform(host_transform)
+                host.placeCharacter()
                 host.bodyNP.node().setTransformDirty()
                 game.movement.alignModelsToHillNormal(host)
                 game.movement.alignModelsToHillNormal(held)
@@ -613,8 +614,9 @@ def refresh_deployment(game):
     player = game.roundCounter.current_player
     scouting = getattr(game, 'deploymentStage', 'ordinary') == 'scouts'
     custom = getattr(game, 'battle_setup', None) is not None
-    game.boundary_np.setCollideMask(BitMask32.allOff() if scouting or custom else BitMask32.bit(11))
-    game.boundary_np.setPos(0, (-1 if player == 1 else 1) * 18, 0)
+    if not game.boundary_np.isEmpty():
+        game.boundary_np.setCollideMask(BitMask32.allOff() if scouting or custom else BitMask32.bit(11))
+        game.boundary_np.setPos(0, (-1 if player == 1 else 1) * 18, 0)
     game.roundCounter.update_round_display()
     game.accept('mouse1', game.setActiveUnit,
                 [game.setActiveUnitTask, game.setActiveUnitTaskName])

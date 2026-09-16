@@ -52,6 +52,121 @@ def restore(scene):
     return app, member
 
 
+@pytest.mark.parametrize('mount,flying', [(None, False), ('Elven Steed', False), (None, True)])
+def test_lone_character_moves_sideways_with_skirmish_and_flight_limits(scene, tmp_path, mount, flying):
+    from charge_declarations import resolve_declarations
+    app, _ = restore(scene)
+    app.terrain_manager.clear()
+    app.AIplayer2.active = False
+    app.fsm.request('MovementPhase')
+    app.roundCounter.current_player = 1
+    for other in app.units:
+        other.isDeployed = False
+    spec = dict(name='Noble', nmodels=1, files=1, ranks=1)
+    if mount:
+        spec['mount'] = mount
+    if flying:
+        spec['special_rules'] = ['Fly (10)']
+    character = app._create_unit(spec, 1, 'Lone Noble')
+    character.isDeployed = True
+    character.bodyNP.setPos(0, 0, 0)
+    character.bodyNP.setH(0)
+    asyncio.run(resolve_declarations(app))
+    assert character.isSkirmisher
+    assert len(character.skirmishLayout) == 1
+    allowance = 10 if flying else character.unit.model.get_movement(0)
+    preview = preview_move(app, character, destination=(allowance, 0, 0))
+    assert preview.error is None
+    assert preview.distance == pytest.approx(allowance)
+    assert preview.allowance == allowance
+    assert not preview.marched
+    assert preview_move(app, character, destination=(allowance * 2 + 1, 0, 0)).error
+    app.unitToMove = character
+    app.arcPoint = Vec2((allowance / 50 + 1) / 2, .5)
+    app.arcPointRotation = 0
+    app.moveArceDistance = allowance
+    assert app.movement.moveUnit(character)
+    assert character.bodyNP.getX() == pytest.approx(allowance)
+    assert character.bodyNP.getH() == 0
+    assert character.moveSpentThisTurn == pytest.approx(allowance)
+    assert character.hasMovedThisTurn and not character.marchedThisTurn
+    saved = tmp_path / 'lone-character.json'
+    save_game_state(app, str(saved))
+    data = json.loads(saved.read_text())
+    for record in data['units']:
+        record.pop('skirmish_layout', None)
+    saved.write_text(json.dumps(data))
+    load_game_state(app, str(saved))
+    assert character.isSkirmisher and len(character.skirmishLayout) == 1
+    assert character.bodyNP.getX() == pytest.approx(allowance)
+
+
+def test_lone_character_cannot_use_independent_move_while_joined(scene, tmp_path):
+    from charge_declarations import resolve_declarations
+    app, _ = restore(scene)
+    app.AIplayer2.active = False
+    app.fsm.request('MovementPhase')
+    app.roundCounter.current_player = 1
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=5, files=5, ranks=1), 1, 'Formed Spears')
+    character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Joining Noble')
+    host.isDeployed = character.isDeployed = True
+    assert character.isSkirmisher and not host.isSkirmisher
+    assert join_unit(app, character, host)
+    assert not host.isSkirmisher and not character.isSkirmisher
+    assert not character.unit.model.is_skirmisher()
+    assert not character.unit.model.has_all_round_vision()
+    asyncio.run(resolve_declarations(app))
+    assert not commit_move(app, character, destination=(3, 0, 0))
+    saved = save_game_state(app, str(tmp_path / 'formed-joined-character.json'))
+    load_game_state(app, saved)
+    assert character.hostUnit is host
+    assert not character.isSkirmisher and not character.unit.model.has_all_round_vision()
+    assert character.bodyNP.node() not in app.world.getRigidBodies()
+
+
+@pytest.mark.parametrize('character_charges', [False, True])
+def test_lone_character_charge_contact_with_formed_unit(scene, character_charges):
+    from direct.interval.IntervalGlobal import LerpPosHprInterval, Parallel
+    from psychology import obb_distance
+    app, _ = restore(scene)
+    app.terrain_manager.clear()
+    app.AIplayer2.active = False
+    app.fsm.request('MovementPhase')
+    for other in app.units:
+        other.isDeployed = False
+        other.bodyNP.setPos(25, 20, 0)
+    character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1),
+                                 1 if character_charges else 2, 'Charging Noble')
+    formed = app._create_unit(dict(name='Elven Spearman', nmodels=5, files=5, ranks=1),
+                              2 if character_charges else 1, 'Charge Spears')
+    attacker, defender = (character, formed) if character_charges else (formed, character)
+    attacker.isDeployed = defender.isDeployed = True
+    attacker.bodyNP.setPos(0, -5, 0)
+    attacker.bodyNP.setH(0)
+    defender.bodyNP.setPos(0, 0, 0)
+    defender.bodyNP.setH(180)
+    origin, facing = attacker.bodyNP.getPos(), attacker.bodyNP.getHpr()
+    app.moveArceDistance = 5
+    app.autoRoll = False
+
+    def finish_interval(interval):
+        interval.start()
+        interval.finish()
+        return iter(())
+
+    with patch.object(LerpPosHprInterval, '__await__', finish_interval), \
+            patch.object(Parallel, '__await__', finish_interval), \
+            patch.object(app.combat, 'swiftstrideChargeChoice', AsyncMock(return_value=False)), \
+            patch.object(app.combat, 'rullTerninger', AsyncMock(return_value=([], [6, 6]))), \
+            patch.object(app.movement, 'dangerousTerrainTests'):
+        asyncio.run(app.combat.chargeInterval(attacker, defender.bodyNP, 0, origin, facing, 'front'))
+    assert attacker.state == defender.state == 'InCombat'
+    assert character.isSkirmisher and character.skirmishCombat
+    assert min(obb_distance(first, second) for first in model_base_boxes(attacker)
+               for second in model_base_boxes(defender)) < 1e-5
+    assert character.unit.nmodels == 1
+
+
 @pytest.mark.parametrize('command', [False, True])
 @pytest.mark.parametrize('human', [False, True])
 @pytest.mark.parametrize('dice,rallied', [([6, 6], False), ([1, 1], True)])
@@ -156,7 +271,7 @@ def test_combat_flee_and_casualties_keep_compact_survivors_until_rally(scene):
 
 def test_joined_character_separates_without_moving_ordinary_models_to_old_layout(scene):
     app, member = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Rally Character')
     assert join_unit(app, character, member)
     member.request('InCombat')
@@ -195,12 +310,17 @@ def test_legacy_save_rebuilds_loose_bases(scene, tmp_path):
     assert coherency_error(model_base_boxes(member)) is None
 
 
-def test_join_keeps_ordinary_positions_and_restores_character(scene, tmp_path):
+@pytest.mark.parametrize('formation', [None, 'Close Order'])
+def test_join_keeps_ordinary_positions_and_restores_character(scene, tmp_path, formation):
     app, member = restore(scene)
     before = model_base_boxes(member)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
-                                     files=1, ranks=1), 1, 'Loose Character')
+    character = app._create_unit(dict(name='Thane', nmodels=1,
+                                     files=1, ranks=1, special_rules=[formation] if formation else []),
+                                 1, 'Loose Character')
+    assert character.isSkirmisher is (formation is None)
     assert join_unit(app, character, member)
+    assert character.isSkirmisher and character.unit.model.is_skirmisher()
+    assert len(character.skirmishLayout) == 1
     assert model_base_boxes(member)[:member.unit.nmodels] == before
     assert coherency_error(model_base_boxes(member)) is None
     saved = tmp_path / 'joined.json'
@@ -214,7 +334,7 @@ def test_join_keeps_ordinary_positions_and_restores_character(scene, tmp_path):
 
 def test_slain_bridge_character_is_replaced_without_extra_casualties(scene):
     app, member = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Bridge Character')
     assert join_unit(app, character, member)
     member.unit.nmodels = 2
@@ -491,7 +611,8 @@ def test_extra_charge_reach_cannot_be_spent_as_ordinary_move(scene):
     assert not member.hasMovedThisTurn
 
 
-def test_contact_rank_survives_combat_entry_and_save_load(scene, tmp_path):
+@pytest.mark.parametrize('attached,unreachable', [(False, False), (True, False), (True, True)])
+def test_contact_rank_survives_combat_entry_and_save_load(scene, tmp_path, attached, unreachable):
     from skirmish_charge import apply_fighting_rank, plan_skirmish_charge
     from psychology import obb_distance
     app, member = restore(scene)
@@ -500,15 +621,26 @@ def test_contact_rank_survives_combat_entry_and_save_load(scene, tmp_path):
     member.bodyNP.setH(83)
     enemy.bodyNP.setPos(0, 0, 0)
     enemy.bodyNP.setH(25)
-    formation = plan_skirmish_charge(model_base_boxes(member), model_base_boxes(enemy), 9, 3)
+    if attached:
+        from characters import join_unit
+        for index in range(2):
+            character = app._create_unit(dict(name='Thane', nmodels=1, files=1, ranks=1), 1, f'Charging Thane {index}')
+            assert join_unit(app, character, member)
+    if unreachable:
+        member.model.getChild(member.unit.nmodels - 1).setPos(app.render, -30, -30, 0)
+    formation = plan_skirmish_charge(model_base_boxes(member), model_base_boxes(enemy), 9, 3,
+                                     attacker=member, defender=enemy)
     assert formation is not None
+    if unreachable:
+        assert formation.attacker.lost == [member.unit.nmodels - 1]
     for participant, rank in ((member, formation.attacker), (enemy, formation.defender)):
         original_ids = [record['id'] for record in participant.skirmishLayout]
         apply_fighting_rank(app, participant, rank)
         actual = model_base_boxes(participant)
         for box, expected in zip(actual, rank.positions):
             assert box[:2] == pytest.approx(expected, abs=1e-5)
-        assert [record['id'] for record in participant.skirmishLayout] == [original_ids[index] for index in rank.order]
+        assert [record['id'] for record in participant.skirmishLayout] == [original_ids[index] for index in rank.order
+                                         if index < len(original_ids)]
         participant.request('InCombat')
         assert model_base_boxes(participant) == actual
     member.isInCombatWith = [enemy]
@@ -895,7 +1027,7 @@ def test_ordinary_move_uses_shared_gate_and_preserves_layout(scene, distance):
 
 def test_last_ordinary_casualty_leaves_character_alive(scene):
     app, member = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Last Survivor')
     assert join_unit(app, character, member)
     position = character.bodyNP.getPos(app.render)
@@ -908,6 +1040,8 @@ def test_last_ordinary_casualty_leaves_character_alive(scene):
     assert character.hostUnit is None
     assert character.bodyNP.getPos(app.render).almostEqual(position)
     assert character.bodyNP.node() in app.world.getRigidBodies()
+    assert character.isSkirmisher and len(character.skirmishLayout) == 1
+    assert len(model_base_boxes(character)) == 1
 
 
 def test_only_models_crossing_dangerous_feature_test(scene):
@@ -933,7 +1067,7 @@ def test_lethal_character_terrain_hit_does_not_leave_dead_host_link(scene):
     app, member = restore(scene)
     app.fsm.request('MovementPhase')
     remaining_moves(app)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Terrain Character')
     assert join_unit(app, character, member)
     final = model_base_boxes(member)[-1]

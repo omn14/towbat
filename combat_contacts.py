@@ -64,15 +64,19 @@ class CombatContactSnapshot:
         from scouts import model_base_boxes
         self.hosts = list(hosts)
         self.formations = {}
+        self.characters = {}
         for host in self.hosts:
             boxes = model_base_boxes(host)
             children = list(host.model.getChildren())[:host.unit.nmodels]
             files = max(1, host.unit.files)
             slots = [round(-child.getY() / host.modelHeight) * files
                      + round(child.getX() / host.modelWidth) for child in children]
-            joined = getattr(host, 'joinedCharacter', None)
-            if joined is not None and len(boxes) > len(children):
-                slots.append(getattr(host, 'characterSlot', 0) or 0)
+            from characters import get_joined_characters
+            characters = get_joined_characters(host)
+            self.characters[id(host)] = characters
+            joined = next(iter(characters), None)
+            for member in characters:
+                slots.append(getattr(member, 'formationSlot', getattr(host, 'characterSlot', 0)) or 0)
             command = {index: entry for index, entry in enumerate(living_command(host))}
             from challenges import guard_fighters
             available = [index for index in range(len(children))
@@ -102,8 +106,9 @@ class CombatContactSnapshot:
             survivors.update(guard.guard_index for guard in guards
                              if guard.unit.nmodels > 0 and guard.command_entry.get('active', True))
             survivors.update(ordinary[:max(0, host.unit.nmodels - len(survivors))])
-            if joined is not None and joined.unit.nmodels > 0 and len(boxes) > initial:
-                survivors.add(initial)
+            for offset, member in enumerate(self.characters[id(host)]):
+                if member.unit.nmodels > 0 and len(boxes) > initial + offset:
+                    survivors.add(initial + offset)
             remaining = [(index, box) for index, box in enumerate(boxes) if index in survivors]
             previous = self.targets[id(host)]
             self.targets[id(host)] = remaining
@@ -116,7 +121,7 @@ class CombatContactSnapshot:
         return [box for _, box in self.targets[id(host)]]
 
     def positions(self, host, target, *, profile=None):
-        boxes, slots, _, _, _ = self.formations[id(host)]
+        boxes, slots, _, initial, _ = self.formations[id(host)]
         enemy_boxes = self.target_boxes(target)
         facing = 'front'
         try:
@@ -125,6 +130,13 @@ class CombatContactSnapshot:
             pass
         if facing == 'flank':
             facing = 'left' if target.bodyNP.getPos(host.bodyNP).x < 0 else 'right'
+        slots = list(slots)
+        files = max(1, host.unit.files)
+        for offset, character in enumerate(self.characters[id(host)]):
+            cells = getattr(host, 'characterPlacements', {}).get(character.unitName, {}).get('cells', [])
+            if cells:
+                key = (lambda slot: slot % files) if facing in ('left', 'right') else (lambda slot: slot // files)
+                slots[initial + offset] = (max if facing in ('rear', 'right') else min)(cells, key=key)
         press = host.unit.model.troop_type_rule('Press of Battle') and not getattr(host, 'chargedThisTurn', False)
         profile = host.unit.model if profile is None else profile
         from special_rules import martial_prowess_applies
@@ -135,8 +147,8 @@ class CombatContactSnapshot:
     def can_challenge(self, host, candidate, enemies):
         """A candidate must be within or adjacent to a fighting rank (p. 210)."""
         _, slots, command, initial, joined = self.formations[id(host)]
-        if candidate is joined:
-            index = initial if len(slots) > initial else None
+        if candidate in self.characters[id(host)]:
+            index = initial + self.characters[id(host)].index(candidate)
         elif candidate is host:
             index = 0 if slots else None
         elif hasattr(candidate, 'guard_index'):
@@ -185,7 +197,8 @@ class CombatContactSnapshot:
         excluded.update(index for index in champion_indices if not command[index].get('active', True)
                         or command[index].get('retired', False) or id(command[index]) in duelling)
         support = part.role in ('main', 'champion', 'character') and profile.fights_in_extra_rank(charged=charged)
-        movement_profile = joined.unit.model if part.role == 'character' and joined is not None else host.unit.model
+        owner = getattr(part, 'character', None) or joined
+        movement_profile = owner.unit.model if part.role == 'character' and owner is not None else host.unit.model
         movement = movement_profile.get_movement()
         from frenzy import attack_bonus
         frenzy_bonus = attack_bonus(part)
@@ -198,8 +211,9 @@ class CombatContactSnapshot:
         elif part.role == 'champion':
             indices = [index for index in champion_indices if command[index] is part.entry]
         elif part.role == 'character':
-            indices = [initial] if joined is not None and joined.unit.nmodels > 0 and len(boxes) > initial else []
-            if part.fighter is not joined:
+            members = self.characters[id(host)]
+            indices = [initial + members.index(owner)] if owner in members and owner.unit.nmodels > 0 else []
+            if part.fighter is not owner:
                 support = False
                 count = part.fighter.unit.nmodels
         else:
@@ -295,7 +309,8 @@ class CombatContactSnapshot:
                         continue
                     touching = obb_distance(own_boxes[index], box) <= CONTACT_EPSILON
                     entry = command.get(other_index, {})
-                    specific = (joined if other_index >= initial else promoted.get(id(entry)))
+                    specific = (self.characters[id(enemy)][other_index - initial]
+                                if other_index >= initial else promoted.get(id(entry)))
                     if specific is not None:
                         if (not touching or specific.unit.nmodels <= 0 or is_retired(specific)
                                 or (challenge and challenge.involves(specific))):

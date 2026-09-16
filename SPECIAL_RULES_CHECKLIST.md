@@ -10,6 +10,89 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## Multiple Characters And Remaining Moves: 2026-09-16
+
+[x] Rulebook pp. 185, 191, 195, 207-209 and official Characters FAQ v1.5.3:
+deployment and Remaining Moves use shared joining eligibility; no character-only
+ad hoc units, enemy/fleeing/engaged hosts, Lumbering attachments, mismatched
+Skirmisher troop subcategories, or incompatible Clumsy/Loner/Unbreakable/Ethereal
+and faction combinations. Mount troop categories control mount restrictions.
+
+[x] Join/Leave controls select individual characters, show measured contact or
+departure previews, and require explicit confirmation. A newly joined host is
+movement-locked without falsely counting as moved for shooting. Leaving must
+precede host movement/manoeuvre spending. Phase, deployment, movement state,
+pending choice/pivot, Stupidity, march, terrain, collision and battlefield checks
+apply. Cancellation is read-only. Basic AI joining uses the same validator.
+
+[x] Plural storage keeps distinct profiles, wounds, spell/item ownership and
+attack allocation. Compatible large bases reserve every occupied cell; two
+flanks can hold incompatible bases in direct contact, with no-room characters
+at the rear. Command positions and the character/rank-and-file frontage limit
+are protected. Rank bonuses count occupied cells, including bases spanning ranks.
+Combat rank moves and retirement are stored per character; saves retain the
+legacy singleton field while restoring all plural links, including engaged or
+fleeing hosts. Restoration no longer misapplies new-join gameplay gates.
+
+[x] Migrated combat/mount profiles, challenges, weapon choices, shooting,
+casters/dispellers, leadership/BSB, shared item/rule effects, Scouts/Vanguard,
+movement participation, scoring and hover/inventory readers. Skirmisher charge
+form-up and post-combat separation include attached bases. Unreachable ordinary
+models can become coherency casualties without dropping character ownership.
+Individual character death removes only that attachment; final ordinary
+casualties release all survivors (including fleeing state), while host destruction
+removes every attachment and its caster effects.
+
+Corrections found during validation: preserve temporary combat slots during
+layout/reload; count front-rank command cells only; do not chain incompatible
+bases away from the host; keep joined Bullet bodies out of independent physics;
+place retired characters after rebuilding ranks; restore all deployment rollback
+positions; use exposed mixed-base cells for rear/flank fighting lines; fix
+second-character menu selection and Vanguard redress dispatch.
+Preserved a joining character's own moving/marching shooting restrictions even
+when the host stood still; extra firing ranks inherit sight across every front
+cell occupied by a large base, not only its first cell.
+
+Verification: focused pure and isolated live tests cover multiple profiles,
+catalogue Great Stag/Elven Steed bases, repeated reload, second-character
+departure, cancellation, movement locks, casualties, rank movement, Skirmisher
+form-up/coherency losses, casting, shooting and deployment. Native offscreen
+editor renders and bounds checks pass at 1280x720 and 800x600. The broader
+scenario checkpoint encountered 20 configuration-dependent failures using the
+locally edited battle-march preset; that user configuration was not changed.
+
+LEFTOVER: contact/departure previews use straight movement segments, not a
+waypoint path editor; explicitly formed characters cannot use this editor to
+combine a wheel and translation. Existing bespoke movement and p. 128 virtual
+contact/disordered-gap handling remain outside this change. Historical entries
+below describing singleton storage, missing voluntary departure, or joined
+Skirmisher form-up are superseded by this section, not current limitations.
+
+## Lone Character Formation: 2026-09-15
+
+[x] Independent infantry and cavalry characters default to Skirmish formation
+(Rulebook pp. 205-206, Characters & Formations / Lone Characters), even without
+an explicit Skirmishers keyword. Previously only that keyword activated the
+shared loose movement path, leaving ordinary lone characters moving as formed
+units. Explicit Close Order, Open Order and Lance Formation take precedence;
+characters on monster/chariot mounts use the mount's formation instead of the
+rider's infantry type. Ordinary single-model units do not gain this default.
+
+The existing Skirmish path supplies movement in any direction without wheeling,
+normal/march distance limits, flight allowance and landing rules, terrain and
+collision checks. Joined characters remain part of their host and cannot make
+independent moves. The host's runtime formation also controls the character's
+model-level queries, preventing the lone default from granting all-round vision
+inside formed ranks; detaching clears that override. New and legacy saves
+rebuild the one-model loose layout. Corrected footprint restoration to keep
+joined characters out of independent Bullet physics when rebuilding their box.
+Formation selection logs the resolved troop type and either the Skirmish result
+or the overriding formation; committed moves retain their measured-cost logs.
+
+LEFTOVER: this implements formation/movement, not new Evade or targeting rules.
+Voluntary departure and joined Skirmisher form-up are implemented in the
+2026-09-16 section above; bespoke movement rules remain separate.
+
 ## Challenge Battle History: 2026-09-15
 
 [x] Challenge events now appear in the game log and Battle History's default
@@ -113,9 +196,8 @@ the reported [1, 3] charge dice, a genuinely short [1, 1] roll, every defending
 front-rank base in contact, rider/mount attack allocation, and joined ownership.
 Pure tests also cover differing character base widths on the formed charger.
 
-LEFTOVER: joined characters in the charging loose formation and loose defenders
-with joined characters still need individual form-up support. The special
-obstructed/disordered gap case on p. 128 needs explicit virtual combat-contact
+LEFTOVER: joined loose-formation form-up is implemented in the 2026-09-16 section
+above. The special obstructed/disordered gap case on p. 128 needs explicit virtual combat-contact
 support; it must not silently become an ordinary successful no-contact charge.
 This fix does not repair units already left separated in an existing combat.
 

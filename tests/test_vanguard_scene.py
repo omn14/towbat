@@ -137,7 +137,7 @@ def test_reload_keeps_order_and_move_history_without_reroll(scene, tmp_path):
 
 def test_skirmishers_leave_non_vanguard_character_at_original_position(scene):
     app, unit = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Non Vanguard Character')
     assert join_unit(app, character, unit)
     position = character.bodyNP.getPos(app.render)
@@ -267,7 +267,7 @@ def test_enemy_clearance_is_one_inch_not_twelve(scene, gap, allowed):
 
 def test_invalid_move_restores_joined_character(scene):
     app, unit = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Stationary Character')
     assert join_unit(app, character, unit)
     position = character.bodyNP.getPos(app.render)
@@ -282,7 +282,7 @@ def test_invalid_move_restores_joined_character(scene):
 
 def test_detached_character_stays_independent_after_reload(scene, tmp_path):
     app, unit = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Stationary Character')
     assert join_unit(app, character, unit)
     position = character.bodyNP.getPos(app.render)
@@ -354,7 +354,7 @@ def test_old_save_clears_stale_vanguard_history(scene, tmp_path):
 
 def test_zero_move_does_not_detach_or_bar_character(scene):
     app, unit = restore(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+    character = app._create_unit(dict(name='Thane', nmodels=1,
                                      files=1, ranks=1), 1, 'Stationary Character')
     assert join_unit(app, character, unit)
     aim(app, unit, 0)
@@ -496,7 +496,7 @@ if __name__ == '__main__':
             unit.bodyNP.setPos(*position)
         for host, name in ((skirmishers, 'P1 Leave Behind Character'),
                            (blocked, 'P1 Blocking Character')):
-            character = app._create_unit(dict(name='Captain of the Empire', nmodels=1,
+            character = app._create_unit(dict(name='Thane', nmodels=1,
                                              files=1, ranks=1), 1, name)
             assert character is not None and join_unit(app, character, host)
         path = save_game_state(app, 'vanguard.json')

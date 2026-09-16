@@ -1,6 +1,7 @@
 """Frenzy eligibility and loss (amended Rulebook p. 170)."""
 
 from rules_log import rule_log
+from characters import get_joined_characters
 
 
 def has_frenzy(profile):
@@ -23,8 +24,7 @@ def counts(unit):
     unit = getattr(unit, 'hostUnit', None) or unit
     total = max(0, unit.unit.nmodels)
     frenzied = total if model_frenzied(unit.unit.model) else 0
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None:
+    for joined in get_joined_characters(unit):
         total += max(0, joined.unit.nmodels)
         if model_frenzied(joined.unit.model):
             frenzied += max(0, joined.unit.nmodels)
@@ -42,7 +42,8 @@ def attack_bonus(part):
     host = part.host
     if not (getattr(host, 'chargedThisTurn', False) or getattr(host, 'frenzyFollowUpThisTurn', False)):
         return 0
-    owner = (getattr(host, 'joinedCharacter', None) if part.role == 'character' else host)
+    owner = ((getattr(part, 'character', None) or getattr(host, 'joinedCharacter', None))
+             if part.role == 'character' else host)
     if owner is None or not model_frenzied(owner.unit.model):
         return 0
     profile = owner.unit.model
@@ -59,8 +60,7 @@ def attack_bonus(part):
 def lose_frenzy(unit):
     """Mark each source lost, retaining unrelated and permanent rules for persistence."""
     pending = [unit.unit.model, *getattr(unit.unit, 'command_models', {}).values()]
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None:
+    for joined in get_joined_characters(unit):
         pending.append(joined.unit.model)
     changed, seen = [], set()
     while pending:

@@ -4,7 +4,7 @@ from time import monotonic
 
 from panda3d.core import Vec3
 
-from characters import enemy_units
+from characters import enemy_units, get_joined_characters
 from first_charge import begin_charge_attempt
 from flight import compulsory_mode, compulsory_preview
 from formed_skirmish_charge import preview_charge, route_allowance, route_to_model
@@ -19,7 +19,7 @@ from terrain_system import terrain_obstacle
 
 def has_impetuous(unit):
     """One or more models, including a joined character, suffices (p. 172)."""
-    for member in (unit, getattr(unit, 'joinedCharacter', None)):
+    for member in [unit, *get_joined_characters(unit)]:
         if member is None:
             continue
         profile = member.unit.model
@@ -113,9 +113,6 @@ async def complete_declarations(game):
         if not frenzied:
             from warband import leadership_for_test
             leadership, general = leadership_for_test(game.psychology, unit, 'Impetuous')
-            joined = active_character(unit)
-            if joined is not None:
-                leadership = max(leadership, int(joined.unit.model.characteristics.get('Ld', leadership)))
             dice = await game.rollLeadershipDice()
             dice = await reroll_leadership(game, unit, 'Impetuous', dice, leadership, game.rollLeadershipDice)
             passed = leadership_passed(sum(dice), leadership)

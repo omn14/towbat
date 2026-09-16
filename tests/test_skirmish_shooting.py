@@ -361,10 +361,11 @@ def test_formed_firing_ranks_keep_their_limits_and_inherit_front_sight(scene, hi
     assert len(geometry.eligible) == len(geometry.models)
 
 
-def test_joined_shooter_has_own_weapon_range_and_does_not_replace_a_loose_model(scene):
+@pytest.mark.parametrize('character_moved,character_marched', [(False, False), (True, False), (True, True)])
+def test_joined_shooter_has_own_weapon_range_and_does_not_replace_a_loose_model(scene, character_moved, character_marched):
     from characters import join_unit
     app, shooter, target = shooting_scene(scene)
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1, files=1, ranks=1),
+    character = app._create_unit(dict(name='Thane', nmodels=1, files=1, ranks=1),
                                  1, 'Shooting Captain')
     assert join_unit(app, character, shooter)
     character.unit.model.give_weapon('Asrai Longbow')
@@ -376,11 +377,17 @@ def test_joined_shooter_has_own_weapon_range_and_does_not_replace_a_loose_model(
     own = next(model for model in geometry.models if model.unit is character)
     assert own.reason == 'out of range'
     character.unit.model.equipedWeapon['ranged_range'] = 30
+    character.hasMovedThisTurn = character_moved
+    character.marchedThisTurn = character_marched
     geometry = shooting_solution(app, shooter, target)
-    assert any(model.unit is character for model in geometry.eligible)
+    assert any(model.unit is character for model in geometry.eligible) is not character_marched
     fired = []
 
     def volley(unit, defender, **kwargs):
+        if unit is character.unit:
+            assert unit.model.moved_this_turn is character_moved
+        else:
+            assert not unit.model.moved_this_turn
         fired.append((unit, kwargs['firing_models']))
         return kwargs['firing_models'], 0, 0, 0, 0
 
@@ -389,7 +396,7 @@ def test_joined_shooter_has_own_weapon_range_and_does_not_replace_a_loose_model(
             patch.object(app, 'shootingAnimation', AsyncMock()), patch.object(app, 'printBattleResults'):
         asyncio.run(app.shootAt(shooter, target))
     assert sum(count for unit, count in fired) == len(geometry.eligible)
-    assert (character.unit, 1) in fired
+    assert ((character.unit, 1) in fired) is not character_marched
 
 
 @pytest.mark.parametrize('size', [(1280, 720), (800, 600)])
@@ -433,22 +440,24 @@ def test_individual_aiming_readout_renders(scene, tmp_path, size):
 
 
 @pytest.mark.parametrize('armed', [False, True])
-def test_formed_joined_character_occupies_one_front_rank_slot(scene, armed):
+@pytest.mark.parametrize('large', [False, True])
+def test_formed_joined_character_occupies_its_base_area(scene, armed, large):
     from characters import join_unit
     app, target, shooter = shooting_scene(scene)
     shooter.unit.model.give_weapon('Asrai Longbow')
     shooter.unit.model.equip_weapon('Asrai Longbow')
     shooter.unit.model.special_rules = [rule for rule in shooter.unit.model.special_rules
                                       if not rule.get('volley_fire')]
-    character = app._create_unit(dict(name='Captain of the Empire', nmodels=1, files=1, ranks=1),
+    character = app._create_unit(dict(name='Glade Lord' if large else 'Captain of the Empire',
+                                     mount='Great Stag' if large else None, nmodels=1, files=1, ranks=1),
                                  2, 'Formed Shooting Captain')
     assert join_unit(app, character, shooter)
     if armed:
         character.unit.model.give_weapon('Asrai Longbow')
         character.unit.model.equip_weapon('Asrai Longbow')
     geometry = shooting_solution(app, shooter, target)
-    assert len(geometry.eligible) == shooter.unit.files - 1 + int(armed)
+    assert len(geometry.eligible) == shooter.unit.files - (2 if large else 1) + int(armed)
     assert sum(model.unit is character for model in geometry.eligible) == int(armed)
     with patch.object(app.movement, 'entirelyOnHill', side_effect=lambda member: member is shooter):
         geometry = shooting_solution(app, shooter, target)
-    assert len(geometry.eligible) == shooter.unit.files * 2 - 1 + int(armed)
+    assert len(geometry.eligible) == shooter.unit.files * 2 - (4 if large else 1) + int(armed)

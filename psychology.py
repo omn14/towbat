@@ -112,10 +112,14 @@ def active_character(host):
     form of Leadership, special rules, or anything else" (p. 210), so a retired
     General or Battle Standard has to stop counting.
     """
-    joined = getattr(host, 'joinedCharacter', None)
-    if joined is None or getattr(joined, 'retiredFromCombat', False):
-        return None
-    return joined
+    return next(iter(active_characters(host)), None)
+
+
+def active_characters(host):
+    """All attached characters still conferring benefits (Rulebook p. 210)."""
+    from characters import get_joined_characters
+    return [joined for joined in get_joined_characters(host)
+            if not getattr(joined, 'retiredFromCombat', False)]
 
 
 def veteran_counts(unit, *, personal=False):
@@ -126,9 +130,8 @@ def veteran_counts(unit, *, personal=False):
     """
     participants = [unit]
     if not personal:
-        joined = getattr(unit, 'joinedCharacter', None)
-        if joined is not None:
-            participants.append(joined)
+        from characters import get_joined_characters
+        participants.extend(get_joined_characters(unit))
     veterans = total = 0
     for participant in participants:
         count = max(0, participant.unit.nmodels)
@@ -478,8 +481,8 @@ def close_order_bonus(unit, *, log=False) -> int:
                    or any(isinstance(rule, dict) and rule.get('name', '').casefold() == 'close order'
                           for rule in profile.special_rules))
     strength = unit_strength_total(unit)
-    joined = getattr(unit, 'joinedCharacter', None)
-    if joined is not None:
+    from characters import get_joined_characters
+    for joined in get_joined_characters(unit):
         strength += unit_strength_total(joined)
     files = unit.unit.files
     if is_skirmish_unit(unit) or not close_order:
@@ -521,8 +524,7 @@ def battle_standard_bonus(units_on_side) -> int:
     for u in units_on_side:
         if is_battle_standard_unit(u):
             return 1
-        joined = active_character(u)
-        if joined is not None and is_battle_standard_unit(joined):
+        if any(is_battle_standard_unit(joined) for joined in active_characters(u)):
             return 1
     return 0
 
@@ -605,9 +607,8 @@ def combat_rank_bonus(unit, *, log=False) -> int:
         if face not in ('flank', 'rear') or enemy.unit.nmodels <= 0:
             continue
         strength = unit_strength_total(enemy)
-        character = getattr(enemy, 'joinedCharacter', None)
-        if character is not None:
-            strength += unit_strength_total(character)
+        from characters import get_joined_characters
+        strength += sum(unit_strength_total(character) for character in get_joined_characters(enemy))
         steady = unit.unit.model.troop_type_rule('Steady in the Ranks')
         threshold = 10 if steady else 5
         if strength < threshold:
@@ -648,7 +649,9 @@ def rank_bonus(unit, disrupted: bool = False, *, skirmish=None) -> int:
     model = unit.model
     if disrupted or (model.is_skirmisher() if skirmish is None else skirmish):
         return 0
-    if unit.files > 0 and -(-unit.nmodels // unit.files) > unit.files:
+    occupied = getattr(unit, 'characterRankCounts', None)
+    rows = max(occupied, default=0) + 1 if occupied else -(-unit.nmodels // max(1, unit.files))
+    if unit.files > 0 and rows > unit.files:
         return 0
     cap = model.max_rank_bonus(MAX_RANK_BONUS)
     if cap <= 0:
@@ -656,6 +659,8 @@ def rank_bonus(unit, disrupted: bool = False, *, skirmish=None) -> int:
     per_rank = model.models_per_rank(MODELS_PER_RANK)
     if per_rank <= 0 or unit.files < per_rank:
         return 0
+    if occupied:
+        return min(cap, sum(row > 0 and count >= per_rank for row, count in occupied.items()))
     bonus = (unit.nmodels + unit.files - 1) // unit.files - 1
     remainder = unit.nmodels % unit.files if unit.files else 0
     if 0 < remainder < per_rank:
@@ -1112,9 +1117,7 @@ class PsychologySystem:
         for u in self._friendlies_of(unit):
             if is_source(u):
                 out.append(u)
-            joined = active_character(u)
-            if joined is not None and is_source(joined):
-                out.append(joined)
+            out.extend(joined for joined in active_characters(u) if is_source(joined))
         return out
 
     def generals_on_side(self, unit):
@@ -1174,6 +1177,8 @@ class PsychologySystem:
         range use the General's Leadership instead of its own.
         """
         own = _stat_int(unit.unit.model.characteristics, 'Ld', 7)
+        own = max([own, *[_stat_int(member.unit.model.characteristics, 'Ld', 7)
+                  for member in active_characters(unit)]])
         general = self.general_of(unit)
         if general is None or general is unit:
             return own, None

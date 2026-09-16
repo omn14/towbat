@@ -38,8 +38,8 @@ async def enemy_sighted_test(game, unit, enemy, distance):
 def request_march(game, unit, on_pass):
     """Delay a committed march for its test; previews never roll (p. 123)."""
     profile = unit.unit.model
-    joined = getattr(unit, 'joinedCharacter', None)
-    flying = profile.is_flying() and (joined is None or joined.unit.model.is_flying())
+    from characters import get_joined_characters
+    flying = all(member.unit.model.is_flying() for member in [unit, *get_joined_characters(unit)])
     drilled = 'drilled' in {str(name).strip().lower() for name in profile.characteristics.get('Special Rules', [])}
     if flying or drilled:
         rule_log('Fly' if flying else 'Drilled', unit,

@@ -1250,7 +1250,7 @@ class MyApp(ShowBase):
         from reserve_move import in_reserve, unavailable
         if self.awaitingChoice:
             return
-        if self.fsm.state == 'DeployPhase':
+        if self.fsm.state == 'DeployPhase' and not in_vanguard(self):
             from deployPhase import redress_held_unit
             if redress_held_unit(self, delta):
                 self.refreshSelectedUnit()
@@ -1715,13 +1715,13 @@ class MyApp(ShowBase):
         the host's footprint the pointer landed decides which of the two it
         wants.
         """
-        char = getattr(unit, 'joinedCharacter', None)
-        if char is None or char.bodyNP.isEmpty() or unit.bodyNP.isEmpty():
-            return unit
-        offset = unit.bodyNP.getRelativePoint(render, hit) - char.bodyNP.getPos()
-        if (abs(offset.getX()) <= unit.modelWidth / 2.0
-                and abs(offset.getY()) <= unit.modelHeight / 2.0):
-            return char
+        from characters import get_joined_characters
+        for char in get_joined_characters(unit):
+            if char.bodyNP.isEmpty() or unit.bodyNP.isEmpty():
+                continue
+            offset = char.bodyNP.getRelativePoint(render, hit)
+            if abs(offset.x) <= char.modelWidth / 2 and abs(offset.y) <= char.modelHeight / 2:
+                return char
         return unit
 
     def mouseHoverUnit(self, task):
@@ -1771,6 +1771,8 @@ class MyApp(ShowBase):
                         
 
     async def setActiveUnit(self,taskfunction,taskname):
+        if getattr(self, 'characterMoveEditor', None) is not None:
+            return
         if getattr(self, 'magicBusy', False) is True:
             return
         if getattr(self, 'spellGenerationBusy', False) is True:
@@ -1881,6 +1883,8 @@ class MyApp(ShowBase):
         refresh_adjust_button(self, unit)
         from flight import refresh_controls
         refresh_controls(self, unit)
+        from character_movement import refresh_controls as refresh_character_controls
+        refresh_character_controls(self, unit)
         model = unit.unit.model
         save = model.effective_armour_save()
         ward = ward_save_value(model)
@@ -1948,8 +1952,9 @@ class MyApp(ShowBase):
 
         from magic_items import current_turn, inventory_lines
         lines.extend(inventory_lines(unit, width=self.CARD_LINE_CHARS, turn=current_turn(self)))
-        joined = getattr(unit, 'joinedCharacter', None)
-        if joined is not None:
+        from characters import get_joined_characters
+        for joined in get_joined_characters(unit):
+            lines.append(f'Joined: {joined.unit.name}')
             lines.extend(inventory_lines(joined, width=self.CARD_LINE_CHARS, turn=current_turn(self)))
 
         if unit.isInCombatWith:
@@ -2112,7 +2117,9 @@ class MyApp(ShowBase):
             rule_skipped('Stupidity', attackerUnit, 'cannot shoot (p. 178)')
             return
         _moved = self.movedThisTurn(attackerUnit)
-        if getattr(attackerUnit, 'marchedThisTurn', False):
+        from characters import get_joined_characters
+        attached = get_joined_characters(attackerUnit)
+        if getattr(attackerUnit, 'marchedThisTurn', False) and not attached:
             if not attackerUnit.unit.model.fires_after_marching():
                 rule_log('Marching', attackerUnit,
                          "marched this turn -> cannot shoot (p. 123)")
@@ -2122,12 +2129,13 @@ class MyApp(ShowBase):
                      f"fires despite the march (p. 174)")
         # A Stand & Shoot is a charge reaction rather than the Shooting phase
         # the rule names, so it is not barred by it.
-        if not stand_and_shoot and self.barredByMoveOrShoot(attackerUnit):
+        if not attached and not stand_and_shoot and self.barredByMoveOrShoot(attackerUnit):
             return
         attacker = attackerUnit.unit
         defender = defenderUnit.unit
         weapon = attacker.model.equipedWeapon or {}
-        for member in (attackerUnit, getattr(attackerUnit, 'joinedCharacter', None)):
+        from characters import get_joined_characters
+        for member in [attackerUnit, *get_joined_characters(attackerUnit)]:
             if member is not None:
                 member.unit.model.partial_cover = False
                 member.unit.model.full_cover = False
@@ -2148,6 +2156,10 @@ class MyApp(ShowBase):
                 return
             geometry = shooting_solution(self, attackerUnit, defenderUnit,
                                          stand_and_shoot=stand_and_shoot, target_boxes=target_boxes)
+            blocked = {(shooter.unit, shooter.reason) for shooter in geometry.models
+                       if shooter.reason in ('marched', 'Move or Shoot')}
+            for member, reason in blocked:
+                rule_skipped('Shooting', member, f'{reason}: own or host movement prevents firing (pp. 123, 174, 207)')
             if not geometry.eligible:
                 rule_skipped('Shooting', attackerUnit, f'{geometry.detail()} -> no volley; shooting retained (p. 137)')
                 return
@@ -2306,7 +2318,7 @@ class MyApp(ShowBase):
                 profile = member.unit.model
                 profile.at_long_range = long_range
                 profile.target_skirmisher = attacker.model.target_skirmisher
-                profile.moved_this_turn = _moved
+                profile.moved_this_turn = _moved or self.movedThisTurn(member)
                 profile.partial_cover = cover == 1
                 profile.full_cover = cover == 2
                 details = sorted({shooter.cover_detail for shooter in geometry.eligible

@@ -55,6 +55,97 @@ def scene(tmp_path_factory):
     app.destroy()
 
 
+@pytest.mark.parametrize('size', [(1280, 720), (800, 600)])
+def test_character_editor_render_bounds(scene, tmp_path, size):
+    from character_movement import open_editor
+    from characters import join_unit
+    from panda3d.core import PNMImage
+    app, baseline = scene
+    load_game_state(app, baseline)
+    app.chargeStage = 'remaining'
+    host = app.player1Units[0]
+    for index in range(2):
+        member = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, f'Editor Noble {index}')
+        assert join_unit(app, member, host)
+    app.unitToMove = host
+    editor = open_editor(app)
+    assert editor is not None
+    editor.menu.set(1)
+    aspect = app.getAspectRatio()
+    window = app.openWindow(type='offscreen', size=size, makeCamera=False)
+    try:
+        for order, camera in enumerate((app.cam, app.cam2d, app.cam2dp)):
+            region = window.makeDisplayRegion()
+            region.setCamera(camera)
+            region.setSort(order * 10)
+        app.adjustWindowAspectRatio(size[0] / size[1])
+        app.graphicsEngine.renderFrame()
+        app.graphicsEngine.renderFrame()
+        image = PNMImage()
+        assert window.getScreenshot(image)
+        assert image.write(Filename.fromOsSpecific(str(tmp_path / f'character-editor-{size[0]}.png')))
+        colors = {tuple(image.getXel(horizontal, vertical)) for horizontal in range(20, 190, 20)
+                  for vertical in range(60, 180, 20)}
+        assert len(colors) > 5
+        bounds = editor.status.getTightBounds(editor.panel)
+        assert bounds[0].z > editor.confirm_button.getZ() + .03
+        assert editor.panel.getWidth() + .04 < 2 * size[0] / size[1]
+    finally:
+        editor.cancel()
+        app.closeWindow(window)
+        app.adjustWindowAspectRatio(aspect)
+
+
+@pytest.mark.parametrize('size', [(1280, 720), (800, 600)])
+def test_movement_readout_keeps_character_options_clear(scene, tmp_path, size):
+    from characters import join_unit
+    from panda3d.core import PNMImage
+    from skirmish_ui import show_plot_status
+    app, baseline = scene
+    load_game_state(app, baseline)
+    app.chargeStage = 'remaining'
+    character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Movement Options Noble')
+    character.isDeployed = True
+    host = app.player1Units[0]
+    aspect = app.getAspectRatio()
+    window = app.openWindow(type='offscreen', size=size, makeCamera=False)
+    try:
+        for order, camera in enumerate((app.cam, app.cam2d, app.cam2dp)):
+            region = window.makeDisplayRegion()
+            region.setCamera(camera)
+            region.setSort(order * 10)
+        app.adjustWindowAspectRatio(size[0] / size[1])
+        for joined in (False, True):
+            if joined:
+                assert join_unit(app, character, host)
+            app.unitToMove = host if joined else character
+            app.refreshSelectedUnit()
+            button = app.characterMoveButton
+            assert not button.isHidden()
+            assert button['text'] == ('Leave unit' if joined else 'Join unit')
+            for error in (None, 'The destination overlaps another unit; choose a different position.'):
+                preview = SimpleNamespace(error=error, charge_target=None, marched=False, distance=2.68, allowance=5)
+                show_plot_status(app, preview)
+                status = app.skirmishMoveStatus
+                top = status.getZ() + status.getBounds()[3]
+                for control in (app.skirmishAdjustButton, button):
+                    if not control.isHidden():
+                        assert top <= control.getZ() + control.getBounds()[2] * control.getSz() - .02
+                app.graphicsEngine.renderFrame()
+                app.graphicsEngine.renderFrame()
+                image = PNMImage()
+                assert window.getScreenshot(image)
+                assert image.write(Filename.fromOsSpecific(str(tmp_path / f'movement-options-{size[0]}-{joined}-{bool(error)}.png')))
+            button['command']()
+            assert app.characterMoveEditor is not None
+            app.characterMoveEditor.cancel()
+    finally:
+        if getattr(app, 'characterMoveEditor', None) is not None:
+            app.characterMoveEditor.cancel()
+        app.closeWindow(window)
+        app.adjustWindowAspectRatio(aspect)
+
+
 def test_load_places_command_without_extra_bodies(scene, tmp_path):
     app, baseline = scene
     load_game_state(app, baseline)
@@ -82,6 +173,153 @@ def test_live_casualties_preserve_then_remove_command_and_reload(scene, tmp_path
     load_game_state(app, baseline)
     load_game_state(app, path)
     assert knights.unit.nmodels == 2 and not has_command(knights, 'musician')
+
+
+def test_multiple_characters_mixed_bases_and_reload(scene, tmp_path):
+    from characters import join_unit, get_joined_characters
+    from scouts import model_base_boxes
+    from psychology import _box_corners
+    from shapely.geometry import Polygon
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=15, files=6, ranks=3), 1, 'Mixed Spears')
+    for index, size in enumerate(((25, 25), (50, 50), (30, 60))):
+        character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, f'Mixed Noble {index}')
+        character.modelWidth, character.modelHeight = (dimension / 25.4 for dimension in size)
+        character.baseSize = size
+        assert join_unit(app, character, host)
+    assert len(get_joined_characters(host)) == 3
+    assert len(host.model.getChildren()) == 15
+    boxes = model_base_boxes(host)
+    assert len(boxes) == 18
+    polygons = [Polygon(_box_corners(*box)) for box in boxes]
+    assert all(first.intersection(second).area < 1e-6 for index, first in enumerate(polygons)
+               for second in polygons[index + 1:])
+    assert len(host.characterPlacements['Mixed Noble 1']['cells']) == 4
+    assert host.characterPlacements['Mixed Noble 2']['adjacent']
+    from combat_profiles import combat_profiles
+    from challenges import duellists
+    enemy = app.player2Units[0]
+    parts = [part for part in combat_profiles(host, enemy) if part.role == 'character']
+    assert len(parts) == 3
+    assert len({id(part.character) for part in parts}) == 3
+    assert len(duellists(host)) == 3
+    path = save_game_state(app, str(tmp_path / 'multiple-characters.json'))
+    load_game_state(app, path)
+    assert [member.unitName for member in get_joined_characters(host)] == [f'Mixed Noble {index}' for index in range(3)]
+    assert all(member.bodyNP.node() not in app.world.getRigidBodies() for member in get_joined_characters(host))
+
+
+@pytest.mark.parametrize('second_character', [False, True])
+def test_remaining_moves_join_and_leave(scene, tmp_path, second_character):
+    from panda3d.core import Point3
+    from character_movement import preview, commit
+    from characters import get_joined_characters, leave_reason
+    app, baseline = scene
+    load_game_state(app, baseline)
+    app.terrain_manager.clear()
+    app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
+    app.roundCounter.current_player = 1
+    for other in app.units:
+        other.isDeployed = False
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=10, files=5, ranks=2), 1, 'Join Host')
+    character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Joining Noble')
+    host.isDeployed = character.isDeployed = True
+    host.bodyNP.setPos(0, 0, 0)
+    character.bodyNP.setPos(0, -5, 0)
+    before = host.bodyNP.getTransform(), character.bodyNP.getTransform()
+    planned = preview(app, character, host=host)
+    assert planned.error is None
+    assert (host.bodyNP.getTransform(), character.bodyNP.getTransform()) == before
+    assert commit(app, character, host=host)
+    assert get_joined_characters(host) == [character]
+    assert host.joinedMovementLocked and not host.hasMovedThisTurn
+    first = character
+    if second_character:
+        character = app._create_unit(dict(name='Noble', nmodels=1, files=1, ranks=1), 1, 'Second Joining Noble')
+        character.isDeployed = True
+        character.bodyNP.setPos(4, 0, 0)
+        assert commit(app, character, host=host)
+        assert get_joined_characters(host) == [first, character]
+    assert leave_reason(app, character)
+    saved = save_game_state(app, str(tmp_path / 'join-lock.json'))
+    load_game_state(app, saved)
+    assert host.joinedMovementLocked and not host.hasMovedThisTurn
+    assert app.movement.moveUnit(host) is None
+    host.joinedMovementLocked = False
+    character.hasMovedThisTurn = False
+    character.moveSpentThisTurn = 0
+    destination = tuple(character.bodyNP.getPos(app.render) + Point3(0, 4, 0))
+    assert preview(app, character, destination=destination).error is None
+    from character_movement import open_editor
+    app.unitToMove = host
+    editor = open_editor(app)
+    assert editor is not None
+    if second_character:
+        editor.menu.set(1)
+        assert editor.character is character
+    original = character.bodyNP.getTransform(), host.bodyNP.getTransform()
+    editor.destination = destination
+    editor.redraw()
+    app.graphicsEngine.renderFrame()
+    app.graphicsEngine.renderFrame()
+    assert app.screenshot(str(tmp_path / f'character-departure-{second_character}.png'), defaultFilename=False)
+    status_bounds = editor.status.getTightBounds(editor.panel)
+    assert status_bounds[0].z > editor.confirm_button.getZ() + .03
+    assert editor.menu.getWidth() * editor.menu.getScale().x <= .651
+    app.fsm.nextPhase()
+    assert app.fsm.state == 'MovementPhase'
+    editor.cancel()
+    assert (character.bodyNP.getTransform(), host.bodyNP.getTransform()) == original
+    editor = open_editor(app)
+    if second_character:
+        editor.menu.set(1)
+    editor.destination = destination
+    editor.redraw()
+    assert editor.confirm()
+    assert get_joined_characters(host) == ([first] if second_character else [])
+    assert character.hostUnit is None and character in app.player1Units
+    assert character.bodyNP.node() in app.world.getRigidBodies()
+    assert not host.hasMovedThisTurn and character.hasMovedThisTurn
+
+
+@pytest.mark.parametrize('fleeing', [False, True])
+def test_catalogue_mounts_reload_and_multiple_survivors(scene, tmp_path, fleeing):
+    from characters import get_joined_characters, join_unit
+    from scouts import model_base_boxes
+    from character_movement import polygon
+    app, baseline = scene
+    load_game_state(app, baseline)
+    host = app._create_unit(dict(name='Elven Spearman', nmodels=15, files=6, ranks=3), 1, 'Mounted Escort')
+    host.isDeployed = True
+    members = []
+    for index, (name, mount) in enumerate((('Glade Lord', 'Great Stag'), ('Noble', 'Elven Steed'))):
+        character = app._create_unit(dict(name=name, mount=mount, nmodels=1, files=1, ranks=1), 1,
+                                     f'Mounted Noble {index}')
+        assert join_unit(app, character, host)
+        members.append(character)
+    assert len(host.characterPlacements[members[0].unitName]['cells']) == 4
+    assert host.characterPlacements[members[1].unitName]['adjacent']
+    before = model_base_boxes(host)
+    if fleeing:
+        host.request('IsFleeing')
+    saved = save_game_state(app, str(tmp_path / 'mounted-escort.json'))
+    for _ in range(2):
+        load_game_state(app, saved)
+        assert get_joined_characters(host) == members
+        assert model_base_boxes(host) == pytest.approx(before)
+    polygons = [polygon(box) for box in before]
+    assert all(first.intersection(second).area < 1e-6 for index, first in enumerate(polygons)
+               for second in polygons[index + 1:])
+    with patch.object(app.psychology, 'on_unit_destroyed'):
+        app.movement.removeModelsFromUnit(host, host.unit.nmodels)
+    assert host not in app.units
+    for member in members:
+        assert member in app.units and member in app.player1Units and member.hostUnit is None
+        assert member.unit.nmodels == 1
+        assert member.bodyNP.node() in app.world.getRigidBodies()
+        assert (member.state == 'IsFleeing') is fleeing
 
 
 @pytest.mark.parametrize('heading', [0, 37, 180])
