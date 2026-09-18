@@ -4,7 +4,7 @@ import random
 
 from panda3d.core import BitMask32, TransformState, Vec2, Vec3
 
-from characters import side_of, get_joined_characters, release_character
+from characters import side_of, get_joined_characters, release_character, ai_controls_player
 from rules_log import battle_log, dice_roll, rule_log, rule_skipped
 from scouts import (has_deployment_rule, nearest_enemy, placement_error,
                     scouts_block_vanguard)
@@ -231,8 +231,8 @@ def refresh_vanguard(game):
     game.accept('mouse1', game.setActiveUnit,
                 [game.setActiveUnitTask, game.setActiveUnitTaskName])
     battle_log(f'Player {game.roundCounter.current_player}: Vanguard.', 'info')
-    if game.roundCounter.current_player == 2 and game.AIplayer2.active:
-        candidates = vanguard_candidates(game, 2)
+    if ai_controls_player(game, game.roundCounter.current_player):
+        candidates = vanguard_candidates(game, game.roundCounter.current_player)
         if candidates:
             game.unitToMove = next((unit for unit in candidates
                                     if unit.unitName == getattr(game, 'vanguardActive', None)), candidates[0])

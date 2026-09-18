@@ -5,6 +5,7 @@ from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole
 from characters import (is_character, has_joined_character, same_player,
                         join_unit, detach_character, side_of)
 from rules_log import rule_log, rule_skipped, battle_log, dice_roll
+from characters import ai_controls_player
 from scouts import (deployment_candidates, has_scouts, nearest_enemy,
                     placement_error, scouts_block_vanguard)
 
@@ -57,7 +58,7 @@ def _get_ai_deploy_position(game, unit):
     based on the chosen army strategy and the opponent's already-deployed
     units.  Prints a short reasoning line to the terminal.
     """
-    if getattr(game, 'battle_setup', None) is not None:
+    if getattr(game, 'battle_setup', None) is not None or side_of(game, unit) == 1:
         from battlefield import deployment_candidate, deployment_heading
         player = side_of(game, unit)
         unit.bodyNP.setH(deployment_heading(game, player))
@@ -377,7 +378,7 @@ def _held_deployment_unit(game):
     if unit is None or unit.isDeployed or unit.bodyNP.isEmpty():
         return None
     player = game.roundCounter.current_player
-    if (player == 2 and game.AIplayer2.active) or unit not in deployment_candidates(game, player):
+    if ai_controls_player(game, player) or unit not in deployment_candidates(game, player):
         return None
     return unit
 
@@ -394,7 +395,7 @@ def rotate_held_unit(game, degrees):
 
 def pending_deployment_formation(game):
     if (getattr(getattr(game, 'fsm', None), 'state', None) != 'DeployPhase'
-            or (game.roundCounter.current_player == 2 and game.AIplayer2.active)):
+            or ai_controls_player(game, game.roundCounter.current_player)):
         return None
     side = game.player1Units if game.roundCounter.current_player == 1 else game.player2Units
     return next((unit for unit in side if getattr(unit, 'deploymentFormationPending', False)
@@ -468,11 +469,11 @@ def redress_held_unit(game, delta):
 
 def taskMoveUnit(game,unit,task):
     #game.ignore('mouse1')
-    if game.roundCounter.current_player == 2 and game.AIplayer2.active:
+    if ai_controls_player(game, game.roundCounter.current_player):
         attempts = getattr(task, '_deploy_attempts', 0) + 1
         task._deploy_attempts = attempts
         if attempts > 200:
-            game.AIplayer2.active = False
+            getattr(game, f'AIplayer{game.roundCounter.current_player}').active = False
             battle_log('AI deployment paused after 200 attempts; select and place this unit manually.', 'info')
             game.accept('mouse1', game.setActiveUnit,
                         [game.setActiveUnitTask, game.setActiveUnitTaskName])
@@ -496,7 +497,7 @@ def taskMoveUnit(game,unit,task):
     outBounds = _preview_placement(game, unit)
 
     
-    if game.roundCounter.current_player == 2 and game.AIplayer2.active:
+    if ai_controls_player(game, game.roundCounter.current_player):
         if outBounds:
             return task.cont
 
@@ -546,7 +547,7 @@ def endMoveUnit(game,taskToEnd):
             _record_deployment(game, held, scouting)
             print(f"{held.unitName} joins {host.unitName}.")
             taskMgr.remove(taskToEnd)
-            if not host.isSkirmisher and not (game.roundCounter.current_player == 2 and game.AIplayer2.active):
+            if not host.isSkirmisher and not ai_controls_player(game, game.roundCounter.current_player):
                 host.deploymentFormationPending = True
                 refresh_deployment(game)
                 return
@@ -664,8 +665,8 @@ def _advance_after_deploy(game, placed=True):
             player = other
     game.roundCounter.request('PlayerOne' if player == 1 else 'PlayerTwo')
     refresh_deployment(game)
-    if player == 2 and game.AIplayer2.active:
-        game.AIplayer2.deployUnits()
+    if ai_controls_player(game, player):
+        getattr(game, f'AIplayer{player}').deployUnits()
 
 def getMouseXY():
     if base.mouseWatcherNode.hasMouse():

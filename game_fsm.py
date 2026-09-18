@@ -12,6 +12,7 @@ from panda3d.bullet import BulletBoxShape, BulletRigidBodyNode
 from deployPhase import (DEPLOY_ZONE_DEPTH, DEPLOY_ZONE_WIDTH,
                          stage_undeployed, refresh_deployment, allUnitsDeployed)
 from rules_log import battle_log, set_log_context
+from characters import ai_controls_player
 
 
 class GamePhaseFSM(FSM):
@@ -179,7 +180,7 @@ class GamePhaseFSM(FSM):
                 return
             if not getattr(self.game, 'strategyCommandDone', True):
                 from rallying_cry import ai_command, finish_command
-                if self.game.roundCounter.current_player == 2 and self.game.AIplayer2.active:
+                if ai_controls_player(self.game, self.game.roundCounter.current_player):
                     taskMgr.add(ai_command(self.game), 'rallyingCryTask')
                 else:
                     finish_command(self.game)
@@ -270,7 +271,8 @@ class GamePhaseFSM(FSM):
         taskMgr.remove('taskLoopPathTowardsMouse')
         base.world.removeRigidBody(self.game.boundary_ghost)
         self.game.boundary_np.removeNode()
-        first = (getattr(self.game, 'battle_setup', None) or {}).get('first_turn', {}).get('player', 1)
+        first = (getattr(self.game, 'battle_setup', None) or {}).get('first_turn', {}).get(
+            'player', getattr(self.game, 'first_player', 1))
         self.game.roundCounter.request('PlayerTwo' if first == 2 else 'PlayerOne')
 
     def enterStrategyPhase(self):
@@ -425,10 +427,8 @@ class GamePhaseFSM(FSM):
         self.game.accept('mouse1', self.game.setActiveUnit,
                          [self.game.setActiveUnitTask, self.game.setActiveUnitTaskName])
         if not getattr(self.game, 'restoringBattle', False):
-            from reserve_move import ai_moves, candidates, prepare
+            from reserve_move import prepare
             prepare(self.game)
-            if candidates(self.game) and all(self.game.aiControls(unit) for unit in candidates(self.game)):
-                self.game.taskMgr.add(ai_moves(self.game), 'reserveMoveAI')
 
     def exitReserveMovePhase(self):
         from reserve_move import finish_window
@@ -538,6 +538,8 @@ class GamePhaseFSM(FSM):
         # Casting is a detour from whichever phase asked for it; a spell's type
         # decides the phase it may be cast in, so remember where to go back to.
         self.phaseBeforeSpell = self.PHASES[self.current_phase_index]
+        if getattr(self.game, 'aiSpellCommand', False):
+            return
         taskMgr.add(self.game.taskMagicArcUpdate, "taskMagicArcUpdate")
         self.game.setActiveUnitTask = self.game.taskMagicArcUpdate
         self.game.setActiveUnitTaskName = "taskMagicArcUpdate"

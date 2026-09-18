@@ -80,11 +80,30 @@ def test_declarations_survive_reload_without_redeclaring_or_spending_another_att
     app.fsm.request('MovementPhase')
     with combat_tasks(app) as run, patch.object(app, 'aiControls', return_value=True):
         run(app.combat.chargeAndChargeReaction(charger, contact, origin, facing, SimpleNamespace(done=None)))
+    app.first_player = 2
+    app.AIplayer1.active = True
+    app.AIplayer1.automatic = False
+    app.AIplayer2.active = False
+    app.AIplayer2.automatic = True
     filename = save_game_state(app, str(tmp_path / 'declared.json'))
+    planning_context = app.AIplayer2._turn_context()
+    load_generation = getattr(app, 'battleLoadGeneration', 0)
     app.chargeDeclarations = []
     app.chargeStage = 'remaining'
+    app.first_player = 1
+    app.AIplayer1.active = False
+    app.AIplayer1.automatic = True
+    app.AIplayer2.active = True
+    app.AIplayer2.automatic = False
     charger.bodyNP.setX(30)
     load_game_state(app, filename)
+    assert app.first_player == 2
+    assert app.AIplayer1.active and not app.AIplayer1.automatic
+    assert not app.AIplayer2.active and app.AIplayer2.automatic
+    app.AIplayer1.active = False
+    assert app.battleLoadGeneration == load_generation + 1
+    assert app.AIplayer2._turn_context()[:-1] == planning_context[:-1]
+    assert app.AIplayer2._turn_context() != planning_context
     assert app.chargeStage == 'declarations'
     assert len(app.chargeDeclarations) == 1
     pending = app.chargeDeclarations[0]
@@ -725,6 +744,8 @@ def test_enhanced_ai_closes_declarations_before_normal_decisions(scene):
 
     with combat_tasks(app) as run, \
             patch.object(ai, 'active', True), \
+            patch.object(ai, 'automatic', False), \
+            patch.object(ai, 'player_num', app.roundCounter.current_player), \
             patch.object(ai, 'player_units', [charger]), \
             patch.object(ai, 'enemy_units', [defender]), \
             patch.object(ai, 'execute_action', AsyncMock(side_effect=execute)), \
@@ -733,7 +754,7 @@ def test_enhanced_ai_closes_declarations_before_normal_decisions(scene):
             patch.object(app.fsm, 'nextPhase') as next_phase, \
             patch('aiMinimaxIntegration.TreeVisualizer'):
         run(ai.take_turn())
-    assert stages == [('declarations', 'move'), ('remaining', 'end_phase')]
+    assert stages == [('remaining', 'end_phase')]
     next_phase.assert_called_once()
     assert not ai._turn_running
 

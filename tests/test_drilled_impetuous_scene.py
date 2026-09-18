@@ -554,6 +554,8 @@ def test_live_enhanced_ai_cannot_end_phase_without_compulsory_charge(scene):
     ai = app.AIplayer2
     with combat_tasks(app) as run, \
             patch.object(ai, 'active', True), \
+            patch.object(ai, 'automatic', False), \
+            patch.object(ai, 'player_num', app.roundCounter.current_player), \
             patch.object(ai, 'player_units', [prince]), \
             patch.object(ai, 'enemy_units', [defender]), \
             patch.object(ai, 'execute_action', AsyncMock(return_value=None)), \

@@ -100,6 +100,9 @@ class CannonFire:
     # ─── Fire sequence ──────────────────────────────────────────────
 
     async def fire(self, cannonUnit, target):
+        """A committed shot spends its allowance even on Misfire (Rulebook p. 226)."""
+        if getattr(cannonUnit, 'hasAttackedThisTurn', False):
+            return
         from battle_secondary import shooting_blocked
         if shooting_blocked(self.game, cannonUnit):
             return
@@ -119,11 +122,14 @@ class CannonFire:
             return
 
         self._place_marker(target)
+        cannonUnit.hasAttackedThisTurn = True
 
         # Step 2 — strike distance.
         first = await self.roll_artillery(cannon_pos + Vec3(0, 0, 12))
         if first == 'Misfire':
             self.game.diceInfoText.setText("Artillery Dice: MISFIRE! The shot fails.")
+            from rules_log import rule_log
+            rule_log('Cannon Fire', cannonUnit, 'first Artillery die: Misfire -> no hits; shooting allowance spent')
             self._draw_path(cannon_pos, target, misfire=True)
             return
         strike_point = Point3(target + dir_n * first)

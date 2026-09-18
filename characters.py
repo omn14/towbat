@@ -196,6 +196,11 @@ def same_player(game, a, b) -> bool:
             (a in game.player2Units and b in game.player2Units))
 
 
+def ai_controls_player(game, player):
+    controller = getattr(game, f'AIplayer{player}', None)
+    return controller is not None and controller.active
+
+
 def side_of(game, unit, default: int | None = 1):
     """Which player *unit* fights for, 1 or 2.
 

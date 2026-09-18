@@ -103,6 +103,9 @@ class Bombardment:
     # ─── Fire sequence ──────────────────────────────────────────────
 
     async def fire(self, unit, target):
+        """A committed shot spends its allowance even on Misfire (Rulebook p. 224)."""
+        if getattr(unit, 'hasAttackedThisTurn', False):
+            return
         from magic_items import item_target_protected
         if item_target_protected(self.game, unit, target, log=True):
             return
@@ -125,11 +128,14 @@ class Bombardment:
 
         radius = weapon.get('blast_diameter', 3) / 2.0
         self._place_template(centre, radius, (1, 1, 0, 0.8))
+        unit.hasAttackedThisTurn = True
 
         # Scatter: Artillery Dice (distance) + Scatter Dice (hit/direction).
         art, scat = await self.roll_scatter_dice(origin + Vec3(0, 0, 12))
         if art == 'Misfire':
             self.game.diceInfoText.setText("Artillery Dice: MISFIRE! The shot fails.")
+            from rules_log import rule_log
+            rule_log('Bombardment', unit, 'Artillery die: Misfire -> no hits; shooting allowance spent')
             return
         if scat == 'Hit!':
             strike = centre

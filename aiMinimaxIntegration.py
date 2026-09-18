@@ -4,6 +4,8 @@ This shows how to enhance ClassAI with minimax decision-making
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from inspect import isawaitable
 import math
 from panda3d.core import ClockObject
 
@@ -18,6 +20,12 @@ from treeVisualization import DecisionExplainer, TreeVisualizer
 from direct.showbase.DirectObject import DirectObject
 from direct.task import Task
 
+@dataclass(frozen=True)
+class ActionOutcome:
+    status: str
+    reason: str = ''
+
+
 class EnhancedAI:
     """
     Enhanced AI that uses minimax with alpha-beta pruning for decision making.
@@ -25,12 +33,14 @@ class EnhancedAI:
     """
     
     def __init__(self, game, player_units, enemy_units, player_num=2, 
-                 use_minimax=True, minimax_depth=3):
+                 use_minimax=False, minimax_depth=3):
         self.game = game
         self.player_units = player_units
         self.enemy_units = enemy_units
         self.player_num = player_num
         self.active = True
+        self.automatic = True
+        self._stalled_steps = 0
         
         # Initialize analyzer, classifier and strategy advisor
         self.analyzer = GameStateAnalyzer(game)
@@ -75,7 +85,10 @@ class EnhancedAI:
         if self.use_minimax and self._should_use_minimax(current_state):
             return await self._minimax_decision(current_state)
         else:
-            return self._heuristic_decision(current_state)
+            from ai_policy import choose
+            self.heuristic_decisions += 1
+            self.decisions_made += 1
+            return choose(self.game, self.player_num, getattr(self, '_rejected_actions', ()))
     
     def _should_use_minimax(self, state: GameState) -> bool:
         """
@@ -149,8 +162,8 @@ class EnhancedAI:
         self.decisions_made += 1
 
         current = state.current_player
-        player_units = state.get_player_units(current)
-        enemy_units  = state.get_player_units(3 - current)
+        player_units = state.get_independent_units(current)
+        enemy_units  = state.get_independent_units(3 - current)
 
         # ── 1. Pick army-level strategy ──────────────────────────────
         top_strats = self.advisor.recommend_strategies(
@@ -865,76 +878,163 @@ class EnhancedAI:
     # ─────────────────────────────────────────────────────────────────────
 
     async def execute_action(self, action: GameAction):
-        """
-        Execute an action in the actual game.
-        Translates GameAction to actual game commands.
-        """
+        """Await the committed command; a refusal never spends its allowance."""
+        from characters import side_of
+
         if action is None:
-            print("[AI] No action to execute")
-            return
-        
-        print(f"[AI] Executing: {action}")
-        
-        if action.action_type == 'move':
-            # Find the actual unit object
-            unit = self._get_unit_by_name(action.unit_name)
+            return ActionOutcome('rejected', 'no action')
+        if not self._can_take_turn():
+            return ActionOutcome('cancelled', 'decision window is no longer available')
+        if action.action_type == 'end_phase':
+            return ActionOutcome('completed')
+        unit = self._get_unit_by_name(action.unit_name)
+        if (unit is None or unit.bodyNP.isEmpty() or unit.unit.nmodels <= 0
+                or side_of(self.game, unit, default=None) != self.player_num
+            or (getattr(unit, 'hostUnit', None) is not None and action.action_type not in ('cast', 'leave'))):
+            return ActionOutcome('rejected', 'actor is not an independent living friendly unit')
+        phases = {'move': ('MovementPhase', 'ReserveMovePhase'), 'charge': ('MovementPhase',),
+                  'cast': ('StrategyPhase', 'MovementPhase', 'ShootingPhase'),
+                  'join': ('MovementPhase',), 'cannon': ('ShootingPhase',), 'bombard': ('ShootingPhase',),
+                  'leave': ('MovementPhase',), 'redress': ('MovementPhase',),
+                  'rally': ('StrategyPhase',), 'shoot': ('ShootingPhase',), 'attack': ('CombatPhase',)}
+        if self.game.fsm.state not in phases.get(action.action_type, ()):
+            return ActionOutcome('rejected', 'action does not belong to the current phase')
+
+        print(f'[AI] Executing: {action}')
+        self._command_running = True
+        try:
             self._highlight_acting_unit(unit)
-            if unit:
-                await Task.pause(1/self.game.speedMultiplier)  # Brief pause to show highlight before moving
-                target_pos = (action.parameters['target_x'], 
-                            action.parameters['target_y'], 0)
-                # Use existing game movement system
-                # This depends on your actual game implementation
-                # Example: self.game.moveUnit(unit, target_pos)
-                self.game.ball.setPos(target_pos)  # Placeholder for movement command
-                self.game.pathTowardsMouse(unit,action.parameters['target_x'],
+            if action.action_type == 'redress':
+                committed = self.game.movement.redressRanks(unit, action.parameters['delta'])
+                return ActionOutcome('completed' if committed else 'rejected')
+            if action.action_type == 'leave':
+                from character_movement import commit
+                committed = commit(self.game, unit, destination=(action.parameters['target_x'],
+                                   action.parameters['target_y'], 0))
+                return ActionOutcome('completed' if committed else 'rejected')
+            if action.action_type == 'join':
+                from character_movement import commit
+                host = self._get_unit_by_name(action.parameters.get('target'))
+                if host is None:
+                    return ActionOutcome('rejected', 'escort no longer available')
+                return ActionOutcome('completed' if commit(self.game, unit, host=host) else 'rejected')
+            if action.action_type == 'cast':
+                from ai_policy import action_key, spell_candidates
+                if action_key(action) not in {action_key(candidate.action)
+                                              for candidate in spell_candidates(self.game, self.player_num)}:
+                    return ActionOutcome('rejected', 'spell or target is no longer available')
+                from spell_system import build_spell
+                from panda3d.core import Point3
+                spell = build_spell(self.game, unit, action.parameters['spell'], allow_catalogue=False)
+                target = (Point3(action.parameters['target_x'], action.parameters['target_y'], 0)
+                          if spell.targets_ground else self._get_unit_by_name(action.parameters['target']))
+                phase = self.game.fsm.state
+                self.game.unitToMove = unit
+                self.game.aiSpellCommand = True
+                self.game.castingSpell = True
+                try:
+                    self.game.fsm.request('SpellPhase')
+                    self.game.fsm.spellInstanceToCast = spell
+                    self.game.fsm.spellClassToCast = type(spell)
+                    self.game.fsm.castingUnit = unit
+                    await self.game.resolveSpell(target)
+                finally:
+                    if self.game.fsm.state == 'SpellPhase':
+                        self.game.fsm.request(phase)
+                    self.game.castingSpell = False
+                    self.game.aiSpellCommand = False
+                return ActionOutcome('completed')
+            if action.action_type == 'rally':
+                if (unit.state != 'IsFleeing' or getattr(unit, 'attemptedRallyThisTurn', False)
+                        or not getattr(self.game, 'strategyCommandDone', True)):
+                    return ActionOutcome('rejected', 'normal rally is unavailable')
+                await self.game.rallyUnit(unit)
+                return ActionOutcome('completed' if unit.attemptedRallyThisTurn else 'rejected')
+            if action.action_type == 'charge':
+                from charge_declarations import collecting, queue_charge
+                from first_charge import begin_charge_attempt
+                from impetuous import legal_targets
+                if not collecting(self.game):
+                    return ActionOutcome('rejected', 'charge declarations are closed')
+                selected = next(((target, route, index) for target, route, index in legal_targets(self.game, unit)
+                                 if target.unitName == action.parameters.get('target')), None)
+                if selected is None:
+                    return ActionOutcome('rejected', 'charge route is no longer legal')
+                target, route, index = selected
+                from flight import compulsory_mode, set_mode
+                if unit.unit.model.can_fly():
+                    mode = compulsory_mode(self.game, unit)
+                    if not set_mode(self.game, unit, mode):
+                        return ActionOutcome('rejected', 'charge movement mode is unavailable')
+                origin, facing = unit.bodyNP.getPos(), unit.bodyNP.getHpr()
+                unit.bodyNP.setPos(*route.destination)
+                unit.bodyNP.setHpr(route.heading + route.wheel, 0, 0)
+                self.game.playerNP.setPos(*route.destination)
+                self.game.moveArceDistance = route.distance
+                try:
+                    entry = queue_charge(self.game, unit, target, origin, facing)
+                finally:
+                    unit.bodyNP.setPos(origin)
+                    unit.bodyNP.setHpr(facing)
+                    unit.bodyNP.node().setTransformDirty()
+                if entry is None:
+                    return ActionOutcome('rejected', 'charge declaration refused')
+                entry.target_index = index
+                begin_charge_attempt(unit)
+                return ActionOutcome('completed')
+            if action.action_type == 'move':
+                if unit.hasMovedThisTurn or unit.state != 'Idle':
+                    return ActionOutcome('rejected', 'actor cannot move')
+                self.game.unitToMove = unit
+                self.game.pathTowardsMouse(unit, action.parameters['target_x'],
                                            action.parameters['target_y'])
-                #self.game.moveUnit(unit)
-                taskMgr.doMethodLater(0.1, self.game.moveUnit, "moveTask", extraArgs=[unit], appendTask=False)
-                self._move_complete = False
-                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
-                if getattr(self.game, 'chargeStage', None) == 'remaining' and not unit.hasMovedThisTurn:
-                    from rules_log import battle_log
-                    battle_log(f'AI: {unit.unit.name} stays in place after an unavailable remaining move.', 'info')
-                    unit.request('Moved')
+                command = self.game.moveUnit(unit, wait_for_completion=True)
+                if isawaitable(command):
+                    await command
+                from reserve_move import in_reserve
+                if (unit.hasMovedThisTurn or getattr(unit, 'chargeAttemptPending', False)
+                    or (in_reserve(self.game) and getattr(unit, 'reserveDoneTurn', None) is not None)):
+                    return ActionOutcome('completed')
+                return ActionOutcome('rejected', 'movement command did not commit')
+
+            target = self._get_unit_by_name(action.parameters.get('target'))
+            if (target is None or target.bodyNP.isEmpty() or target.unit.nmodels <= 0
+                    or side_of(self.game, target, default=None) != 3 - self.player_num):
+                return ActionOutcome('rejected', 'target is not a living enemy')
+            if unit.hasAttackedThisTurn:
+                return ActionOutcome('rejected', 'actor has already attacked')
+            self.game.unitToMove = unit
+            if action.action_type in ('cannon', 'bombard'):
+                from ai_policy import action_key, living_units, shooting_candidates
+                legal = shooting_candidates(self.game, [unit], living_units(self.game, 3 - self.player_num))
+                if action_key(action) not in {action_key(candidate.action) for candidate in legal}:
+                    return ActionOutcome('rejected', 'artillery target no longer legal')
+                if action.action_type == 'cannon':
+                    await self.game.cannon.fire(unit, target.bodyNP.getPos())
+                else:
+                    await self.game.bombard.fire(unit, target)
+            elif action.action_type == 'shoot':
+                weapon_key = action.parameters.get('weapon')
+                if weapon_key is not None:
+                    from shooting_geometry import shooting_solution
+                    weapon = unit.unit.model.weapons.get(weapon_key)
+                    if not weapon or not shooting_solution(self.game, unit, target, weapon=weapon).eligible:
+                        return ActionOutcome('rejected', 'missile weapon or target no longer legal')
+                    unit.unit.model.equip_weapon(weapon_key)
+                await self.game.shootAt(unit, target)
+            else:
+                if target not in unit.isInCombatWith:
+                    return ActionOutcome('rejected', 'target is outside the connected combat')
+                await self.game.taskMgr.add(self.game.combat.verySimpleBattleStart,
+                                            f'ai-combat-{self.player_num}')
+                if getattr(self.game.combat, 'last_error', None):
+                    return ActionOutcome('failed', self.game.combat.last_error)
+            if unit.hasAttackedThisTurn:
+                return ActionOutcome('completed')
+            return ActionOutcome('rejected', 'attack command did not commit')
+        finally:
+            self._command_running = False
             self._unhighlight_acting_unit(unit)
-        
-        elif action.action_type == 'shoot':
-            unit = self._get_unit_by_name(action.unit_name)
-            target = self._get_unit_by_name(action.parameters['target'])
-            self._highlight_acting_unit(unit)
-            if unit and target:
-                self.game.unitToMove=unit
-                #target_pos = target['position']
-                # Execute shooting
-                # Example: self.game.shootAt(unit, target)
-                #self.game.ball.setPos(target_pos)  # Placeholder for movement command
-                await self.game.shootAt(unit,target)
-                self._move_complete = False
-                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
-                # Mark the unit as having attacked so it can't shoot again this turn
-                unit.hasAttackedThisTurn = True
-            self._unhighlight_acting_unit(unit)
-        
-        elif action.action_type == 'attack':
-            unit = self._get_unit_by_name(action.unit_name)
-            target = self._get_unit_by_name(action.parameters['target'])
-            self._highlight_acting_unit(unit)
-            if unit and target:
-                # Mark the unit as having attacked so it can't attack again this turn
-                #unit.hasAttackedThisTurn = True
-                # Execute melee attack
-                # Example: self.game.meleeAttack(unit, target)
-                self.game.unitToMove=unit
-                self._move_complete = False
-                taskMgr.add(self.game.combat.verySimpleBattleStart, "meleeTask", appendTask=True)
-                await taskMgr.add(self.loopWaitForMoveComplete, "waitTask", extraArgs=[unit], appendTask=True)
-            self._unhighlight_acting_unit(unit)
-        
-        elif action.action_type == 'end_phase':
-            # End current phase
-            # Example: self.game.fsm.nextPhase()
-            pass
     
     def _get_unit_by_name(self, name: str):
         """Get actual unit object by name"""
@@ -942,71 +1042,153 @@ class EnhancedAI:
             if unit.unitName == name:
                 return unit
         return None
+
+    def _can_take_turn(self):
+        game = self.game
+        manager = getattr(game, 'taskMgr', None)
+        if manager is not None and any(manager.hasTaskNamed(name) for name in (
+                'taskLoopDeploy', 'taskMoveUnit', 'resolveChargesTask',
+                'chargeAndChargeReaction', 'rallyingCryTask', 'rallyUnitTask',
+                'freeReformUnitTask', 'shootingVolley', 'cannonFire', 'bombardmentFire')):
+            return False
+        psychology = getattr(game, 'psychology', None)
+        if psychology is not None and (psychology._panic_active or psychology._panic_queue):
+            return False
+        return (self.active
+                and game.roundCounter.current_player == self.player_num
+                and game.fsm.state in ('DeployPhase', 'StrategyPhase', 'MovementPhase', 'ReserveMovePhase',
+                                       'ShootingPhase', 'CombatPhase')
+                and getattr(game, 'chargeStage', None) not in ('resolving', 'blocked')
+                and not any(getattr(game, flag, False) for flag in (
+                    'restoringBattle', 'awaitingChoice', 'resolvingCombat',
+                    'magicBusy', 'castingSpell', 'spellGenerationBusy',
+                    'shootingInFlight', 'rallyingCryBusy', '_reformActive',
+                    'battleMarchSetupBusy', 'battleMarchBoundaryBusy')))
+
+    async def autoplay_step(self):
+        """One driver iteration; unresolved rules keep ownership of the game."""
+        if not self.automatic or not self._can_take_turn() or getattr(self, '_turn_running', False):
+            return False
+        before = GameState.from_game(self.game)
+        try:
+            await self.take_turn()
+        except Exception as error:
+            self.active = False
+            from rules_log import battle_log
+            self.pause_reason = f'{type(error).__name__}: {error}'
+            battle_log(f'AI player {self.player_num} paused after {self.pause_reason}', 'info')
+            raise
+        after = GameState.from_game(self.game)
+        self._stalled_steps = self._stalled_steps + 1 if before == after and self._can_take_turn() else 0
+        if self._stalled_steps >= 3:
+            self.active = False
+            from rules_log import battle_log
+            self.pause_reason = f'three decisions made no progress in {self.game.fsm.state}'
+            battle_log(f'AI player {self.player_num} paused: {self.pause_reason}; no phase was skipped.', 'info')
+        return True
+
+    def start_autoplay(self):
+        manager = self.game.taskMgr
+        name = f'ai-autoplay-{self.player_num}'
+        if not manager.hasTaskNamed(name):
+            self._driver_coroutine = self._autoplay()
+            manager.add(self._driver_coroutine, name)
+
+    def shutdown(self):
+        self.active = False
+        self.game.taskMgr.remove(f'ai-autoplay-{self.player_num}')
+        coroutine = getattr(self, '_driver_coroutine', None)
+        if coroutine is not None:
+            coroutine.close()
+            self._driver_coroutine = None
+        self.helper1.ignoreAll()
+
+    async def _autoplay(self):
+        while True:
+            try:
+                await self.autoplay_step()
+            except Exception:
+                pass
+            await Task.pause(0.05)
+
+    def _turn_context(self):
+        """Identify a live turn window, including reloads into the same window."""
+        game = self.game
+        return (id(game), id(game.fsm), game.fsm.state, game.fsm.currentPhaseIndex,
+                game.roundCounter.current_player,
+                tuple(game.roundCounter.currentRoundPlayer),
+                getattr(game, 'battleLoadGeneration', 0))
     
     async def take_turn(self):
         """
         Main entry point for AI turn.
         Loops, making and executing decisions, until an end_phase action is produced.
         """
-        if not self.active or getattr(self, '_turn_running', False):
+        if getattr(self, '_turn_running', False) or not self._can_take_turn():
             return
 
-        # DeployPhase is not in fsm.PHASES, so GameState.current_phase misreports
-        # it as StrategyPhase. Deployment is its own self-chaining task loop:
-        # taskMoveUnit auto-places, then _advance_after_deploy calls deployUnits()
-        # again once the turn comes back round to this player.
-        if self.game.fsm.state == 'DeployPhase':
-            if self.game.roundCounter.current_player != self.player_num:
-                print(f"[AI] Player {self.player_num} deploy: waiting for the "
-                      f"opponent to place a unit first.")
-                return
-            self.deployUnits()
-            return
-
-        self.game.save_game_state('previous_phase.json')
         self._turn_running = True
+        try:
+            if self.game.fsm.state == 'DeployPhase':
+                self.deployUnits()
+                return
 
-        from charge_declarations import collecting, resolve_declarations
-        if collecting(self.game):
-            for unit in self.player_units:
-                if unit.state != 'Idle' or unit.hasMovedThisTurn or unit.bodyNP.isEmpty():
+            context = self._turn_context()
+            self._rejected_actions = set()
+            self.game.save_game_state('previous_phase.json')
+
+            from charge_declarations import collecting, resolve_declarations
+            decisions = 0
+            while self._can_take_turn() and self._turn_context() == context:
+                decisions += 1
+                if decisions > max(32, len(self.game.units) * 12):
+                    self.active = False
+                    self.pause_reason = 'decision budget exhausted'
+                    print(f'[AI] Player {self.player_num}: decision budget exhausted; paused without advancing.')
+                    return
+                self._move_complete = False
+                charge_stage = getattr(self.game, 'chargeStage', None)
+                action = await self.make_decision()
+                if (not self._can_take_turn() or self._turn_context() != context
+                        or getattr(self.game, 'chargeStage', None) != charge_stage):
+                    print(f'[AI] Player {self.player_num}: discarded decision after the live window changed.')
+                    return
+                if action is None:
+                    print(f'[AI] Player {self.player_num}: no decision; leaving the phase unchanged.')
+                    return
+                if action.action_type == 'end_phase' and collecting(self.game):
+                    await resolve_declarations(self.game)
+                    self._rejected_actions.clear()
                     continue
-                enemies = [enemy for enemy in self.enemy_units
-                           if not enemy.bodyNP.isEmpty() and enemy.unit.nmodels > 0]
-                if not enemies:
-                    break
-                target = min(enemies, key=lambda enemy: (enemy.bodyNP.getPos() - unit.bodyNP.getPos()).length())
-                position = target.bodyNP.getPos()
-                await self.execute_action(GameAction('move', unit.unitName,
-                                                     {'target_x': position.x, 'target_y': position.y}))
-            await resolve_declarations(self.game)
 
-        while True:
-            self._move_complete = False  # Reset move completion flag at start of each decision loop
-            # Make decision (await directly so the return value is preserved)
-            action = await self.make_decision()
+                tree = getattr(self, 'tree', None)
+                if tree is not None:
+                    TreeVisualizer(tree).print_best_path()
+                print(self.game.analyzer.get_strategy_report(player_num=self.player_num))
 
-            visualizer = TreeVisualizer(self.tree)
-            visualizer.print_best_path()
-
-            print(self.game.analyzer.get_strategy_report(player_num=self.game.roundCounter.current_player))
-
-            # Execute action
-            await self.execute_action(action)
-
-            #visualizer.print_tree_ascii(max_depth=19)
-
-            """ explainer = DecisionExplainer(self.tree)
-            explainer.explain_decision()
-
-            visualizer.print_statistics_detailed() """
-
-            if action.action_type == 'end_phase':
-                self.game.fsm.nextPhase()
-                break
-
-        self._turn_running = False
-        return action
+                outcome = await self.execute_action(action)
+                from rules_log import battle_log
+                if outcome is not None:
+                    battle_log(f'AI P{self.player_num}: {action} -> {outcome.status}'
+                               + (f': {outcome.reason}' if outcome.reason else ''), 'info')
+                if outcome is not None and outcome.status != 'completed':
+                    print(f'[AI] {outcome.status}: {outcome.reason}')
+                    if outcome.status == 'failed':
+                        self.active = False
+                        self.pause_reason = outcome.reason
+                        return
+                    if outcome.status == 'cancelled':
+                        return
+                    from ai_policy import action_key
+                    self._rejected_actions.add(action_key(action))
+                    continue
+                if not self._can_take_turn() or self._turn_context() != context:
+                    return
+                if action.action_type == 'end_phase':
+                    self.game.fsm.nextPhase()
+                    return action
+        finally:
+            self._turn_running = False
     
     def print_statistics(self):
         """Print AI performance statistics"""

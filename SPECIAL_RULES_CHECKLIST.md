@@ -4800,6 +4800,14 @@ clamour of battle, friendly units are seldom able to tell the difference"
       implemented by their own rules, must explicitly define their interaction.
 
 ## Deferred war-machine items
+- [x] Cannon Fire / Bombardment firing allowance (Rulebook pp. 226, 224):
+      a valid committed shot spends the allowance before its artillery dice,
+      including first-die Misfire. Repeated fire calls cannot reroll a misfire;
+      invalid range still leaves the allowance untouched. Misfire logs report
+      zero hits and the spent shot. Tests: `tests/test_ai.py`.
+      Sources: https://tow.whfb.app/war-machines/cannon-fire and
+      https://tow.whfb.app/war-machines/bombardment.
+      LEFTOVER: damage/geometry and Misfire-table limitations below unchanged.
 - [ ] Multiple Wounds (D3+1) generic rule
 - [ ] Black Powder / Misfire tables
 - [ ] True line-of-sight and rank/file hit caps for cannon/bombardment

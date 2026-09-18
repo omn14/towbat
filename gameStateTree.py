@@ -8,9 +8,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
 from unitTypeClassifier import UnitTypeClassifier, UnitType, SupportRole, MATCHUP_TABLE, FLANK_BONUS, REAR_BONUS
 from models import stat_int
-
-# Module-level classifier singleton (caches classifications across calls)
-_classifier = UnitTypeClassifier()
+from characters import side_of
 
 
 @dataclass
@@ -33,19 +31,37 @@ class GameState:
     
     # Evaluation score (cached)
     score: Optional[float] = None
+
+    rounds_completed: Tuple[int, ...] = ()
+    charge_stage: Optional[str] = None
     
     @classmethod
     def from_game(cls, game):
         """Create a GameState from the actual game object"""
         units = []
+        classifier = UnitTypeClassifier()
         
         for unit in game.units:
+            if unit.bodyNP.isEmpty() or unit.unit.nmodels <= 0:
+                continue
+            player = side_of(game, unit, default=None)
+            if player is None:
+                raise ValueError(f'AI snapshot cannot determine owner of {unit.unitName}')
+            world = getattr(game, 'render', None)
+            if world is None:
+                world = unit.bodyNP.getTop()
+            profile = unit.unit.model
+            ground_movement = profile.get_movement(0)
+            fly_movement = profile.get_fly_movement(0)
+            flying = profile.is_flying()
+            host = getattr(unit, 'hostUnit', None)
             unit_data = {
                 'name': unit.unitName,
-                'position': tuple(unit.bodyNP.getPos()),
-                'heading': unit.bodyNP.getH(),
+                'position': tuple(unit.bodyNP.getPos(world)),
+                'heading': unit.bodyNP.getH(world),
                 'state': unit.state,
-                'player': 1 if unit in game.player1Units else 2,
+                'player': player,
+                'host_name': host.unitName if host is not None else None,
                 
                 # Combat/turn state
                 'isInCombat': unit.isInCombat,
@@ -74,9 +90,11 @@ class GameState:
                 'is_stubborn': any('stubborn' in r.get('name', '').lower() for r in unit.unit.model.special_rules if isinstance(r, dict)),
                 'has_regen': any(r.get('regen') for r in unit.unit.model.special_rules if isinstance(r, dict)),
                 'has_mount': any(r.get('tag') == 'mount' for r in unit.unit.model.special_rules if isinstance(r, dict)),
-                'is_flying': any('fly' in r.get('name', '').lower() for r in unit.unit.model.special_rules if isinstance(r, dict)),
+                'is_flying': flying,
                 'has_charge_bonus': any(r.get('charge') for r in unit.unit.model.special_rules if isinstance(r, dict)),
-                'M': stat_int(unit.unit.model.characteristics, 'M', 4) or 4,
+                'ground_movement': ground_movement,
+                'fly_movement': fly_movement,
+                'M': fly_movement if flying else ground_movement,
                 'W': stat_int(unit.unit.model.characteristics, 'W', 1),
                     
                 # Combat relationships (store indices instead of references)
@@ -85,19 +103,21 @@ class GameState:
             }
             
             # Classify unit type and store on the dict
-            main_type, support_role = _classifier.classify_from_dict(unit_data)
+            main_type, support_role = classifier.classify_from_dict(unit_data)
             unit_data['unit_type'] = main_type.value
             unit_data['support_role'] = support_role.value
             
             units.append(unit_data)
         
         return cls(
-            current_phase=game.fsm.phases[game.fsm.currentPhaseIndex],
+            current_phase=game.fsm.state,
             current_phase_index=game.fsm.currentPhaseIndex,
             current_round=game.roundCounter.currentRoundPlayer[game.roundCounter.current_player - 1],
             current_player=game.roundCounter.current_player,
             max_rounds=game.roundCounter.max_rounds,
-            units=units
+            units=units,
+            rounds_completed=tuple(game.roundCounter.currentRoundPlayer),
+            charge_stage=getattr(game, 'chargeStage', None),
         )
     
     def clone(self):
@@ -116,6 +136,8 @@ class GameState:
             max_rounds=self.max_rounds,
             units=new_units,
             score=None,  # Don't carry cached score from parent
+            rounds_completed=self.rounds_completed,
+            charge_stage=self.charge_stage,
         )
     
     def get_unit_by_name(self, name: str) -> Optional[Dict]:
@@ -128,6 +150,11 @@ class GameState:
     def get_player_units(self, player: int) -> List[Dict]:
         """Get all units belonging to a player"""
         return [u for u in self.units if u['player'] == player]
+
+    def get_independent_units(self, player: int) -> List[Dict]:
+        """Units eligible for formation-level actions, excluding joined members."""
+        return [unit for unit in self.get_player_units(player)
+                if unit['nmodels'] > 0 and unit.get('host_name') is None]
 
 
 @dataclass
@@ -346,8 +373,8 @@ class MinimaxTree:
         """
         actions = []
         current_player = state.current_player
-        player_units = state.get_player_units(current_player)
-        enemy_units = state.get_player_units(3 - current_player)
+        player_units = state.get_independent_units(current_player)
+        enemy_units = state.get_independent_units(3 - current_player)
         
         phase = state.current_phase
         

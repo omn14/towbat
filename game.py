@@ -136,7 +136,11 @@ class MyApp(ShowBase):
     # ─── Initialization ──────────────────────────────────────────────────────
 
     def __init__(self, *, battle_config=None, battle_seed=None,
-                 configure_battle=False, battle_config_path=None):
+                 configure_battle=False, battle_config_path=None, rosters=None, first_player=1):
+        if first_player not in (1, 2):
+            raise ValueError('first_player must be 1 or 2')
+        self.first_player = first_player
+        self.startup_rosters = rosters
         if battle_config is not None:
             from battle_config import _number, validate_activation, validate_config
             battle_config = (validate_config(battle_config) if configure_battle
@@ -155,6 +159,14 @@ class MyApp(ShowBase):
         self._initialize_battle(battle_config, battle_seed)
 
     def destroy(self):
+        for player in (1, 2):
+            controller = getattr(self, f'AIplayer{player}', None)
+            if controller is not None:
+                controller.shutdown()
+        hud = getattr(self, 'hud', None)
+        if hud is not None:
+            hud.destroy()
+            self.hud = None
         screen = getattr(self, 'battle_config_screen', None)
         if screen is not None:
             screen.destroy()
@@ -341,7 +353,7 @@ class MyApp(ShowBase):
         #self.load_player1_army("strategy_armies/hammer_and_anvil.json")
         #self.p1army="strategy_armies/orc_and_goblin_horde.json"
         #self.p1army="strategy_armies/my_army_he.json"
-        rosters = (battle_config or {}).get('rosters', {})
+        rosters = self.startup_rosters or (battle_config or {}).get('rosters', {})
         self.p1army = (os.path.join(os.path.dirname(__file__), os.path.expanduser(rosters['player1']))
                    if rosters.get('player1') else 'my_army1.json')
         self.p2army = (os.path.join(os.path.dirname(__file__), os.path.expanduser(rosters['player2']))
@@ -371,24 +383,22 @@ class MyApp(ShowBase):
         
         from aiMinimaxIntegration import EnhancedAI
 
-        # Replace: self.AIplayer2 = ClassAI(...)
+        self.AIplayer1 = EnhancedAI(
+            self, self.player1Units, self.player2Units, player_num=1,
+        )
         self.AIplayer2 = EnhancedAI(
             self, self.player2Units, self.player1Units,
-            player_num=2, use_minimax=True, minimax_depth=19
+            player_num=2,
         )
-        self.AIplayer2.tree.stop_after_n_returns = 1
-        # TEMP: disable P2 AI so player 2 deploys and acts manually.
-        self.AIplayer2.active = False
-        async def auppp():
-            for unit in self.player2Units:
-                action = await taskMgr.add(self.AIplayer2.take_turn())
-                if action.action_type == 'end_phase':
-                    break
-        #self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
-        self.accept('a-up', lambda: taskMgr.add(self.AIplayer2.take_turn()))
-        #self.accept('a-up', lambda: taskMgr.add(auppp()))
+        for controller in (self.AIplayer1, self.AIplayer2):
+            controller.active = False
+            controller.start_autoplay()
+        self.accept('a-up', lambda: taskMgr.add(
+            getattr(self, f'AIplayer{self.roundCounter.current_player}').take_turn()))
         # Not shift-a: Panda3D still emits 'a-up' on release, which would step a turn too.
         self.accept('f4', self.toggle_ai_player2)
+        self.accept('shift-f4', self.toggle_ai_player, [1])
+        self.accept('control-f4', self.toggle_ai_automatic)
 
         # In your game class __init__:
         self.list_builder = None
@@ -885,7 +895,7 @@ class MyApp(ShowBase):
             #return task.cont
             unit.model.setColor(unit.color)
             
-        if base.mouseWatcherNode.hasMouse():
+        if base.mouseWatcherNode is not None and base.mouseWatcherNode.hasMouse():
             mousePos = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
             pTo = Point3()
@@ -1348,20 +1358,10 @@ class MyApp(ShowBase):
             self.fsm.request(getattr(self.fsm, 'phaseBeforeSpell',
                                      "StrategyPhase"))
             return task.done
-        index = spellChoices.index(spellchoice)
         self.fsm.activeSpell = spellbook.get(spellchoice)
-        self.fsm.spellClassToCast = spellClasses[index]
-        self.fsm.spellInstanceToCast = self.fsm.spellClassToCast(
-            self.fsm.activeSpell.get('name', spellchoice), self.fsm.activeSpell.get('casting_value') or 12,
-            self.fsm.endOfTurnSpells,
-            wizard_level=_level,
-            effect=self.fsm.activeSpell.get('effect', ''),
-            game=self, caster=self.unitToMove,
-            bound=self.fsm.activeSpell.get('bound', False),
-            power_level=self.fsm.activeSpell.get('power_level', 0),
-            spell_range=self.fsm.activeSpell.get('range'))
-        self.fsm.spellInstanceToCast.selection_key = spellchoice
-        self.fsm.spellInstanceToCast.scroll_item_id = self.fsm.activeSpell.get('scroll_item_id')
+        from spell_system import build_spell
+        self.fsm.spellInstanceToCast = build_spell(self, self.unitToMove, spellchoice)
+        self.fsm.spellClassToCast = type(self.fsm.spellInstanceToCast)
         self.fsm.castingUnit = self.unitToMove
         self.debugTextInfo.setText(
             spell_readout(spellchoice, self.fsm.activeSpell))
@@ -1732,7 +1732,7 @@ class MyApp(ShowBase):
         it jump as it crossed a screen edge.
         """
         hovered = None
-        if base.mouseWatcherNode.hasMouse():
+        if base.mouseWatcherNode is not None and base.mouseWatcherNode.hasMouse():
             pMouse = base.mouseWatcherNode.getMouse()
             pFrom = Point3()
             pTo = Point3()
@@ -2368,8 +2368,9 @@ class MyApp(ShowBase):
             attackerUnit.standAndShootWounds += total_wounds
         else:
             attackerUnit.hasAttackedThisTurn = True
-        taskMgr.add(self.shootingAnimation(attackerUnit, defenderUnit,
-                                           total_wounds, stand_and_shoot))
+        await self.shootingAnimation(attackerUnit, defenderUnit,
+                                     total_wounds, stand_and_shoot)
+        return True
 
     async def shootingAnimation(self, attackerUnit, defenderUnit, total_wounds,
                                 stand_and_shoot=False):
@@ -3010,10 +3011,11 @@ class MyApp(ShowBase):
         """
         from characters import side_of
 
-        return bool(unit is not None
-                    and getattr(self, 'AIplayer2', None) is not None
-                    and self.AIplayer2.active
-                and side_of(self, unit, default=None) == 2)
+        return unit is not None and self.aiControlsPlayer(side_of(self, unit, default=None))
+
+    def aiControlsPlayer(self, player):
+        from characters import ai_controls_player
+        return ai_controls_player(self, player)
 
     async def makeChoiceNew(self, choices, position, cancellable=False,
                             descriptions=None, owner=None, prompt=None,
@@ -3027,8 +3029,7 @@ class MyApp(ShowBase):
         # an owner fall back to the active player, so an unnamed prompt still
         # does not stall the AI's own turn.
         auto = (self.aiControls(owner) if owner is not None else
-                (self.roundCounter.current_player == 2
-                 and self.AIplayer2.active))
+            self.aiControlsPlayer(self.roundCounter.current_player))
         if auto:
             #cynchoice = chargeYesNo[0]
             await Task.pause(1.0)
@@ -3398,9 +3399,22 @@ class MyApp(ShowBase):
 
     def toggle_ai_player2(self):
         """Switch the player 2 AI between autonomous and manual play."""
-        self.AIplayer2.active = not self.AIplayer2.active
-        state = 'ON' if self.AIplayer2.active else 'OFF'
-        print(f"[AI] Player 2 AI {state} — F4 toggles, 'a' steps a single AI turn.")
+        self.toggle_ai_player(2)
+
+    def toggle_ai_player(self, player):
+        controller = getattr(self, f'AIplayer{player}')
+        controller.active = not controller.active
+        controller._stalled_steps = 0
+        controller.pause_reason = ''
+        state = 'ON' if controller.active else 'OFF'
+        print(f'[AI] Player {player} AI {state}; automatic={controller.automatic}.')
+
+    def toggle_ai_automatic(self):
+        controller = getattr(self, f'AIplayer{self.roundCounter.current_player}')
+        controller.automatic = not controller.automatic
+        controller._stalled_steps = 0
+        print(f'[AI] Player {controller.player_num}: '
+              f'{"continuous" if controller.automatic else "manual stepping"}.')
 
 # Guarded so the module can be imported to build the scene offscreen and
 # screenshot it, which is the only way to check anything visual here.

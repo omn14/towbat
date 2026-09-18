@@ -794,6 +794,28 @@ def spell_class(name: str):
     return BATTLE_MAGIC.get(key) or HIGH_MAGIC.get(key)
 
 
+def build_spell(game, caster, key, *, allow_catalogue=True):
+    """Construct an uncommitted spell using the bearer's current spellbook."""
+    from magic_items import casting_spellbook
+    record = casting_spellbook(caster).get(key)
+    if record is None:
+        return None
+    implementation = record.get('class') or spell_class(record.get('name', key))
+    if implementation is None:
+        if not allow_catalogue:
+            return None
+        implementation = CatalogueSpell
+    spell = implementation(
+        record.get('name', key), record.get('casting_value') or 12,
+        game.fsm.endOfTurnSpells, wizard_level=caster.unit.model.wizard_level(1),
+        effect=record.get('effect', ''), game=game, caster=caster,
+        bound=record.get('bound', False), power_level=record.get('power_level', 0),
+        spell_range=record.get('range'))
+    spell.selection_key = key
+    spell.scroll_item_id = record.get('scroll_item_id')
+    return spell
+
+
 def spell_readout(name: str, spell: dict, width: int = 46) -> str:
     """The card for one spell: type, casting value, range and wording.
 

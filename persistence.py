@@ -14,7 +14,7 @@ from datetime import datetime
 
 from battlescribe import get_catalogue, STAT_KEYS
 from challenges import Challenge
-from characters import detach_character, join_unit, get_joined_characters
+from characters import detach_character, join_unit, get_joined_characters, ai_controls_player
 from models import model as Model
 from rules_log import battle_log
 from special_rules import apply_rule_keywords
@@ -233,6 +233,10 @@ def save_game_state(game, filename=None):
         'vanguard_first': getattr(game, 'vanguardFirst', None),
         'vanguard_active': getattr(game, 'vanguardActive', None),
         'ai_player2_active': game.AIplayer2.active,
+        'first_player': getattr(game, 'first_player', 1),
+        'ai_player1_active': ai_controls_player(game, 1),
+        'ai_automatic': {str(player): getattr(getattr(game, f'AIplayer{player}', None), 'automatic', True)
+                 for player in (1, 2)},
         'strategy_command_done': getattr(game, 'strategyCommandDone', True),
         'chaos_command_turn': getattr(game, 'chaosCommandTurn', None),
         'fated_dispel_turns': getattr(game, 'fatedDispelTurns', {}),
@@ -460,6 +464,10 @@ def load_game_state(game, filename):
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
     """
+    if any(getattr(getattr(game, f'AIplayer{player}', None), '_command_running', False) is True
+           for player in (1, 2)):
+        battle_log('Finish the committed AI command before loading a battle.', 'info')
+        return
     if getattr(game, 'battleMarchSetupBusy', False):
         battle_log('Finish the Battle March setup choice before loading another battle.', 'info')
         return
@@ -507,6 +515,8 @@ def load_game_state(game, filename):
     except ConfigError as error:
         battle_log(f'Load failed: {error}', 'info')
         return
+    game.battleLoadGeneration = getattr(game, 'battleLoadGeneration', 0) + 1
+    game.first_player = game_state.get('first_player', 1)
     restore_battle(game, saved_setup)
     _repair_missing_profiles(game_state['units'])
     from spell_effects import active_spells, end_effect
@@ -542,6 +552,13 @@ def load_game_state(game, filename):
 
     # Restore AI settings
     game.AIplayer2.active = game_state['ai_player2_active']
+    if getattr(game, 'AIplayer1', None) is not None:
+        game.AIplayer1.active = game_state.get('ai_player1_active', False)
+    for player in (1, 2):
+        controller = getattr(game, f'AIplayer{player}', None)
+        if controller is not None:
+            controller.automatic = game_state.get('ai_automatic', {}).get(str(player), True)
+            controller._stalled_steps = 0
 
     # Remove any current units that aren't in the save (e.g. units destroyed
     # after this save was taken) so a load reflects the saved roster exactly.
@@ -883,11 +900,11 @@ def load_game_state(game, filename):
     if game_state['current_phase'] == 'DeployPhase':
         from deployPhase import refresh_deployment
         refresh_deployment(game)
-        if (game.roundCounter.current_player == 2 and game.AIplayer2.active
+        if (ai_controls_player(game, game.roundCounter.current_player)
             and game.deploymentStage != 'vanguard'
             and not getattr(game, 'battleMarchSetupBusy', False)
             and not (getattr(game, 'battle_setup', None) or {}).get('first_turn')):
-            game.AIplayer2.deployUnits()
+            getattr(game, f'AIplayer{game.roundCounter.current_player}').deployUnits()
 
     # Each model sits on the terrain surface, not at its unit's own Z. That
     # offset is derived rather than saved, so a unit restored onto a hill would

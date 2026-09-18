@@ -2444,6 +2444,7 @@ class CombatResolver:
         return max(0, victim.unit.nmodels * per_model - partial)
 
     async def verySimpleBattleStart(self, task):
+        self.last_error = None
         self.game.resolvingCombat = True
         await taskMgr.add(self.verySimpleBattle, "verySimpleBattleTask")
         return task.done
@@ -2458,6 +2459,7 @@ class CombatResolver:
         try:
             await self._verySimpleBattleInner(task)
         except Exception as e:
+            self.last_error = f'{type(e).__name__}: {e}'
             print(f"ERROR in verySimpleBattle: {e}")
             import traceback
             traceback.print_exc()

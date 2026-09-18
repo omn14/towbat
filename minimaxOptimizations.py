@@ -390,7 +390,7 @@ class OptimizedMinimaxTree(MinimaxTree):
         """Generate only tactical/capturing moves for quiescence search"""
         actions = []
         current_player = state.current_player
-        player_units = state.get_player_units(current_player)
+        player_units = state.get_independent_units(current_player)
         
         # Only attacks and combat-related moves
         if state.current_phase == 'CombatPhase':

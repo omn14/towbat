@@ -829,8 +829,10 @@ async def magic_roll_bonus(game, member, kind):
     report_inactive_effects(member, EffectKind.MAGIC_ROLL, f'no {kind} modifier', context='Magic roll')
     bonus = 0
     for entry in entries:
-        use = game.aiControls(member)
-        if not use:
+        if game.aiControls(member):
+            from ai_policy import use_scarce_magic
+            use = use_scarce_magic(game, member, kind)
+        else:
             answer = await game.makeChoiceNew(['Use shard', 'Keep shard'], Vec3(0, 0, 10), owner=member,
                                               prompt=f'{member.unit.name}: Wyrdstone Shard?',
                                               detail=f'+1 to this {kind} roll; single use, declared before rolling')
