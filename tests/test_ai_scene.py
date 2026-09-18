@@ -1,6 +1,7 @@
 """Fixture-owned battles with the real AI, commands, rules and task manager."""
 
 import json
+import math
 from pathlib import Path
 import random
 from time import monotonic
@@ -157,6 +158,205 @@ def test_saved_battle_startup_missing_file_fails_cleanly(scene_factory, tmp_path
     assert scene_factory().fsm.state == 'DeployPhase'
 
 
+def test_basic_movement_preview_checks_swept_route_without_mutation(ai_scene):
+    app = ai_scene
+    unit = app.player1Units[1]
+    for other in app.units:
+        other.isDeployed = other is unit
+    unit.bodyNP.setPos(0, -12, 0)
+    unit.bodyNP.setH(0)
+    app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
+    app.terrain_manager.clear()
+    app.terrain_manager.add_terrain('house', Point3(0, -7, 0), 4, 3)
+    before = (tuple(unit.bodyNP.getPos()), unit.bodyNP.getH(), unit.hasMovedThisTurn, unit.moveSpentThisTurn)
+    blocked = app.movement.previewBasicMove(unit, (0, -4, 0))
+    assert blocked.error
+    assert (tuple(unit.bodyNP.getPos()), unit.bodyNP.getH(), unit.hasMovedThisTurn, unit.moveSpentThisTurn) == before
+    unit.bodyNP.setX(-8)
+    clear = app.movement.previewBasicMove(unit, (-8, -4, 0))
+    assert clear.error is None
+    assert clear.marching and clear.distance == pytest.approx(8)
+    assert app.movement.previewBasicMove(unit, (-8, -20, 0)).error
+    assert not unit.hasMovedThisTurn and unit.moveSpentThisTurn == 0
+    with patch.object(app.movement, 'movementAllowance', side_effect=[4, 2]):
+        assert app.movement.previewBasicMove(unit, (-6, -12, 0)).error
+
+
+@pytest.mark.parametrize('loose', [False, True])
+@pytest.mark.parametrize('drilled', [False, True])
+@pytest.mark.parametrize('dice, status', [([1, 1], 'completed'), ([6, 6], 'rejected')])
+def test_ai_awaits_enemy_sighted_march(ai_scene, dice, status, drilled, loose):
+    from unittest.mock import AsyncMock
+    app = ai_scene
+    app.AIplayer1.active = app.AIplayer2.active = True
+    app.AIplayer1.automatic = app.AIplayer2.automatic = False
+    mover, enemy = app.player1Units[2 if loose else 1], app.player2Units[1]
+    travel = app.movement.movementAllowance(mover, features=[]) * 2
+    if drilled:
+        from special_rules import apply_rule_keywords
+        apply_rule_keywords(mover.unit.model, ['Drilled'])
+        status = 'completed'
+    for other in app.units:
+        other.isDeployed = other in (mover, enemy)
+        if not other.isDeployed:
+            other.bodyNP.setPos(40, 40, 0)
+    app.terrain_manager.clear()
+    mover.bodyNP.setPos(0, 0, 0)
+    mover.bodyNP.setH(0)
+    enemy.bodyNP.setPos(0, -7, 0)
+    app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
+    outcomes = []
+
+    async def roll_dice():
+        from direct.task.Task import pause
+        await pause(.2)
+        assert app.AIplayer1._command_running
+        assert not app.AIplayer1._can_take_turn()
+        return dice
+
+    async def execute():
+        outcomes.append(await app.AIplayer1.execute_action(GameAction('move', mover.unitName,
+                        {'target_x': 0, 'target_y': travel, 'heading': 0})))
+
+    with patch.object(app, 'rollLeadershipDice', AsyncMock(side_effect=roll_dice)) as roll:
+        app.taskMgr.add(execute(), 'ai-march-test')
+        for frame in range(100):
+            app.taskMgr.step()
+            if outcomes:
+                break
+    assert outcomes and outcomes[0].status == status, (
+        outcomes, mover.marchTestResult, tuple(mover.bodyNP.getPos()),
+        [entry.text for entry in app.hud._journal.entries][-20:])
+    assert mover.marchTestResult == (None if drilled else 'passed' if status == 'completed' else 'failed')
+    assert roll.await_count == (0 if drilled else 1)
+    assert mover.bodyNP.getY() == pytest.approx(travel if status == 'completed' else 0)
+    assert not app.AIplayer1._command_running
+
+
+def test_saved_movement_candidate_budget(scene_factory):
+    from ai_movement import routes_towards
+    app = scene_factory(load_save=Path(__file__).with_name('ai_movement_reed_fens.json'))
+    for unit in app.units:
+        if getattr(unit, 'hostUnit', None) is not None:
+            continue
+        started = monotonic()
+        routes_towards(app, unit, (5, 13) if unit in app.player1Units else (-6, -12))
+        assert monotonic() - started < 2, unit.unitName
+
+
+def test_infantry_routes_around_house_with_useful_progress(ai_scene):
+    from ai_movement import routes_towards
+    from scouts import placement_error
+    app = ai_scene
+    app.AIplayer1.active = app.AIplayer2.active = True
+    app.AIplayer1.automatic = app.AIplayer2.automatic = False
+    unit = app.player1Units[1]
+    for other in app.units:
+        other.isDeployed = other is unit
+        other.bodyNP.setPos(40, 40, 0)
+    unit.bodyNP.setPos(-2, -14, 0)
+    unit.bodyNP.setH(0)
+    app.terrain_manager.clear()
+    app.terrain_manager.add_terrain('house', Point3(-2, -7, 0), 4, 3)
+    app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
+    positions = []
+    for turn in range(4):
+        unit.request('Idle')
+        unit.hasMovedThisTurn = unit.marchedThisTurn = False
+        unit.moveSpentThisTurn = 0
+        unit.manoeuvreThisTurn = None
+        routes = routes_towards(app, unit, (-2, 10))
+        assert routes, (positions, unit.bodyNP.getH())
+        preview, progress, waypoint = routes[0]
+        before = tuple(unit.bodyNP.getPos())
+        finish_action(app, GameAction('move', unit.unitName, {
+            'target_x': preview.destination[0], 'target_y': preview.destination[1], 'heading': preview.heading}))
+        assert tuple(unit.bodyNP.getPos()) == pytest.approx(preview.destination, abs=1e-4)
+        assert placement_error(app, unit, deployment_zone=False) is None
+        positions.append(tuple(unit.bodyNP.getPos()))
+        assert math.dist(before, positions[-1]) > .5
+        if unit.bodyNP.getY() > -3:
+            break
+    assert unit.bodyNP.getY() > -3, positions
+
+
+def test_front_unit_clears_lane_before_rear_advances(ai_scene):
+    from ai_policy import movement_candidates
+    from scouts import placement_error
+    app = ai_scene
+    app.AIplayer1.active = app.AIplayer2.active = True
+    app.AIplayer1.automatic = app.AIplayer2.automatic = False
+    front, enemy = app.player1Units[1], app.player2Units[1]
+    rear = app._create_unit({'name': 'Chaos Warrior', 'nmodels': 5, 'files': 5, 'ranks': 1}, 1, 'Rear regiment')
+    for unit in app.units:
+        unit.isDeployed = unit in (front, rear, enemy)
+        unit.bodyNP.setPos(40, 40, 0)
+    front.bodyNP.setPos(0, -4, 0)
+    rear.bodyNP.setPos(0, -7, 0)
+    enemy.bodyNP.setPos(0, 18, 0)
+    front.bodyNP.setH(0)
+    rear.bodyNP.setH(0)
+    app.terrain_manager.clear()
+    app.fsm.request('MovementPhase')
+    app.chargeStage = 'remaining'
+    options = movement_candidates(app, 1, [rear, front], [enemy])
+    selected = max(options, key=lambda candidate: candidate.score)
+    assert selected.action.unit_name == front.unitName
+    finish_action(app, selected.action)
+    options = movement_candidates(app, 1, [rear, front], [enemy])
+    selected = max(options, key=lambda candidate: candidate.score)
+    assert selected.action.unit_name == rear.unitName
+    finish_action(app, selected.action)
+    assert rear.bodyNP.getY() > -3
+    assert placement_error(app, rear, deployment_zone=False) is None
+
+
+def test_reed_fens_movement_reaches_combat(scene_factory, tmp_path):
+    random.seed(42)
+    app = scene_factory(load_save=Path(__file__).with_name('ai_movement_reed_fens.json'))
+    app.AIplayer1.active = app.AIplayer2.active = True
+    trace = []
+    previous = None
+    started = monotonic()
+    for frame in range(9000):
+        app.taskMgr.step()
+        state = (app.fsm.state, app.roundCounter.current_player,
+                 tuple(app.roundCounter.currentRoundPlayer))
+        if state != previous:
+            if app.fsm.state == 'ShootingPhase':
+                from scouts import placement_error
+                for unit in app.units:
+                    if getattr(unit, 'hostUnit', None) is None and not unit.isInCombat:
+                        assert placement_error(app, unit, deployment_zone=False) is None, unit.unitName
+            trace.append({'window': state, 'units': [
+                {'name': unit.unitName, 'position': tuple(unit.bodyNP.getPos(app.render)),
+                 'heading': unit.bodyNP.getH(), 'state': unit.state,
+                 'engaged': bool(unit.isInCombat), 'moved': unit.hasMovedThisTurn}
+                for unit in app.units if getattr(unit, 'hostUnit', None) is None]})
+            previous = state
+        if any(unit.isInCombat for unit in app.units):
+            break
+        if (max(app.roundCounter.currentRoundPlayer) >= 3 or app.fsm.state == 'BattleEnded'
+                or monotonic() - started > 60):
+            break
+        assert app.AIplayer1.active and app.AIplayer2.active, (
+            app.AIplayer1.pause_reason, app.AIplayer2.pause_reason, trace)
+    (tmp_path / 'movement-trace.json').write_text(json.dumps(trace, indent=2))
+    actions = [entry.text for entry in app.hud._journal.entries if entry.text.startswith('AI P')]
+    (tmp_path / 'movement-actions.json').write_text(json.dumps(actions, indent=2))
+    (tmp_path / 'movement-summary.json').write_text(json.dumps({
+        'seed': 42, 'seconds': monotonic() - started, 'frames': frame + 1,
+        'player': app.roundCounter.current_player, 'rounds_completed': app.roundCounter.currentRoundPlayer,
+        'contacts': {unit.unitName: [enemy.unitName for enemy in unit.isInCombatWith]
+                     for unit in app.units if unit.isInCombat},
+    }, indent=2))
+    assert any(unit.isInCombat for unit in app.units), (trace, actions)
+    assert max(app.roundCounter.currentRoundPlayer) <= 1
+
+
 @pytest.mark.parametrize('ai_scene', [(scenario, seed) for scenario in
                     ('standard', 'battle_march', 'reed_fens') for seed in (41, 42)],
                     ids=[f'{scenario}-{seed}' for scenario in ('standard', 'battle_march', 'reed_fens')
@@ -182,7 +382,10 @@ def test_autonomous_battle_matrix(ai_scene, tmp_path, request, record_property):
         assert app.AIplayer1.active and app.AIplayer2.active, (
             app.fsm.state, app.roundCounter.current_player,
             getattr(app.AIplayer1, 'pause_reason', ''), getattr(app.AIplayer2, 'pause_reason', ''),
-            [(unit.unitName, unit.state, unit.hasMovedThisTurn) for unit in app.units])
+                        [(unit.unitName, unit.state, unit.hasMovedThisTurn, unit.marchTestResult,
+                            getattr(unit, '_drilledMoveActive', False)) for unit in app.units],
+                        [task.getName() for task in app.taskMgr.getTasks()],
+                        '\n'.join(entry.text for entry in list(app.hud._journal.entries)[-25:]))
     assert app.fsm.state == 'BattleEnded', (app.fsm.state, phases)
     assert {'DeployPhase', 'MovementPhase', 'ShootingPhase', 'CombatPhase'} <= phases
     assert app.roundCounter.currentRoundPlayer == [6, 6]
@@ -196,8 +399,7 @@ def test_autonomous_battle_matrix(ai_scene, tmp_path, request, record_property):
         assert bool(app.battle_objectives) == (app.battle_config['objectives']['layout'] != 'none')
     actions = [entry.text for entry in app.hud._journal.entries
                if entry.text.startswith('AI P') and ' -> ' in entry.text]
-    assert any(': cast(' in action and ' -> completed' in action for action in actions)
-    assert any(': shoot(' in action and ' -> completed' in action for action in actions)
+    (tmp_path / 'ai-journal.json').write_text(json.dumps([entry.text for entry in app.hud._journal.entries], indent=2))
     result = {
         'schema_version': 1, 'policy': 'live-utility-v1', 'setup': getattr(app, 'battle_setup', None),
         'case': request.node.callspec.id, 'rounds': app.roundCounter.currentRoundPlayer,
@@ -208,6 +410,11 @@ def test_autonomous_battle_matrix(ai_scene, tmp_path, request, record_property):
     output = json.dumps(result, default=str, indent=2)
     (tmp_path / 'ai-match-result.json').write_text(output)
     record_property('ai_match', output)
+    assert any(': cast(' in action and ' -> completed' in action for action in actions)
+    assert (any((': shoot(' in action or ': attack(' in action) and ' -> completed' in action for action in actions)
+            or any(entry.text.startswith('Shooting ') and ' eligible models ' in entry.text
+                   and ' shots,' in entry.text and '-> 0 shots,' not in entry.text
+                   for entry in app.hud._journal.entries)), '\n'.join(actions)
 
 
 def test_ai_casts_through_live_spell_window(ai_scene):
@@ -282,7 +489,7 @@ def test_live_policy_targets_objectives_and_shooting(ai_scene):
     app.fsm.request('MovementPhase')
     app.chargeStage = 'remaining'
     approach = movement_candidates(app, 1, [shooter], [])
-    assert approach and all(candidate.reason == 'objective approach' for candidate in approach)
+    assert approach and all(candidate.reason.startswith('objective approach;') for candidate in approach)
     shooter.bodyNP.setPos(0, -2, 0)
     assert not movement_candidates(app, 1, [shooter], [])
 
@@ -368,7 +575,8 @@ def test_ai_controls_start_disabled_and_toggle_both_sides(ai_scene):
     assert not app.aiControls(app.player1Units[0])
 
 
-def test_ai_reserve_move_preserves_earlier_budget(ai_scene):
+@pytest.mark.parametrize('drilled', [False, True])
+def test_ai_reserve_move_preserves_earlier_budget(ai_scene, drilled):
     from ai_policy import movement_candidates
     from magic_items import current_turn
     from special_rules import apply_rule_keywords
@@ -379,7 +587,7 @@ def test_ai_reserve_move_preserves_earlier_budget(ai_scene):
     for index, member in enumerate(app.units):
         member.isDeployed = member in (mover, enemy)
         member.bodyNP.setPos(25 + index * 3, 20, 0)
-    apply_rule_keywords(mover.unit.model, ['Reserve Move'])
+    apply_rule_keywords(mover.unit.model, ['Reserve Move', 'Drilled'] if drilled else ['Reserve Move'])
     mover.bodyNP.setPos(0, 0, 0)
     mover.bodyNP.setH(0)
     enemy.bodyNP.setPos(0, 20, 0)
@@ -391,6 +599,8 @@ def test_ai_reserve_move_preserves_earlier_budget(ai_scene):
     options = movement_candidates(app, 1, [mover], [enemy])
     assert options
     finish_action(app, options[0].action)
+    assert mover.bodyNP.getX() == pytest.approx(options[0].action.parameters['target_x'], abs=1e-4)
+    assert mover.bodyNP.getY() == pytest.approx(options[0].action.parameters['target_y'], abs=1e-4)
     assert tuple(mover.bodyNP.getPos()) != before
     assert mover.reserveDoneTurn == current_turn(app)
     assert mover.hasMovedThisTurn and mover.moveSpentThisTurn == 1.5

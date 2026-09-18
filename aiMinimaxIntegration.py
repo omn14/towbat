@@ -986,14 +986,32 @@ class EnhancedAI:
                 if unit.hasMovedThisTurn or unit.state != 'Idle':
                     return ActionOutcome('rejected', 'actor cannot move')
                 self.game.unitToMove = unit
-                self.game.pathTowardsMouse(unit, action.parameters['target_x'],
-                                           action.parameters['target_y'])
-                command = self.game.moveUnit(unit, wait_for_completion=True)
+                preview = None
+                if 'heading' in action.parameters:
+                    destination = (action.parameters['target_x'], action.parameters['target_y'], 0)
+                    preview = self.game.movement.previewBasicMove(unit, destination, action.parameters['heading'])
+                    if preview.error:
+                        return ActionOutcome('rejected', preview.error)
+                    command = self.game.movement.commitBasicMove(unit, preview)
+                else:
+                    self.game.pathTowardsMouse(unit, action.parameters['target_x'],
+                                               action.parameters['target_y'])
+                    command = self.game.moveUnit(unit, wait_for_completion=True)
                 if isawaitable(command):
                     await command
                 from reserve_move import in_reserve
                 if (unit.hasMovedThisTurn or getattr(unit, 'chargeAttemptPending', False)
                     or (in_reserve(self.game) and getattr(unit, 'reserveDoneTurn', None) is not None)):
+                    if preview is not None and not unit.bodyNP.isEmpty() and unit.unit.nmodels > 0:
+                        position = tuple(unit.bodyNP.getPos(self.game.render))
+                        error = math.dist(position[:2], preview.destination[:2])
+                        if error > 1e-3:
+                            return ActionOutcome('failed', f'move ended {error:.3f}" from the planned destination')
+                        from rules_log import battle_log
+                        battle_log(f'AI P{self.player_num}: {unit.unitName} '
+                                   f'{"marches" if preview.marching else "moves"} {preview.distance:.2f}" '
+                                   f'to ({position[0]:.2f}, {position[1]:.2f}), '
+                                   f'heading {unit.bodyNP.getH(self.game.render):.1f}', 'info')
                     return ActionOutcome('completed')
                 return ActionOutcome('rejected', 'movement command did not commit')
 
@@ -1045,6 +1063,9 @@ class EnhancedAI:
 
     def _can_take_turn(self):
         game = self.game
+        if any(getattr(unit, 'marchTestResult', None) == 'pending'
+               or getattr(unit, '_drilledMoveActive', False) is True for unit in game.units):
+            return False
         manager = getattr(game, 'taskMgr', None)
         if manager is not None and any(manager.hasTaskNamed(name) for name in (
                 'taskLoopDeploy', 'taskMoveUnit', 'resolveChargesTask',

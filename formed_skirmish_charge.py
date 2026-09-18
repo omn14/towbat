@@ -172,11 +172,26 @@ def path_error(route, targets, obstacles, *, battlefield=STANDARD_BATTLEFIELD):
     steps = max(1, math.ceil(abs(route.wheel) / 0.5))
     stops.extend(route.lead + route.wheel_distance * index / steps for index in range(1, steps + 1))
     stops.append(route.distance)
-    before = footprint(route.boxes_at(0))
+    body = footprint(route.original_boxes)
+
+    def body_at(distance):
+        position, heading = route.pose(distance)
+        center = rotate((position[0] + body[0] - route.origin[0],
+                         position[1] + body[1] - route.origin[1]), position, heading - route.heading)
+        return (*center, body[2], body[3], body[4] + heading - route.heading)
+
+    before = body_at(0)
     for distance in stops[1:]:
-        after = footprint(route.boxes_at(distance))
+        after = body_at(distance)
         if not battlefield.contains_box(after, EPSILON):
             return 'Charge would leave the battlefield'
+        if all(math.hypot(after[0] - obstacle[0], after[1] - obstacle[1]) >
+               math.hypot(after[2], after[3]) + math.hypot(obstacle[2], obstacle[3]) +
+               math.dist(before[:2], after[:2]) + math.hypot(before[2], before[3]) *
+               abs(math.radians(after[4] - before[4])) * 2
+               for obstacle in [*obstacles, *targets]):
+            before = after
+            continue
         change = abs(math.radians(after[4] - before[4]))
         padding = math.hypot(before[2], before[3]) * change
         swept = (*before[:2], before[2] + padding, before[3] + padding, before[4])

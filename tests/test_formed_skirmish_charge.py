@@ -73,6 +73,64 @@ def test_one_wheel_route_keeps_formed_shape_and_reaches_base(heading, offset):
         assert route.wheel == 0
 
 
+def test_optimized_sweeps_match_per_model_reference():
+    import random
+    from battlefield import STANDARD_BATTLEFIELD
+    from formed_skirmish_charge import ChargeRoute, entry_distance, path_error, rotate
+    from skirmish import EPSILON, swept_base_overlaps
+
+    def reference(route, targets, obstacles):
+        steps = max(1, math.ceil(abs(route.wheel) / .5))
+        stops = [0, route.lead, *(route.lead + route.wheel_distance * index / steps
+                                 for index in range(1, steps + 1)), route.distance]
+        before = footprint(route.boxes_at(0))
+        for distance in stops[1:]:
+            after = footprint(route.boxes_at(distance))
+            if not STANDARD_BATTLEFIELD.contains_box(after, EPSILON):
+                return 'Charge would leave the battlefield'
+            change = abs(math.radians(after[4] - before[4]))
+            padding = math.hypot(before[2], before[3]) * change
+            swept = (*before[:2], before[2] + padding, before[3] + padding, before[4])
+            end = (*after[:2], *swept[2:])
+            if any(swept_base_overlaps(swept, end, obstacle) for obstacle in obstacles):
+                return 'Charge path is blocked'
+            if change and any(swept_base_overlaps(swept, end, target) for target in targets):
+                return 'Wheel contacts the target before the approach is complete'
+            length = math.dist(before[:2], after[:2])
+            if not change and length > EPSILON:
+                direction = ((after[0] - before[0]) / length, (after[1] - before[1]) / length)
+                if any((entry := entry_distance(before, target, direction)) is not None
+                       and entry < length - EPSILON for target in targets):
+                    return 'Another target model is contacted first'
+            before = after
+        return None
+
+    rng = random.Random(42)
+    outcomes = set()
+    for case in range(200):
+        heading, angle = rng.uniform(-180, 180), rng.choice((0, -90, -30, 30, 90))
+        origin = (rng.uniform(-30, 30), rng.uniform(-18, 18), 0)
+        boxes = [(*rotate((origin[0] + column, origin[1] + row), origin, heading), .5, .5, heading)
+                 for row in (-1, 0) for column in (-2, -1, 0, 1, 2)]
+        body = footprint(boxes)
+        lead = rng.uniform(0, 3)
+        forward = (-math.sin(math.radians(heading)), math.cos(math.radians(heading)))
+        right = (forward[1], -forward[0])
+        pivot = (body[0] + forward[0] * (body[3] + lead) - math.copysign(body[2], angle) * right[0],
+                 body[1] + forward[1] * (body[3] + lead) - math.copysign(body[2], angle) * right[1])
+        route = ChargeRoute(origin, heading, pivot, lead, angle, abs(math.radians(angle)) * 5,
+                            rng.uniform(0, 12), 0, boxes)
+        sample = route.pose(rng.uniform(0, route.distance))[0]
+        obstacles = [(sample[0] + rng.uniform(-8, 8), sample[1] + rng.uniform(-8, 8),
+                      rng.uniform(.3, 2), rng.uniform(.3, 2), rng.uniform(-180, 180)),
+                     (100, 100, 2, 2, 0)]
+        targets = [(sample[0] + rng.uniform(-8, 8), sample[1] + rng.uniform(-8, 8), .5, .5, 0)]
+        expected = reference(route, targets, obstacles)
+        outcomes.add(expected)
+        assert path_error(route, targets, obstacles) == expected, case
+    assert len(outcomes) == 5
+
+
 @pytest.mark.parametrize('dice,succeeds', [([6, 6], True), ([1, 1], False)])
 @pytest.mark.parametrize('offset', [-3, 0, 3])
 def test_real_route_resolution_uses_preview_wheel_and_roll(scene, dice, succeeds, offset):

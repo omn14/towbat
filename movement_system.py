@@ -7,6 +7,7 @@ are used directly; all other game state is accessed via ``self.game``.
 """
 
 import math
+from dataclasses import dataclass, replace
 from collision_masks import CollisionMask as CM
 from characters import on_host_removed, same_player
 from rules_log import rule_log, rule_skipped
@@ -68,6 +69,15 @@ def is_march(distance: float, movement: float, spent: float = 0.0) -> bool:
     the boundary out of the march band.
     """
     return distance > max(0.0, movement - spent) + 1e-6
+
+
+@dataclass(frozen=True)
+class BasicMovePreview:
+    destination: tuple
+    heading: float
+    distance: float
+    marching: bool
+    error: str | None = None
 
 
 class MovementSystem:
@@ -606,6 +616,148 @@ class MovementSystem:
                 rule_log('Move Through Cover', unit,
                          f'terrain {modifier:+g}M; {detail}; unit allowance {allowance:g}"')
         return allowance
+
+    def previewBasicMove(self, unit, destination, heading=None):
+        """Quiet wheel/translation check shared by AI and commit (pp. 123-125, 270).
+
+        Reuse the charge route's swept formation geometry, not just the endpoint.
+        No dice, scene transforms, movement budgets or UI state are changed.
+        """
+        from battlefield import battlefield_for
+        from characters import side_of
+        from drilled import march_multiplier
+        from formed_skirmish_charge import footprint, movement_route, path_error, route_features
+        from psychology import obb_distance
+        from reserve_move import in_reserve
+        from scouts import model_base_boxes
+        from skirmish import swept_base_overlaps
+        from terrain_system import terrain_obstacle
+        from chariot_terrain import linear_impassable
+        from special_rules import unit_is_ethereal
+
+        origin = unit.bodyNP.getPos(self.game.render)
+        facing = unit.bodyNP.getHpr(self.game.render)
+        heading = facing.x if heading is None else heading
+        destination = tuple(destination)
+        angle = (heading - facing.x + 180) % 360 - 180
+        boxes = model_base_boxes(unit)
+        if not boxes:
+            return BasicMovePreview(destination, heading, 0, False, 'no living model bases')
+        body = footprint(boxes)
+        loose = getattr(unit, 'isSkirmisher', False)
+        route = movement_route(unit, origin, facing, destination, heading) if not loose else None
+        distance = route.distance if route else math.dist(tuple(origin)[:2], destination[:2])
+        allowance = self.movementAllowance(unit, features=[])
+        spent = unit.moveSpentThisTurn
+        marching = is_march(distance, allowance, spent)
+        error = None
+        if route and math.dist(route.destination, destination) > 1e-3:
+            error = 'destination is not on the wheeled forward route'
+        if loose and abs(angle) > 1e-4:
+            error = 'unsupported wheel angle'
+        if abs(angle) > 1e-4 and unit.manoeuvreThisTurn not in (None, 'Wheel'):
+            error = 'another manoeuvre has already been performed'
+        maximum = allowance * (1 if in_reserve(self.game) else march_multiplier(unit))
+        if getattr(unit, 'marchTestResult', None) == 'failed':
+            maximum = allowance
+        if distance + spent > maximum + 1e-4:
+            error = 'route exceeds remaining movement allowance'
+        half_speed = False
+        if not loose and not route:
+            displacement = Vec3(*destination) - origin
+            forward = unit.bodyNP.getQuat(self.game.render).getForward()
+            right = unit.bodyNP.getQuat(self.game.render).getRight()
+            lateral, advance = displacement.dot(right), displacement.dot(forward)
+            if abs(lateral) > 1e-4 or advance < -1e-4:
+                half_speed = True
+                if (unit.manoeuvreThisTurn or unit.marchedThisTurn or distance + spent > allowance / 2 + 1e-4
+                        or (abs(lateral) > 1e-4 and abs(advance) > 1e-4)):
+                    error = 'sideways/backwards movement requires a separate half-M manoeuvre'
+        if route:
+            final_boxes = route.final_boxes
+        else:
+            final_boxes = [(box[0] + destination[0] - origin.x, box[1] + destination[1] - origin.y,
+                            *box[2:]) for box in boxes]
+        field = battlefield_for(self.game)
+        if any(not field.contains_box(box) for box in final_boxes):
+            error = 'formation would leave the battlefield'
+        flying = all(member.unit.model.is_flying() for member in self.movementParticipants(unit))
+        obstacles = []
+        for other in self.game.units:
+            if (other is unit or getattr(other, 'hostUnit', None) is not None or not other.isDeployed
+                    or other.unit.nmodels <= 0 or other.bodyNP.isEmpty()):
+                continue
+            other_boxes = model_base_boxes(other)
+            if not other_boxes:
+                continue
+            obstacle = footprint(other_boxes)
+            clearance = 1.0 if side_of(self.game, other, None) != side_of(self.game, unit, None) else 0.05
+            if any(obb_distance(box, obstacle) < clearance - 1e-4 for box in final_boxes):
+                error = f'formation cannot finish this close to {other.unitName}'
+            if not flying:
+                obstacles.append(obstacle)
+        for piece in getattr(getattr(self.game, 'terrain_manager', None), 'terrain_pieces', []):
+            if piece.is_impassable or linear_impassable(piece, unit):
+                obstacle = terrain_obstacle(piece)
+                if any(obb_distance(box, obstacle) <= 0.02 for box in final_boxes):
+                    error = f'formation cannot land in impassable {piece.terrain_type}'
+                if not flying and not unit_is_ethereal(unit):
+                    obstacles.append(obstacle)
+        if not error and not flying:
+            if route:
+                error = path_error(replace(route, original_boxes=[body]), [], obstacles, battlefield=field)
+            elif any(swept_base_overlaps(before, after, obstacle)
+                     for before, after in zip(boxes, final_boxes) for obstacle in obstacles):
+                error = 'movement path is blocked'
+        if not error:
+            features = (route_features(self.game, replace(route, original_boxes=[body])) if route else
+                        self.movementTerrainFeatures(unit, origin, destination))
+            allowance = self.movementAllowance(unit, origin, destination, features=features)
+            marching = is_march(distance, allowance, spent)
+            maximum = allowance * (1 if in_reserve(self.game) else march_multiplier(unit))
+            if half_speed:
+                maximum = allowance / 2
+            if getattr(unit, 'marchTestResult', None) == 'failed':
+                maximum = min(maximum, allowance)
+            if distance + spent > maximum + 1e-4:
+                error = 'terrain reduces the remaining movement allowance'
+        return BasicMovePreview(destination, heading, distance, marching, error)
+
+    async def commitBasicMove(self, unit, planned):
+        """Commit an explicit pose through the ordinary movement rules (pp. 123-125)."""
+        from drilled import before_move, has_drilled
+        from inspect import isawaitable
+        from reserve_move import in_reserve
+        from rules_log import battle_log
+        if self.game.awaitingChoice:
+            return False
+        loose = getattr(unit, 'isSkirmisher', False)
+        if not loose and has_drilled(unit):
+            unit._drilledMoveActive = True
+            try:
+                await before_move(self.game, unit, 'Reserve Move' if in_reserve(self.game) else 'Remaining Move')
+            finally:
+                unit._drilledMoveActive = False
+        preview = self.previewBasicMove(unit, planned.destination, planned.heading)
+        if preview.error:
+            battle_log(f'{unit.unitName}: move refused: {preview.error}; movement retained', 'info')
+            return False
+        marker = (0 if loose else unit.unitHeight / 2 if in_reserve(self.game) else
+                  -unit.bodyNPback.getY() * unit.bodyNP.getScale().y)
+        heading = math.radians(preview.heading)
+        front = Vec2(preview.destination[0] - math.sin(heading) * marker,
+                     preview.destination[1] + math.cos(heading) * marker)
+        self.game.arcPoint = (front / 50 + Vec2(1, 1)) * .5
+        self.game.arcPointRotation = (preview.heading - unit.bodyNP.getH() + 180) % 360 - 180
+        self.game.moveArceDistance = preview.distance
+        unit.wouldMarch = preview.marching
+        unit.formedSkirmishPreview = None
+        result = self.moveUnit(unit, drilled_ready=True)
+        if isawaitable(result):
+            result = await result
+        if getattr(unit, 'marchTestResult', None) == 'pending':
+            await unit._marchTask
+        return result
 
     def dangerousTerrainTests(self, unit, from_pos, to_pos, damage='1', *, features=None, route=None, travel=None) -> int:
         """Test every model against each dangerous feature the move met, and
@@ -1453,7 +1605,7 @@ class MovementSystem:
             return False
         from reserve_move import commit, in_reserve
         if in_reserve(self.game):
-            return commit(self.game, unit)
+            return commit(self.game, unit, drilled_ready=drilled_ready)
         from scouts import scout_charge_blocked
         from charge_declarations import ordinary_move_allowed
         if (self.game.fsm.state == 'MovementPhase'
@@ -1534,6 +1686,22 @@ class MovementSystem:
             self.game.startTaskFunction(self.game.taskLoopPathTowardsMouse, 'taskLoopPathTowardsMouse')
             messenger.send('unit-move-complete')
             return False
+
+        if (unit.state == 'Idle' and not getattr(unit, 'isSkirmisher', False)
+                and (not c or (landing_target is not None and same_player(self.game, unit, landing_target)))):
+            destination, heading = tuple(unit.bodyNP.getPos()), unit.bodyNP.getH()
+            unit.bodyNP.setPos(oposUnit)
+            unit.bodyNP.setHpr(orotUnit)
+            preview = self.previewBasicMove(unit, destination, heading)
+            if preview.error:
+                unit.bodyNP.node().setTransformDirty()
+                from rules_log import battle_log
+                battle_log(f'{unit.unitName}: move refused: {preview.error}; movement retained', 'info')
+                return False
+            unit.bodyNP.setPos(*destination)
+            unit.bodyNP.setH(heading)
+            self.game.moveArceDistance = preview.distance
+            unit.wouldMarch = preview.marching
         
         if c:
             defenderNP = render.find(f"**/{c.getNode1().getName()}")
@@ -1594,7 +1762,7 @@ class MovementSystem:
 
         # Do not mark or announce marching for a refused Scout charge.
         from drilled import before_move, has_drilled
-        if (not c and unit.state == 'Idle' and has_drilled(unit)
+        if (not c and unit.state == 'Idle' and has_drilled(unit) and not drilled_ready
                 and not getattr(unit, '_drilledMoveActive', False)):
             target = Vec3(getattr(unit, '_movementAim', unit.bodyNP.getPos()))
             unit.bodyNP.setPos(oposUnit)
@@ -1628,10 +1796,10 @@ class MovementSystem:
                 self.game.arcPointRotation = declared_rotation
                 self.game.moveArceDistance = declared_distance
                 unit.wouldMarch = True
-                self.moveUnit(unit)
+                self.moveUnit(unit, drilled_ready=drilled_ready)
 
             if not request_march(self.game, unit, complete_march):
-                return False
+                return getattr(unit, '_marchTask', False) if unit.marchTestResult == 'pending' else False
             unit.bodyNP.setPos(destination)
             unit.bodyNP.setHpr(heading)
         if getattr(unit, 'wouldMarch', False) and (not c or same_player(self.game, unit, defenderUnit)):

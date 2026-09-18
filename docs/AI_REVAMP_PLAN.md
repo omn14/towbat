@@ -1,9 +1,10 @@
 # Game AI Revamp Plan
 
 Date: 2026-09-18.
-Status: Phase 2 exit gate met for the agreed acceptance matrix. The live utility
-baseline is implemented and verified; complete observations, predictive modelling,
-search correctness, playing-strength benchmarks, and release gates remain open.
+Status: Phase 2 completion matrix passed. The saved-opening movement correction
+below adds navigation/progress evidence missing from that original gate. Complete
+observations, broader navigation, predictive modelling, search correctness,
+playing-strength benchmarks, and release gates remain open.
 
 ## Goal And Scope
 
@@ -127,7 +128,7 @@ missile weapons and targets, support from potential/committed charges and engage
 allies, normal rallies, implemented spells, character escorts/retreats, leaving
 Marching Column, and Reserve Move. It conserves a single-use casting/dispel bonus
 when its threshold or battlefield pressure makes it unhelpful. Scores are labelled
-utility, not probabilities. The only rule correction in this delivery is artillery
+utility, not probabilities. The only rule correction in the original delivery was artillery
 shot spending on committed misfires, documented with sources and remaining limits
 in [SPECIAL_RULES_CHECKLIST.md](../SPECIAL_RULES_CHECKLIST.md).
 
@@ -146,7 +147,7 @@ priority. This is a basic fallback, not a strategic ranking of every prompt.
 | Strategy, movement and shooting spells | Shared spell construction and phase/target checks; select supported legal spell/target, otherwise decline casting. Unknown catalogue effects and unsupported target forms are not simulated. |
 | Assailment, spell generation, Wizardly/Fated and Remains in Play dispels | Existing magic-local handlers, legal spell/target choices and attempt limits. Dispel policy prefers the strongest eligible wizard; otherwise Fated if available. Scarce bonus policy may retain its item. |
 | Charge declarations, compulsory charges, reactions, Counter Charge, order | Shared route candidates with support scoring; declaration completion still calls the compulsory Frenzy/Impetuous resolver. Opponent-owned reactions and charge order stay inside existing resolution. No unconditional nearest-enemy charge pass. |
-| Remaining movement, flight, terrain | Sample objective/support/retreat destinations, then authoritative path and budget validation. Preserve useful firing/objective positions; rejected routes yield another candidate or a legal hold. Existing flight/Drilled/terrain safeguards remain active. |
+| Remaining movement, flight, terrain | Bounded house detours, wheel/advance, half-M sideways/backwards and loose translations. Shared swept previews and exact commits; progress/facing scores favour useful approaches. Preserve objective/firing positions; await march tests and Drilled; reject blocked routes without spending movement. See the correction below for limits. |
 | Characters, formations, optional pivots | Legal non-marching join/leave previews and commits; redress out of Marching Column. Keep current formation/facing when no supported beneficial action is available. |
 | Shooting, cannon, bombardment | Compare available missile weapons and legal targets, then real volley/artillery resolver. Engaged/blocked/out-of-range targets are rejected. A committed misfire spends one shot; invalid targeting does not. |
 | Reserve Move | Separate extra-move budget through the existing window; move if useful/legal, otherwise decline. Restore the ordinary movement record afterward; no march or charge. |
@@ -154,7 +155,7 @@ priority. This is a basic fallback, not a strategic ranking of every prompt.
 | Panic, Break, flee, pursuit, overrun, reform | Existing nested resolution owns the task/choice until completion; controller waits on active Panic/combat/reform work. Optional choices use their local policy or offered-option fallback. |
 | Objective control, secondary/scenario prompts, terminal scoring | Existing scenario handlers resolve legal choices and score; movement uses current geometry, not stale stored ownership. Terminal result comes from the authoritative battle scorer. |
 
-### Acceptance Results
+### Original Acceptance Results
 
 [tests/test_ai_scene.py](../tests/test_ai_scene.py) runs the real policy, FSM,
 commands, Bullet geometry, dice, magic and combat with offscreen Panda3D. It replaces
@@ -227,6 +228,85 @@ default. No full suite was run. A full shooting module exceeded its earlier
 512 MiB cap; a later 1536 MiB attempt was refused by the memory admission guard,
 which was not bypassed. The focused results above do not substitute for release
 regression gates or human play-testing.
+
+## Saved-Opening Movement Correction
+
+User play-testing exposed a gap in the original Phase 2 gate: completion and
+any-unit-moved assertions did not establish useful navigation. Full/half straight
+targets were clipped by the human cursor path; spending a move was incorrectly
+treated as sufficient evidence of progress. No detours or traffic-aware activation
+were tested. The original gate must not be read as a movement-quality claim.
+
+The user authorized this correction using the current quicksave, prioritising
+fast legal contact. [tests/ai_movement_reed_fens.json](../tests/ai_movement_reed_fens.json)
+is a frozen copy, not a test that reads the user's changing save. Source and fixture
+SHA-256 both remain `7185d0256017490a97af9fb22cc1704ccd0a23eb47ccf0fe0783713de0ece8e9`.
+The opening has two houses, dangerous marshes, joined characters, infantry,
+cavalry, skirmishers and a flying chariot on the 30 by 44 inch Reed Fens map.
+
+Implemented:
+
+- [ai_movement.py](../ai_movement.py) uses a small obstacle-corner graph with
+  formation clearance, then samples legal wheel/advance, wheel-only, half-M lateral
+  or backward moves and loose translations. Candidates inside the coarse obstacle
+  envelope do not receive a fictitious direct path-to-goal score. Actual sweeps
+  remain authoritative; the graph does not grant permission to cross a blocker.
+- Shared quiet previews validate formation bases, swept routes, bounds, terrain,
+  landing clearance and movement cost. Marching is available; failed Enemy Sighted
+  tests restrict subsequent candidates to ordinary Movement. Progress and facing
+  gains rank moves across units, letting a front regiment clear a blocked rear one.
+- Explicit commits retain the planned endpoint through Drilled and Reserve Move.
+  The ordinary 45%-depth marker and Reserve's half-depth convention are converted
+  separately. A spent move with the wrong endpoint now fails visibly. Logs include
+  route cost, waypoint, progress/facing gain and the actual committed position.
+- Both formed and loose marches await their dice task. Pending march tests and
+  Drilled work block new decisions. A real Battle March replay caught the loose-unit
+  race, in which a Mage moved again while its test still blocked phase advance.
+- Shared charge sweeps transform one rigid formation footprint and reject distant
+  obstacles cheaply. Already declared chargers are not replanned. A 200-route
+  seeded comparison matches the previous per-model algorithm's five outcomes.
+
+### Measured Result
+
+Seed 42, both AIs continuous: the old opening reached no combat within three P1
+turns; the corrected opening reaches first contact on **P2's first turn**, with
+completed-turn counters `[1, 0]`. Chaos Warriors contact the Lothern Skycutter;
+the Aspiring Champion also declared a charge. P1's preceding legal route costs
+were Skycutter 20.00 inches, White Lions 10.00 inches and Spearmen 6.29 inches.
+The final accelerated offscreen run took 37.26 seconds / 394 task frames. This is
+not interactive animation pacing or proof of a globally fastest/safe attack.
+
+Verification, sequential isolated services with the existing headroom guard:
+
+- Seven saved-opening, preview, candidate-budget, multi-turn infantry detour,
+  front-before-rear and Reserve checks passed: `20260918-221205-1379367`, peak
+  503.4 MiB. Clearance is checked at ordinary movement boundaries; exact endpoints
+  are checked on commits. JSON retains phase/pose traces, actions and first contact.
+- Eight delayed march pass/fail cases cover formed/loose units and Drilled's
+  exemption: `20260918-220858-1378336`. That run's ninth test finished its battle
+  but failed the old every-match-must-shoot assertion, corrected below.
+- All six six-round autonomous matrix cases completed across focused reports
+  `20260918-220154-1375891` (standard seeds), `20260918-220621-1377373`
+  (Battle March 41) and `20260918-220958-1378675` (Battle March 42, Reed Fens seeds).
+  Match assertions now accept resolved shooting or melee, rather than prescribing
+  a volley in every seed. The separate ordinary-shooting/LOS/objective test passes.
+- 71 lightweight AI, 22 marching, 34 Drilled/Impetuous and 51 formed-charge cases
+  passed. The new 200-route equivalence test also passes. Final half-M terrain
+  correction and infantry detour checks pass in `20260918-221345-1379903`.
+- Mounted cursor previews: six passed; the Mage case still expects two formed
+  arcs but gets none in the unchanged cursor-preview branch. It is not fixed here.
+  No full-suite or human play-test is claimed. Nothing was staged or committed for
+  this correction; earlier baseline/startup commits remain 2152738 and 432474e.
+
+LEFTOVER: one sampled front-corner wheel per candidate, not arbitrary multi-wheel
+routes, multi-turn searches or guaranteed navigation through tight passages. The
+graph models static blocking terrain, while friendly traffic is checked locally;
+there are no persistent lane reservations, detour-side memory or global activation
+search. Ground detour/column tests establish specific progress cases, not universal
+absence of stalls. The saved test stops at first contact, not battle completion.
+Aggressive contact can expose the Skycutter or a wizard; mutual-damage/risk scoring
+and stronger missile facing/formation policies remain future work. Objective and
+useful-firing holds are intentional. Do not interpret fast contact as strong play.
 
 ## Simulation Simplification Policy
 
@@ -433,8 +513,10 @@ yet establish autonomous tactical competence.
   joining/leaving, formation changes, and scenario-specific decisions.
 - [x] Add objective/scoring-aware utility, terrain-validated movement, appropriate holding,
   target selection, and coordinated charge candidates.
-- [ ] Expand terrain/threat evaluation beyond existing route/LOS validation and
-  the simple nearest-enemy pressure/retreat heuristic.
+- [x] Correct saved-opening movement with bounded detours, exact legal commits,
+  progress/traffic checks and a repeatable first-contact regression.
+- [ ] Expand terrain/threat evaluation beyond bounded route/LOS validation and
+  nearest-enemy contact goals; add coordinated multi-turn navigation and risk.
 - [x] Adapt existing rule-local policies instead of losing their safeguards.
   Enumerate every supported decision window and its fallback explicitly.
 

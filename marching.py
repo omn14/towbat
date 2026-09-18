@@ -68,5 +68,5 @@ def request_march(game, unit, on_pass):
             if unit.marchTestResult == 'pending':
                 unit.marchTestResult = None
 
-    game.taskMgr.add(resolve())
+    unit._marchTask = game.taskMgr.add(resolve(), f'march-test-{unit.unitName}')
     return False

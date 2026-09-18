@@ -40,6 +40,7 @@ def fighting_power(unit):
 def charge_candidates(game, friendlies):
     from impetuous import legal_targets
     options = [(unit, target, route) for unit in friendlies
+               if not any(entry.charger is unit for entry in getattr(game, 'chargeDeclarations', []))
                for target, route, target_index in legal_targets(game, unit)]
     result = []
     for unit, target, route in options:
@@ -147,25 +148,19 @@ def movement_candidates(game, player, friendlies, enemies):
                 target = min(enemies, key=lambda enemy: (enemy.bodyNP.getPos() - origin).length())
                 position = target.bodyNP.getPos()
                 distance = (position - origin).length()
-                ratio = fighting_power(unit) / max(1, fighting_power(target))
                 shooting_position = bool(shooting_candidates(game, [unit], enemies))
-                if not shooting_position and distance > 4:
-                    direction = -1 if ratio < 0.5 and distance < allowance * 3 else 1
-                    goals.append((origin.x + (position.x - origin.x) * direction,
-                                  origin.y + (position.y - origin.y) * direction,
-                                  20 if direction > 0 else 30, 'support approach' if direction > 0 else 'avoid isolated fight'))
+                if not shooting_position and distance > 1:
+                    goals.append((position.x, position.y, 20, 'combat approach'))
         for target_x, target_y, score, reason in goals[:3]:
-            delta_x, delta_y = target_x - origin.x, target_y - origin.y
-            distance = math.hypot(delta_x, delta_y)
-            if distance < 0.1:
-                continue
-            for fraction in (1.0, 0.5):
-                travel = min(allowance * fraction, max(0, distance - 2))
-                if travel < 0.1:
-                    continue
-                destination = {'target_x': origin.x + delta_x / distance * travel,
-                               'target_y': origin.y + delta_y / distance * travel}
-                result.append(Candidate(GameAction('move', unit.unitName, destination), score * fraction, reason))
+            from ai_movement import routes_towards
+            for preview, progress, waypoint in routes_towards(game, unit, (target_x, target_y)):
+                destination = {'target_x': preview.destination[0], 'target_y': preview.destination[1],
+                               'heading': preview.heading}
+                result.append(Candidate(GameAction('move', unit.unitName, destination),
+                                        score + progress * 8,
+                                        f'{reason}; route {preview.distance:.2f}" '
+                                        f'via ({waypoint[0]:.2f}, {waypoint[1]:.2f}), '
+                                        f'progress/facing gain {progress:.2f}'))
     return result
 
 

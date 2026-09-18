@@ -10,6 +10,49 @@ did not, carrying the numbers that decided it. Nothing in this engine is
 visible on screen, so a rule that works and a rule that was never coded look
 identical without the log. See `.github/copilot-instructions.md`.
 
+## AI Movement And March Continuations: 2026-09-18
+
+[x] Rulebook pp. 123-125, 167, 170, 177, 270: AI Remaining/Reserve movement now
+uses quiet formation-base previews and exact planned commits. Wheel cost, ordinary
+and march budgets, half-M sideways/backwards movement (including terrain-adjusted
+allowance), battlefield limits, blocked routes and landing clearance are checked.
+Ordinary formed commits also revalidate the route before spending the move.
+Fly/Ethereal traversal and the existing landing, terrain and damage resolvers
+remain in control. Preview queries do not roll dice or emit rule logs.
+
+[x] Corrected on the way: ordinary movement uses a 45%-depth marker whereas
+Reserve uses half depth; treating both as a geometric front edge overshot the
+planned endpoint. Drilled continuations now preserve the explicit route after
+their normal free-redress opportunity instead of regenerating a cursor path.
+
+[x] Enemy Sighted (p. 123) is awaited for formed and skirmishing AI moves; the
+named pending task blocks subsequent decisions. Failed tests retain normal-M
+movement and the existing counts-as-marched restriction. Drilled (p. 167) keeps
+its no-test exemption. Existing numbered rule logs remain; AI logs add route
+cost, waypoint/progress, actual endpoint and explicit refusal/mismatch reasons.
+
+Sources: [Marching](https://tow.whfb.app/movement-in-detail/marching),
+[Wheel](https://tow.whfb.app/movement-in-detail/wheel),
+[Move Sideways](https://tow.whfb.app/movement-in-detail/move-sideways),
+[Move Backwards](https://tow.whfb.app/movement-in-detail/move-backwards),
+[Drilled](https://tow.whfb.app/special-rules/drilled),
+[Impassable Terrain](https://tow.whfb.app/battlefield-terrain/impassable-terrain).
+
+Verified: preserved Reed Fens opening reaches contact on P2 turn one; shared
+preview non-mutation, swept house blocking, multi-turn infantry detour, friendly
+column activation order, exact endpoints, half-M terrain budget, Reserve with and
+without Drilled, and eight formed/loose march cases. Existing 22 marching,
+34 Drilled/Impetuous and 51 formed-charge cases pass. Optimized rigid-footprint
+charge sweeps match the old per-model algorithm over 200 seeded routes.
+
+LEFTOVER: AI candidates do not cover arbitrary multi-wheel moves, persistent
+traffic coordination or all narrow passages; conservative formation envelopes can
+reject routes a richer planner would find. Existing rule-specific movement
+editors remain separate. Full-suite and interactive play-test not run. Six mounted
+cursor-preview cases pass; the unchanged Mage cursor test still expects formed
+arcs and fails. See docs/AI_REVAMP_PLAN.md for reports, limitations and the explicit
+correction to the original Phase 2 movement-quality claim.
+
 ## Multiple Characters And Remaining Moves: 2026-09-16
 
 [x] Rulebook pp. 185, 191, 195, 207-209 and official Characters FAQ v1.5.3:
