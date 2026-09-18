@@ -48,7 +48,7 @@ def scenario_config(scenario):
 
 
 @pytest.fixture
-def ai_scene(tmp_path, request):
+def scene_factory(tmp_path):
     loadPrcFileData('', 'window-type offscreen\nwin-size 640 360\naudio-library-name null')
     getModelPath().appendDirectory(Filename.fromOsSpecific(str(Path(__file__).resolve().parents[1])))
     rosters = {}
@@ -63,32 +63,98 @@ def ai_scene(tmp_path, request):
                          'phase': 'strategy', 'type': 'Enchantment'}]},
         ]}))
         rosters[f'player{player}'] = str(path)
-    scenario, seed = getattr(request, 'param', ('standard', 41))
-    random.seed(seed)
     import rules_log
     original_listeners = list(rules_log._listeners)
     bake = MyApp.bakeBattleMat
+    app = None
+    clock = ClockObject.getGlobalClock()
+    old_mode, old_dt = clock.getMode(), clock.getDt()
+
+    def close_scene():
+        nonlocal app
+        if app is not None:
+            for task in list(app.taskMgr.getTasks()) + list(app.taskMgr.getDoLaters()):
+                app.taskMgr.remove(task)
+            app.destroy()
+            app = None
+        assert rules_log._listeners == original_listeners
+
+    def create_scene(**options):
+        nonlocal app
+        close_scene()
+        app = MyApp(rosters=rosters, **options)
+        clock.setMode(ClockObject.MNonRealTime)
+        clock.setDt(1 / 30)
+        app.speedMultiplier = 100
+        return app
+
     with patch.object(unitGraphics, 'loadFigureModel', base_model), \
             patch.object(MyApp, 'bakeBattleMat', lambda app, size=128: bake(app, size=128)), \
             patch.object(TerrainManager, 'load_from_json'), \
             patch('persistence.SAVE_DIR', str(tmp_path)):
-        app = MyApp(rosters=rosters, battle_config=scenario_config(scenario), battle_seed=seed,
-                first_player=1 if seed == 41 else 2)
-        clock = ClockObject.getGlobalClock()
-        old_mode, old_dt = clock.getMode(), clock.getDt()
-        clock.setMode(ClockObject.MNonRealTime)
-        clock.setDt(1 / 30)
-        app.speedMultiplier = 100
-        app.roundCounter.max_rounds = 1
         try:
-            yield app
+            yield create_scene
         finally:
-            for task in list(app.taskMgr.getTasks()) + list(app.taskMgr.getDoLaters()):
-                app.taskMgr.remove(task)
-            app.destroy()
-            assert rules_log._listeners == original_listeners
+            close_scene()
             clock.setMode(old_mode)
-            clock.setDt(old_dt)
+            if old_dt > 0:
+                clock.setDt(old_dt)
+
+
+@pytest.fixture
+def ai_scene(scene_factory, request):
+    scenario, seed = getattr(request, 'param', ('standard', 41))
+    random.seed(seed)
+    app = scene_factory(battle_config=scenario_config(scenario), battle_seed=seed,
+                        first_player=1 if seed == 41 else 2)
+    app.roundCounter.max_rounds = 1
+    return app
+
+
+@pytest.mark.parametrize('scenario, backup', [('standard', False), ('battle_march', False),
+                                            ('standard', True)])
+def test_saved_battle_startup_restores_without_default_armies(scene_factory, tmp_path, scenario, backup):
+    from battle_config import startup_options
+    from persistence import save_game_state
+    random.seed(41)
+    app = scene_factory(battle_config=scenario_config(scenario), battle_seed=41)
+    app.restoringBattle = True
+    app.fsm.request('MovementPhase')
+    app.restoringBattle = False
+    app.chargeStage = 'remaining'
+    app.roundCounter.currentRoundPlayer = [2, 1]
+    app.roundCounter.current_player = 2
+    app.first_player = 2
+    for index, unit in enumerate(app.units):
+        unit.isDeployed = True
+        unit.bodyNP.setPos(index * 3, 7, 0)
+        unit.hasMovedThisTurn = True
+    expected = {unit.unitName: tuple(unit.bodyNP.getPos()) for unit in app.units}
+    path = Path(save_game_state(app, str(tmp_path / 'saved battle.json')))
+    if backup:
+        path.rename(str(path) + '.bak')
+    argument = path.name if backup else str(path)
+    options = startup_options(['--load-save', argument])
+    with patch.object(MyApp, 'load_player1_army', side_effect=AssertionError('default P1 army read')), \
+            patch.object(MyApp, 'load_player2_army', side_effect=AssertionError('default P2 army read')):
+        restored = scene_factory(load_save=options.load_save)
+    assert restored.battle_config_screen is None
+    assert restored.fsm.state == 'MovementPhase'
+    assert restored.chargeStage == 'remaining'
+    assert restored.roundCounter.currentRoundPlayer == [2, 1]
+    assert restored.roundCounter.current_player == restored.first_player == 2
+    assert restored.unitToMove in restored.player2Units
+    assert {unit.unitName: tuple(unit.bodyNP.getPos()) for unit in restored.units} == expected
+    assert all(unit.hasMovedThisTurn and unit.isDeployed for unit in restored.units)
+    assert bool(getattr(restored, 'battle_config', None)) == (scenario != 'standard')
+    restored.taskMgr.step()
+    restored.graphicsEngine.renderFrame()
+
+
+def test_saved_battle_startup_missing_file_fails_cleanly(scene_factory, tmp_path):
+    with pytest.raises(ValueError, match='Could not load saved battle'):
+        scene_factory(load_save=tmp_path / 'missing.json')
+    assert scene_factory().fsm.state == 'DeployPhase'
 
 
 @pytest.mark.parametrize('ai_scene', [(scenario, seed) for scenario in

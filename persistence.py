@@ -463,6 +463,8 @@ def load_game_state(game, filename):
     Args:
         game: The MyApp game instance.
         filename: Name of a save in saves/, or a path to one.
+
+    Returns True after a completed load, or None when loading is refused.
     """
     if any(getattr(getattr(game, f'AIplayer{player}', None), '_command_running', False) is True
            for player in (1, 2)):
@@ -927,3 +929,4 @@ def load_game_state(game, filename):
         print(f"Total Score: {evaluation['total_score']:.1f}")
         strategy = game.analyzer.suggest_strategy(player_num=player_num)
         print(f"Suggested Strategy: {strategy}")
+    return True

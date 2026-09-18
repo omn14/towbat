@@ -136,7 +136,11 @@ class MyApp(ShowBase):
     # ─── Initialization ──────────────────────────────────────────────────────
 
     def __init__(self, *, battle_config=None, battle_seed=None,
-                 configure_battle=False, battle_config_path=None, rosters=None, first_player=1):
+                 configure_battle=False, battle_config_path=None, rosters=None, first_player=1,
+                 load_save=None):
+        if load_save is not None and (battle_config is not None or configure_battle or battle_seed is not None):
+            raise ValueError('A saved battle cannot be combined with new battle configuration')
+        self.startup_save = os.path.expanduser(os.fspath(load_save)) if load_save is not None else None
         if first_player not in (1, 2):
             raise ValueError('first_player must be 1 or 2')
         self.first_player = first_player
@@ -157,6 +161,17 @@ class MyApp(ShowBase):
                 self, battle_config, battle_config_path, battle_seed, self._start_configured_battle)
             return
         self._initialize_battle(battle_config, battle_seed)
+        if self.startup_save is not None:
+            try:
+                if not load_game_state(self, self.startup_save):
+                    raise ValueError(f"Could not load saved battle: {self.startup_save}")
+                active_units = self.player1Units if self.roundCounter.current_player == 1 else self.player2Units
+                self.unitToMove = next((unit for unit in active_units
+                                        if getattr(unit, 'hostUnit', None) is None), None)
+                self.accept('mouse3', self.onRightClick, [self.unitToMove])
+            except Exception:
+                self.destroy()
+                raise
 
     def destroy(self):
         for player in (1, 2):
@@ -358,11 +373,12 @@ class MyApp(ShowBase):
                    if rosters.get('player1') else 'my_army1.json')
         self.p2army = (os.path.join(os.path.dirname(__file__), os.path.expanduser(rosters['player2']))
                    if rosters.get('player2') else 'my_army2.json')
-        self.load_player1_army(self.p1army)
-        self.load_player2_army(self.p2army)
+        if self.startup_save is None:
+            self.load_player1_army(self.p1army)
+            self.load_player2_army(self.p2army)
 
 
-        self.unitToMove=self.player1Units[0]
+        self.unitToMove = self.player1Units[0] if self.player1Units else None
         self.accept('mouse3', self.onRightClick,[self.unitToMove])
         #self.messenger.toggleVerbose()
         # Built before anything that publishes to it (round counter, FSM).
@@ -430,7 +446,8 @@ class MyApp(ShowBase):
         if battle_config is not None:
             from battle_setup import prepare_new_battle
             prepare_new_battle(self, battle_config, battle_seed)
-        self.fsm.request("DeployPhase")
+        if self.startup_save is None:
+            self.fsm.request("DeployPhase")
 
         self.deploymentLine = self.drawRectangle(center=Point3(0, 0, .5), width=72, height=24, color=Vec4(1, 1, 1, 1))
         if battle_config is not None:
@@ -3421,7 +3438,10 @@ class MyApp(ShowBase):
 if __name__ == '__main__':
     from battle_config import startup_options
     options = startup_options()
-    app = MyApp(battle_config=options.battle_config, battle_seed=options.battle_seed,
-                configure_battle=options.battle_config is not None,
-                battle_config_path=options.battle_config_path)
+    try:
+        app = MyApp(battle_config=options.battle_config, battle_seed=options.battle_seed,
+                    configure_battle=options.battle_config is not None,
+                    battle_config_path=options.battle_config_path, load_save=options.load_save)
+    except (OSError, ValueError) as error:
+        raise SystemExit(str(error)) from error
     app.run()

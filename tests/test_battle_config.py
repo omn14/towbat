@@ -776,6 +776,19 @@ def test_terrain_preparation_records_validate_pool_ownership_and_rolls():
         validate_terrain_state(config, state)
 
 
+def test_startup_save_option_and_conflicting_new_battle_options():
+    from battle_config import startup_options
+    assert startup_options([]).load_save is None
+    options = startup_options(['--load-save', 'saves/my battle.json', '--debug'])
+    assert options.load_save == 'saves/my battle.json'
+    assert options.battle_config is None and options.debug
+    for arguments in (['--load-save'], ['--load-save', 'battle.json', '--battle-config'],
+                      ['--load-save', 'battle.json', '--battle-seed', '19']):
+        with pytest.raises(SystemExit) as error:
+            startup_options(arguments)
+        assert error.value.code == 2
+
+
 def test_startup_preset_is_explicit_and_validated_before_window_creation():
     from battle_config import startup_options
     assert startup_options([]).battle_config is None

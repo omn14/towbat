@@ -1,5 +1,24 @@
 # towbat
 
+## Start From A Saved Battle
+
+```bash
+source .venv/bin/activate
+python game.py --load-save saves/quicksave.json
+```
+
+Use a relative or absolute JSON path, or just a filename to look in `saves/`:
+
+```bash
+python game.py --load-save quicksave.json --debug
+```
+
+This skips the new-battle configuration screen and default army loading. The
+existing loader restores the saved armies, phase, battle configuration and AI
+settings, including enabled continuous AI. Its `.bak` fallback still applies;
+an unusable or missing save stops startup with an error. Do not combine
+`--load-save` with `--battle-config` or `--battle-seed`.
+
 ## Battle March Configuration
 
 ```bash

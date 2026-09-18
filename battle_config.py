@@ -221,8 +221,11 @@ def startup_options(arguments=None):
     """Parse explicit opt-in without changing ordinary game startup."""
     import argparse
     parser = argparse.ArgumentParser(description='Warhammer: The Old World battle engine')
-    parser.add_argument('--battle-config', nargs='?', const=str(DEFAULT_PRESET), metavar='PATH',
+    startup = parser.add_mutually_exclusive_group()
+    startup.add_argument('--battle-config', nargs='?', const=str(DEFAULT_PRESET), metavar='PATH',
                         help='open Battle March configuration using the default preset or a JSON file')
+    startup.add_argument('--load-save', metavar='PATH',
+                         help='start directly from a saved battle JSON file (or a name in saves/)')
     parser.add_argument('--battle-seed', type=int, help='repeatable Battle March setup seed')
     parser.add_argument('--debug', action='store_true', help='enable developer tools')
     options = parser.parse_args(arguments)
